@@ -1,0 +1,169 @@
+FileName,db_name,db_type,query_category,query,question,instructions,full_instructions,Pydough,Implemented
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_date_join,"SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p.id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s.id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;","For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order.",Weekend days are Saturday (6) and Sunday (0). Truncate date to week for aggregation. A week begins on 'weekday 1',"To calculate the average days between sale date and payment received date, join the sales and payments received tables. Weekend days are Saturday (6) and Sunday (0). Truncate date to week for aggregation. When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards. To get the total sales amount per salesperson, join the salespersons and sales tables, group by salesperson, and sum the sale_price",#Pydough doesn't support date manipulation,N
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_cte_join,"WITH recent_sales AS (SELECT sp.id, sp.first_name, sp.last_name, COUNT(s.id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp.id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp.id) SELECT id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;WITH recent_sales AS (SELECT sp.id, sp.first_name, sp.last_name, COUNT(s.id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp.id = s.salesperson_id AND s.sale_date >= DATE('now', '-30 days') GROUP BY sp.id, sp.first_name, sp.last_name) SELECT id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;","How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.","To get the number of sales made by each salesperson in the past 30 days, join the salespersons and sales tables and filter for sales in the last 30 days.","When using car makes, model names, engine_type, and vin_number, ensure matching is case-insensitive and allows for partial matches using LIKE with wildcards.
+To get the number of sales made by each salesperson in the past 30 days, join the salespersons and sales tables and filter for sales in the last 30 days.
+ASP = Calculate the average sale price without specifying the period
+GPM = Define gross profit margin as a ratio without specifying how to calculate total revenue or total cost","#Pydough doesn't support date manipulation
+result = Salespersons(
+    _id,
+    first_name,
+    last_name,
+    num_sales=COUNT(sales_made.WHERE(sale_date >= 30_days_ago)._id) #There is no way to calculate 30_days_ago.
+    ).WHERE(
+        HAS(sales_made.WHERE(sale_date >= ""2025-01-10"")) 
+).ORDER_BY(num_sales.DESC())",N
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_string_matching,"SELECT c.make, c.model, COUNT(s.id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c.id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;","How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.","When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","To determine the total sales amount for each salesperson, combine data from the salespersons and sales tables, grouping by salesperson and summing the sale_price
+When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.
+To calculate the average selling price, join the sales and cars tables, and divide the total sales amount by the number of sales
+For understanding the number of sales achieved by each salesperson within a specified period, merge the salespersons and sales tables and apply a filter based on the given time frame.","result = Cars(
+    make, 
+    model,
+    num_sales=COUNT(sale_records._id)
+    ).WHERE(
+        LIKE(vin_number, ""%m5%"") 
+).ORDER_BY(num_sales.DESC())",Y
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_date_join,"SELECT COUNT(s.id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c.id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');",How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,"Last 30 days = DATE('now', -'30 days') to DATE('now'). Always join sales with cars before using the sales table.","To calculate the average days between sale date and payment received date, join the sales and payments_received tables
+To get the list of cars that were sold and their sale price, join the cars and sales tables
+Last 30 days = DATE('now', -'30 days') to DATE('now'). Always join sales with cars before using the sales table.
+When using car makes, model names, engine_type, and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","#Pydough doesn't support date manipulation
+result = Cars(
+    num_sales=COUNT(sale_records.WHERE(sale_date >= 30_days_ago)._id),  #There is no way to calculate 30_days_ago.
+    total_revenue=SUM(sale_records.WHERE(sale_date >= 30_days_ago).sale_price) 
+).WHERE(
+    LOWER(make) == ""toyota"" 
+)",N
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_cte_window,"WITH salesperson_sales AS (SELECT salesperson_id, SUM(sale_price) AS total_sales, COUNT(*) AS num_sales FROM sales GROUP BY salesperson_id) SELECT s.first_name, s.last_name, ss.total_sales, ss.num_sales, RANK() OVER (ORDER BY CASE WHEN ss.total_sales IS NULL THEN 1 ELSE 0 END DESC, ss.total_sales DESC) AS sales_rank FROM salesperson_sales AS ss JOIN salespersons AS s ON ss.salesperson_id = s.id;","Return the first name, last name, total sales amount, number of sales, and SR for each salesperson",SR = sales rank of each salesperson ordered by their total sales amount descending,"SR = sales rank of each salesperson ordered by their total sales amount descending To determine the sales performance per territory, sum the sales amount and count the sales, grouping by territory To calculate the average sale price, join the sales table with itself on the salesperson_id and find the ratio of total sales amount to number of sales To assess inventory turnover, compare inventory snapshots with sales on matching days, focusing on the quantity of items sold.","total_sales= SUM(sales_made.sale_price)
+
+result = Salespersons(
+    _id,
+    first_name, 
+    last_name,
+    total_sales=SUM(sales_made.sale_price),  
+    num_sales=COUNT(sales_made._id),
+    sales_rank=RANKING(by=total_sales.DESC())  
+).ORDER_BY(total_sales.DESC())",Y
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_cte_join,"WITH latest_inventory_status AS (SELECT car_id, is_in_inventory, ROW_NUMBER() OVER (PARTITION BY car_id ORDER BY CASE WHEN snapshot_date IS NULL THEN 1 ELSE 0 END DESC, snapshot_date DESC) AS rn FROM inventory_snapshots) SELECT c.make, c.model, MAX(s.sale_price) AS highest_sale_price FROM cars AS c JOIN sales AS s ON c.id = s.car_id JOIN latest_inventory_status AS lis ON c.id = lis.car_id WHERE lis.is_in_inventory = FALSE AND lis.rn = 1 GROUP BY c.make, c.model ORDER BY CASE WHEN highest_sale_price IS NULL THEN 1 ELSE 0 END DESC, highest_sale_price DESC;","Return the highest sale price for each make and model of cars that have been sold and are no longer in inventory, ordered by the sale price from highest to lowest. Use the most recent date in the inventory_snapshots table to determine that car's inventory status.","When getting a car's inventory status, always take the latest status from the inventory_snapshots table","Recall that a car can have multiple entries in the inventory_snapshot table. 
+TSC = Count of sales within a specified period
+MoM = Change in total receivable amounts from one month to the next, comparing with the immediately preceding month.
+ASP = Mean sale price for a designated start period
+When getting a car's inventory status, always take the latest status from the inventory_snapshots table",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_string_matching,"SELECT c.make, c.model, c.year, c.color, c.vin_number, AVG(s.sale_price) AS avg_sale_price FROM cars AS c JOIN sales AS s ON c.id = s.car_id WHERE LOWER(c.make) LIKE '%ford%' OR LOWER(c.model) LIKE '%mustang%' GROUP BY c.make, c.model, c.year, c.color, c.vin_number;","What are the details and average sale price for cars that have 'Ford' in their make name or 'Mustang' in the model name? Return make, model, year, color, vin_number and avg_sale_price.","When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","To calculate the gross profit margin, use the formula where GPM is the quotient of total revenue minus total cost over total cost, multiplied by 100 When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards. To compute the average sales price, divide the total sales amount by the number of sales To determine the sales rank of each salesperson, order by their total sales amount in descending order.",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_date_join,"WITH RECURSIVE date_range(month_start) AS (SELECT DATE('now', '-6 months', 'start of month') AS month_start UNION ALL SELECT DATE(month_start, '+1 month') FROM date_range WHERE month_start < DATE('now', '-1 month', 'start of month')), sales_metrics AS (SELECT strftime('%Y-%m', s.sale_date) AS sale_month, COUNT(s.id) AS PMSPS, SUM(s.sale_price) AS PMSR FROM sales AS s JOIN salespersons AS sp ON s.salesperson_id = sp.id WHERE strftime('%Y', sp.hire_date) BETWEEN '2022' AND '2023' AND s.sale_date >= DATE('now', '-6 months', 'start of month') AND s.sale_date < DATE('now', 'start of month') GROUP BY sale_month) SELECT dr.month_start, COALESCE(sm.PMSPS, 0) AS PMSPS, COALESCE(sm.PMSR, 0) AS PMSR FROM date_range AS dr LEFT JOIN sales_metrics AS sm ON strftime('%Y-%m', dr.month_start) = sm.sale_month ORDER BY dr.month_start ASC;","What are the PMSPS and PMSR in the last 6 months excluding the current month, for salespersons hired between 2022 and 2023 (both inclusive)? Return all months in your answer, including those where metrics are 0. Order by month ascending.",PMSPS = per month salesperson sales count. PMSR = per month sales revenue in dollars. Truncate date to month for aggregation.,"PMSPS = per month salesperson sales count. PMSR = per month sales revenue in dollars. Truncate date to month for aggregation.
+ASP = Average Sale Price during a specific timeframe
+To calculate the average days between a sale date and when the payment was received, join the relevant tables.
+TSC = Total Sales Count for a given period",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,keywords_aggregate,SELECT AVG(sale_price) AS ASP FROM sales WHERE sale_date >= '2023-01-01' AND sale_date <= '2023-03-31';,What is the ASP for sales made in the first quarter of 2023?,ASP = Average Sale Price in the first quarter of 2023.,"Always join sales with cars before using the sales table. ASP = Average Sale Price in the first quarter of 2023. To calculate the average days between sale date and payment received date, join the sales and payments tables To get the list of cars that were sold along with their sale prices, join the cars and sales tables Last 30 days = DATE('now', -'30 days') to DATE('now')",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_cte_join,"WITH sale_payments AS (SELECT s.id AS sale_id, s.sale_date, MAX(p.payment_date) AS latest_payment_date FROM sales AS s JOIN payments_received AS p ON s.id = p.sale_id GROUP BY s.id, s.sale_date) SELECT ROUND(AVG(julianday(latest_payment_date) - julianday(sale_date)), 2) AS avg_days_to_paymen FROM sale_payments;","What is the average number of days between the sale date and payment received date, rounded to 2 decimal places?","When getting duration between sale and payment date for each sale, get the latest payment for sale by aggregating over the payments_received table first.","When getting duration between sale and payment date for each sale, get the latest payment for sale by aggregating over the payments_received table first. ASP = Calculate the average price of sales within a specific timeframe Last 30 days = Use a range from the current date minus a certain interval to the current date, always ensure to make the necessary joins before utilizing the sales data. TSC = Count of sales within a specified period",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,keywords_ratio,"SELECT (SUM(sale_price) - SUM(cars.cost)) / SUM(cars.cost) * 100 AS gpm FROM sales JOIN cars ON sales.car_id = cars.id WHERE strftime('%Y', sale_date) = '2023';",What is the GPM for all car sales in 2023?,GPM (gross profit margin) = (total revenue - total cost) / total cost * 100,"Analyze salesperson activity over a selected period by connecting salespersons with sales records
+GPM (gross profit margin) = (total revenue - total cost) / total cost * 100
+For weekly trends, consider the start of the week
+To calculate the TSC = Total Sales Count within a given period
+Identify sold vehicles and pricing by linking car and sales data
+MoM = assess the month-over-month change in total financial transactions
+SR = sales rank of each salesperson based on their total sales without specifying the order
+Utilize LIKE for flexible matching in vehicle information queries.
+Use inventory and sales data for concurrent analysis, ensuring date alignment
+To summarize sales performance, combine sales and salesperson data, focusing on total sales
+PMSPS and PMSR aim to measure salesperson engagement and monthly revenue, respectively
+For insights on sale to payment duration, correlate sales with payment dates
+To find the ASP = Average Sale Price for a specific time frame
+For timing analysis, apply specific date intervals",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_date_join,"SELECT c.make, c.model, s.sale_price FROM cars AS c JOIN sales AS s ON c.id = s.car_id JOIN inventory_snapshots AS i ON c.id = i.car_id AND DATE(s.sale_date) = DATE(i.snapshot_date) WHERE i.is_in_inventory = 0 ORDER BY s.sale_price DESC LIMIT 1;","What is the make, model and sale price of the car with the highest sale price that was sold on the same day it went out of inventory?","If inventory snapshots and sales from the same day are to be joined, join on the truncated date fields eg FROM inventory_snapshots i JOIN sales s ON DATETIME(DATE(i.snapshot_date)) = DATETIME(DATE(s.sale_date)).","ASP (average selling price) = total sales amount / number of sales
+To calculate the gross profit margin, join the appropriate tables and calculate the margin
+If inventory snapshots and sales from the same day are to be joined, join on the truncated date fields eg FROM inventory_snapshots i JOIN sales s ON DATETIME(DATE(i.snapshot_date)) = DATETIME(DATE(s.sale_date)).
+To rank salespersons by their sales volume, join the salespersons and sales data, order by sales volume.
+
+So, the rephrased instructions would be: ""GPM (gross profit margin) = (total revenue - total cost) / total cost * 100
+To determine the average sale price, join the sales data and calculate the average
+SR = sales rank of each salesperson ordered by their total sales amount descending.""",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_cte_window,"WITH monthly_totals AS (SELECT strftime('%Y-%m', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;WITH monthly_totals AS (SELECT strftime('%Y-%m-01', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m-01', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m-01', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m-01', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;WITH monthly_totals AS (SELECT strftime('%Y-%m-01 00:00:00', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m-01 00:00:00', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m-01 00:00:00', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m-01 00:00:00', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;",What is the total payments received per month? Also calculate the MoM change for each month.,"MoM change = (current month value - prev month value). Return all months in your answer, including those where there were no payments.","To ascertain the volume of sales conducted by each salesperson over a recent period, merge the salespersons and sales tables, applying a filter for recent sales transactions.
+To determine the average duration from sale date to payment date, perform a join between the sales and payments tables
+To calculate the average selling price, join the sales and products tables, group by product name, and compute the ratio of total sales amount to the number of sales
+MoM change = (current month value - prev month value). Return all months in your answer, including those where there were no payments.",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,keywords_aggregate,"SELECT COUNT(id) AS TSC FROM sales WHERE sale_date >= DATE('now', '-7 days');","What is the TSC in the past 7 days, inclusive of today?",TSC = Total Sales Count.,"To determine the average selling price, divide the total sales amount by the number of sales
+To calculate the gross profit margin, subtract the total cost from the total revenue, then divide by the total cost and multiply by 100
+To ascertain the sales rank of each salesperson, order them by their total sales amount in descending order.
+TSC = Total Sales Count.",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,keywords_ratio,"SELECT salespersons.first_name, salespersons.last_name, AVG(sales.sale_price) AS ASP FROM sales JOIN salespersons ON sales.salesperson_id = salespersons.id GROUP BY salespersons.first_name, salespersons.last_name ORDER BY ASP DESC LIMIT 3;","Who are the top 3 salespersons by ASP? Return their first name, last name and ASP.",ASP (average selling price) = total sales amount / number of sales,"To get the total sales amount per salesperson, join the salespersons and sales tables, group by salesperson, and sum the sale_amount. To calculate the average days between the sale date and payment received date, join the sales and payments_received tables. ASP (average selling price) = total sales amount / number of sales. To get the list of cars that were sold and their sale price, join the cars and sales tables.",,
+instruct_advanced_sqlite.csv,car_dealership,sqlite,instructions_cte_join,"WITH salesperson_sales AS (SELECT s.id, s.first_name, s.last_name, SUM(sa.sale_price) AS total_sales FROM salespersons AS s LEFT JOIN sales AS sa ON s.id = sa.salesperson_id GROUP BY s.id) SELECT id, first_name, last_name, total_sales FROM salesperson_sales ORDER BY total_sales DESC LIMIT 5;","Who are the top 5 salespersons by total sales amount? Return their ID, first name, last name and total sales amount.","To get the total sales amount per salesperson, join the salespersons and sales tables, group by salesperson, and sum the sale_price. Always order results with NULLS last.","PMSR = per month sales revenue
+Always join sales with cars before using the sales table
+Weekend days are Saturday and Sunday
+Truncate date to month for aggregation
+Last 30 days = DATE('now', '-30 days') to DATE('now')
+PMSPS = per month salesperson signups
+To get the total sales amount per salesperson, join the salespersons and sales tables, group by salesperson, and sum the sale_price. Always order results with NULLS last.
+Truncate date to week for aggregation.",,
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_left_join,"SELECT c.id AS car_id, c.make, c.model, c.year FROM cars AS c LEFT JOIN sales AS s ON c.id = s.car_id WHERE s.car_id IS NULL;","Return the car ID, make, model and year for cars that have no sales records, by doing a left join from the cars to sales table.",,," result = Cars.WHERE(HASNOT(sale_records))(_id, make, model, year)",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_join_distinct,SELECT DISTINCT c.id AS customer_id FROM customers AS c JOIN sales AS s ON c.id = s.customer_id;,"Return the distinct list of customer IDs that have made a purchase, based on joining the customers and sales tables.",,,result = Customers.WHERE(HAS(car_purchases))(_id),Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_join_distinct,SELECT DISTINCT s.id AS salesperson_id FROM salespersons AS s JOIN sales AS sa ON s.id = sa.salesperson_id JOIN payments_received AS p ON sa.id = p.sale_id WHERE p.payment_method = 'cash';,"Return the distinct list of salesperson IDs that have received a cash payment, based on joining the salespersons, sales and payments_received tables.",,,"result = Salespersons.WHERE(
+    HAS(
+        sales_made.WHERE(
+            HAS(payment.WHERE(payment_method == ""cash""))
+        )
+    )
+)(_id)",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_left_join,"SELECT s.id AS salesperson_id, s.first_name, s.last_name FROM salespersons AS s LEFT JOIN sales AS sa ON s.id = sa.salesperson_id WHERE sa.salesperson_id IS NULL;","Return the salesperson ID, first name and last name for salespersons that have no sales records, by doing a left join from the salespersons to sales table.",,,"result = Salespersons(_id, make, model, year).WHERE(HASNOT(sales_made))",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_join_date_group_order_limit,"SELECT sp.first_name, sp.last_name, COUNT(s.id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN salespersons AS sp ON s.salesperson_id = sp.id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp.first_name, sp.last_name, sp.id ORDER BY total_sales DESC LIMIT 5;","Return the top 5 salespersons by number of sales in the past 30 days? Return their first and last name, total sales count and total revenue amount.",,," #Pydough doesn't support date manipulation.
+sales_person_last_month = Salespersons.WHERE(
+    HAS(sales_made.WHERE(sale_date >= 30_days_ago) #There is no way to calculate 30 days ago
+
+result = PARTITION(sales_person_last_month,name=""sp"", by=(_id, first_name, last_name))(
+    first_name,
+    last_name,
+    total_sales=COUNT(sp.sales_made),
+    total_revenue=SUM(sp.sales_made.sale_price)
+).TOP_K(5, by=total_sales.DESC())",N
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_join_group_order_limit,"SELECT c.state, COUNT(DISTINCT s.customer_id) AS unique_customers, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN customers AS c ON s.customer_id = c.id GROUP BY c.state ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC LIMIT 5;","Return the top 5 states by total revenue, showing the number of unique customers and total revenue (based on sale price) for each state.",,,"result = PARTITION(Customers, name=""c"", by=state)(
+    state,
+    total_customers=COUNT(c._id),
+    total_revenue=SUM(c.car_purchases.sale_price)
+).TOP_K(5, by=total_revenue.DESC())",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite, ,"SELECT payment_method, COUNT(*) AS total_payments, SUM(payment_amount) AS total_amount FROM payments_received GROUP BY payment_method ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 3;","What are the top 3 payment methods by total payment amount received? Return the payment method, total number of payments and total amount.",,,"result = PARTITION(PaymentsReceived, name=""p"", by=payment_method)(
+    payment_method,
+    total_payments=COUNT(p._id),
+    total_amount=SUM(p.payment_amount), 
+).ORDER_BY(
+    total_amount.DESC()
+).TOP_K(3, by=total_amount.DESC())",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_join_group_order_limit,"SELECT c.make, c.model, COUNT(s.id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c.id GROUP BY c.make, c.model ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC LIMIT 5;","What are the top 5 best selling car models by total revenue? Return the make, model, total number of sales and total revenue.",,,"result = Cars(
+    make,
+    model,
+    total_sales=COUNT(sale_records._id),
+    total_revenue=SUM(sale_records.sale_price)
+).TOP_K(5, by=total_revenue.DESC())",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_group_order_limit,"SELECT state, COUNT(*) AS total_signups FROM customers GROUP BY state ORDER BY CASE WHEN total_signups IS NULL THEN 1 ELSE 0 END DESC, total_signups DESC LIMIT 2;","What are the total number of customer signups for the top 2 states? Return the state and total signups, starting from the top.",,,"grouped_customers = PARTITION(Customers, name=""grouped"", by=state)(
+    state,
+    total_signups=COUNT(grouped._id) 
+).TOP_K(2, by=total_signups.DESC())",Y
+instruct_basic_sqlite.csv,car_dealership,sqlite,basic_join_date_group_order_limit,"SELECT c.first_name, c.last_name, COUNT(s.id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN salespersons AS c ON s.salesperson_id = c.id WHERE s.sale_date >= DATE('now', '-3 months') GROUP BY c.first_name, c.last_name ORDER BY total_revenue DESC LIMIT 3;","Who were the top 3 sales representatives by total revenue in the past 3 months, inclusive of today's date? Return their first name, last name, total number of sales and total revenue. Note that revenue refers to the sum of sale_price in the sales table.",,,"#Pydough doesn't support date manipulation.
+result = Salespersons(
+    first_name,
+    last_name,
+    total_sales=COUNT(sales_made.WHERE(sale_date >= three_months_ago)._id), # There is no way to calculate three_months_ago.
+    total_revenue=SUM(sales_made.WHERE(sale_date >= three_months_ago).sale_price)  
+).TOP_K(3, by=total_revenue.DESC())",N
+questions_gen_sqlite.csv,car_dealership,sqlite,date_functions,"SELECT s.first_name, s.last_name, s.phone, julianday(s.termination_date) - julianday(s.hire_date) AS days_employed FROM salespersons AS s ORDER BY CASE WHEN days_employed IS NULL THEN 1 ELSE 0 END, days_employed ASC LIMIT 1;",Return the name and phone number of the salesperson with the shortest time from being hired to getting fired. Return the number of days he/she was employed for.,,,"#Pydough doesn't support date manipulation.
+result = Salespersons.WHERE(PRESENT(termination_date))(
+    first_name,
+    last_name,
+    phone,
+    termination_date,
+    hire_date,
+    days_employed=(DAY(termination_date) - DAY(hire_date)) #Date arithmethic doesn't work.
+).TOP_K(10, by=days_employed.ASC())",N
+questions_gen_sqlite.csv,car_dealership,sqlite,date_functions,"SELECT COUNT(*) AS weekend_payments FROM payments_made WHERE vendor_name = 'Utility Company' AND strftime('%w', payment_date) IN ('0', '6');",Return the number of payments made on weekends to the vendor named 'Utility Company',,,"#Pydough doesn't support date manipulation.
+result = PaymentsMade.WHERE(
+    (vendor_name == ""Utility Company"") & (is_weekend) #There is no way to calculate weekends.
+)(
+    weekend_payments=COUNT(_id)
+)",N
+questions_gen_sqlite.csv,car_dealership,sqlite,date_functions,"SELECT payment_date, payment_method, SUM(payment_amount) AS total_amount FROM payments_received WHERE payment_date >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND payment_date < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY payment_date, payment_method ORDER BY payment_date DESC, payment_method ASC;","show me the daily total amount of payments received in the whole of the previous ISO week not including the current week, split by the payment_method",,,"#Pydough doesn't support date manipulation. 
+result = PaymentsReceived.WHERE(
+    (payment_date >= start_date) & (payment_date <= end_date) #There is no way to calculate start_date or end_date
+)(
+    payment_date,
+    payment_method,
+    total_amount=SUM(payment_amount)
+).ORDER_BY(payment_date.DESC(), payment_method.ASC())",N
+questions_gen_sqlite.csv,car_dealership,sqlite,date_functions,"SELECT CASE WHEN strftime('%m', s.sale_date) BETWEEN '01' AND '03' THEN '2023-01-01' WHEN strftime('%m', s.sale_date) BETWEEN '04' AND '06' THEN '2023-04-01' WHEN strftime('%m', s.sale_date) BETWEEN '07' AND '09' THEN '2023-07-01' ELSE '2023-10-01' END AS quarter, c.state, SUM(s.sale_price) AS total_sales FROM sales AS s JOIN customers AS c ON s.customer_id = c.id WHERE strftime('%Y', s.sale_date) = '2023' GROUP BY c.state, quarter HAVING SUM(s.sale_price) > 0 ORDER BY quarter, c.state;",What were the total quarterly sales in 2023 grouped by customer's state? Represent each quarter as the first date in the quarter.,,,#Pydough doesn't support date manipulation. ,N
+questions_gen_sqlite.csv,car_dealership,sqlite,date_functions,"WITH latest_snapshot AS (SELECT MAX(snapshot_date) AS snapshot_date FROM inventory_snapshots WHERE snapshot_date BETWEEN '2023-03-01' AND '2023-03-31'), latest_snapshot_data AS (SELECT inv.car_id FROM inventory_snapshots AS inv JOIN latest_snapshot AS ls ON inv.snapshot_date = ls.snapshot_date WHERE inv.is_in_inventory = TRUE) SELECT c.id, c.make, c.model, c.year FROM cars AS c JOIN latest_snapshot_data AS lsd ON c.id = lsd.car_id;","Which cars were in inventory in the latest snapshot for march 2023? Return the car id, make, model, and year. Cars are considered to be in inventory"" if is_in_inventory is True.""",,,#Pydough doesn't support date manipulation. ,N
