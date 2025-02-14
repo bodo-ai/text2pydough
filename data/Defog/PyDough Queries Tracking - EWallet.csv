@@ -15,13 +15,13 @@ instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_string_matching,"SELECT
 Merchant category should be matched case-insensitively with wildcards, e.g., LOWER(merchants.category) LIKE '%...%'.
 To get the total number of transactions per user, join the users and wallet_transactions tables in a common table expression (CTE), then sum up transactions by user ID
 To assess coupon utilization, link the coupons and wallet_transactions tables in a CTE, filter for particular merchants, then calculate the total discount amounts","# Retrieve merchant summary for active merchants in the ""retail"" category who have coupons
-active_retail_merchants_with_coupons = Merchants.WHERE(
-    (status == ""active"") & 
-    (CONTAINS(LOWER(category), '%retail%')) &  
-    HAS(coupons) 
-)(
-    merchant_name=name, 
-    total_coupons=COUNT(coupons)  
+active_retail_merchants_with_coupons = Merchants(
+ merchant_name=name, 
+ total_coupons=COUNT(coupons) 
+).WHERE(
+ (status == ""active"") & 
+ (CONTAINS(LOWER(category), '%retail%')) & 
+ HAS(coupons) 
 )",y
 instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_date_join,"SELECT COUNT(*) AS num_transactions, SUM(amount) AS total_amount FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE u.country = 'US' AND t.created_at >= DATE('now', '-7 days') AND t.created_at < DATE('now', '+1 day');",How many wallet transactions were made by users from the US in the last 7 days inclusive of today? Return the number of transactions and total transaction amount.,"Last 7 days = DATE('now', -'7 days') to DATE('now'). Always join wallet_transactions_daily with users before using the wallet_transactions_daily table.","To analyze coupon usage, join the coupons and wallet_transactions tables in a CTE, filter for a specific merchant, then aggregate to get the total discount amount
 Last 7 days = DATE('now', -'7 days') to DATE('now'). Always join wallet_transactions_daily with users before using the wallet_transactions_daily table.
@@ -58,16 +58,14 @@ instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_cte_window,"WITH mercha
 Merchant category should be matched case-insensitively with wildcards, e.g., using LOWER(merchants.category) LIKE '%...%'.
 MRR = Merchant Revenue Rank, which ranks merchants based on their total successful received transaction amounts. Filter receiver_type=1 in wallet_transactions_daily for merchants. Merchant with rank 1 has the highest revenue.
 To analyze user engagement, join the users and user_sessions tables in a CTE, then aggregate to calculate total session duration per user","successful_transactions= transactions_received.WHERE((receiver_type == 1) & (status==""success""))
-
-mrr_summary= Merchants.WHERE(HAS(successful_transactions))(
-   total_revenue= SUM(successful_transactions.amount)
-)(
+total_revenue= SUM(successful_transactions.amount)
+mrr_summary= Merchants(
    mid,
    category,
    name,
    total_revenue,
    mrr = RANKING(by=total_revenue.DESC(), levels=1)
-)",y
+).WHERE(HAS(successful_transactions))",y
 instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_date_join,"SELECT strftime('%Y-%m', t.created_at) AS month, COUNT(DISTINCT t.sender_id) AS active_users FROM wallet_transactions_daily AS t WHERE t.sender_type = 0 AND t.created_at >= date('now', 'start of month', '-2 months') AND t.created_at < date('now', 'start of month') GROUP BY month;",What is the PMDAU (Per Month Daily Active Users) for wallet transactions in the last 2 months excluding the current month?,PMDAU (Per Month Daily Active Users) = COUNT(DISTINCT(sender_id) ... WHERE t.sender_type = 0. Truncate created_at to month for aggregation.,"PMDAU (Per Month Daily Active Users) = COUNT(DISTINCT(sender_id) ... WHERE t.sender_type = 0. Truncate created_at to month for aggregation. To analyze coupon usage, join the coupons and wallet_transactions_daily tables in a CTE, filter for transactions associated with a specific merchant, then aggregate to calculate the total discount amount received To get the total number of transactions per user, join the users and wallet_transactions_daily tables in a common table expression (CTE), then aggregate by user_id and count the transactions To get user notification preferences, join the users and user_setting_snapshot tables in a CTE, then select the most recent snapshot for each user.","# Define the start date (2 months before the start of the current month)
 start_date = DATE('now', 'start of month', '-2 months') # Pydough doesn't support date manipulation
 
@@ -91,10 +89,10 @@ AMB = Average balance of user wallets
 LUB = Most recent balance for each user
 To get the total number of transactions per user, join the users and wallet_transactions_daily tables in a CTE, then aggregate by user_id and count the number of transactions","successful_transactions = transactions_sent.WHERE(sender_type == 0)
 # Group users who have successful transactions and calculate the number of distinct transactions per user
-transactions_by_users = Users.WHERE(HAS(successful_transactions))(
-    uid,
-    total_transactions= COUNT(successful_transactions)
-)",y
+transactions_by_users = Users(
+ uid,
+ total_transactions= COUNT(successful_transactions)
+).WHERE(HAS(successful_transactions))",y
 instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_cte_join,"WITH user_session_duration AS (SELECT u.uid, s.session_start_ts, s.session_end_ts FROM users AS u JOIN user_sessions AS s ON u.uid = s.user_id WHERE s.session_start_ts >= '2023-06-01' AND s.session_end_ts < '2023-06-08') SELECT uid, SUM(strftime('%s', session_end_ts) - strftime('%s', session_start_ts)) AS total_duration FROM user_session_duration GROUP BY uid ORDER BY total_duration DESC;",What is the total session duration in seconds for each user between 2023-06-01 inclusive and 2023-06-08 exclusive? Return the user ID and their total duration as an integer sorted by total duration with the longest duration first,"To analyze user engagement, join the users and user_sessions tables in a CTE, then aggregate to calculate total session duration per user for a given date range. Remember to convert your answer into seconds, using EPOCH function","LUB = Most recent account balance for each user. CPUR (coupon usage rate) = Ratio of distinct coupons used to the number of distinct transactions AMB = Average balance of user wallets over a specified period To analyze user engagement, join the users and user_sessions tables in a CTE, then aggregate to calculate total session duration per user for a given date range","selected_sessions = sessions.WHERE(
     (session_start_ts >= ""2023-06-01"") &  
     (session_end_ts < ""2023-06-08"")  
@@ -108,29 +106,63 @@ total_session_duration = Users(
 instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_cte_join,"WITH merchant_coupon_usage AS (SELECT c.cid, t.amount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id WHERE c.merchant_id = 1) SELECT cid, SUM(amount) AS total_discount FROM merchant_coupon_usage GROUP BY cid;",What is the total transaction amount for each coupon offered by merchant with ID 1? Return the coupon ID and total amount transacted with it.,"To get coupon usage, join the coupons and wallet_transactions_daily on coupon_id","AMB = Average balance of user wallets updated recently
 To get coupon usage, join the coupons and wallet_transactions_daily on coupon_id 
 STR (success transaction rate) = Number of successful transactions divided by total transactions
-PMDAU = Aggregation based on truncating creation dates to months for active user metrics.",,
-instruct_advanced_sqlite.csv,ewallet,sqlite,keywords_aggregate,"SELECT COUNT(*) AS TUC FROM user_sessions WHERE session_start_ts >= DATE('now', '-1 month') OR session_end_ts >= DATE('now', '-1 month');","What is the TUC in the past month, inclusive of 1 month ago? Return the total count.",TUC = Total number of user sessions in the past month,"To analyze coupon usage, join the coupons and transactions tables in a CTE, filtering for any required criteria, then aggregate to find the total discount amount TUC = Total number of user sessions in the past month To get user notification preferences, join the users and settings tables in a CTE, selecting the most recent settings snapshot for each user. To get the total number of transactions per user, join the users and transactions tables in a common table expression (CTE), then aggregate by user_id to count transactions",,
+PMDAU = Aggregation based on truncating creation dates to months for active user metrics.","# Calculate the total session duration for each user and order by the total duration in descending order
+total_session_duration = Coupons(
+    cid,  
+    total_discount=SUM(transaction_used_in.amount) 
+).WHERE(merchant_id=='1')",y
+instruct_advanced_sqlite.csv,ewallet,sqlite,keywords_aggregate,"SELECT COUNT(*) AS TUC FROM user_sessions WHERE session_start_ts >= DATE('now', '-1 month') OR session_end_ts >= DATE('now', '-1 month');","What is the TUC in the past month, inclusive of 1 month ago? Return the total count.",TUC = Total number of user sessions in the past month,"To analyze coupon usage, join the coupons and transactions tables in a CTE, filtering for any required criteria, then aggregate to find the total discount amount TUC = Total number of user sessions in the past month To get user notification preferences, join the users and settings tables in a CTE, selecting the most recent settings snapshot for each user. To get the total number of transactions per user, join the users and transactions tables in a common table expression (CTE), then aggregate by user_id to count transactions","start_date = DATE('now', '-1 month') # Pydough does'nt support data manipulation
+ 
+selected_session = UserSessions.WHERE((session_start_ts >= s) | (session_end_ts>=s)) 
+
+TUC_result= Ewallet(TUC=COUNT(selected_session))
+",n
 instruct_advanced_sqlite.csv,ewallet,sqlite,keywords_ratio,"SELECT (SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 1.0 / COUNT(*)) AS STR FROM wallet_transactions_daily WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'start of month', '-1 month');",What was the STR for wallet transactions in the previous month?,STR (success transaction rate) = number of successful transactions / total number of transactions,"To analyze user engagement, join the users and sessions tables in a CTE, then aggregate to measure total session length per user for a specified period.
 To get user notification preferences, join the users and settings tables in a CTE, then filter for the most recent settings per user
 STR (success transaction rate) = number of successful transactions / total number of transactions
-To analyze coupon usage, join the coupons and transactions tables in a CTE, filter for a particular merchant, then aggregate to calculate the total discount value",,
-instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_date_join,"WITH coupons_per_merchant AS (SELECT m.mid, COUNT(c.cid) AS num_coupons FROM coupons AS c JOIN merchants AS m ON m.mid = c.merchant_id AND strftime('%Y-%m', c.created_at) = strftime('%Y-%m', m.created_at) GROUP BY m.mid) SELECT coupons_per_merchant.mid, m.name, coupons_per_merchant.num_coupons FROM coupons_per_merchant JOIN merchants AS m USING (mid) ORDER BY coupons_per_merchant.num_coupons DESC LIMIT 1;",Which merchant created the highest number of coupons within the same month that the merchant was created (coupon or merchant can be created earlier than the other)? Return the number of coupons along with the merchant's id and name.,"If events from 2 different tables from the same interval are to be joined, join on the respective truncated date fields eg `FROM t1 JOIN t2 ON DATE(t1.date, '<interval>') = DATE(t2.date, '<interval>').","To analyze coupon usage, join the coupons and wallet_transactions_daily tables in a CTE, filtering for specific merchants, then aggregate If events from 2 different tables from the same interval are to be joined, join on the respective truncated date fields eg `FROM t1 JOIN t2 ON DATE(t1.date, '<interval>') = DATE(t2.date, '<interval>'). To get the total number of transactions per user, join the users and wallet_transactions_daily tables in a CTE, then aggregate by user_id To get user notification preferences, join the users and user_setting_snapshot tables in a CTE, selecting the most recent snapshot for each user.",,
-instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_string_matching,"SELECT u.username, COUNT(n.id) AS total_notifications FROM users AS u JOIN notifications AS n ON u.uid = n.user_id WHERE n.type = 'promotion' AND n.status = 'unread' AND LOWER(u.country) = 'us' GROUP BY u.username;",Which users from the US have unread promotional notifications? Return the username and the total number of unread promotional notifications.,"User country should be matched case-insensitively, e.g., LOWER(users.country) = 'us'. Notification type and status should be matched exactly.","For merchant revenue analysis, rank merchants by their total successful transaction amounts without specifying any rank number To derive user engagement metrics, aggregate total session durations for users by joining with the user_sessions table over an unspecified date range. To calculate the Average Balance of user wallets, join the users and wallet_transactions_daily tables, then compute the average balance for a specified period User country should be matched case-insensitively, e.g., LOWER(users.country) = 'us'. Notification type and status should be matched exactly.",,
-instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_date_group_order_limit,"SELECT strftime('%Y-%m', t.created_at) AS month, COUNT(DISTINCT t.sender_id) AS active_users FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE t.sender_type = 0 AND t.status = 'success' AND u.status = 'active' AND t.created_at >= '2023-01-01' AND t.created_at < '2024-01-01' GROUP BY month ORDER BY month;","How many distinct active users sent money per month in 2023? Return the number of active users per month (as a date), starting from the earliest date. Do not include merchants in the query. Only include successful transactions.",,,"active_users = Users.WHERE(status=='active')
-selected_transactions= active_users.transactions_sent.WHERE(
-    (status=='success') & (created_at >= datetime.date(2023,1,1)) & (created_at < datetime.date(2024,1,1)) & (sender_type==0))(year_month= JOIN_STRINGS(""-"",YEAR(created_at),MONTH(created_at)))
+To analyze coupon usage, join the coupons and transactions tables in a CTE, filter for a particular merchant, then aggregate to calculate the total discount value","selected_transactions = Transactions.WHERE( DATE(created_at, 'start of month') == DATE(now, 'start of month', '-1 month')) 
 
-output= PARTITION(selected_transactions, name=""t"", by=year_month)(
-    month= year_month,
-    active_users= NDISTINCT(t.sender_id)
+STR_result= Ewallet(STR=(COUNT(selected_transactions.WHERE(status=='success'))*1.0 / COUNT(selected_transactions)))",n
+instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_date_join,"WITH coupons_per_merchant AS (SELECT m.mid, COUNT(c.cid) AS num_coupons FROM coupons AS c JOIN merchants AS m ON m.mid = c.merchant_id AND strftime('%Y-%m', c.created_at) = strftime('%Y-%m', m.created_at) GROUP BY m.mid) SELECT coupons_per_merchant.mid, m.name, coupons_per_merchant.num_coupons FROM coupons_per_merchant JOIN merchants AS m USING (mid) ORDER BY coupons_per_merchant.num_coupons DESC LIMIT 1;",Which merchant created the highest number of coupons within the same month that the merchant was created (coupon or merchant can be created earlier than the other)? Return the number of coupons along with the merchant's id and name.,"If events from 2 different tables from the same interval are to be joined, join on the respective truncated date fields eg `FROM t1 JOIN t2 ON DATE(t1.date, '<interval>') = DATE(t2.date, '<interval>').","To analyze coupon usage, join the coupons and wallet_transactions_daily tables in a CTE, filtering for specific merchants, then aggregate If events from 2 different tables from the same interval are to be joined, join on the respective truncated date fields eg `FROM t1 JOIN t2 ON DATE(t1.date, '<interval>') = DATE(t2.date, '<interval>'). To get the total number of transactions per user, join the users and wallet_transactions_daily tables in a CTE, then aggregate by user_id To get user notification preferences, join the users and user_setting_snapshot tables in a CTE, selecting the most recent snapshot for each user.","merchant_highest_number_coupons= Merchants(
+ mid,
+ name,
+ coupons_per_merchant = COUNT(coupons.WHERE(
+  DATE(created_at, 'month') == DATE(merchant.created_at, 'month')
+ ))
+).TOP_K(1, by=coupons_per_merchant.DESC())",n
+instruct_advanced_sqlite.csv,ewallet,sqlite,instructions_string_matching,"SELECT u.username, COUNT(n.id) AS total_notifications FROM users AS u JOIN notifications AS n ON u.uid = n.user_id WHERE n.type = 'promotion' AND n.status = 'unread' AND LOWER(u.country) = 'us' GROUP BY u.username;",Which users from the US have unread promotional notifications? Return the username and the total number of unread promotional notifications.,"User country should be matched case-insensitively, e.g., LOWER(users.country) = 'us'. Notification type and status should be matched exactly.","For merchant revenue analysis, rank merchants by their total successful transaction amounts without specifying any rank number To derive user engagement metrics, aggregate total session durations for users by joining with the user_sessions table over an unspecified date range. To calculate the Average Balance of user wallets, join the users and wallet_transactions_daily tables, then compute the average balance for a specified period User country should be matched case-insensitively, e.g., LOWER(users.country) = 'us'. Notification type and status should be matched exactly.","unread_promotional_notifications= notifications.WHERE((notification_type=='promotion') & (status=='unread'))
+output= Users(
+ username,
+ total_notifications= COUNT(unread_promotional_notifications)
+).WHERE((LOWER(country)== 'us') & HAS(unread_promotional_notifications))
+",y
+instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_date_group_order_limit,"SELECT strftime('%Y-%m', t.created_at) AS month, COUNT(DISTINCT t.sender_id) AS active_users FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE t.sender_type = 0 AND t.status = 'success' AND u.status = 'active' AND t.created_at >= '2023-01-01' AND t.created_at < '2024-01-01' GROUP BY month ORDER BY month;","How many distinct active users sent money per month in 2023? Return the number of active users per month (as a date), starting from the earliest date. Do not include merchants in the query. Only include successful transactions.",,,"formatted_transactions = Transactions(
+    new_date=JOIN_STRINGS(""-"", YEAR(created_at), MONTH(created_at))
+)
+
+# Filter transactions based on multiple conditions
+filtered_transactions = formatted_transactions.WHERE(
+    (status == 'success') &  
+    (created_at >= datetime.date(2023,1,1)) &  
+    (created_at < datetime.date(2024,1,1)) & 
+    (sending_user.status == 'active') & 
+    (sender_type == 0) 
+)
+
+# Partition the filtered transactions by month (new_date) and calculate the number of distinct active users per month
+monthly_active_users = PARTITION(
+    filtered_transactions, name=""t"", by=new_date
+)(
+    month=new_date,
+    active_users=NDISTINCT(t.sender_id)  
 )",y
-instruct_basic_sqlite.csv,ewallet,sqlite,basic_left_join,"SELECT m.mid AS merchant_id, m.name AS merchant_name FROM merchants AS m LEFT JOIN coupons AS c ON m.mid = c.merchant_id WHERE c.cid IS NULL;",Return merchants (merchant ID and name) who have not issued any coupons.,,,"mercants_without_coupons = Merchants.WHERE(HASNOT(coupons))(merchan_id= mid, merchant_name= name)
+instruct_basic_sqlite.csv,ewallet,sqlite,basic_left_join,"SELECT m.mid AS merchant_id, m.name AS merchant_name FROM merchants AS m LEFT JOIN coupons AS c ON m.mid = c.merchant_id WHERE c.cid IS NULL;",Return merchants (merchant ID and name) who have not issued any coupons.,,,"mercants_wihout_coupons = Merchants(merchan_id= mid, merchant_name= name).WHERE(HASNOT(coupons))
 ",y
-instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_distinct,SELECT DISTINCT m.mid AS merchant_id FROM merchants AS m JOIN wallet_transactions_daily AS t ON m.mid = t.receiver_id WHERE t.receiver_type = 1;,"Return the distinct list of merchant IDs that have received money from a transaction. Consider all transaction types in the results you return, but only include the merchant ids in your final answer.",,,"mercants_wihout_coupons = Merchants.WHERE(HAS(transactions_received.WHERE(receiver_type==1)))(merchan_id= mid)
+instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_distinct,SELECT DISTINCT m.mid AS merchant_id FROM merchants AS m JOIN wallet_transactions_daily AS t ON m.mid = t.receiver_id WHERE t.receiver_type = 1;,"Return the distinct list of merchant IDs that have received money from a transaction. Consider all transaction types in the results you return, but only include the merchant ids in your final answer.",,,"result = Merchants(merchant= mid).WHERE(HAS(transactions_received.WHERE(receiver_type==1)))
 ",y
-instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_distinct,SELECT DISTINCT user_id FROM notifications WHERE type = 'transaction';,Return the distinct list of user IDs who have received transaction notifications.,,,"users_with_notifications = Users.WHERE(HAS(notifications.WHERE(notification_type=='transaction')))(user_id= uid)
+instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_distinct,SELECT DISTINCT user_id FROM notifications WHERE type = 'transaction';,Return the distinct list of user IDs who have received transaction notifications.,,,"users_with_notifications = Users(user_id= uid).WHERE(HAS(notifications.WHERE(notification_type=='transaction')))
 ",y
-instruct_basic_sqlite.csv,ewallet,sqlite,basic_left_join,"SELECT u.uid, u.username FROM users AS u LEFT JOIN notifications AS n ON u.uid = n.user_id WHERE n.id IS NULL;",Return users (user ID and username) who have not received any notifications,,,"users_without_notifications = Users.WHERE(HASNOT(notifications))(uid,username)
+instruct_basic_sqlite.csv,ewallet,sqlite,basic_left_join,"SELECT u.uid, u.username FROM users AS u LEFT JOIN notifications AS n ON u.uid = n.user_id WHERE n.id IS NULL;",Return users (user ID and username) who have not received any notifications,,,"users_without_notifications = Users(uid,username).WHERE(HASNOT(notifications))
 ",y
 instruct_basic_sqlite.csv,ewallet,sqlite,basic_group_order_limit,"SELECT device_type, COUNT(*) AS COUNT FROM user_sessions GROUP BY device_type ORDER BY CASE WHEN COUNT IS NULL THEN 1 ELSE 0 END DESC, COUNT DESC LIMIT 2;",What are the top 2 most frequently used device types for user sessions and their respective counts?,,,"selected_sessions= PARTITION(UserSessions, name=""usession"", by=device_type)(
     device_type=device_type,
@@ -149,13 +181,14 @@ instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_group_order_limit,"SELECT c.
 
 sorted_coupons= coupons_by_code.TOP_K(3,redemption_count.DESC())
 ",y
-instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_group_order_limit,"SELECT u.country, COUNT(DISTINCT t.sender_id) AS user_count, SUM(t.amount) AS total_amount FROM users AS u JOIN wallet_transactions_daily AS t ON u.uid = t.sender_id WHERE t.sender_type = 0 GROUP BY u.country ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 5;","Which are the top 5 countries by total transaction amount sent by users, sender_type = 0? Return the country, number of distinct users who sent, and total transaction amount.",,,"transactions_by_sending_users= Transactions.WHERE(sender_type==0)(country= sending_user.country)
+instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_group_order_limit,"SELECT u.country, COUNT(DISTINCT t.sender_id) AS user_count, SUM(t.amount) AS total_amount FROM users AS u JOIN wallet_transactions_daily AS t ON u.uid = t.sender_id WHERE t.sender_type = 0 GROUP BY u.country ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 5;","Which are the top 5 countries by total transaction amount sent by users, sender_type = 0? Return the country, number of distinct users who sent, and total transaction amount.",,,"transactions_by_sending_users= Transactions(country= sending_user.country).WHERE(sender_type==0)
 
 output= PARTITION(transactions_by_sending_users, name=""t"", by=country)(
     country=country,
     user_count= NDISTINCT(t.sender_id),
     total_amount= SUM(t.amount)
-).TOP_K(5,total_amount.DESC())",y
+).TOP_K(5,total_amount.DESC())
+)",y
 instruct_basic_sqlite.csv,ewallet,sqlite,basic_join_date_group_order_limit,"SELECT m.name AS merchant_name, COUNT(t.txid) AS total_transactions, SUM(t.amount) AS total_amount FROM merchants AS m JOIN wallet_transactions_daily AS t ON m.mid = t.receiver_id WHERE t.receiver_type = 1 AND t.created_at >= DATE('now', '-150 days') GROUP BY m.name ORDER BY total_amount DESC LIMIT 2;","Who are the top 2 merchants (receiver type 1) by total transaction amount in the past 150 days (inclusive of 150 days ago)? Return the merchant name, total number of transactions, and total transaction amount.",,,"selected_transactions = transactions_received.WHERE(
  (receiver_type == 1) & (created_at >= ""2024-10-09"")
 )
@@ -189,5 +222,6 @@ selected_earliest_coupons = merchants_with_earliest_coupons.coupons(
     earliest_coupon_start_date=BACK(1).earliest_coupon_start_date,  
     earliest_coupon_id=cid 
 )",n
-questions_gen_sqlite.csv,ewallet,sqlite,date_functions,"SELECT u.username, u.email, u.created_at FROM users AS u LEFT JOIN notifications AS n ON u.uid = n.user_id AND n.created_at BETWEEN u.created_at AND date(u.created_at, '+1 year') WHERE n.user_id IS NULL;","Which users did not get a notification within the first year of signing up? Return their usernames, emails and signup dates.",,,"users_without_notifications = Users.WHERE(HASNOT(notifications.WHERE((created_at >= user.created_at) & (created_at < ""2025-01-01"") )))(username, email)
+questions_gen_sqlite.csv,ewallet,sqlite,date_functions,"SELECT u.username, u.email, u.created_at FROM users AS u LEFT JOIN notifications AS n ON u.uid = n.user_id AND n.created_at BETWEEN u.created_at AND date(u.created_at, '+1 year') WHERE n.user_id IS NULL;","Which users did not get a notification within the first year of signing up? Return their usernames, emails and signup dates.",,,"users_without_notifications = Users(username, email, created_at).WHERE(HASNOT(notifications.WHERE((created_at >= user.created_at) & (created_at < DATE(created_at, '+1 year') ) )))
+
 # Pydough  doesn't support date manipulation",n

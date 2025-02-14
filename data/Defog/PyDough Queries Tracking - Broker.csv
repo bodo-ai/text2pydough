@@ -1,6 +1,28 @@
 FileName,db_name,db_type,query_category,query,question,instructions,full_instructions,Pydough,Implemented
-instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_join,"WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions.","CR = customer rank by total transaction amount, with different rankings based on transaction amounts MoMC = month-over-month change in average closing price based on previous month's averages for each ticker each month To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions. Always join transactions with customers before using the transactions table. TAC = Total Active Customers who joined after a certain date",,n
-instruct_advanced_sqlite.csv,broker,sqlite,instructions_string_matching,SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?","Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')","MoMC = month-over-month change in average closing price = (average closing price of given month - average closing price of previous month) / average closing price of previous month for each ticker. ACP = Average Closing Price of tickers within a defined time frame TAC = Total Active Customers who have joined since a specific starting date Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",,n
+instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_join,"WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions.","CR = customer rank by total transaction amount, with different rankings based on transaction amounts MoMC = month-over-month change in average closing price based on previous month's averages for each ticker each month To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions. Always join transactions with customers before using the transactions table. TAC = Total Active Customers who joined after a certain date","%%pydough
+
+tables = Transactions(cust_id = customer._id, cust_name = customer.name)
+
+tx_success = PARTITION(tables, name=""t"", by=(cust_id, cust_name))(cust_name, total_tx = COUNT(t.transaction_id), success_tx = COUNT(t.WHERE(status == ""success"")))
+
+tx_rate = tx_success(success_rate = success_tx / total_tx * 100).WHERE(total_tx >= 5)
+
+output = tx_rate(cust_name, success_rate)
+
+pydough_output = pydough.to_df(output)
+pydough_output",y
+instruct_advanced_sqlite.csv,broker,sqlite,instructions_string_matching,SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?","Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')","MoMC = month-over-month change in average closing price = (average closing price of given month - average closing price of previous month) / average closing price of previous month for each ticker. ACP = Average Closing Price of tickers within a defined time frame TAC = Total Active Customers who have joined since a specific starting date Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')","%%pydough
+
+tables = Transactions(cust_email = customer.email, ticker_symbol = ticker.symbol)
+
+filter = tables.WHERE(CONTAINS(cust_email, '%.com%') & LIKE(ticker_symbol, 'AAPL') 
+                      | LIKE(ticker_symbol, 'GOOGL')| LIKE(ticker_symbol, 'META')
+                      | LIKE(ticker_symbol, 'NFLX') | LIKE(ticker_symbol, 'AMZN'))
+
+output = Broker(distinct_ids = NDISTINCT(filter.customer._id))
+
+pydough_output = pydough.to_df(output)
+pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,keywords_aggregate,"SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.","TAC = Total Active Customers who joined on or after January 1, 2023","To analyze stock performance, join the daily price and stock symbol tables, filter for a designated date range, and compute the variation in price
 To calculate the success rate of transactions for each customer, merge the customer and transaction records, aggregate by customer, and assess the rate of successful transactions
 TAC = Total Active Customers who joined on or after January 1, 2023
@@ -13,7 +35,16 @@ instruct_advanced_sqlite.csv,broker,sqlite,instructions_date_join,"SELECT COUNT(
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_window,"WITH cust_tx_counts AS (SELECT sbTxCustId, COUNT(*) AS num_tx, SUM(sbTxAmount) AS total_amount FROM sbTransaction GROUP BY sbTxCustId) SELECT c.sbCustName, ct.num_tx, ct.total_amount, RANK() OVER (ORDER BY CASE WHEN ct.total_amount IS NULL THEN 1 ELSE 0 END DESC, ct.total_amount DESC) AS cust_rank FROM cust_tx_counts AS ct JOIN sbCustomer AS c ON ct.sbTxCustId = c.sbCustId;","Return the customer name, number of transactions, total transaction amount, and CR for all customers","CR = customer rank by total transaction amount, with rank 1 being the customer with the highest total transaction amount","ACP = Average Closing Price of tickers over a select period of days
 TAC = Total Active Customers who have recently joined
 NPM (Net Profit Margin) = Net income divided by net sales for a specific time frame, expressed as a percentage for transactions in a recent period.
-CR = customer rank by total transaction amount, with rank 1 being the customer with the highest total transaction amount",,n
+CR = customer rank by total transaction amount, with rank 1 being the customer with the highest total transaction amount","%%pydough
+
+tables = Transactions(cust_name = customer.name)
+
+id_grouped_tx = PARTITION(tables, name=""t"", by=(customer_id, cust_name))(num_tx = COUNT(t.customer_id), total_amount = SUM(t.amount))
+
+output = id_grouped_tx(cust_name, total_amount, cust_rank = RANKING(by=total_amount.DESC(), levels=1))
+
+pydough_output = pydough.to_df(output)
+pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_join,"WITH popular_stocks AS (SELECT t.sbTickerSymbol, COUNT(*) AS tx_count FROM sbTransaction AS tx JOIN sbTicker AS t ON tx.sbTxTickerId = t.sbTickerId WHERE tx.sbTxType = 'buy' AND tx.sbTxDateTime >= DATE('now', '-10 days') GROUP BY t.sbTickerSymbol) SELECT sbTickerSymbol, tx_count FROM popular_stocks ORDER BY tx_count DESC LIMIT 2;",What are the 2 most frequently bought stock ticker symbols in the past 10 days? Return the ticker symbol and number of buy transactions.,"To find the most popular stocks in the past 10 days, join the transaction and ticker tables, filter for buy transactions in the last 10 days, group by ticker and count transactions.","MoMC = month-over-month change in average closing price Weekend days refer to Saturday and Sunday; adjust dates to weeks for aggregation. To find the most popular stocks in the past 10 days, join the transaction and ticker tables, filter for buy transactions in the last 10 days, group by ticker and count transactions. CR = customer rank by total transaction volume, where rank 1 belongs to the customer with the highest volume",,n
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_date_join,"SELECT strftime('%Y-%m', sbCustJoinDate) AS MONTH, COUNT(sbCustId) AS customer_signups, AVG(t.sbTxAmount) AS avg_tx_amount FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', t.sbTxDateTime) = strftime('%Y-%m', c.sbCustJoinDate) WHERE sbCustJoinDate >= date('now', '-6 months', 'start of month') AND sbCustJoinDate < date('now', 'start of month') GROUP BY MONTH;SELECT strftime('%Y-%m-01', sbCustJoinDate) AS MONTH, COUNT(sbCustId) AS customer_signups, AVG(t.sbTxAmount) AS avg_tx_amount FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', t.sbTxDateTime) = strftime('%Y-%m', c.sbCustJoinDate) WHERE sbCustJoinDate >= date('now', '-6 months', 'start of month') AND sbCustJoinDate < date('now', 'start of month') GROUP BY MONTH;SELECT strftime('%Y-%m-01 %H:%M:%S', sbCustJoinDate) AS MONTH, COUNT(sbCustId) AS customer_signups, AVG(t.sbTxAmount) AS avg_tx_amount FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', t.sbTxDateTime) = strftime('%Y-%m', c.sbCustJoinDate) WHERE sbCustJoinDate >= date('now', '-6 months', 'start of month') AND sbCustJoinDate < date('now', 'start of month') GROUP BY MONTH;",What are the PMCS and PMAT for customers who signed up in the last 6 months excluding the current month?,PMCS = per month customer signups. PMAT = per month average transaction amount. Truncate date to month for aggregation.,"ACP = Average Closing Price of tickers over a selected period, including the end day
 CR = customer rank by total transaction amount, where the top customer has the highest amount.
@@ -24,7 +55,14 @@ Customer Rank (CR) is determined by ranking customers based on their total trans
 To calculate Net Profit Margin (NPM), subtract the sum of tax and commission from the total amount obtained from sales, then divide by the total sales amount and multiply by 100, assessing transactions within a specific period
 ACP = Average Closing Price of tickers in the last 7 days, inclusive of today",,n
 instruct_advanced_sqlite.csv,broker,sqlite,keywords_ratio,"SELECT c.sbCustCountry, COALESCE(100.0 * COUNT(DISTINCT CASE WHEN c.sbCustStatus = 'active' THEN c.sbCustId END) / NULLIF(COUNT(DISTINCT t.sbTxCustId), 0), 0) AS AR FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE c.sbCustJoinDate BETWEEN '2022-01-01' AND '2022-12-31' GROUP BY c.sbCustCountry;",What is the AR for each country for customers who joined in 2022? Return the country and AR.,AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100.,"To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts If transactions from 2 different tables from the same interval are to be joined, join on the respective truncated date fields. AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100. To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate the price change",,n
-instruct_advanced_sqlite.csv,broker,sqlite,instructions_string_matching,SELECT COUNT(sbCustId) FROM sbCustomer WHERE (LOWER(sbCustName) LIKE 'j%' OR LOWER(sbCustName) LIKE '%ez') AND LOWER(sbCustState) LIKE '%a';,"What is the number of customers whose name starts with J or ends with 'ez', and who live in a state ending with the letter 'a'?",all customer attributes should be matched case insensitively,"To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts To find the most popular stocks over a recent period, join the transaction and ticker tables, filter for buy transactions within that period, group by ticker, and count transactions. To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate price change all customer attributes should be matched case insensitively",,n
+instruct_advanced_sqlite.csv,broker,sqlite,instructions_string_matching,SELECT COUNT(sbCustId) FROM sbCustomer WHERE (LOWER(sbCustName) LIKE 'j%' OR LOWER(sbCustName) LIKE '%ez') AND LOWER(sbCustState) LIKE '%a';,"What is the number of customers whose name starts with J or ends with 'ez', and who live in a state ending with the letter 'a'?",all customer attributes should be matched case insensitively,"To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts To find the most popular stocks over a recent period, join the transaction and ticker tables, filter for buy transactions within that period, group by ticker, and count transactions. To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate price change all customer attributes should be matched case insensitively","%%pydough
+
+tables = Customers
+
+filter = tables.WHERE(STARTSWITH(LOWER(name), 'j%') & ENDSWITH(LOWER(name), '%ez' & LIKE(state, '%a')))
+
+pydough_output = pydough.to_df(filter)
+pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,keywords_ratio,"SELECT sbTickerSymbol, CASE WHEN SUM(sbTxAmount) = 0 THEN NULL ELSE (SUM(sbTxAmount) - SUM(sbTxTax + sbTxCommission)) / SUM(sbTxAmount) * 100 END AS SPM FROM sbTransaction JOIN sbTicker ON sbTransaction.sbTxTickerId = sbTicker.sbTickerId WHERE sbTxType = 'sell' AND sbTxDateTime >= DATE('now', '-1 month') GROUP BY sbTickerSymbol;","What is the SPM for each ticker symbol from sell transactions in the past month, inclusive of 1 month ago? Return the ticker symbol and SPM.",SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100,"To calculate the Total Active Customers who have recently joined, the Average Closing Price of tickers within a recent period, and the Customer Rank by their total transaction volume, you would need different queries and calculations that are not directly related to calculating the Net Profit Margin (NPM) for sell transactions of ticker symbols in the past month. ACP = Calculate the Average Closing Price of tickers over a chosen recent time span Analyze customer signups over a certain period.
 SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100
 TAC = Total Active Customers who joined within a specified timeframe
@@ -48,7 +86,7 @@ cust_no_trans = Customers.WHERE(HASNOT(transactions_made))
 output = cust_no_trans(_id, name)
 
 pydough_output = pydough.to_df(output)
-pydough_output",n
+pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_distinct,SELECT DISTINCT c.sbCustId FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE t.sbTxType = 'buy';,Return the distinct list of customer IDs who have made a 'buy' transaction.,,,"%%pydough
 
 tables = Customers.transactions_made
@@ -58,7 +96,7 @@ filter = tables.WHERE(transaction_type == 'buy')
 output = filter(Cust_Id = BACK(1)._id)
 
 pydough_output = pydough.to_df(output)
-pydough_output",n
+pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_distinct,SELECT DISTINCT tk.sbTickerId FROM sbTicker AS tk JOIN sbDailyPrice AS dp ON tk.sbTickerId = dp.sbDpTickerId WHERE dp.sbDpDate >= '2023-04-01';,"Return the distinct list of ticker IDs that have daily price records on or after Apr 1, 2023.",,,,n
 instruct_basic_sqlite.csv,broker,sqlite,basic_left_join,"SELECT tk.sbTickerId, tk.sbTickerSymbol FROM sbTicker AS tk LEFT JOIN sbDailyPrice AS dp ON tk.sbTickerId = dp.sbDpTickerId WHERE dp.sbDpTickerId IS NULL;",Return the ticker ID and symbol of tickers that do not have any daily price records.,,,"%%pydough
 
@@ -69,7 +107,7 @@ filter = tables.WHERE(HASNOT(historical_prices))
 output = filter(_id, symbol)
 
 pydough_output = pydough.to_df(output)
-pydough_output",n
+pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_group_order_limit,"SELECT tk.sbTickerSymbol, COUNT(tx.sbTxId) AS num_transactions, SUM(tx.sbTxAmount) AS total_amount FROM sbTicker AS tk JOIN sbTransaction AS tx ON tk.sbTickerId = tx.sbTxTickerId GROUP BY tk.sbTickerSymbol ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 10;","What are the top 10 ticker symbols by total transaction amount? Return the ticker symbol, number of transactions and total transaction amount.",,,"%%pydough
 
 tables = Tickers.transactions_of(single_amount = amount, transactions  = transaction_id, symbols = BACK(1).symbol)
@@ -79,10 +117,37 @@ filter = PARTITION(tables, name=""t"", by=(symbols))(symbols, num_transactions =
 output = filter.TOP_K(10, by = total_amount.DESC())
 
 pydough_output = pydough.to_df(output)
-pydough_output",n
-instruct_basic_sqlite.csv,broker,sqlite,basic_group_order_limit,"SELECT sbTxStatus, COUNT(*) AS num_transactions FROM sbTransaction GROUP BY sbTxStatus ORDER BY CASE WHEN num_transactions IS NULL THEN 1 ELSE 0 END DESC, num_transactions DESC LIMIT 3;",What are the top 3 transaction statuses by number of transactions? Return the status and number of transactions.,,,,n
-instruct_basic_sqlite.csv,broker,sqlite,basic_join_group_order_limit,"SELECT c.sbCustState, t.sbTickerType, COUNT(*) AS num_transactions FROM sbTransaction AS tx JOIN sbCustomer AS c ON tx.sbTxCustId = c.sbCustId JOIN sbTicker AS t ON tx.sbTxTickerId = t.sbTickerId GROUP BY c.sbCustState, t.sbTickerType ORDER BY CASE WHEN num_transactions IS NULL THEN 1 ELSE 0 END DESC, num_transactions DESC LIMIT 5;","What are the top 5 combinations of customer state and ticker type by number of transactions? Return the customer state, ticker type and number of transactions.",,,,n
-instruct_basic_sqlite.csv,broker,sqlite,basic_group_order_limit,"SELECT sbCustCountry, COUNT(*) AS num_customers FROM sbCustomer GROUP BY sbCustCountry ORDER BY CASE WHEN num_customers IS NULL THEN 1 ELSE 0 END DESC, num_customers DESC LIMIT 5;",What are the top 5 countries by number of customers? Return the country name and number of customers.,,,,n
+pydough_output",y
+instruct_basic_sqlite.csv,broker,sqlite,basic_group_order_limit,"SELECT sbTxStatus, COUNT(*) AS num_transactions FROM sbTransaction GROUP BY sbTxStatus ORDER BY CASE WHEN num_transactions IS NULL THEN 1 ELSE 0 END DESC, num_transactions DESC LIMIT 3;",What are the top 3 transaction statuses by number of transactions? Return the status and number of transactions.,,,"%%pydough
+
+tables = Transactions
+
+filter = PARTITION(tables, name=""t"", by=(status))(status, num_transactions = COUNT(t))
+
+output = filter.TOP_K(10, by = num_transactions.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output",y
+instruct_basic_sqlite.csv,broker,sqlite,basic_join_group_order_limit,"SELECT c.sbCustState, t.sbTickerType, COUNT(*) AS num_transactions FROM sbTransaction AS tx JOIN sbCustomer AS c ON tx.sbTxCustId = c.sbCustId JOIN sbTicker AS t ON tx.sbTxTickerId = t.sbTickerId GROUP BY c.sbCustState, t.sbTickerType ORDER BY CASE WHEN num_transactions IS NULL THEN 1 ELSE 0 END DESC, num_transactions DESC LIMIT 5;","What are the top 5 combinations of customer state and ticker type by number of transactions? Return the customer state, ticker type and number of transactions.",,,"%%pydough
+
+tables = Transactions(t_type = ticker.ticker_type, cust_state = customer.state)
+
+filter = PARTITION(tables, name=""t"", by=(t_type, cust_state))(cust_state, t_type, num_transactions = COUNT(t))
+
+output = filter.TOP_K(5, by = num_transactions.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output",y
+instruct_basic_sqlite.csv,broker,sqlite,basic_group_order_limit,"SELECT sbCustCountry, COUNT(*) AS num_customers FROM sbCustomer GROUP BY sbCustCountry ORDER BY CASE WHEN num_customers IS NULL THEN 1 ELSE 0 END DESC, num_customers DESC LIMIT 5;",What are the top 5 countries by number of customers? Return the country name and number of customers.,,,"%%pydough
+
+tables = Customers
+
+filter = PARTITION(tables, name=""t"", by=(country))(country, num_customers = COUNT(t))
+
+output = filter.TOP_K(5, by = num_customers.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_date_group_order_limit,"SELECT c.sbCustCountry, COUNT(t.sbTxId) AS num_transactions, SUM(t.sbTxAmount) AS total_amount FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE t.sbTxDateTime >= DATE('now', '-30 days') GROUP BY c.sbCustCountry ORDER BY total_amount DESC LIMIT 5;","What are the top 5 countries by total transaction amount in the past 30 days, inclusive of 30 days ago? Return the country name, number of transactions and total transaction amount.",,,,n
 questions_gen_sqlite.csv,broker,sqlite,date_functions,"SELECT MIN(sdp.sbDpClose) AS lowest_price FROM sbDailyPrice AS sdp JOIN sbTicker AS st ON sdp.sbDpTickerId = st.sbTickerId WHERE st.sbTickerSymbol = 'VTI' AND sdp.sbDpDate >= date('now', '-7 days');",Lowest daily closest price for symbol `VTI` in the past 7 days,,,,n
 questions_gen_sqlite.csv,broker,sqlite,date_functions,"SELECT COUNT(t.sbTxCustId) AS transaction_count FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId WHERE c.sbCustJoinDate >= date('now', '-70 days');",number of transactions by users who joined in the past 70 days,,,,n
