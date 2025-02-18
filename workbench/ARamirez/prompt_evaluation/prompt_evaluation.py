@@ -139,9 +139,7 @@ def main(git_hash):
                 "model_id": args.model_id
             }
         )
-        mlflow.log_metrics({
-            "llm_output": output_file
-        })
+        mlflow.set_tag("llm_output", output_file)
         mlflow.set_tag("csv" ,responses) 
         #mlflow.log_artifact(output_file)
     

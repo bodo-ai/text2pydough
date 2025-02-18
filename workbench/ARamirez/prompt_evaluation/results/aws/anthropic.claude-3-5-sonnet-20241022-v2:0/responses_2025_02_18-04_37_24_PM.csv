@@ -1,0 +1,673 @@
+question,response,extracted_python_code
+List the total number of customers and suppliers in each nation,"I'll help you create a query to count the number of customers and suppliers per nation. We'll use COUNT aggregation function for both customers and suppliers.
+
+Here's the solution:
+
+```python
+nations(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    num_suppliers=COUNT(suppliers)
+).ORDER_BY(nation_name.ASC())
+```
+
+This query:
+1. Accesses the nations collection
+2. Creates a derived field 'nation_name' from the name field
+3. Counts the number of customers in each nation using COUNT(customers)
+4. Counts the number of suppliers in each nation using COUNT(suppliers)
+5. Orders the results alphabetically by nation name
+
+The result will show three columns:
+- nation_name: The name of the nation
+- num_customers: Total number of customers in that nation
+- num_suppliers: Total number of suppliers in that nation
+
+The query uses:
+- Aggregation function COUNT() to count records in the customers and suppliers collections
+- ORDER_BY with ASC() to sort nations alphabetically
+- Direct access to the reverse relationships (nations.customers and nations.suppliers)
+
+This provides a clear overview of the distribution of customers and suppliers across different nations.","nations(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    num_suppliers=COUNT(suppliers)
+).ORDER_BY(nation_name.ASC())"
+Find the top 5 nations with the highest number of orders placed by their customers in 1995.,"I'll help you write a PyDough query to find the nations with the highest order counts from their customers in 1995. Here's how we can break this down:
+
+1. First, we need to filter orders from 1995
+2. Then count orders per nation
+3. Finally, select the top 5 nations by order count
+
+Here's the solution:
+
+```python
+# Get nations with their order counts for 1995
+nations(
+    nation_name=name,
+    order_count=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).TOP_K(
+    5, 
+    by=order_count.DESC()
+)
+```
+
+This query:
+
+1. Starts with the `nations` collection
+2. Creates two fields:
+   - `nation_name`: The name of the nation
+   - `order_count`: Counts orders for each nation's customers, but only for orders placed in 1995 (using WHERE clause with YEAR function)
+3. Uses TOP_K to select the top 5 nations, sorted by order_count in descending order
+
+Alternative approach using PARTITION if you want more details:
+
+```python
+# Get nations with their order counts for 1995
+PARTITION(
+    nations(
+        nation_name=name,
+        order_count=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+    ),
+    name=""nation_stats"",
+    by=nation_name
+)(
+    nation_name,
+    total_orders=order_count
+).TOP_K(
+    5,
+    by=total_orders.DESC()
+)
+```
+
+Both queries will give you the same result: the 5 nations whose customers placed the most orders in 1995, sorted in descending order by number of orders.
+
+The output will include:
+- nation_name: The name of the nation
+- order_count/total_orders: The total number of orders placed by customers in that nation during 1995","# Get nations with their order counts for 1995
+nations(
+    nation_name=name,
+    order_count=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).TOP_K(
+    5, 
+    by=order_count.DESC()
+)"
+Find the region with the highest total order value in 1996,"I'll help you write a PyDough query to find the region with the highest total order value for orders placed in 1996. Here's how we can break this down:
+
+1. First, we need to filter orders from 1996
+2. Then aggregate the total order values up through nations to regions
+3. Find the region with the maximum total value
+
+Here's the query:
+
+```python
+regions(
+    region_name=name,
+    total_value=SUM(
+        nations.customers.orders.WHERE(
+            YEAR(order_date) == 1996
+        ).total_price
+    )
+).ORDER_BY(total_value.DESC()).TOP_K(1)
+```
+
+This query:
+1. Starts from the regions collection
+2. For each region:
+   - Gets its name
+   - Sums up the total_price of all orders that:
+     - Were placed by customers
+     - In nations
+     - Within that region
+     - During 1996 (using the YEAR filter)
+3. Orders the results by total_value in descending order
+4. Takes the top 1 result (the region with highest value)
+
+Alternatively, we could write this using PARTITION:
+
+```python
+PARTITION(
+    regions.nations.customers.orders.WHERE(
+        YEAR(order_date) == 1996
+    ),
+    name=""orders"",
+    by=region.name
+)(
+    region_name=orders.region.name,
+    total_value=SUM(orders.total_price)
+).ORDER_BY(total_value.DESC()).TOP_K(1)
+```
+
+Both queries will give you the same result: the region with the highest total order value in 1996, along with that total value.","regions(
+    region_name=name,
+    total_value=SUM(
+        nations.customers.orders.WHERE(
+            YEAR(order_date) == 1996
+        ).total_price
+    )
+).ORDER_BY(total_value.DESC()).TOP_K(1)"
+Find the top 3 regions with the most distinct customers,"I'll help you write a PyDough query to find the top 3 regions with the most distinct customers. We'll need to:
+1. Count distinct customers per region by going through the nations
+2. Order them by customer count in descending order
+3. Take the top 3 results
+
+Here's the query:
+
+```python
+PARTITION(nations, name=""n"", by=region.name)(
+    region_name=n.region.name,
+    customer_count=NDISTINCT(n.customers)
+).TOP_K(3, by=customer_count.DESC())
+```
+
+Let's break down how this works:
+
+1. `PARTITION(nations, name=""n"", by=region.name)` - Groups nations by their region name
+2. Inside the partition:
+   - `region_name=n.region.name` - Gets the region name
+   - `customer_count=NDISTINCT(n.customers)` - Counts distinct customers in each region
+3. `.TOP_K(3, by=customer_count.DESC())` - Selects the top 3 regions ordered by customer count in descending order
+
+This will return a result with two columns:
+- region_name: The name of the region
+- customer_count: The number of distinct customers in that region
+
+The regions will be ordered from highest to lowest customer count, showing only the top 3 regions.","PARTITION(nations, name=""n"", by=region.name)(
+    region_name=n.region.name,
+    customer_count=NDISTINCT(n.customers)
+).TOP_K(3, by=customer_count.DESC())"
+Find the names of all customers in Europe who have an account balance greater than $700 (or your chosen threshold) and placed at least one order in 1995.,"I'll help you create a PyDough query to find European customers meeting these criteria. Let's break this down into parts:
+
+1. Customer must be from Europe (through nation and region relationship)
+2. Account balance > 700
+3. Has orders in 1995
+
+Here's the solution:
+
+```python
+european_customers = customers(
+    customer_name=name,
+    nation_name=nation.name,
+    account_balance=acctbal,
+    num_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995))
+).WHERE(
+    (nation.region.name == ""EUROPE"") &  # Customer must be from Europe
+    (acctbal > 700) &                   # Account balance > 700
+    (HAS(orders.WHERE(YEAR(order_date) == 1995)))  # Has orders in 1995
+).ORDER_BY(
+    account_balance.DESC()  # Sort by account balance descending
+)
+```
+
+This query:
+
+1. Selects relevant fields:
+   - customer_name (aliased from name)
+   - nation_name (from the related nation)
+   - account_balance (from acctbal)
+   - num_orders_1995 (counted from filtered orders)
+
+2. Applies filters:
+   - Checks if customer's nation is in Europe using the nation->region relationship
+   - Ensures account balance is over 700
+   - Verifies customer has at least one order in 1995
+
+3. Orders results by account balance in descending order
+
+Alternative version with more detailed information:
+
+```python
+european_customers = customers(
+    customer_name=name,
+    nation_name=nation.name,
+    region_name=nation.region.name,
+    account_balance=acctbal,
+    total_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)),
+    total_spend_1995=SUM(orders.WHERE(YEAR(order_date) == 1995).total_price)
+).WHERE(
+    (nation.region.name == ""EUROPE"") &
+    (acctbal > 700) &
+    (HAS(orders.WHERE(YEAR(order_date) == 1995)))
+).ORDER_BY(
+    total_spend_1995.DESC(),
+    account_balance.DESC()
+)
+```
+
+This enhanced version also includes:
+- The region name explicitly
+- Total number of orders in 1995
+- Total spending in 1995
+- Sorting by both total spend and account balance
+
+Both queries will give you European customers meeting the criteria, with the second version providing more detailed information about their ordering behavior in 1995.","european_customers = customers(
+    customer_name=name,
+    nation_name=nation.name,
+    account_balance=acctbal,
+    num_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995))
+).WHERE(
+    (nation.region.name == ""EUROPE"") &  # Customer must be from Europe
+    (acctbal > 700) &                   # Account balance > 700
+    (HAS(orders.WHERE(YEAR(order_date) == 1995)))  # Has orders in 1995
+).ORDER_BY(
+    account_balance.DESC()  # Sort by account balance descending
+)"
+"For each European country, list the number of customers and the number of orders they placed in 1995, including customers who didn't place any orders that year.","I'll help you create a query to get this information. Let's break it down into steps:
+
+1. First, we need to identify European nations
+2. For each nation, we need to count customers
+3. For each customer, we need to count orders from 1995
+4. We need to include customers with no orders (so we'll use COUNT instead of HASNOT)
+
+Here's the solution:
+
+```python
+nations.WHERE(region.name == ""EUROPE"")(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    orders_in_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).ORDER_BY(
+    nation_name.ASC()
+)
+```
+
+This query:
+1. Filters nations to only those in Europe using `WHERE(region.name == ""EUROPE"")`
+2. For each nation, returns:
+   - The nation name
+   - Total count of customers in that nation
+   - Total count of orders placed in 1995 by customers in that nation
+3. Orders results alphabetically by nation name
+
+The query includes all customers whether or not they placed orders in 1995, because we're not filtering the customers collection, only the orders when counting them.
+
+Alternative format with PARTITION for clarity:
+```python
+european_nations = nations.WHERE(region.name == ""EUROPE"")
+PARTITION(european_nations, name=""nation"", by=key)(
+    nation_name=nation.name,
+    num_customers=COUNT(nation.customers),
+    orders_in_1995=COUNT(nation.customers.orders.WHERE(YEAR(order_date) == 1995))
+).ORDER_BY(nation_name.ASC())
+```
+
+Both queries will produce the same result: a list of European nations with their customer counts and 1995 order counts.","nations.WHERE(region.name == ""EUROPE"")(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    orders_in_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).ORDER_BY(
+    nation_name.ASC()
+)"
+List customers who placed orders in every year from 1992 to 1995.,"I'll help create a query to find customers who placed orders in all years from 1992 to 1995. We'll need to:
+1. Get the years for each customer's orders
+2. Ensure they have orders in all required years
+3. Return the customer details
+
+Here's the solution:
+
+```python
+# First, create a query to get customers and their order years
+customer_years = customers(
+    key, 
+    name,
+    # Get distinct years using NDISTINCT to avoid counting multiple orders in same year
+    year_count=NDISTINCT(orders.WHERE(
+        (YEAR(order_date) >= 1992) & 
+        (YEAR(order_date) <= 1995)
+    ).ORDER_BY(YEAR(order_date).ASC())(YEAR(order_date))),
+    # Check if they have orders in all required years (should be 4)
+    has_all_years=(year_count == 4)
+).WHERE(has_all_years)(
+    customer_key=key,
+    customer_name=name,
+    nation=nation.name,
+    total_orders=COUNT(orders)
+).ORDER_BY(
+    nation.ASC(),
+    customer_name.ASC()
+)
+```
+
+This query:
+1. For each customer, gets the count of distinct years (between 1992-1995) in which they placed orders
+2. Filters to keep only customers who have orders in all 4 years (year_count == 4)
+3. Returns customer details including:
+   - Customer key
+   - Customer name
+   - Nation name
+   - Total number of orders
+4. Orders the results by nation and customer name
+
+The WHERE clause with YEAR(order_date) ensures we only look at orders in our target date range, and NDISTINCT ensures we don't count multiple orders in the same year more than once. A customer must have year_count == 4 to have ordered in all years from 1992 to 1995.
+
+An alternative approach using HAS could be:
+
+```python
+customers.WHERE(
+    HAS(orders.WHERE(YEAR(order_date) == 1992)) &
+    HAS(orders.WHERE(YEAR(order_date) == 1993)) &
+    HAS(orders.WHERE(YEAR(order_date) == 1994)) &
+    HAS(orders.WHERE(YEAR(order_date) == 1995))
+)(
+    customer_key=key,
+    customer_name=name,
+    nation=nation.name,
+    total_orders=COUNT(orders)
+).ORDER_BY(
+    nation.ASC(),
+    customer_name.ASC()
+)
+```
+
+Both approaches will give you the same results, but the first approach might be more efficient as it only needs to count distinct years once per customer. The second approach checks each year separately but might be more readable for some users.","# First, create a query to get customers and their order years
+customer_years = customers(
+    key, 
+    name,
+    # Get distinct years using NDISTINCT to avoid counting multiple orders in same year
+    year_count=NDISTINCT(orders.WHERE(
+        (YEAR(order_date) >= 1992) & 
+        (YEAR(order_date) <= 1995)
+    ).ORDER_BY(YEAR(order_date).ASC())(YEAR(order_date))),
+    # Check if they have orders in all required years (should be 4)
+    has_all_years=(year_count == 4)
+).WHERE(has_all_years)(
+    customer_key=key,
+    customer_name=name,
+    nation=nation.name,
+    total_orders=COUNT(orders)
+).ORDER_BY(
+    nation.ASC(),
+    customer_name.ASC()
+)"
+Retrieve customers who placed more orders in 1995 than in 1994,"I'll help you create a query to find customers who placed more orders in 1995 than in 1994. Here's how we can break this down:
+
+1. For each customer, we need to:
+   - Count their orders in 1995
+   - Count their orders in 1994
+   - Compare these counts
+
+Here's the solution:
+
+```python
+customers(
+    key,
+    name,
+    orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)),
+    orders_1994=COUNT(orders.WHERE(YEAR(order_date) == 1994))
+).WHERE(orders_1995 > orders_1994)
+```
+
+This query:
+
+1. For each customer, creates two calculated fields:
+   - `orders_1995`: Counts orders where the order_date is in 1995
+   - `orders_1994`: Counts orders where the order_date is in 1994
+
+2. Uses WHERE to filter for customers where the 1995 count is greater than the 1994 count
+
+If you want to include the actual order counts in the output to see the difference, you could modify it like this:
+
+```python
+customers(
+    customer_key=key,
+    customer_name=name,
+    orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)),
+    orders_1994=COUNT(orders.WHERE(YEAR(order_date) == 1994)),
+    difference=COUNT(orders.WHERE(YEAR(order_date) == 1995)) - 
+              COUNT(orders.WHERE(YEAR(order_date) == 1994))
+).WHERE(orders_1995 > orders_1994
+).ORDER_BY(difference.DESC())
+```
+
+This enhanced version:
+1. Renames the output columns to be more descriptive
+2. Adds a `difference` column showing how many more orders were placed in 1995
+3. Sorts the results by the difference in descending order
+
+Both queries will return customers who were more active in 1995 compared to 1994.","customers(
+    key,
+    name,
+    orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)),
+    orders_1994=COUNT(orders.WHERE(YEAR(order_date) == 1994))
+).WHERE(orders_1995 > orders_1994)"
+Which is the average order value per Nation?,"I'll help you create a query to find the average order value per Nation. We need to:
+1. Connect nations to their customers
+2. Connect customers to their orders
+3. Group by nation and calculate average order value
+
+Here's the solution:
+
+```python
+PARTITION(nations, name=""n"", by=key)(
+    nation_name=n.name,
+    avg_order_value=AVG(n.customers.orders.total_price)
+).ORDER_BY(avg_order_value.DESC())
+```
+
+This query will:
+1. Start from the nations collection
+2. Create a partition by nation key
+3. For each nation:
+   - Get the nation name
+   - Calculate the average of all order total prices from all customers in that nation
+4. Sort results by average order value in descending order
+
+Alternative approach using nations directly:
+
+```python
+nations(
+    nation_name=name,
+    avg_order_value=AVG(customers.orders.total_price)
+).ORDER_BY(avg_order_value.DESC())
+```
+
+Both queries will give you the same result: a list of nations with their names and the average order value, sorted from highest to lowest average order value.
+
+The results will show:
+- nation_name: The name of the nation
+- avg_order_value: The average total price of all orders from customers in that nation","PARTITION(nations, name=""n"", by=key)(
+    nation_name=n.name,
+    avg_order_value=AVG(n.customers.orders.total_price)
+).ORDER_BY(avg_order_value.DESC())"
+Find suppliers in each nation who supply more than 1000 units of parts with 'BRASS' in their type.,"I'll help you create a query to find suppliers in each nation who supply parts with 'BRASS' in their type and have supply quantities greater than 1000. Here's how we can break this down:
+
+```python
+# First, let's find the supply records that meet our criteria:
+# 1. Part type contains 'BRASS'
+# 2. Available quantity > 1000
+qualifying_suppliers = nations(
+    nation_name=name,
+    suppliers=suppliers.WHERE(
+        HAS(
+            supply_records.WHERE(
+                (availqty > 1000) & 
+                CONTAINS(part.part_type, 'BRASS')
+            )
+        )
+    )(
+        supplier_name=name,
+        supplier_acctbal=account_balance,
+        total_brass_supply=SUM(
+            supply_records.WHERE(
+                CONTAINS(part.part_type, 'BRASS')
+            ).availqty
+        )
+    )
+).WHERE(
+    HAS(suppliers)  # Only include nations that have qualifying suppliers
+).ORDER_BY(
+    nation_name.ASC()
+)
+```
+
+This query:
+
+1. Groups suppliers by nation
+2. Filters for suppliers who have:
+   - At least one supply record
+   - Parts containing 'BRASS' in their type
+   - Available quantity > 1000
+3. Returns for each nation:
+   - Nation name
+   - List of qualifying suppliers with:
+     - Supplier name
+     - Account balance
+     - Total quantity of brass parts available
+4. Only includes nations that have at least one qualifying supplier
+5. Orders results by nation name
+
+The results will show each nation and its suppliers who meet the criteria, with details about their brass parts supply quantities and account balances.
+
+Alternative version with PARTITION if you want aggregated statistics per nation:
+
+```python
+# Using PARTITION to get nation-level statistics
+nation_stats = PARTITION(
+    suppliers.WHERE(
+        HAS(
+            supply_records.WHERE(
+                (availqty > 1000) & 
+                CONTAINS(part.part_type, 'BRASS')
+            )
+        )
+    ),
+    name=""supps"",
+    by=nation.name
+)(
+    nation_name=supps.nation.name,
+    supplier_count=COUNT(supps),
+    avg_brass_supply=AVG(
+        supps.supply_records.WHERE(
+            CONTAINS(part.part_type, 'BRASS')
+        ).availqty
+    ),
+    total_brass_supply=SUM(
+        supps.supply_records.WHERE(
+            CONTAINS(part.part_type, 'BRASS')
+        ).availqty
+    )
+).ORDER_BY(
+    nation_name.ASC()
+)
+```
+
+This alternative version provides:
+1. Nation name
+2. Count of qualifying suppliers
+3. Average brass parts supply quantity
+4. Total brass parts supply quantity
+per nation, ordered alphabetically by nation name.
+
+Choose the version that better suits your needs - the first one gives detailed supplier information within each nation, while the second provides summary statistics at the national level.","# First, let's find the supply records that meet our criteria:
+# 1. Part type contains 'BRASS'
+# 2. Available quantity > 1000
+qualifying_suppliers = nations(
+    nation_name=name,
+    suppliers=suppliers.WHERE(
+        HAS(
+            supply_records.WHERE(
+                (availqty > 1000) & 
+                CONTAINS(part.part_type, 'BRASS')
+            )
+        )
+    )(
+        supplier_name=name,
+        supplier_acctbal=account_balance,
+        total_brass_supply=SUM(
+            supply_records.WHERE(
+                CONTAINS(part.part_type, 'BRASS')
+            ).availqty
+        )
+    )
+).WHERE(
+    HAS(suppliers)  # Only include nations that have qualifying suppliers
+).ORDER_BY(
+    nation_name.ASC()
+)"
+Find parts that are supplied by at least 5 different nations.,"I'll help you write a query to find parts that are supplied by at least 5 different nations. We need to:
+1. Connect parts to suppliers through supply_records
+2. Connect suppliers to nations
+3. Count distinct nations per part
+4. Filter for parts with ≥ 5 nations
+
+Here's the solution:
+
+```python
+parts(
+    part_key=key,
+    part_name=name,
+    nation_count=NDISTINCT(supply_records.supplier.nation.key)
+).WHERE(nation_count >= 5).ORDER_BY(nation_count.DESC())
+```
+
+This query:
+1. Starts with the parts collection
+2. Creates new fields:
+   - part_key: from the part's key
+   - part_name: from the part's name
+   - nation_count: counts distinct nations supplying this part by traversing:
+     * parts → supply_records → supplier → nation
+3. Filters for parts supplied by 5 or more nations
+4. Orders results by nation count descendingly
+
+The relationships used are:
+- parts.supply_records: links parts to their supply records
+- supply_records.supplier: links supply records to suppliers
+- supplier.nation: links suppliers to their nations
+
+This will show which parts have the most geographic diversity in their supply chain.","parts(
+    part_key=key,
+    part_name=name,
+    nation_count=NDISTINCT(supply_records.supplier.nation.key)
+).WHERE(nation_count >= 5).ORDER_BY(nation_count.DESC())"
+"Which 10 customers purchased the highest quantity of products with ""green"" in the product name during 1998? Provide their names, adress and the total quantity ordered.","I'll help you create a query to find the top 10 customers who ordered the highest quantity of ""green"" products in 1998. Here's the solution:
+
+```python
+customers(
+    customer_name=name,
+    customer_address=address,
+    total_green_quantity=SUM(
+        orders.WHERE(YEAR(order_date) == 1998)
+        .lines.WHERE(CONTAINS(part.name, ""green""))
+        .quantity
+    )
+).WHERE(
+    total_green_quantity > 0
+).TOP_K(
+    10, 
+    by=total_green_quantity.DESC()
+)
+```
+
+This query:
+
+1. Starts with the customers collection
+2. Creates derived fields:
+   - customer_name from the name field
+   - customer_address from the address field
+   - total_green_quantity by:
+     * Looking at orders from 1998 using WHERE(YEAR(order_date) == 1998)
+     * Finding line items where the part name contains ""green""
+     * Summing up the quantities of these items
+3. Filters out customers who didn't order any green products (total_green_quantity > 0)
+4. Gets the top 10 customers by total_green_quantity in descending order
+
+The result will show:
+- The customer's name
+- Their address
+- The total quantity of green products they ordered in 1998
+
+This gives us a clear view of which customers were the biggest purchasers of green products during that year.","customers(
+    customer_name=name,
+    customer_address=address,
+    total_green_quantity=SUM(
+        orders.WHERE(YEAR(order_date) == 1998)
+        .lines.WHERE(CONTAINS(part.name, ""green""))
+        .quantity
+    )
+).WHERE(
+    total_green_quantity > 0
+).TOP_K(
+    10, 
+    by=total_green_quantity.DESC()
+)"
