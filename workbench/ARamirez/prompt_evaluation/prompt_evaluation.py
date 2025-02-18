@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import time
 import pandas as pd
 import aisuite as ai
@@ -8,6 +9,9 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
+import mlflow
+
+from utils import autocommit, get_git_commit, modified_files, untracked_files
 
 def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
@@ -15,13 +19,19 @@ def read_file(file_path):
 
 def setup_azure_client():
     """Initializes and returns the Azure ChatCompletionsClient."""
-    endpoint = os.getenv("AZURE_BASE_URL")
+    endpoint = os.getenv("AZURE_OPENAI_BASE_URL")
     token = os.getenv("GITHUB_TOKEN")
 
     if not endpoint or not token:
         raise ValueError("Azure environment variables are not set correctly.")
 
     return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(token))
+
+def extract_python_code(text):
+    """Extracts Python code from triple backticks in text."""
+    match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
+    return match.group(1) if match else ""
+
 
 def get_azure_response(client, prompt, question, model_id):
     """Generates a response using Azure AI."""
@@ -66,9 +76,11 @@ def process_questions(provider, model_id, formatted_prompt, questions):
 
     return responses
 
-def main():
+def main(git_hash):
     # Argument Parser
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
+    parser.add_argument("description", type=str, default="MLFlow")
+    parser.add_argument("name", type=str, default="MLFlow project")
     parser.add_argument("script_file", type=str, help="Path to the script file.")
     parser.add_argument("database_structure", type=str, help="Path to the database file.")
     parser.add_argument("prompt_file", type=str, help="Path to the prompt file.")
@@ -82,33 +94,67 @@ def main():
     folder_path = f"./results/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
 
-    # Read Files Efficiently
-    with open(args.prompt_file, "r", encoding="utf-8") as f:
-        prompt = f.read()
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
-    with open(args.script_file, "r", encoding="utf-8") as f:
-        script_content = f.read()
+    with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}):
+        # Read Files Efficiently
+        with open(args.prompt_file, "r", encoding="utf-8") as f:
+            prompt = f.read()
 
-    with open(args.database_structure, "r", encoding="utf-8") as f:
-        database_content = f.read()
+        with open(args.script_file, "r", encoding="utf-8") as f:
+            script_content = f.read()
 
-    # Read Questions
-    questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
-    questions = questions_df["question"].tolist()
+        with open(args.database_structure, "r", encoding="utf-8") as f:
+            database_content = f.read()
 
-    # Format prompt once
-    formatted_prompt = prompt.format(script_content=script_content, database_content=database_content)
+        # Read Questions
+        questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
+        questions = questions_df["question"].tolist()
+
+        # Format prompt once
+        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content)
 
 
-    # Process questions
-    responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
+        # Process questions
+        
+        responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
 
-    # Save responses
-    questions_df["response"] = responses
-    output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}.csv"
-    questions_df.to_csv(output_file, index=False, encoding="utf-8")
+        # Save responses
+        questions_df["response"] = responses
+        output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}.csv"
+        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
-    print(f"Responses saved to {output_file}")
+        questions_df.to_csv(output_file, index=False, encoding="utf-8")
+
+        print(f"Responses saved to {output_file}")
+
+        mlflow.log_params(
+            {
+                "script_file": args.script_file,
+                "database_structure": args.database_structure,
+                "prompt_file": args.prompt_file,
+                "prompt": prompt,
+                "questions_file": args.questions_csv,
+                "provider": args.provider,
+                "model_id": args.model_id
+            }
+        )
+        mlflow.log_metrics({
+            "llm_output": output_file
+        })
+        mlflow.set_tag("csv" ,responses) 
+        #mlflow.log_artifact(output_file)
+    
 
 if __name__ == "__main__":
-    main()
+
+    cwd = os.getcwd()
+    untracked= untracked_files(cwd)
+    modified= modified_files(cwd)
+    
+    if untracked or modified:
+        autocommit(cwd)
+
+    git_hash= get_git_commit(cwd)
+    
+    main(git_hash)
