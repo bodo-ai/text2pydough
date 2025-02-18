@@ -15,7 +15,7 @@ def read_file(file_path):
 
 def setup_azure_client():
     """Initializes and returns the Azure ChatCompletionsClient."""
-    endpoint = os.getenv("AZURE_OPENAI_BASE_URL")
+    endpoint = os.getenv("AZURE_BASE_URL")
     token = os.getenv("GITHUB_TOKEN")
 
     if not endpoint or not token:
