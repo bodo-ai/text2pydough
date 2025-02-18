@@ -13,7 +13,7 @@ Before running the script, set the following environment variables
 
 For azure models:
 ```bash
-export AZURE_OPENAI_BASE_URL="your_azure_endpoint"
+export AZURE_BASE_URL="your_azure_endpoint"
 export GITHUB_TOKEN="your_azure_api_token"
 ```
 
