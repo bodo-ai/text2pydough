@@ -9,6 +9,7 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
+from azure.core.pipeline.transport import RequestsTransport
 import mlflow
 
 from utils import autocommit, get_git_commit, modified_files, untracked_files
@@ -25,7 +26,10 @@ def setup_azure_client():
     if not endpoint or not key:
         raise ValueError("Azure environment variables are not set correctly.")
 
-    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+    # Configure the transport with a timeout of 60 seconds
+    transport = RequestsTransport(connection_timeout=300, read_timeout=300)
+
+    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key), transport=transport)
 
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
@@ -73,7 +77,7 @@ def process_questions(provider, model_id, formatted_prompt, questions):
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q)
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
