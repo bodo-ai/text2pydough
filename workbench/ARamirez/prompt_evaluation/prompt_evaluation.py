@@ -11,7 +11,7 @@ from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
 from azure.core.pipeline.transport import RequestsTransport
 import mlflow
-
+from test_data.eval import compare_output
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 
 def read_file(file_path):
@@ -93,13 +93,14 @@ def main(git_hash):
     parser.add_argument("questions_csv", type=str, help="Path to the questions CSV file.")
     parser.add_argument("provider", type=str, help="Model provider (either 'azure' or another provider).")
     parser.add_argument("model_id", type=str, help="Model ID.")
+    parser.add_argument("eval_results", type=bool, help="Evaluate the LLM output against the ground truth data.")
 
     args = parser.parse_args()
 
     # Create result directory if not exists
     folder_path = f"./results/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
-
+    
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}):
@@ -120,20 +121,22 @@ def main(git_hash):
         # Format prompt once
         formatted_prompt = prompt.format(script_content=script_content, database_content=database_content)
 
-
         # Process questions
-        
         responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
 
         # Save responses
         questions_df["response"] = responses
-        output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}.csv"
+        output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
-        print(f"Responses saved to {output_file}")
+        if args.eval_results:
+            folder_path = f"./results/{args.provider}/{args.model_id}/test"
+            os.makedirs(folder_path, exist_ok=True)
 
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+        
         mlflow.log_params(
             {
                 "script_file": args.script_file,
