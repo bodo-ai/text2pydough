@@ -19,13 +19,13 @@ def read_file(file_path):
 
 def setup_azure_client():
     """Initializes and returns the Azure ChatCompletionsClient."""
-    endpoint = os.getenv("AZURE_OPENAI_BASE_URL")
-    token = os.getenv("GITHUB_TOKEN")
+    endpoint = os.getenv("AZURE_BASE_URL")
+    key = os.getenv("AZURE_API_KEY")
 
-    if not endpoint or not token:
+    if not endpoint or not key:
         raise ValueError("Azure environment variables are not set correctly.")
 
-    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(token))
+    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key))
 
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
