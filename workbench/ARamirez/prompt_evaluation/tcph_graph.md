@@ -128,12 +128,9 @@ orders_per_customer = customers.orders(order_key, customer_key, order_status, to
 
 ### Retrieving Orders in each nation
 To join all the orders you have to join first each customer in each nation like this:
-orders_per_customer_in_each_nation = nations.customers.orders(order_key, customer_key, order_status, 
 ```python
-total_price, order_date, order_priority, clerk, ship_priority, comment)
+orders_per_customer_in_each_nation = nations.customers.orders(order_key, customer_key, order_status,total_price, order_date, order_priority, clerk, ship_priority, comment)
 ```
-### Retrieving Lines for an Order
-To retrieve all line items for a given order:
 
 ### Retrieving Suppliers for a Nation
 To retrieve all suppliers located in a given nation:
@@ -145,11 +142,21 @@ To retrieve all line items for a given order:
 ```python
 lines_for_order = orders.lines(comment, commit_date, discount, extended_price, line_number, order_key, part_key, quantity, receipt_date, return_flag, ship_date, ship_instruct, ship_mode, status, supplier_key, tax)
 ```
-
+### Retrieving the Order for a Line
+To retrieve the order associated with a line item, you can query the lines object with the necessary fields:
+```python
+order_for_line = lines.order(order_key, customer_key, order_status, total_price, order_date, order_priority, clerk, ship_priority, comment)
+```
 ### Retrieving Parts for a Supplier
 To retrieve all parts supplied by a specific supplier:
 ```python
 parts_for_supplier = suppliers.supply_records.part(brand, comment, container, key, manufacturer, name, part_type, retail_price, size)
+```
+
+### Retrieving Suppliers for a Part
+To retrieve all suppliers that supply a specific part
+```python
+suppliers_for_part = parts.supply_records.supplier(account_balance, address, comment, key, name, nation_key, phone)
 ```
 
 ### Retrieving Suppliers for a Nation
