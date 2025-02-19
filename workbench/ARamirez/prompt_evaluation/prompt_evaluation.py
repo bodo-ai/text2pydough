@@ -26,8 +26,8 @@ def setup_azure_client():
     if not endpoint or not key:
         raise ValueError("Azure environment variables are not set correctly.")
 
-    # Configure the transport with a timeout of 60 seconds
-    transport = RequestsTransport(connection_timeout=300, read_timeout=300)
+    # Configure the transport with a timeout of 800 seconds
+    transport = RequestsTransport(read_timeout=800)
 
     return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key), transport=transport)
 
@@ -44,7 +44,7 @@ def get_azure_response(client, prompt, question, model_id):
     messages = [SystemMessage(prompt), UserMessage(question)]
     
     try:
-        response = client.complete(messages=messages, max_tokens=1000, model=model_id)
+        response = client.complete(messages=messages, max_tokens=800, model=model_id)
         return response.choices[0].message.content
     except Exception as e:
         print(f"Azure AI error: {e}")
