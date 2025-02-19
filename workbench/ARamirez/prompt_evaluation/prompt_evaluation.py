@@ -29,9 +29,11 @@ def setup_azure_client():
 
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
-    match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
-    return match.group(1) if match else ""
+    if not isinstance(text, str):  # Ensure text is a string
+        return ""
 
+    match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
+    return match.group(1).strip() if match else ""
 
 def get_azure_response(client, prompt, question, model_id):
     """Generates a response using Azure AI."""
