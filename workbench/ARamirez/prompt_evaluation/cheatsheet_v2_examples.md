@@ -107,8 +107,7 @@
   Example: HASNOT(orders)
 
 **Rules**: 
-
-Aggregation functions do not support calling aggregations inside of aggregations. For example, you cannot do COUNT(HAS(orders)). 
+Aggregation functions do not support calling aggregations inside of aggregations. 
 
 **7. PARTITIONING (PARTITION)**  
 
