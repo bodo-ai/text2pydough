@@ -93,7 +93,7 @@ def main(git_hash):
     parser.add_argument("questions_csv", type=str, help="Path to the questions CSV file.")
     parser.add_argument("provider", type=str, help="Model provider (either 'azure' or another provider).")
     parser.add_argument("model_id", type=str, help="Model ID.")
-    parser.add_argument("eval_results", type=bool, help="Evaluate the LLM output against the ground truth data.")
+    parser.add_argument("eval_results",  type=bool, default=False, help="Evaluate the LLM output against the ground truth data.")
 
     args = parser.parse_args()
 
@@ -131,11 +131,11 @@ def main(git_hash):
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
-        #if args.eval_results:
-        #    folder_path = f"./results/{args.provider}/{args.model_id}/test"
-        #    os.makedirs(folder_path, exist_ok=True)
+        if args.eval_results:
+            folder_path = f"./results/{args.provider}/{args.model_id}/test"
+            os.makedirs(folder_path, exist_ok=True)
 
-        #    output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
         
         mlflow.log_params(
             {
