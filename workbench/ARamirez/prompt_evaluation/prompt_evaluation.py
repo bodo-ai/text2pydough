@@ -44,8 +44,13 @@ def get_azure_response(client, prompt, question, model_id):
     messages = [SystemMessage(prompt), UserMessage(question)]
     
     try:
-        response = client.complete(messages=messages, max_tokens=800, model=model_id)
-        return response.choices[0].message.content
+        completion = client.complete(messages=messages, max_tokens=800, model=model_id, stream=True)
+        response = []
+        for chunck in completion:
+            if chunck.choices != []:
+                response.append(chunck.choices[0]["delta"]["content"])
+        result = "".join(response)
+        return result
     except Exception as e:
         print(f"Azure AI error: {e}")
         return None
