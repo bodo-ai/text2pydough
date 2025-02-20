@@ -131,11 +131,11 @@ def main(git_hash):
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
-        if args.eval_results:
-            folder_path = f"./results/{args.provider}/{args.model_id}/test"
-            os.makedirs(folder_path, exist_ok=True)
+        #if args.eval_results:
+        #    folder_path = f"./results/{args.provider}/{args.model_id}/test"
+        #    os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+        #    output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
         
         mlflow.log_params(
             {
