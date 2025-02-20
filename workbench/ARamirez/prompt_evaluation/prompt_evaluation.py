@@ -26,10 +26,7 @@ def setup_azure_client():
     if not endpoint or not key:
         raise ValueError("Azure environment variables are not set correctly.")
 
-    # Configure the transport with a timeout of 800 seconds
-    transport = RequestsTransport(read_timeout=800)
-
-    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key), transport=transport)
+    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key))
 
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
@@ -43,17 +40,20 @@ def get_azure_response(client, prompt, question, model_id):
     """Generates a response using Azure AI."""
     messages = [SystemMessage(prompt), UserMessage(question)]
     
-    try:
-        completion = client.complete(messages=messages, max_tokens=800, model=model_id, stream=True)
-        response = []
-        for chunck in completion:
-            if chunck.choices != []:
-                response.append(chunck.choices[0]["delta"]["content"])
-        result = "".join(response)
-        return result
-    except Exception as e:
+    #try:
+    start_time = time.perf_counter()
+    completion = client.complete(messages=messages, max_tokens=20000, model=model_id, stream=True)
+    response = []
+    for chunck in completion:
+        if chunck.choices != []:
+            response.append(chunck.choices[0]["delta"]["content"])
+    result = "".join(response)
+    end_time = time.perf_counter()
+    print("Time: " + (end_time - start_time))
+    return result
+    """ except Exception as e:
         print(f"Azure AI error: {e}")
-        return None
+        return None """
 
 def get_other_provider_response(client, provider, model_id, prompt, question):
     """Generates a response using aisuite."""
