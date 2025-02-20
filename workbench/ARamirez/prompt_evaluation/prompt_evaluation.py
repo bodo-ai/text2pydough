@@ -149,13 +149,13 @@ def main(git_hash):
             output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch1.db")
             total_rows = len(responses)
 
-            # Count occurrences of each comparison result
             counts = responses['comparison_result'].value_counts()
 
-            # Calculate and print percentages
-            for category in ["Match", "Not Match", "Query Error"]:
-                percentage = (counts.get(category, 0) / total_rows) * 100
-                print(f"{category}: {percentage:.2f}%")
+            total = counts.sum()
+            percentages = (counts / total) * 100
+            mlflow.log_metrics(
+                    percentages
+                )
         
         mlflow.log_params(
             {
@@ -168,6 +168,7 @@ def main(git_hash):
                 "model_id": args.model_id
             }
         )
+       
         mlflow.set_tag("llm_output", output_file)
         mlflow.set_tag("csv" ,responses) 
         #mlflow.log_artifact(output_file)
