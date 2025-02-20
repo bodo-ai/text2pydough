@@ -1,3 +1,4 @@
+# %%
 import collections
 from datetime import datetime
 import os
@@ -156,6 +157,7 @@ def execute_code_and_extract_result(extracted_code, local_env):
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
+        print(last_variable)
         result_df = convert_to_df(last_variable)
         return result_df, None  # Return result and no exception
     except Exception as e:
@@ -237,3 +239,7 @@ def compare_output(folder_path, csv_file_path, db_path):
     df.to_csv(output_file, index=False)
 
     return output_file, df
+
+# %%
+#compare_output("../results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/test", "/home/ara/tekdatum/a-texto2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/responses_2025_02_20-11_24_25.csv","./tpch.db")
+# %%

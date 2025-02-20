@@ -106,9 +106,7 @@
 - **HASNOT(collection)**: True if collection is empty.
   Example: HASNOT(orders)
 
-**Rules**: 
-
-Aggregation functions do not support calling aggregations inside of aggregations. For example, you cannot do COUNT(HAS(orders)). 
+**Rules**: Aggregations Function does not support calling aggregations inside of aggregations
 
 **7. PARTITIONING (PARTITION)**  
 
@@ -127,7 +125,25 @@ Aggregation functions do not support calling aggregations inside of aggregations
   - **Group packages by year/month**:  
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
-- **Rules**: Partition keys must be scalar fields from the collection. 
+- **Bad Examples**:
+  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
+    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
+        birth_year,
+        email,
+        n_people=COUNT(ppl)
+    )
+
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    PARTITION(Packages, name=\"packs\", by=YEAR(order_date))(
+        n_packages=COUNT(packages)
+    )
+
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    PARTITION(People, name=\"ppl\", by=current_address.state)(
+        n_packages=COUNT(packages)
+    )
+
+- **Rules**: Partition keys must be scalar fields from the collection.
 
 **8. WINDOW FUNCTIONS**  
 
