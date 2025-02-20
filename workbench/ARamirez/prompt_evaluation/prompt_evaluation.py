@@ -93,8 +93,14 @@ def main(git_hash):
     parser.add_argument("questions_csv", type=str, help="Path to the questions CSV file.")
     parser.add_argument("provider", type=str, help="Model provider (either 'azure' or another provider).")
     parser.add_argument("model_id", type=str, help="Model ID.")
-    parser.add_argument("eval_results",  type=bool, default=False, help="Evaluate the LLM output against the ground truth data.")
+   # Use `store_true` to set eval_results to True if argument is passed
+    parser.add_argument("--eval_results", action="store_true", help="Evaluate the LLM output against the ground truth data.")
+    
+    # Use `store_false` if --no-eval_results is passed
+    parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
 
+    # Default value for eval_results is False
+    parser.set_defaults(eval_results=False)
     args = parser.parse_args()
 
     # Create result directory if not exists
