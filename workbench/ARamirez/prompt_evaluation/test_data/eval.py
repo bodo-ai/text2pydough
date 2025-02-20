@@ -241,5 +241,5 @@ def compare_output(folder_path, csv_file_path, db_path):
     return output_file, df
 
 # %%
-#compare_output("../results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/test", "/home/ara/tekdatum/a-texto2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/responses_2025_02_20-11_55_59.csv","./tpch.db")
+#compare_output("../results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/test", "/home/ara/tekdatum/a-texto2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/responses_2025_02_20-12_39_04.csv","./tpch1.db")
 # %%
