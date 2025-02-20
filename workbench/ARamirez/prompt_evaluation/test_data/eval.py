@@ -9,7 +9,7 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 
 pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db")
+pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch1.db")
 
 
 
@@ -241,5 +241,5 @@ def compare_output(folder_path, csv_file_path, db_path):
     return output_file, df
 
 # %%
-#compare_output("../results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/test", "/home/ara/tekdatum/a-texto2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/responses_2025_02_20-11_24_25.csv","./tpch.db")
+#compare_output("../results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/test", "/home/ara/tekdatum/a-texto2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/results/aws/anthropic.claude-3-5-sonnet-20241022-v2:0/responses_2025_02_20-11_55_59.csv","./tpch.db")
 # %%
