@@ -1,7 +1,6 @@
 import argparse
 import os
 import re
-import time
 import pandas as pd
 import aisuite as ai
 from concurrent.futures import ThreadPoolExecutor
@@ -40,21 +39,17 @@ def get_azure_response(client, prompt, question, model_id):
     """Generates a response using Azure AI."""
     messages = [SystemMessage(prompt), UserMessage(question)]
     
-    #try:
-    start_time = time.perf_counter()
-    completion = client.complete(messages=messages, max_tokens=20000, model=model_id, stream=True)
-    response = []
-    for chunck in completion:
-        if chunck.choices != []:
-            response.append(chunck.choices[0]["delta"]["content"])
-    result = "".join(response)
-    end_time = time.perf_counter()
-    print("TIME")
-    print(end_time - start_time)
-    return result
-    """ except Exception as e:
+    try:
+        completion = client.complete(messages=messages, max_tokens=20000, model=model_id, stream=True)
+        response = []
+        for chunck in completion:
+            if chunck.choices != []:
+                response.append(chunck.choices[0]["delta"]["content"])
+        result = "".join(response)
+        return result
+    except Exception as e:
         print(f"Azure AI error: {e}")
-        return None """
+        return None
 
 def get_other_provider_response(client, provider, model_id, prompt, question):
     """Generates a response using aisuite."""
