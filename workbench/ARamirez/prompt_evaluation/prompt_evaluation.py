@@ -147,6 +147,15 @@ def main(git_hash):
             os.makedirs(folder_path, exist_ok=True)
 
             output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch1.db")
+            total_rows = len(responses)
+
+            # Count occurrences of each comparison result
+            counts = responses['comparison_result'].value_counts()
+
+            # Calculate and print percentages
+            for category in ["Match", "Not Match", "Query Error"]:
+                percentage = (counts.get(category, 0) / total_rows) * 100
+                print(f"{category}: {percentage:.2f}%")
         
         mlflow.log_params(
             {
