@@ -49,7 +49,8 @@ def get_azure_response(client, prompt, question, model_id):
             response.append(chunck.choices[0]["delta"]["content"])
     result = "".join(response)
     end_time = time.perf_counter()
-    print("Time: " + (end_time - start_time))
+    print("TIME")
+    print(end_time - start_time)
     return result
     """ except Exception as e:
         print(f"Azure AI error: {e}")
