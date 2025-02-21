@@ -8,6 +8,25 @@ This script processes a set of questions against a script and database, generati
 1. Clone or download the repository.
 2. Install the environment using conda
 
+## Conda install
+
+under workbench/ARamirez/prompt_evaluation
+conda env create -f environment.yml
+pip install pydough 
+
+## For AWS
+
+Install aws cli:
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+Once installed, configure it using "aws configure" and add your AWS Access Key and AWS Secret Key
+
+To get Access Key ID ... 
+
+
+
 ## Setup
 Before running the script, set the following environment variables
 
