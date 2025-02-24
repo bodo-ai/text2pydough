@@ -143,7 +143,9 @@
         n_packages=COUNT(packages)
     )
 
-- **Rules**: Partition keys must be scalar fields from the collection.
+- **Rules**: 
+Partition keys must be scalar fields from the collection. 
+You must use Aggregation functions to call plural values insde PARTITION. 
 
 **8. WINDOW FUNCTIONS**  
 
