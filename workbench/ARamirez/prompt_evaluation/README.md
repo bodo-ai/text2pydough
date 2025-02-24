@@ -25,10 +25,18 @@ Once installed, configure it using "aws configure" and add your AWS Access Key a
 
 To get Access Key ID ... 
 
-
+## For Google
+Create a service account in Google Cloud Console, generate a JSON key and then move this file to a location on your file system like your home directory. 
 
 ## Setup
 Before running the script, set the following environment variables
+
+For google models:
+```bash
+export GOOGLE_PROJECT_ID="your-project-id"
+export GOOGLE_REGION="your-region"
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account-file.json"
+```
 
 For azure models:
 ```bash

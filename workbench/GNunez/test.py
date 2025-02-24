@@ -4,8 +4,8 @@ from azure.core.credentials import AzureKeyCredential
 from azure.ai.inference.models import SystemMessage, UserMessage
 
 client = ChatCompletionsClient(
-    endpoint="https://ai-arnoldo2137ai929428123129.services.ai.azure.com/models",
-    credential=AzureKeyCredential("CLQAXkuwkcBxwpVB0fuL9KmIMGP3GLhTBZcAGezHh6CRZhfqq9fPJQQJ99BBACHYHv6XJ3w3AAAAACOGSJD4"),
+    endpoint=os.getenv("AZURE_BASE_URL"),
+    credential=AzureKeyCredential(os.getenv("AZURE_API_KEY")),
 )
 
 response = client.complete(
