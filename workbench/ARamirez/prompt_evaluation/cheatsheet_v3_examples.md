@@ -97,7 +97,7 @@
 - **MIN/MAX(collection)**: Min/Max value.  
   Example: MIN(Packages.order_date)  
 
-- **NDISTINCT(collection)**: Distinct count.  
+- **NDISTINCT(collection)**: Distinct count equivalent to COUNT(DISTINCT).  
   Example: NDISTINCT(Addresses.state)  
 
 - **HAS(collection)**: True if ≥1 record exists.  
