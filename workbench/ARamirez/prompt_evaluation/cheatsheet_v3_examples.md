@@ -146,6 +146,10 @@
 - **Rules**: 
 Partition keys must be scalar fields from the collection. 
 You must use Aggregation functions to call plural values inside PARTITION. 
+Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in PARTITION.
+Instead, create a named reference using CALC before using it in PARTITION.
+Directly referencing nested attributes (e.g., table.column.subfield) in PARTITION is not allowed.
+Assign the nested value to a named reference using CALC before partitioning.
 
 **8. WINDOW FUNCTIONS**  
 
