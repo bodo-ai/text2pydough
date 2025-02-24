@@ -106,7 +106,7 @@
 - **HASNOT(collection)**: True if collection is empty.
   Example: HASNOT(orders)
 
-**Rules**: Aggregations Function does not support calling aggregations inside of aggregations
+**Rules**: PyDough does not support calling aggregation functions within other aggregation functions. For example: `SUM(NDISTINCT(nations.customers))`.
 
 **7. PARTITIONING (PARTITION)**  
 
