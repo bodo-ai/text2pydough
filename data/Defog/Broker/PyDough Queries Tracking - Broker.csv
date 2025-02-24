@@ -1,4 +1,4 @@
-FileName,db_name,db_type,query_category,query,question,instructions,full_instructions,Pydough,Implemented
+FileName,db_name,db_type,query_category,query,question,instructions,full_instructions,Pydough,NewPydough,Implemented
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_join,"WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions.","CR = customer rank by total transaction amount, with different rankings based on transaction amounts MoMC = month-over-month change in average closing price based on previous month's averages for each ticker each month To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions. Always join transactions with customers before using the transactions table. TAC = Total Active Customers who joined after a certain date","%%pydough
 
 tables = Transactions(cust_id = customer._id, cust_name = customer.name)
@@ -8,6 +8,22 @@ tx_success = PARTITION(tables, name=""t"", by=(cust_id, cust_name))(cust_name, t
 tx_rate = tx_success(success_rate = success_tx / total_tx * 100).WHERE(total_tx >= 5)
 
 output = tx_rate(cust_name, success_rate)
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
+
+tx_success = PARTITION(tables, name=""t"", by=(cust_id, cust_name)
+                ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
+                    success_tx = COUNT(t.WHERE(status == ""success""))
+                )
+
+tx_rate = tx_success.CALCULATE(
+                    success_rate = success_tx / total_tx * 100
+                    ).WHERE(total_tx >= 5)
+
+output = tx_rate.CALCULATE(cust_name, success_rate)
 
 pydough_output = pydough.to_df(output)
 pydough_output",y
@@ -20,6 +36,19 @@ filter = tables.WHERE(CONTAINS(cust_email, '%.com%') & LIKE(ticker_symbol, 'AAPL
                       | LIKE(ticker_symbol, 'NFLX') | LIKE(ticker_symbol, 'AMZN'))
 
 output = Broker(distinct_ids = NDISTINCT(filter.customer._id))
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(cust_email = customer.email, 
+                                ticker_symbol = ticker.symbol, 
+                                cust_id = customer._id)
+
+filter = tables.WHERE(CONTAINS(cust_email, '%.com%') & LIKE(ticker_symbol, 'AAPL') 
+                      | LIKE(ticker_symbol, 'GOOGL')| LIKE(ticker_symbol, 'META')
+                      | LIKE(ticker_symbol, 'NFLX') | LIKE(ticker_symbol, 'AMZN'))
+
+output = Broker.CALCULATE(distinct_ids = NDISTINCT(filter.customer._id))
 
 pydough_output = pydough.to_df(output)
 pydough_output",y
@@ -36,11 +65,21 @@ group = PARTITION(filter, name='f',by= country)
 output = group(cust_country = country, TAC = COUNT(f._id))
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Customers
+
+filter = tables.WHERE(join_date >= datetime.date(2023, 1, 1))
+
+group = PARTITION(filter, name='f',by= country)
+output = group.CALCULATE(cust_country = country, TAC = COUNT(f._id))
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_date_join,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;SELECT DATE(t.sbTxDateTime,  '-' || ((strftime('%w', t.sbTxDateTime) + 6) % 7) || ' days') AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?,Weekend days are Saturday and Sunday. Truncate date to week for aggregation.,"For an analysis of stock performance, link daily price data with ticker information, select a relevant time period, and calculate the change in price
 To determine the success rate of transactions for each customer, merge customer and transaction records, group by customer ID, and compute the ratio of successful transactions.
 Weekend days are Saturday and Sunday. Truncate date to week for aggregation.
-To get the total amount of transactions per customer, perform a join between customer and transaction datasets, then group by customer ID and sum up the transaction amounts",waiting for week functionaluty,n
+To get the total amount of transactions per customer, perform a join between customer and transaction datasets, then group by customer ID and sum up the transaction amounts",waiting for week functionaluty,,n
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_date_join,"SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');",How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount.,"Last week = DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') to before DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days'). Always join transactions with customers before using the transactions table.","To analyze stock performance, join the daily price and ticker tables and calculate price change To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts. Last week = DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') to before DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days'). Always join transactions with customers before using the transactions table. To get the success rate of transactions per customer, join customer and transaction tables, group by customer, and calculate the percentage of successful transactions","%%pydough
 
 tables = Transactions
@@ -48,6 +87,12 @@ tables = Transactions
 filter = tables.WHERE(DATEDIFF(""days"", date_time, 'now')>= 7).WHERE( DATEDIFF(""days"", date_time, 'now')<= 14)
 
 output = Broker(num_transactions=COUNT(filter), total_transaction_amount=SUM(filter.amount))
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+filter = Transactions.WHERE((DATEDIFF(""days"", date_time, 'now')>= 7) & ( DATEDIFF(""days"", date_time, 'now')<= 14))
+
+output = Broker.CALCULATE(num_transactions=COUNT(filter), total_transaction_amount=SUM(filter.amount))
 pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_window,"WITH cust_tx_counts AS (SELECT sbTxCustId, COUNT(*) AS num_tx, SUM(sbTxAmount) AS total_amount FROM sbTransaction GROUP BY sbTxCustId) SELECT c.sbCustName, ct.num_tx, ct.total_amount, RANK() OVER (ORDER BY CASE WHEN ct.total_amount IS NULL THEN 1 ELSE 0 END DESC, ct.total_amount DESC) AS cust_rank FROM cust_tx_counts AS ct JOIN sbCustomer AS c ON ct.sbTxCustId = c.sbCustId;","Return the customer name, number of transactions, total transaction amount, and CR for all customers","CR = customer rank by total transaction amount, with rank 1 being the customer with the highest total transaction amount","ACP = Average Closing Price of tickers over a select period of days
@@ -62,6 +107,19 @@ id_grouped_tx = PARTITION(tables, name=""t"", by=(customer_id, cust_name))(num_t
 output = id_grouped_tx(cust_name, total_amount, cust_rank = RANKING(by=total_amount.DESC(), levels=1))
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(cust_name = customer.name)
+
+id_grouped_tx = PARTITION(tables, name=""t"", by=(customer_id, cust_name)
+                          )(num_tx = COUNT(t.customer_id), 
+                            total_amount = SUM(t.amount))
+
+output = id_grouped_tx.CALCULATE(cust_name, 
+                                 total_amount, 
+                                 cust_rank = RANKING(by=total_amount.DESC(), levels=1))
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_join,"WITH popular_stocks AS (SELECT t.sbTickerSymbol, COUNT(*) AS tx_count FROM sbTransaction AS tx JOIN sbTicker AS t ON tx.sbTxTickerId = t.sbTickerId WHERE tx.sbTxType = 'buy' AND tx.sbTxDateTime >= DATE('now', '-10 days') GROUP BY t.sbTickerSymbol) SELECT sbTickerSymbol, tx_count FROM popular_stocks ORDER BY tx_count DESC LIMIT 2;",What are the 2 most frequently bought stock ticker symbols in the past 10 days? Return the ticker symbol and number of buy transactions.,"To find the most popular stocks in the past 10 days, join the transaction and ticker tables, filter for buy transactions in the last 10 days, group by ticker and count transactions.","MoMC = month-over-month change in average closing price Weekend days refer to Saturday and Sunday; adjust dates to weeks for aggregation. To find the most popular stocks in the past 10 days, join the transaction and ticker tables, filter for buy transactions in the last 10 days, group by ticker and count transactions. CR = customer rank by total transaction volume, where rank 1 belongs to the customer with the highest volume","%%pydough
 
@@ -71,6 +129,17 @@ filter = tables.WHERE(LIKE(transaction_type, 'buy') & (DATEDIFF('days', date_tim
 
 
 grouped = PARTITION(filter, name='g', by=ticker_symbol)(ticker_symbol, tx_count = COUNT(g))
+
+output = grouped.TOP_K(2, by = tx_count.DESC())
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+filter = Transactions.WHERE(LIKE(transaction_type, 'buy') 
+                      & (DATEDIFF('days', date_time, 'now') <= 10)
+                      ).CALCULATE(ticker_symbol = ticker.symbol)
+
+grouped = PARTITION(filter, name='g', by=ticker_symbol
+                    ).CALCULATE(ticker_symbol, tx_count = COUNT(g))
 
 output = grouped.TOP_K(2, by = tx_count.DESC())
 pydough_output = pydough.to_df(output)
@@ -93,6 +162,23 @@ grouped = PARTITION(month, name='m', by=month_joined)
 
 output = grouped(month_joined, customer_signups = COUNT(m.cust_id), avg_tx_amount = AVG(m.amount))
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+filter = Transactions.WHERE((YEAR(customer.join_date) == YEAR(date_time)) 
+                      & (MONTH(customer.join_date) == MONTH(date_time)) 
+                      & (DATEDIFF(""months"", customer.join_date, 'now') < 6)
+                      & (DATEDIFF(""months"", customer.join_date, 'now') >= 1))
+
+month = filter.CALCULATE(cust_id = customer._id, 
+                         month_joined = (YEAR(customer.join_date) 
+                                         * 100 + MONTH(customer.join_date)))
+
+grouped = PARTITION(month, name='m', by=month_joined)
+
+output = grouped.CALCULATE(month_joined, customer_signups = COUNT(m.cust_id), 
+                           avg_tx_amount = AVG(m.amount))
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,keywords_aggregate,"SELECT sbTicker.sbTickerType, AVG(sbDailyPrice.sbDpClose) AS ACP FROM sbDailyPrice JOIN sbTicker ON sbDailyPrice.sbDpTickerId = sbTicker.sbTickerId WHERE sbDpDate >= DATE('now', '-7 days') GROUP BY sbTicker.sbTickerType;","What is the ACP for each ticker type in the past 7 days, inclusive of today? Return the ticker type and the average closing price.","ACP = Average Closing Price of tickers in the last 7 days, inclusive of today","To determine the Activity Ratio (AR), divide the number of active customers by the total customer count and then multiply by 100, focusing on customers who joined within a particular year
 Customer Rank (CR) is determined by ranking customers based on their total transaction amount, with rank 1 assigned to the customer with the highest amount.
@@ -107,8 +193,18 @@ grouped = PARTITION(filter, name='g', by = ticker_type)
 
 output = grouped(ticker_type, ACP = AVG(g.close))
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+filter = DailyPrices.WHERE(DATEDIFF(""days"", date, 'now') <7
+                      ).CALCULATE(ticker_type = ticker.ticker_type)
+
+grouped = PARTITION(filter, name='g', by = ticker_type)
+
+output = grouped.CALCULATE(ticker_type, ACP = AVG(g.close))
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
-instruct_advanced_sqlite.csv,broker,sqlite,keywords_ratio,"SELECT c.sbCustCountry, COALESCE(100.0 * COUNT(DISTINCT CASE WHEN c.sbCustStatus = 'active' THEN c.sbCustId END) / NULLIF(COUNT(DISTINCT t.sbTxCustId), 0), 0) AS AR FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE c.sbCustJoinDate BETWEEN '2022-01-01' AND '2022-12-31' GROUP BY c.sbCustCountry;",What is the AR for each country for customers who joined in 2022? Return the country and AR.,AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100.,"To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts If transactions from 2 different tables from the same interval are to be joined, join on the respective truncated date fields. AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100. To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate the price change",,n
+instruct_advanced_sqlite.csv,broker,sqlite,keywords_ratio,"SELECT c.sbCustCountry, COALESCE(100.0 * COUNT(DISTINCT CASE WHEN c.sbCustStatus = 'active' THEN c.sbCustId END) / NULLIF(COUNT(DISTINCT t.sbTxCustId), 0), 0) AS AR FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE c.sbCustJoinDate BETWEEN '2022-01-01' AND '2022-12-31' GROUP BY c.sbCustCountry;",What is the AR for each country for customers who joined in 2022? Return the country and AR.,AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100.,"To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts If transactions from 2 different tables from the same interval are to be joined, join on the respective truncated date fields. AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100. To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate the price change",,,n
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_string_matching,SELECT COUNT(sbCustId) FROM sbCustomer WHERE (LOWER(sbCustName) LIKE 'j%' OR LOWER(sbCustName) LIKE '%ez') AND LOWER(sbCustState) LIKE '%a';,"What is the number of customers whose name starts with J or ends with 'ez', and who live in a state ending with the letter 'a'?",all customer attributes should be matched case insensitively,"To get the total transaction amount per customer, join the customer and transaction tables, group by customer, and sum the transaction amounts To find the most popular stocks over a recent period, join the transaction and ticker tables, filter for buy transactions within that period, group by ticker, and count transactions. To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate price change all customer attributes should be matched case insensitively","%%pydough
 
 tables = Customers
@@ -116,6 +212,15 @@ tables = Customers
 filter = tables.WHERE((STARTSWITH(LOWER(name), 'j%') | ENDSWITH(LOWER(name), '%ez')) & LIKE(state, '%a'))
 
 output = Broker(COUNT(filter))
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Customers.WHERE((STARTSWITH(LOWER(name), 'j%') 
+                          | ENDSWITH(LOWER(name), '%ez')) 
+                         & LIKE(state, '%a'))
+
+output = Broker.CALCULATE(COUNT(tables))
 
 pydough_output = pydough.to_df(output)
 pydough_output",y
@@ -131,6 +236,19 @@ filter = tables.WHERE(LIKE(transaction_type, 'sell') & (DATEDIFF(""months"", dat
 output = PARTITION(filter, name = 't', by= ticker_symbol)(ticker_symbol, SPM = (SUM(t.amount) - SUM(t.tax + t.commission))/SUM(t.amount) * 100)
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+filter = Transactions.WHERE(
+                    LIKE(transaction_type, 'sell') 
+                    & (DATEDIFF(""months"", date_time, 'now') < 1)
+                    ).CALCULATE(ticker_symbol = ticker.symbol)
+
+output = PARTITION(filter, name = 't', by= ticker_symbol
+                   ).CALCULATE(ticker_symbol, 
+                    SPM = (SUM(t.amount) - SUM(t.tax + t.commission))
+                    /SUM(t.amount) * 100)
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_cte_window,"WITH monthly_price_stats AS (SELECT strftime('%Y-%m', sbDpDate) AS month, sbDpTickerId, AVG(sbDpClose) AS avg_close, MAX(sbDpHigh) AS max_high, MIN(sbDpLow) AS min_low FROM sbDailyPrice GROUP BY month, sbDpTickerId) SELECT t.sbTickerSymbol, mps.month, mps.avg_close, mps.max_high, mps.min_low, (mps.avg_close - LAG(mps.avg_close) OVER (PARTITION BY mps.sbDpTickerId ORDER BY mps.month)) / LAG(mps.avg_close) OVER (PARTITION BY mps.sbDpTickerId ORDER BY mps.month) AS mom_change FROM monthly_price_stats AS mps JOIN sbTicker AS t ON mps.sbDpTickerId = t.sbTickerId;WITH monthly_price_stats AS (SELECT strftime('%Y-%m-01', sbDpDate) AS month, sbDpTickerId, AVG(sbDpClose) AS avg_close, MAX(sbDpHigh) AS max_high, MIN(sbDpLow) AS min_low FROM sbDailyPrice GROUP BY month, sbDpTickerId) SELECT t.sbTickerSymbol, mps.month, mps.avg_close, mps.max_high, mps.min_low, (mps.avg_close - LAG(mps.avg_close) OVER (PARTITION BY mps.sbDpTickerId ORDER BY mps.month)) / LAG(mps.avg_close) OVER (PARTITION BY mps.sbDpTickerId ORDER BY mps.month) AS mom_change FROM monthly_price_stats AS mps JOIN sbTicker AS t ON mps.sbDpTickerId = t.sbTickerId;WITH monthly_price_stats AS (SELECT strftime('%Y-%m-01 %H:%M:%S', sbDpDate) AS month, sbDpTickerId, AVG(sbDpClose) AS avg_close, MAX(sbDpHigh) AS max_high, MIN(sbDpLow) AS min_low FROM sbDailyPrice GROUP BY month, sbDpTickerId) SELECT t.sbTickerSymbol, mps.month, mps.avg_close, mps.max_high, mps.min_low, (mps.avg_close - LAG(mps.avg_close) OVER (PARTITION BY mps.sbDpTickerId ORDER BY mps.month)) / LAG(mps.avg_close) OVER (PARTITION BY mps.sbDpTickerId ORDER BY mps.month) AS mom_change FROM monthly_price_stats AS mps JOIN sbTicker AS t ON mps.sbDpTickerId = t.sbTickerId;","What is the ticker symbol, month, average closing price, highest price, lowest price, and MoMC for each ticker by month?","MoMC = month-over-month change in average closing price = (avg_close_given_month - avg_close_previous_month) / avg_close_previous_month for each ticker symbol each month. Recall that we want the symbol, and not just the ticker id.","NPM (Net Profit Margin) = (Total Income from Sales - (Tax + Commission Expenses)) / Total Income from Sales * 100, for recent transactions. TAC = Total Active Customers who have recently joined ACP = Average Closing Price of tickers over a recent period MoMC = month-over-month change in average closing price = (avg_close_given_month - avg_close_previous_month) / avg_close_previous_month for each ticker each month","%%pydough
 
@@ -142,6 +260,19 @@ grouped = PARTITION(tables, name='g', by = (ticker_id, ticker_symbol, _month))(
 
 #I don't understand the mom_change yet, will ask
 
+output = grouped
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = DailyPrices.CALCULATE(_month = (YEAR(date) * 100 + MONTH(date))
+                               , ticker_symbol = ticker.symbol)
+
+grouped = PARTITION(tables, name='g', by = (ticker_id, ticker_symbol, _month)
+                    ).CALCULATE(ticker_symbol, _month, ticker_id, 
+                                avg_close = AVG(g.close), max_high = MAX(g.high), 
+                                min_low = MIN(g.low))
+
+#I don't understand the mom_change yet, will ask
 output = grouped
 pydough_output = pydough.to_df(output)
 pydough_output",y
@@ -161,6 +292,21 @@ price_changed = grouped(ticker_symbol, price_change = (max_price - min_price))
 output = price_changed.TOP_K(3, price_change.DESC())
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = DailyPrices.WHERE((date >= datetime.date(2023, 4, 1)) & (date <= datetime.date(2023, 4, 4))
+                           ).CALCULATE(ticker_symbol = ticker.symbol)
+
+grouped = PARTITION(tables, name='g', by = ticker_symbol
+                    ).CALCULATE(ticker_symbol, max_price = MAX(g.high)
+                                , min_price = MIN(g.low))
+
+price_changed = grouped.CALCULATE(ticker_symbol, 
+                                  price_change = (max_price - min_price))
+
+output = price_changed.TOP_K(3, price_change.DESC())
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_advanced_sqlite.csv,broker,sqlite,instructions_date_join,"WITH active_customers AS (SELECT c.sbCustId, COUNT(t.sbTxId) AS num_transactions FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', c.sbCustJoinDate) = strftime('%Y-%m', t.sbTxDateTime) GROUP BY c.sbCustId) SELECT ac.sbCustId, c.sbCustName, ac.num_transactions FROM active_customers AS ac JOIN sbCustomer AS c ON ac.sbCustId = c.sbCustId ORDER BY ac.num_transactions DESC LIMIT 1;","Which customer made the highest number of transactions in the same month as they signed up? Return the customer's id, name and number of transactions.","If transactions from 2 different tables from the same interval are to be joined, join on the respective truncated date fields eg `FROM t1 JOIN t2 ON DATE(t1.date, '<interval>') = DATE(t2.date, '<interval>').","To analyze the performance of stocks, join the tables for daily prices and tickers, filter for a designated time frame, and calculate the change in price To get the total transaction amount by each customer, you should join the customer and transaction tables, group by the customer, and sum up the amounts of the transactions If transactions from 2 different tables from the same interval are to be joined, join on the respective truncated date fields eg `FROM t1 JOIN t2 ON DATE(t1.date, '<interval>') = DATE(t2.date, '<interval>'). To identify the most popular stocks within a recent period, join the transaction table with the ticker table, filter for buy transactions during the last several days, group by the ticker symbol, and count the number of transactions.","%%pydough
 
@@ -169,6 +315,20 @@ tables = Transactions.WHERE((YEAR(customer.join_date) == YEAR(date_time))
                         cust_id = customer._id, cust_name = customer.name)
 
 grouped = PARTITION(tables, name = 'g', by = (cust_id, cust_name))(cust_id, cust_name, num_transactions = COUNT(g.transaction_id))
+
+output = grouped.TOP_K(1, num_transactions.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.WHERE((YEAR(customer.join_date) == YEAR(date_time)) 
+                      & (MONTH(customer.join_date) == MONTH(date_time))
+                      ).CALCULATE(cust_id = customer._id, 
+                                  cust_name = customer.name)
+
+grouped = PARTITION(tables, name = 'g', by = (cust_id, cust_name)
+                    ).CALCULATE(cust_id, cust_name, 
+                                num_transactions = COUNT(g.transaction_id))
 
 output = grouped.TOP_K(1, num_transactions.DESC())
 
@@ -186,6 +346,17 @@ grouped = PARTITION(tables, name = 'g', by = (cust_id, cust_name))(cust_name, to
 output = grouped.TOP_K(5, total_amount.DESC())
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(cust_id = customer._id, 
+                                cust_name = customer.name)
+
+grouped = PARTITION(tables, name = 'g', by = (cust_id, cust_name)
+                    ).CALCULATE(cust_name, total_amount = SUM(g.amount))
+
+output = grouped.TOP_K(5, total_amount.DESC())
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_date_group_order_limit,"SELECT t.sbTxType, COUNT(DISTINCT t.sbTxCustId) AS num_customers, AVG(t.sbTxShares) AS avg_shares FROM sbTransaction AS t WHERE t.sbTxDateTime BETWEEN '2023-01-01' AND '2023-03-31 23:59:59' GROUP BY t.sbTxType ORDER BY CASE WHEN num_customers IS NULL THEN 1 ELSE 0 END DESC, num_customers DESC LIMIT 3;","How many distinct customers made each type of transaction between Jan 1, 2023 and Mar 31, 2023 (inclusive of start and end dates)? Return the transaction type, number of distinct customers and average number of shares, for the top 3 transaction types by number of customers.",,,"%%pydough
 
@@ -196,6 +367,15 @@ grouped = PARTITION(tables, name='t', by=transaction_type)(
                         avg_shares = AVG(t.shares))
 
 pydough_output = pydough.to_df(grouped)
+pydough_output","%%pydough
+
+tables = Transactions.WHERE((date_time >= '2023-01-01') & (date_time <= '2023-03-31 23:59:59'))
+
+grouped = PARTITION(tables, name='t', by=transaction_type).CALCULATE(
+                        transaction_type, num_customers = NDISTINCT(t.customer_id)
+                        ,avg_shares = AVG(t.shares))
+
+pydough_output = pydough.to_df(grouped)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_left_join,"SELECT c.sbCustId, c.sbCustName FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE t.sbTxCustId IS NULL;",Return the customer ID and name of customers who have not made any transactions.,,,"%%pydough
 
@@ -204,6 +384,14 @@ cust_no_trans = Customers.WHERE(HASNOT(transactions_made))
 output = cust_no_trans(_id, name)
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+cust_no_trans = (
+    Customers.CALCULATE(_id, name)
+    .WHERE(HASNOT(transactions_made))
+)
+
+pydough_output = pydough.to_df(cust_no_trans)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_distinct,SELECT DISTINCT c.sbCustId FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE t.sbTxType = 'buy';,Return the distinct list of customer IDs who have made a 'buy' transaction.,,,"%%pydough
 
@@ -214,12 +402,30 @@ filter = tables.WHERE(transaction_type == 'buy')
 output = filter(Cust_Id = BACK(1)._id)
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE( cust_id =
+        customer._id).WHERE(
+        transaction_type == 'buy'
+        )
+        
+output = PARTITION(tables, name='t', by = cust_id)
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_distinct,SELECT DISTINCT tk.sbTickerId FROM sbTicker AS tk JOIN sbDailyPrice AS dp ON tk.sbTickerId = dp.sbDpTickerId WHERE dp.sbDpDate >= '2023-04-01';,"Return the distinct list of ticker IDs that have daily price records on or after Apr 1, 2023.",,,"%%pydough
 
 tables = DailyPrices
 
 filter = tables.WHERE(date >= '2023-04-01')(tickers_id = ticker._id)
+
+output = PARTITION(filter, name=""o"", by=tickers_id)
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+filter = DailyPrices.WHERE(
+    date >= datetime.date(2023, 4, 1)
+    ).CALCULATE(tickers_id = ticker._id)
 
 output = PARTITION(filter, name=""o"", by=tickers_id)
 pydough_output = pydough.to_df(output)
@@ -233,12 +439,35 @@ filter = tables.WHERE(HASNOT(historical_prices))
 output = filter(_id, symbol)
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Tickers.WHERE(
+    HASNOT(historical_prices)
+    ).CALCULATE(_id, symbol)
+
+pydough_output = pydough.to_df(tables)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_group_order_limit,"SELECT tk.sbTickerSymbol, COUNT(tx.sbTxId) AS num_transactions, SUM(tx.sbTxAmount) AS total_amount FROM sbTicker AS tk JOIN sbTransaction AS tx ON tk.sbTickerId = tx.sbTxTickerId GROUP BY tk.sbTickerSymbol ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 10;","What are the top 10 ticker symbols by total transaction amount? Return the ticker symbol, number of transactions and total transaction amount.",,,"%%pydough
 
 tables = Tickers.transactions_of(single_amount = amount, transactions  = transaction_id, symbols = BACK(1).symbol)
 
 filter = PARTITION(tables, name=""t"", by=(symbols))(symbols, num_transactions = COUNT(t.transactions), total_amount = SUM(t.single_amount))
+
+output = filter.TOP_K(10, by = total_amount.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(
+    ticker_symbol = ticker.symbol
+)
+
+filter = PARTITION(
+        tables, name=""t"", by=(ticker_symbol)
+        ).CALCULATE(ticker_symbol, 
+        num_transactions = COUNT(t.transaction_id), 
+        total_amount = SUM(t.amount)
+        )
 
 output = filter.TOP_K(10, by = total_amount.DESC())
 
@@ -253,12 +482,35 @@ filter = PARTITION(tables, name=""t"", by=(status))(status, num_transactions = C
 output = filter.TOP_K(10, by = num_transactions.DESC())
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = PARTITION(Transactions, name=""t"", by=(status)
+            ).CALCULATE(
+                status, num_transactions = COUNT(t)
+            )
+
+output = tables.TOP_K(10, by = num_transactions.DESC())
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_group_order_limit,"SELECT c.sbCustState, t.sbTickerType, COUNT(*) AS num_transactions FROM sbTransaction AS tx JOIN sbCustomer AS c ON tx.sbTxCustId = c.sbCustId JOIN sbTicker AS t ON tx.sbTxTickerId = t.sbTickerId GROUP BY c.sbCustState, t.sbTickerType ORDER BY CASE WHEN num_transactions IS NULL THEN 1 ELSE 0 END DESC, num_transactions DESC LIMIT 5;","What are the top 5 combinations of customer state and ticker type by number of transactions? Return the customer state, ticker type and number of transactions.",,,"%%pydough
 
 tables = Transactions(t_type = ticker.ticker_type, cust_state = customer.state)
 
 filter = PARTITION(tables, name=""t"", by=(t_type, cust_state))(cust_state, t_type, num_transactions = COUNT(t))
+
+output = filter.TOP_K(5, by = num_transactions.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(
+        t_type = ticker.ticker_type, 
+        cust_state = customer.state
+    )
+
+filter = PARTITION(tables, name=""t"", by=(t_type, cust_state)
+        ).CALCULATE(cust_state, t_type, num_transactions = COUNT(t))
 
 output = filter.TOP_K(5, by = num_transactions.DESC())
 
@@ -273,6 +525,16 @@ filter = PARTITION(tables, name=""t"", by=(country))(country, num_customers = CO
 output = filter.TOP_K(5, by = num_customers.DESC())
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = PARTITION(Customers, name=""t"", by=(country)
+            ).CALCULATE(
+            country, num_customers = COUNT(t)
+            )
+
+output = tables.TOP_K(5, by = num_customers.DESC())
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 instruct_basic_sqlite.csv,broker,sqlite,basic_join_date_group_order_limit,"SELECT c.sbCustCountry, COUNT(t.sbTxId) AS num_transactions, SUM(t.sbTxAmount) AS total_amount FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE t.sbTxDateTime >= DATE('now', '-30 days') GROUP BY c.sbCustCountry ORDER BY total_amount DESC LIMIT 5;","What are the top 5 countries by total transaction amount in the past 30 days, inclusive of 30 days ago? Return the country name, number of transactions and total transaction amount.",,,"%%pydough
 
@@ -285,12 +547,32 @@ grouped = PARTITION(tables, name = 'g', by = (cust_country))(
 output = grouped.TOP_K(5, total_amount.DESC())
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.WHERE(DATEDIFF(""days"", date_time, 'now') < 30
+                            ).CALCULATE(cust_country = customer.country)
+
+grouped = PARTITION(tables, name = 'g', by = (cust_country)
+                    ).CALCULATE(cust_country, 
+                                num_transactions = COUNT(g.transaction_id),
+                                total_amount = SUM(g.amount))
+
+output = grouped.TOP_K(5, total_amount.DESC())
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 questions_gen_sqlite.csv,broker,sqlite,date_functions,"SELECT MIN(sdp.sbDpClose) AS lowest_price FROM sbDailyPrice AS sdp JOIN sbTicker AS st ON sdp.sbDpTickerId = st.sbTickerId WHERE st.sbTickerSymbol = 'VTI' AND sdp.sbDpDate >= date('now', '-7 days');",Lowest daily closest price for symbol `VTI` in the past 7 days,,,"%%pydough
 
 tables = DailyPrices.WHERE((ticker.symbol == 'VTI') & (DATEDIFF(""days"", date, 'now') <= 7))
 
 output = Broker(lowest_price = MIN(tables.close))
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = DailyPrices.WHERE((ticker.symbol == 'VTI') & (DATEDIFF(""days"", date, 'now') <= 7))
+
+output = Broker.CALCULATE(lowest_price = MIN(tables.close))
 
 pydough_output = pydough.to_df(output)
 pydough_output",y
@@ -301,6 +583,13 @@ tables = Transactions.WHERE((DATEDIFF(""days"",customer.join_date, 'now') <= 70)
 output = Broker(transaction_count = COUNT(tables.customer_id))
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.WHERE((DATEDIFF(""days"",customer.join_date, 'now') <= 70))
+
+output = Broker.CALCULATE(transaction_count = COUNT(tables.customer_id))
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 questions_gen_sqlite.csv,broker,sqlite,date_functions,"SELECT c.sbCustId, MIN(julianday(t.sbTxDateTime)) - julianday(c.sbCustJoinDate) AS DaysFromJoinToFirstTransaction FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId;",Return the customer id and the difference between their time from joining to their first transaction. Ignore customers who haven't made any transactions.,,,"%%pydough
 
@@ -309,6 +598,18 @@ tables = Transactions(cust_id = customer._id, cust_joins = customer.join_date)
 grouped = PARTITION(tables, name = 'g', by=(cust_id, cust_joins))(first_tx = MIN(g.date_time))
 
 output = grouped(cust_id, DaysFromJoinToFirstTransaction = DATEDIFF(""days"", cust_joins, first_tx))
+
+pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.CALCULATE(cust_id = customer._id, 
+                                cust_joins = customer.join_date)
+
+grouped = PARTITION(tables, name = 'g', by=(cust_id, cust_joins)
+                    ).CALCULATE(first_tx = MIN(g.date_time))
+
+output = grouped.CALCULATE(cust_id, DaysFromJoinToFirstTransaction = 
+                           DATEDIFF(""days"", cust_joins, first_tx))
 
 pydough_output = pydough.to_df(output)
 pydough_output",y
@@ -324,6 +625,21 @@ grouped = PARTITION(cust_info, name = 'c', by=(cust_id, cust_name))(cust_id, cus
 output = grouped.TOP_K(1, by=num_tx.DESC(na_pos=""first""))
 
 pydough_output = pydough.to_df(output)
+pydough_output","%%pydough
+
+tables = Transactions.WHERE((DATEDIFF(""days"", date_time, 
+                                      datetime.date(2023, 4, 1)) == 0)
+                                    & (transaction_type == 'sell'))
+
+cust_info = tables.CALCULATE(cust_id = customer._id, 
+                             cust_name = customer.name)
+
+grouped = PARTITION(cust_info, name = 'c', by=(cust_id, cust_name)
+                    ).CALCULATE(cust_id, cust_name, num_tx = COUNT(c))
+
+output = grouped.TOP_K(1, by=num_tx.DESC(na_pos=""first""))
+
+pydough_output = pydough.to_df(output)
 pydough_output",y
 questions_gen_sqlite.csv,broker,sqlite,date_functions,"SELECT strftime('%Y-%m', sbTxDateTime) AS month, AVG(sbTxPrice) AS avg_price FROM sbTransaction WHERE sbTxStatus = 'success' AND sbTxDateTime BETWEEN '2023-01-01' AND '2023-03-31' GROUP BY month ORDER BY month;SELECT strftime('%Y-%m-01 00:00:00', sbTxDateTime) AS datetime, AVG(sbTxPrice) AS avg_price FROM sbTransaction WHERE sbTxStatus = 'success' AND sbTxDateTime BETWEEN '2023-01-01' AND '2023-03-31' GROUP BY datetime ORDER BY datetime;SELECT strftime('%Y-%m-01', sbTxDateTime) AS datetime, AVG(sbTxPrice) AS avg_price FROM sbTransaction WHERE sbTxStatus = 'success' AND sbTxDateTime BETWEEN '2023-01-01' AND '2023-03-31' GROUP BY datetime ORDER BY datetime;",What is the monthly average transaction price for successful transactions in the 1st quarter of 2023?,,,"%%pydough
 
@@ -334,6 +650,20 @@ tables = Transactions.WHERE((DATEDIFF(""days"", '2023-01-01', date_time) >= 0 )
 month = tables(_month = (YEAR(date_time) * 100 + MONTH(date_time)))
 
 grouped = PARTITION(month, name = 'm', by=(_month))(_month, avg_price = AVG(m.price))
+
+output = grouped.ORDER_BY(_month.DESC())
+
+pydough_output = pydough.to_df(grouped)
+pydough_output","%%pydough
+
+tables = Transactions.WHERE((DATEDIFF(""days"", datetime.date(2023, 1, 1), date_time) >= 0 )
+                            & (DATEDIFF(""days"", date_time, datetime.date(2023, 3, 31)) >= 0) 
+                            & (status == 'success'))
+
+month = tables.CALCULATE(_month = (YEAR(date_time) * 100 + MONTH(date_time)))
+
+grouped = PARTITION(month, name = 'm', by=(_month)
+                    ).CALCULATE(_month, avg_price = AVG(m.price))
 
 output = grouped.ORDER_BY(_month.DESC())
 
