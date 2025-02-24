@@ -169,7 +169,7 @@ def main(git_hash):
        
         mlflow.set_tag("llm_output", output_file)
         mlflow.set_tag("csv" ,responses) 
-        #mlflow.log_artifact(output_file)
+        mlflow.log_artifact(output_file)
     
 
 if __name__ == "__main__":
