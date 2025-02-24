@@ -147,6 +147,7 @@
 You must use Aggregation functions to call plural values inside PARTITION. 
 Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in PARTITION Instead, create a named reference using CALC before using it in PARTITION.
 Directly referencing nested attributes (e.g., table.column.subfield) in PARTITION is not allowed. Assign the nested value to a named reference using CALC before partitioning.
+All terms in a partitioning or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate the data
 
 **8. WINDOW FUNCTIONS**  
 
