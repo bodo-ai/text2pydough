@@ -145,7 +145,7 @@
 
 - **Rules**: 
 Partition keys must be scalar fields from the collection. 
-You must use Aggregation functions to call plural values insde PARTITION. 
+You must use Aggregation functions to call plural values inside PARTITION. 
 
 **8. WINDOW FUNCTIONS**  
 
