@@ -12,8 +12,8 @@ Generate PyDough code based on the provided text description. To accurately perf
 
 5. If the description is unclear or vague, seek clarification or make reasonable assumptions based on the provided reference materials.
 
-1. **PyDough Reference File:** This file contains core concepts, functions, and syntax of the PyDough code. Familiarize yourself with the structure, commands, and best practices to ensure accurate code generation.
+1. **PyDough Reference File:**:
 {script_content}
 
-2. **Database Structure Reference File:** This file outlines the database schema, including collections, fields and relationships between collections. Understand how to access and manipulate these relations through appropriate PyDough commands.
+2. **Database Structure Reference File:**:
 {database_content}
