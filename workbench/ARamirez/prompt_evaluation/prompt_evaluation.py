@@ -111,8 +111,11 @@ def main(git_hash):
     os.makedirs(folder_path, exist_ok=True)
     
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
-    with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}):
+    expr_name = "text2pydough"  # create a new experiment (do not replace)
+    s3_bucket = "s3://text2pydough"  # replace this value
+    #mlflow.create_experiment(expr_name, s3_bucket)
+    experiment= mlflow.set_experiment(expr_name)
+    with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash},experiment_id=experiment.experiment_id):
         # Read Files Efficiently
         with open(args.prompt_file, "r", encoding="utf-8") as f:
             prompt = f.read()
