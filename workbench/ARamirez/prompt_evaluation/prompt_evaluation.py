@@ -14,6 +14,62 @@ import mlflow
 from test_data.eval import compare_output
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 
+WORDS_MAP = {
+    "group_by": "PARTITION",
+    "where": "WHERE",
+    "count": "COUNT",
+    "sum": "SUM",
+    "avg": "AVG",
+    "min": "MIN",
+    "max": "MAX",
+    "ndistinct": "NDISTINCT",
+    "has": "HAS",
+    "hasnot": "HASNOT",
+    "order_by": "ORDER_BY",
+    "top_k": "TOP_K",
+    "ranking": "RANKING",
+    "percentile": "PERCENTILE",
+    "lower": "LOWER",
+    "upper": "UPPER",
+    "length": "LENGTH",
+    "startswith": "STARTSWITH",
+    "endswith": "ENDSWITH",
+    "contains": "CONTAINS",
+    "like": "LIKE",
+    "join_strings": "JOIN_STRINGS",
+    "year": "YEAR",
+    "month": "MONTH",
+    "day": "DAY",
+    "hour": "HOUR",
+    "minute": "MINUTE",
+    "second": "SECOND",
+    "iff": "IFF",
+    "isin": "ISIN",
+    "default_to": "DEFAULT_TO",
+    "present": "PRESENT",
+    "absent": "ABSENT",
+    "keep_if": "KEEP_IF",
+    "monotonic": "MONOTONIC",
+    "abs": "ABS",
+    "round": "ROUND",
+    "power": "POWER",
+    "sqrt": "SQRT"
+}
+
+def replace_with_upper(text):
+    # Use regex to match words that appear in the words_map (case-insensitive)
+    def replacer(match):
+        word = match.group(0)
+        # Check if the lowercase version of the word is in the map
+        lower_word = word.lower()
+        if lower_word in WORDS_MAP:
+            return WORDS_MAP[lower_word]
+        else:
+            return word
+    
+    # Replace the matched words using the replacer function
+    return re.sub(r'\b\w+\b', replacer, text)
+
 def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
@@ -111,8 +167,10 @@ def main(git_hash):
     os.makedirs(folder_path, exist_ok=True)
     
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
-    with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}):
+    expr_name = "text2pydough"  # create a new experiment (do not replace)
+    #mlflow.create_experiment(expr_name, s3_bucket)
+    experiment= mlflow.set_experiment(expr_name)
+    with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash},experiment_id=experiment.experiment_id):
         # Read Files Efficiently
         with open(args.prompt_file, "r", encoding="utf-8") as f:
             prompt = f.read()
@@ -136,7 +194,7 @@ def main(git_hash):
         # Save responses
         questions_df["response"] = responses
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
+        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
@@ -144,7 +202,7 @@ def main(git_hash):
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch1.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].value_counts()
@@ -169,7 +227,7 @@ def main(git_hash):
        
         mlflow.set_tag("llm_output", output_file)
         mlflow.set_tag("csv" ,responses) 
-        #mlflow.log_artifact(output_file)
+        mlflow.log_artifact(output_file)
     
 
 if __name__ == "__main__":
