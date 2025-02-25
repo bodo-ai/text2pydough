@@ -116,7 +116,7 @@ def get_other_provider_response(client, provider, model_id, prompt, question):
     ]
     
     try:
-        time.sleep(0.2)
+        time.sleep(0.5)
         response = client.chat.completions.create(
             model=f"{provider}:{model_id}",
             messages=messages,
