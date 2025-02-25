@@ -183,10 +183,10 @@ def main(git_hash):
 
         # Read Questions
         questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
-        questions = questions_df["question"].tolist()
+        similar_code = questions_df["similar_queries"].tolist()
 
         # Format prompt once
-        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content)
+        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
         responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
@@ -208,7 +208,7 @@ def main(git_hash):
             counts = responses['comparison_result'].value_counts()
 
             total = counts.sum()
-            percentages = (counts / total) * 100
+            percentages = (counts / total) 
             mlflow.log_metrics(
                     percentages
                 )
