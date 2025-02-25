@@ -108,46 +108,46 @@
 
 **Rules**: Aggregation functions does not support calling aggregation functions within other aggregation functions. Avoid to do: `SUM(NDISTINCT(nations.customers))`.
 
-**7. PARTITIONING (PARTITION)**  
+**7. grouping (GROUP_BY)**  
 
 - **Purpose**: Group records by keys.  
 
-- **Syntax**: PARTITION(Collection, name='group_name', by=(key1, key2))  
+- **Syntax**: GROUP_BY(Collection, name='group_name', by=(key1, key2))  
 
 - **Good Examples**:  
 
   - **Group addresses by state and count occupants**:  
-    PARTITION(Addresses, name='addrs', by=state)(  
+    GROUP_BY(Addresses, name='addrs', by=state)(  
         state,  
         total_occupants=COUNT(addrs.current_occupants)  
     )  
 
   - **Group packages by year/month**:  
-    PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
+    GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
 - **Bad Examples**:
-  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
-    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
+  - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
+    GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
         email,
         n_people=COUNT(ppl)
     )
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    PARTITION(Packages, name=\"packs\", by=YEAR(order_date))(
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
+    GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date))(
         n_packages=COUNT(packages)
     )
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    PARTITION(People, name=\"ppl\", by=current_address.state)(
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
+    GROUP_BY(People, name=\"ppl\", by=current_address.state)(
         n_packages=COUNT(packages)
     )
 
-- **Rules**:  PARTITION keys must be scalar fields from the collection. 
-You must use Aggregation functions to call plural values inside PARTITION. 
-Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in PARTITION Instead, create a named reference using CALC before using it in PARTITION.
-Directly referencing nested attributes (e.g., table.column.subfield) in PARTITION is not allowed. Assign the nested value to a named reference using CALC before partitioning.
-All terms in a partitioning or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate
+- **Rules**:  GROUP_BY keys must be scalar fields from the collection. 
+You must use Aggregation functions to call plural values inside GROUP_BY. 
+Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in GROUP_BY Instead, create a named reference using CALC before using it in GROUP_BY.
+Directly referencing nested attributes (e.g., table.column.subfield) in GROUP_BY is not allowed. Assign the nested value to a named reference using CALC before grouping.
+All terms in a grouping or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate
 
 **8. WINDOW FUNCTIONS**  
 
@@ -311,7 +311,7 @@ All terms in a partitioning or grouping expression must be singular. Plural expr
 * **Top 5 States by Average Occupants:**  
 
   addr_info = Addresses(n_occupants=COUNT(current_occupants))  
-  average_occupants=PARTITION(addr_info, name="addrs", by=state)(  
+  average_occupants=GROUP_BY(addr_info, name="addrs", by=state)(  
       state,  
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
