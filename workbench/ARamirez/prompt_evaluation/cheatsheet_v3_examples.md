@@ -128,27 +128,43 @@
 
 - **WRONG USES**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
+    ```python 
     GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
         email,
         n_people=COUNT(ppl)
     )
+    ```
 
   - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-    GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date))(
+     ```python
+     GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date))(
         n_packages=COUNT(packages)
-    )
+    ) 
+    ```
 
   - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
+     ```python
     GROUP_BY(People, name=\"ppl\", by=current_address.state)(
         n_packages=COUNT(packages)
-    )
+    ) 
+    ```
 
-- **Rules**:  GROUP_BY keys must be scalar fields from the collection. 
-You must use Aggregation functions to call plural values inside GROUP_BY. 
-Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in GROUP_BY Instead, create a named reference using CALC before using it in GROUP_BY.
-Directly referencing nested attributes (e.g., table.column.subfield) in GROUP_BY is not allowed. Assign the nested value to a named reference using CALC before grouping.
-All terms in a grouping or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate
+    ```python
+     suppliers_with_brass_parts = PARTITION(suppliers, name='supplier_group', by=(name, nation.name))(
+        supplier_name=name,
+        nation_name=nation.name,
+        total_quantity=SUM(supplier_group.supply_records.part.WHERE(CONTAINS(part_type, 'BRASS')).lines.quantity)
+    ).WHERE(total_quantity > 1000) 
+    ```
+
+- **Rules**:  
+  - GROUP_BY keys must be scalar fields from the collection. 
+  - You must use Aggregation functions to call plural values inside GROUP_BY. 
+  - Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in GROUP_BY Instead, create a named reference using CALC before using it in GROUP_BY.
+  - Directly referencing nested attributes (e.g., table.column.subfield) in GROUP_BY is not allowed. 
+  - Assign the nested value to a named reference using CALC before grouping.
+  - All terms in a grouping or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate
 
 **8. WINDOW FUNCTIONS**  
 
