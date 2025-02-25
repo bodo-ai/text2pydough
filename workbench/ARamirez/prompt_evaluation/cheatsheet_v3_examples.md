@@ -106,7 +106,7 @@
 - **HASNOT(collection)**: True if collection is empty.
   Example: HASNOT(orders)
 
-**Rules**: PyDough does not support calling aggregation functions within other aggregation functions. For example: `SUM(NDISTINCT(nations.customers))`.
+**Rules**: Aggregation functions does not support calling aggregation functions within other aggregation functions. Avoid to do: `SUM(NDISTINCT(nations.customers))`.
 
 **7. PARTITIONING (PARTITION)**  
 
@@ -125,12 +125,29 @@
   - **Group packages by year/month**:  
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
-- **WARNING**:  
-PARTITION keys must be scalar fields from the collection. 
+- **Bad Examples**:
+  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
+    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
+        birth_year,
+        email,
+        n_people=COUNT(ppl)
+    )
+
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    PARTITION(Packages, name=\"packs\", by=YEAR(order_date))(
+        n_packages=COUNT(packages)
+    )
+
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    PARTITION(People, name=\"ppl\", by=current_address.state)(
+        n_packages=COUNT(packages)
+    )
+
+- **Rules**:  PARTITION keys must be scalar fields from the collection. 
 You must use Aggregation functions to call plural values inside PARTITION. 
 Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in PARTITION Instead, create a named reference using CALC before using it in PARTITION.
 Directly referencing nested attributes (e.g., table.column.subfield) in PARTITION is not allowed. Assign the nested value to a named reference using CALC before partitioning.
-All terms in a partitioning must be singular. When refer to multiple values aggregate the data
+All terms in a partitioning or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate
 
 **8. WINDOW FUNCTIONS**  
 
