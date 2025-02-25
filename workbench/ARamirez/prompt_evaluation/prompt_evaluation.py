@@ -54,10 +54,20 @@ WORDS_MAP = {
     "sqrt": "SQRT"
 }
 
-def replace_with_upper(text):
-    words = text.split()
-    return ' '.join(WORDS_MAP.get(word.lower(), word.lower()) for word in words)
-  
+def replace_with_upper(text, words_map):
+    # Use regex to match words that appear in the words_map (case-insensitive)
+    def replacer(match):
+        word = match.group(0)
+        # Check if the lowercase version of the word is in the map
+        lower_word = word.lower()
+        if lower_word in words_map:
+            return words_map[lower_word]
+        else:
+            return word
+    
+    # Replace the matched words using the replacer function
+    return re.sub(r'\b\w+\b', replacer, text)
+
 def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
