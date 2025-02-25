@@ -143,7 +143,7 @@
         n_packages=COUNT(packages)
     )
 
-- **Rules**:  
+- **WARNING**:  
 PARTITION keys must be scalar fields from the collection. 
 You must use Aggregation functions to call plural values inside PARTITION. 
 Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in PARTITION Instead, create a named reference using CALC before using it in PARTITION.
