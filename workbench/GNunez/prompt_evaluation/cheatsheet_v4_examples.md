@@ -1,5 +1,9 @@
 **PYDOUGH CHEAT SHEET**  
 
+**VERY IMPORTANT BEFORE BEGIN**:
+
+Please note the number of parameters that each function receives. Be very careful to use functions like Top_k and PARTITION correctly. 
+
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
 - **Syntax**: Access collections/sub-collections using dot notation.  
