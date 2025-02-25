@@ -15,6 +15,8 @@ from test_data.eval import compare_output
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 
 WORDS_MAP = {
+    "group_by": "PARTITION",
+    "where": "WHERE",
     "count": "COUNT",
     "sum": "SUM",
     "avg": "AVG",
