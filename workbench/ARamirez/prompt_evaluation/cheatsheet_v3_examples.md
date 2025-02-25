@@ -125,24 +125,6 @@
   - **Group packages by year/month**:  
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
-- **Bad Examples**:
-  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
-    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
-        birth_year,
-        email,
-        n_people=COUNT(ppl)
-    )
-
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    PARTITION(Packages, name=\"packs\", by=YEAR(order_date))(
-        n_packages=COUNT(packages)
-    )
-
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    PARTITION(People, name=\"ppl\", by=current_address.state)(
-        n_packages=COUNT(packages)
-    )
-
 - **WARNING**:  
 PARTITION keys must be scalar fields from the collection. 
 You must use Aggregation functions to call plural values inside PARTITION. 
