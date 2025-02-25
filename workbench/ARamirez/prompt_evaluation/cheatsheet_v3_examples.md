@@ -107,7 +107,7 @@
 - **HASNOT(collection)**: True if collection is empty.
   Example: HASNOT(orders)
 
-**Rules**: Aggregation functions does not support calling aggregation functions within other aggregation functions. Avoid to do: `SUM(NDISTINCT(nations.customers))`.
+**Rules**: Aggregation functions does not support calling aggregation functions within other aggregation functions. Avoid to do: `SUM(NDISTINCT(nations.customers))`, `SUM(COUNT(nations.customers))`.
 
 **7. grouping (GROUP_BY)**  
 
