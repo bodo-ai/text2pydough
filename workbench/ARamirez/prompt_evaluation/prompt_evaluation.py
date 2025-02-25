@@ -54,14 +54,14 @@ WORDS_MAP = {
     "sqrt": "SQRT"
 }
 
-def replace_with_upper(text, words_map):
+def replace_with_upper(text):
     # Use regex to match words that appear in the words_map (case-insensitive)
     def replacer(match):
         word = match.group(0)
         # Check if the lowercase version of the word is in the map
         lower_word = word.lower()
-        if lower_word in words_map:
-            return words_map[lower_word]
+        if lower_word in WORDS_MAP:
+            return WORDS_MAP[lower_word]
         else:
             return word
     
