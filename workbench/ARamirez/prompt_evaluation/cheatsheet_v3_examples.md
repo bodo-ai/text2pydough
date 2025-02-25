@@ -99,6 +99,7 @@
 
 - **NDISTINCT(collection)**: Distinct count equivalent to COUNT(DISTINCT).  
   Example: NDISTINCT(Addresses.state)  
+  - **Limitations**: PyDough does not yet support non-expression arguments for the aggregation function `NDISTINCT`.
 
 - **HAS(collection)**: True if ≥1 record exists.  
   Example: HAS(People.packages)
