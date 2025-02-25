@@ -107,7 +107,7 @@
   Example: HASNOT(orders)
 
 **Rules**: 
-PyDough does not support calling aggregation functions within other aggregation functions. For example: `SUM(NDISTINCT(nations.customers))`.
+  - Aggregation functions does not support calling aggregation functions within other aggregation functions. For example: `SUM(NDISTINCT(nations.customers))`.
 
 **7. PARTITIONING (PARTITION)**  
 
