@@ -16,9 +16,10 @@ Your objective is to analyze the provided natural language description that outl
    - Includes comments for any complex operations, where necessary.
    - Assigns the final query to a variable.
 3. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
-4. Provide three examples of similar queries that relate to the user's query before generating the final code snippet.
 
-- Similar queries that might help:
+- Reference similar queries to enhance understanding:
 {similar_queries}
+
+5. Show the final code snippet, making sure it's well-formatted and properly commented.
 
 Use this structure to ensure clarity, consistency, and adherence to PyDough syntax in your outputs.
