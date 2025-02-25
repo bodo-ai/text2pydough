@@ -1,5 +1,7 @@
 **PYDOUGH CHEAT SHEET**  
 
+**IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
+
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
 - **Syntax**: Access collections/sub-collections using dot notation.  
@@ -80,6 +82,8 @@
   .DESC(na_pos='first') → Sort descending, nulls first.
 
 **5. SORTING TOP_K(k, by=field.DESC())**  
+
+  **IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
 
 - **Select top k records.**
 
