@@ -14,6 +14,50 @@ import mlflow
 from test_data.eval import compare_output
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 
+WORDS_MAP = {
+    "count": "COUNT",
+    "sum": "SUM",
+    "avg": "AVG",
+    "min": "MIN",
+    "max": "MAX",
+    "ndistinct": "NDISTINCT",
+    "has": "HAS",
+    "hasnot": "HASNOT",
+    "order_by": "ORDER_BY",
+    "top_k": "TOP_K",
+    "ranking": "RANKING",
+    "percentile": "PERCENTILE",
+    "lower": "LOWER",
+    "upper": "UPPER",
+    "length": "LENGTH",
+    "startswith": "STARTSWITH",
+    "endswith": "ENDSWITH",
+    "contains": "CONTAINS",
+    "like": "LIKE",
+    "join_strings": "JOIN_STRINGS",
+    "year": "YEAR",
+    "month": "MONTH",
+    "day": "DAY",
+    "hour": "HOUR",
+    "minute": "MINUTE",
+    "second": "SECOND",
+    "iff": "IFF",
+    "isin": "ISIN",
+    "default_to": "DEFAULT_TO",
+    "present": "PRESENT",
+    "absent": "ABSENT",
+    "keep_if": "KEEP_IF",
+    "monotonic": "MONOTONIC",
+    "abs": "ABS",
+    "round": "ROUND",
+    "power": "POWER",
+    "sqrt": "SQRT"
+}
+
+def replace_with_upper(text):
+    words = text.split()
+    return ' '.join(WORDS_MAP.get(word.lower(), word.lower()) for word in words)
+  
 def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
@@ -112,7 +156,6 @@ def main(git_hash):
     
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
     expr_name = "text2pydough"  # create a new experiment (do not replace)
-    s3_bucket = "s3://text2pydough"  # replace this value
     #mlflow.create_experiment(expr_name, s3_bucket)
     experiment= mlflow.set_experiment(expr_name)
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash},experiment_id=experiment.experiment_id):
@@ -139,7 +182,7 @@ def main(git_hash):
         # Save responses
         questions_df["response"] = responses
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
+        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
