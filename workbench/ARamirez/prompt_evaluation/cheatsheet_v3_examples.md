@@ -126,7 +126,7 @@
   - **Group packages by year/month**:  
     GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
-- **Bad Examples**:
+- **WRONG USES**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
     GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
