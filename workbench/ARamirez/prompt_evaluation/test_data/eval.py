@@ -218,7 +218,7 @@ def process_row(row, db_path):
             return 'Match' if comparison_result else 'No Match', None
         else:
             return 'Query Error', exception
-    return '', None  
+    return 'Unknow', None  
 
 def compare_output(folder_path, csv_file_path, db_path):
     """
