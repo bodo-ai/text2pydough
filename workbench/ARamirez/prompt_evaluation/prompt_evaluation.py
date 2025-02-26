@@ -136,7 +136,7 @@ def process_questions(provider, model_id, formatted_prompt, questions):
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q)
     
-    with ThreadPoolExecutor(max_workers=1) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
@@ -144,14 +144,14 @@ def process_questions(provider, model_id, formatted_prompt, questions):
 def main(git_hash):
     # Argument Parser
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
-    parser.add_argument("description", type=str, default="MLFlow")
-    parser.add_argument("name", type=str, default="MLFlow project")
-    parser.add_argument("script_file", type=str, help="Path to the script file.")
-    parser.add_argument("database_structure", type=str, help="Path to the database file.")
-    parser.add_argument("prompt_file", type=str, help="Path to the prompt file.")
-    parser.add_argument("questions_csv", type=str, help="Path to the questions CSV file.")
-    parser.add_argument("provider", type=str, help="Model provider (either 'azure' or another provider).")
-    parser.add_argument("model_id", type=str, help="Model ID.")
+    parser.add_argument("--description", type=str, default="MLFlow")
+    parser.add_argument("--name", type=str, default="MLFlow project")
+    parser.add_argument("--script_file", type=str, help="Path to the script file.")
+    parser.add_argument("--database_structure", type=str, help="Path to the database file.")
+    parser.add_argument("--prompt_file", type=str, help="Path to the prompt file.")
+    parser.add_argument("--questions_csv", type=str, help="Path to the questions CSV file.")
+    parser.add_argument("--provider", type=str, help="Model provider (either 'azure' or another provider).")
+    parser.add_argument("--model_id", type=str, help="Model ID.")
    # Use `store_true` to set eval_results to True if argument is passed
     parser.add_argument("--eval_results", action="store_true", help="Evaluate the LLM output against the ground truth data.")
     
