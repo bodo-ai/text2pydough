@@ -136,30 +136,37 @@ def process_questions(provider, model_id, formatted_prompt, questions):
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q)
     
-    with ThreadPoolExecutor(max_workers=1) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
 
 def main(git_hash):
     # Argument Parser
+    # this is an example: python prompt_evaluation.py  "Experiment for testing azure" "Azure test" cheatsheet_v4_examples.md tcph_graph.md prompt2.txt questions.csv google gemini-1.5-pro-001 --eval_results
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
-    parser.add_argument("description", type=str, default="MLFlow")
-    parser.add_argument("name", type=str, default="MLFlow project")
-    parser.add_argument("script_file", type=str, help="Path to the script file.")
-    parser.add_argument("database_structure", type=str, help="Path to the database file.")
-    parser.add_argument("prompt_file", type=str, help="Path to the prompt file.")
-    parser.add_argument("questions_csv", type=str, help="Path to the questions CSV file.")
-    parser.add_argument("provider", type=str, help="Model provider (either 'azure' or another provider).")
-    parser.add_argument("model_id", type=str, help="Model ID.")
+    parser.add_argument("--description", type=str, default="MLFlow")
+    parser.add_argument("--name", type=str, default="MLFlow project")
+    parser.add_argument("--script_file", type=str, help="Path to the script file.")
+    parser.add_argument("--database_structure", type=str, help="Path to the database file.")
+    parser.add_argument("--prompt_file", type=str, help="Path to the prompt file.")
+    parser.add_argument("--questions_csv", type=str, help="Path to the questions CSV file.")
+    parser.add_argument("--provider", type=str, help="Model provider (either 'azure' or another provider).")
+    parser.add_argument("--model_id", type=str, help="Model ID.")
    # Use `store_true` to set eval_results to True if argument is passed
     parser.add_argument("--eval_results", action="store_true", help="Evaluate the LLM output against the ground truth data.")
     
     # Use `store_false` if --no-eval_results is passed
     parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
 
+   # Use `store_true` to set eval_results to True if argument is passed
+    parser.add_argument("--eval_benchmark", action="store_true", help="Evaluate the TPCH Benchmark")
+    
+    # Use `store_false` if --no-eval_results is passed
+    parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not Evaluate the TPCH Benchmark")
+
     # Default value for eval_results is False
-    parser.set_defaults(eval_results=False)
+    parser.set_defaults(eval_results=False, eval_benchmark=False)
     args = parser.parse_args()
 
     # Create result directory if not exists
@@ -183,10 +190,10 @@ def main(git_hash):
 
         # Read Questions
         questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
-        questions = questions_df["question"].tolist()
+        similar_code = questions_df["similar_queries"].tolist()
 
         # Format prompt once
-        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content)
+        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
         responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
@@ -205,14 +212,37 @@ def main(git_hash):
             output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
-            counts = responses['comparison_result'].value_counts()
+            counts = responses['comparison_result'].dropna().value_counts()
+            percentages = counts / total_rows
 
+            mlflow.log_metrics(
+                    percentages,
+                )
+            mlflow.log_metric("total_script_queries", total_rows)
+
+        if args.eval_benchmark:
+            folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
+            os.makedirs(folder_path, exist_ok=True)
+
+            output_file, responses= compare_output(folder_path,"./TPCH Queries - All Queries.csv", "./test_data/tpch.db")
+            total_rows = len(responses)
+
+            counts = responses['comparison_result'].dropna().value_counts()
             total = counts.sum()
-            percentages = (counts / total) * 100
+            percentages = counts / total
+            key_mapping = {
+                'Match': 'Match_benchmark',
+                'No match': 'No_Match_benchmark',
+                'Query error': 'Query_error_bechmark'
+            }
+            counts = counts.rename(key_mapping)
+            percentages = percentages.rename(key_mapping)
+
             mlflow.log_metrics(
                     percentages
                 )
-        
+            mlflow.log_metric("total_benchmark_queries", total_rows)
+
         mlflow.log_params(
             {
                 "script_file": args.script_file,
