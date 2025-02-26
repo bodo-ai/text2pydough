@@ -136,7 +136,7 @@ def process_questions(provider, model_id, formatted_prompt, questions):
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q)
     
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
