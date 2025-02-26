@@ -165,7 +165,7 @@ def main(git_hash):
     parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not Evaluate the TPCH Benchmark")
 
     # Default value for eval_results is False
-    parser.set_defaults(eval_results=False)
+    parser.set_defaults(eval_results=False, eval_benchmark=False)
     args = parser.parse_args()
 
     # Create result directory if not exists
@@ -212,13 +212,36 @@ def main(git_hash):
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
+            percentages = counts / total_rows
+
+            mlflow.log_metrics(
+                    percentages,
+                )
+            mlflow.log_metric("total_script_queries", total_rows)
+
+        if args.eval_benchmark:
+            folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
+            os.makedirs(folder_path, exist_ok=True)
+
+            output_file, responses= compare_output(folder_path,"./TPCH Queries - All Queries.csv", "./test_data/tpch.db")
+            total_rows = len(responses)
+
+            counts = responses['comparison_result'].dropna().value_counts()
             total = counts.sum()
             percentages = counts / total
+            key_mapping = {
+                'Match': 'Match_benchmark',
+                'No match': 'No_Match_benchmark',
+                'Query error': 'Query_error_bechmark'
+            }
+            counts = counts.rename(key_mapping)
+            percentages = percentages.rename(key_mapping)
 
             mlflow.log_metrics(
                     percentages
                 )
-        
+            mlflow.log_metric("total_benchmark_queries", total_rows)
+
         mlflow.log_params(
             {
                 "script_file": args.script_file,
