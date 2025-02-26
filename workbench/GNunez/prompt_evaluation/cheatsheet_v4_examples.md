@@ -94,6 +94,9 @@
   Top 10 customers by orders count:  
   customers.TOP_K(10, by=COUNT(orders).DESC())
 
+  Top 10 customers by orders count (but also selecting only the name):  
+  customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())
+
 **6. AGGREGATION FUNCTIONS**  
 
 - **COUNT(collection)**: Count non-null records.  
