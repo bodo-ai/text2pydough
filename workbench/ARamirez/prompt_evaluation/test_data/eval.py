@@ -205,6 +205,7 @@ def query_sqlite_db(
     
 def process_row(row, db_path):
     extracted_code = row.get('extracted_python_code')
+    question= row.get('question')
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
         
@@ -212,7 +213,7 @@ def process_row(row, db_path):
         
         if result is not None:
             extracted_sql = query_sqlite_db(row["sql"], db_path)
-            comparison_result = compare_df(result, extracted_sql,query_category="a", question="a")
+            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
@@ -241,5 +242,5 @@ def compare_output(folder_path, csv_file_path, db_path):
     return output_file, df
 
 # %%
-#compare_output("../results/azure/DeepSeek-R1/test", "../results/azure/DeepSeek-R1/responses_2025_02_24-07_46_31.csv","./tpch.db")
+#compare_output("../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/test", "../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/responses_2025_02_26-10_08_45.csv","./tpch.db")
 # %%
