@@ -1,0 +1,390 @@
+question,sql,response,extracted_python_code
+List the total number of customers and suppliers in each nation,"SELECT n_name AS nation_name, COUNT(DISTINCT c_custkey) AS total_customers, COUNT(DISTINCT s_suppkey) AS total_suppliers FROM nation LEFT JOIN customer ON n_nationkey = c_nationkey LEFT JOIN supplier ON n_nationkey = s_nationkey GROUP BY n_name;","```python
+nation_summary = nations.CALCULATE(
+    nation_name=name,
+    total_customers=COUNT(customers),
+    total_suppliers=COUNT(suppliers)
+)
+```
+","nation_summary = nations.CALCULATE(
+    nation_name=name,
+    total_customers=COUNT(customers),
+    total_suppliers=COUNT(suppliers)
+)"
+Find the top 5 nations with the highest number of orders placed by their customers in 1995.,"SELECT n_name AS nation_name, COUNT(o_orderkey) AS total_orders FROM nation JOIN customer ON n_nationkey = c_nationkey JOIN orders ON c_custkey = o_custkey WHERE o_orderdate >= '1995-01-01' AND o_orderdate <= '1995-12-31' GROUP BY n_name ORDER BY total_orders DESC LIMIT 5;","```python
+# Calculate the number of orders placed in 1995 for each nation.
+top_nations_by_orders = nations.CALCULATE(
+    nation_name=name,
+    order_count=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).TOP_K(5, by=order_count.DESC())
+```
+","# Calculate the number of orders placed in 1995 for each nation.
+top_nations_by_orders = nations.CALCULATE(
+    nation_name=name,
+    order_count=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).TOP_K(5, by=order_count.DESC())"
+"Find the region with the highest total order value in 1996. The total order value is defined as potential revenue, defined as the sum of extended_price * (1 - discount)","SELECT r_name AS region_name, SUM(l_extendedprice * l_quantity) AS total_order_value FROM region JOIN nation ON r_regionkey = n_regionkey JOIN customer ON n_nationkey = c_nationkey JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey WHERE o_orderdate >= '1996-01-01' AND o_orderdate <= '1996-12-31' GROUP BY r_name ORDER BY total_order_value DESC LIMIT 1;","```python
+region_revenue = regions.CALCULATE(
+    region_name=name,
+    total_revenue=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1996).lines.CALCULATE(potential_revenue = extended_price * (1 - discount)).potential_revenue)
+).ORDER_BY(total_revenue.DESC()).TOP_K(1)
+```","region_revenue = regions.CALCULATE(
+    region_name=name,
+    total_revenue=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1996).lines.CALCULATE(potential_revenue = extended_price * (1 - discount)).potential_revenue)
+).ORDER_BY(total_revenue.DESC()).TOP_K(1)"
+Find the top 3 regions with the most distinct customers,"SELECT r_name AS region_name, COUNT(DISTINCT c_custkey) AS distinct_customers FROM region JOIN nation ON r_regionkey = n_regionkey JOIN customer ON n_nationkey = c_nationkey GROUP BY r_name ORDER BY distinct_customers DESC LIMIT 3;","```python
+region_customer_counts = regions.CALCULATE(
+    region_name=name,
+    distinct_customer_count=NDISTINCT(nations.customers.key)
+).TOP_K(3, by=distinct_customer_count.DESC())
+```
+","region_customer_counts = regions.CALCULATE(
+    region_name=name,
+    distinct_customer_count=NDISTINCT(nations.customers.key)
+).TOP_K(3, by=distinct_customer_count.DESC())"
+Find the names of all customers and number of orders placed in Europe who have an account balance greater than $700 and placed at least one order in 1995. Do not use HAS function,SELECT DISTINCT c_name AS customer_name FROM customer JOIN nation ON c_nationkey = n_nationkey JOIN region ON n_regionkey = r_regionkey JOIN orders ON c_custkey = o_custkey WHERE r_name = 'EUROPE' AND c_acctbal > 700 AND o_orderdate >= '1995-01-01' AND o_orderdate <= '1995-12-31';,"```python
+european_customers_high_balance_orders_1995 = customers.WHERE(
+    (nation.region.name == ""EUROPE"") & (acctbal > 700) & (COUNT(orders.WHERE(YEAR(order_date) == 1995)) > 0) 
+).CALCULATE(
+    customer_name = name,
+    order_count = COUNT(orders)
+)
+```","european_customers_high_balance_orders_1995 = customers.WHERE(
+    (nation.region.name == ""EUROPE"") & (acctbal > 700) & (COUNT(orders.WHERE(YEAR(order_date) == 1995)) > 0) 
+).CALCULATE(
+    customer_name = name,
+    order_count = COUNT(orders)
+)"
+"Find suppliers in each nation who supply more than 1000 units of parts with 'BRASS' in their type. List the supplier name, nation name and sum of the parts supplied","SELECT s.s_name AS SupplierName, n.n_name AS Nation, SUM(ps.ps_availqty) AS TotalUnitsSupplied FROM supplier s JOIN nation n ON s.s_nationkey = n.n_nationkey JOIN partsupp ps ON s.s_suppkey = ps.ps_suppkey JOIN part p ON ps.ps_partkey = p.p_partkey WHERE p.p_type LIKE '%BRASS%' GROUP BY s.s_name, n.n_name HAVING SUM(ps.ps_availqty) > 1000 ORDER BY TotalUnitsSupplied DESC;","```python
+supplier_brass_parts = suppliers.CALCULATE(
+    supplier_name = name,
+    nation_name = nation.name,
+    total_brass_parts_supplied = SUM(supply_records.WHERE(part.part_type.CONTAINS('BRASS')).availqty)
+).WHERE(total_brass_parts_supplied > 1000) 
+```","supplier_brass_parts = suppliers.CALCULATE(
+    supplier_name = name,
+    nation_name = nation.name,
+    total_brass_parts_supplied = SUM(supply_records.WHERE(part.part_type.CONTAINS('BRASS')).availqty)
+).WHERE(total_brass_parts_supplied > 1000)"
+Find parts that are supplied by at least five different nations. Show the part name and the count of distinct nations that supply each part,"SELECT p.P_NAME AS PartName, COUNT(DISTINCT n.N_NAME) AS NumberOfNations FROM PART p JOIN PARTSUPP ps ON p.P_PARTKEY = ps.PS_PARTKEY JOIN SUPPLIER s ON ps.PS_SUPPKEY = s.S_SUPPKEY JOIN NATION n ON s.S_NATIONKEY = n.N_NATIONKEY GROUP BY p.P_NAME HAVING COUNT(DISTINCT n.N_NAME) > 5 ORDER BY NumberOfNations DESC;","```python
+part_nation_counts = parts.CALCULATE(
+    part_name = name,
+    supplying_nations = NDISTINCT(supply_records.supplier.nation)
+).WHERE(supplying_nations >= 5) 
+```
+","part_nation_counts = parts.CALCULATE(
+    part_name = name,
+    supplying_nations = NDISTINCT(supply_records.supplier.nation)
+).WHERE(supplying_nations >= 5)"
+"Which 10 customers purchased the highest quantity of products with ""green"" in the product name during 1998? Provide their names, adress and the total quantity ordered.","SELECT c_name AS customer_name, c_address AS customer_address, SUM(l_quantity) AS total_quantity_ordered FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey JOIN part ON l_partkey = p_partkey WHERE p_name LIKE '%green%' AND strftime('%Y', o_orderdate) = '1998' GROUP BY c_name, c_address ORDER BY total_quantity_ordered DESC LIMIT 10;","```python
+top_green_customers = (
+    customers.CALCULATE(
+        customer_name = name,
+        customer_address = address,
+        total_quantity = SUM(orders.lines.WHERE(YEAR(order.order_date) == 1998).WHERE(CONTAINS(part.name, ""green"")).quantity)
+    )
+    .ORDER_BY(total_quantity.DESC())
+    .TOP_K(10)
+)
+```
+","top_green_customers = (
+    customers.CALCULATE(
+        customer_name = name,
+        customer_address = address,
+        total_quantity = SUM(orders.lines.WHERE(YEAR(order.order_date) == 1998).WHERE(CONTAINS(part.name, ""green"")).quantity)
+    )
+    .ORDER_BY(total_quantity.DESC())
+    .TOP_K(10)
+)"
+Wich is the average discount applied on orders for each market segment?,"SELECT c_mktsegment AS market_segment, AVG(l_discount) AS average_discount FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey GROUP BY c_mktsegment;","```python
+avg_discount_by_mktsegment = customers.CALCULATE(
+    mkt=mktsegment,
+    average_discount=AVG(orders.lines.discount)
+).PARTITION(name='discount', by=mkt).CALCULATE(
+    mkt=mkt,
+    avg_discount=AVG(discount.average_discount)
+)
+```","avg_discount_by_mktsegment = customers.CALCULATE(
+    mkt=mktsegment,
+    average_discount=AVG(orders.lines.discount)
+).PARTITION(name='discount', by=mkt).CALCULATE(
+    mkt=mkt,
+    avg_discount=AVG(discount.average_discount)
+)"
+What were the 20 most popular products within each market segment in 1998?,"WITH ProductPopularity AS (SELECT c_mktsegment AS market_segment, p_name AS product_name, SUM(l_quantity) AS total_quantity FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey JOIN part ON l_partkey = p_partkey WHERE strftime('%Y', o_orderdate) = '1998' GROUP BY c_mktsegment, p_name) SELECT market_segment, product_name, total_quantity FROM (SELECT market_segment, product_name, total_quantity, ROW_NUMBER() OVER (PARTITION BY market_segment ORDER BY total_quantity DESC) AS rank FROM ProductPopularity) WHERE rank <= 20;","```python
+popular_products_1998 = PARTITION(
+    Lines.WHERE(YEAR(order.order_date) == 1998),
+    name=""segment_lines"", 
+    by=order.customer.mktsegment
+).CALCULATE(
+    product_name = segment_lines.part.name,
+    orders_count = COUNT(segment_lines.order)
+).TOP_K(20, by=orders_count.DESC())
+```","popular_products_1998 = PARTITION(
+    Lines.WHERE(YEAR(order.order_date) == 1998),
+    name=""segment_lines"", 
+    by=order.customer.mktsegment
+).CALCULATE(
+    product_name = segment_lines.part.name,
+    orders_count = COUNT(segment_lines.order)
+).TOP_K(20, by=orders_count.DESC())"
+Retrieves the top 3 suppliers with the highest total sales for each region,"WITH SupplierSales AS (SELECT r_name AS region_name, s_name AS supplier_name, SUM(l_extendedprice * l_quantity) AS total_sales FROM region JOIN nation ON r_regionkey = n_regionkey JOIN supplier ON n_nationkey = s_nationkey JOIN lineitem ON s_suppkey = l_suppkey JOIN orders ON l_orderkey = o_orderkey GROUP BY r_name, s_name) SELECT region_name, supplier_name, total_sales FROM (SELECT region_name, supplier_name, total_sales, ROW_NUMBER() OVER (PARTITION BY region_name ORDER BY total_sales DESC) AS rank FROM SupplierSales) WHERE rank <= 3;","```python
+supplier_revenue = suppliers.CALCULATE(
+    supplier_key=key,
+    nation_key=nation_key,
+    total_revenue=SUM(lines.extended_price)
+)
+# Calculate the total sales for each supplier
+supplier_sales = PARTITION(supplier_revenue, name=""supplier_rev"", by=nation_key).CALCULATE(
+    supplier_key=supplier_rev.supplier_key,
+    total_sales=SUM(supplier_rev.total_revenue)
+)
+#Rank suppliers within each region by their total sales.
+ranked_suppliers = PARTITION(supplier_sales, name=""supplier_sale"", by=nation.region.name).CALCULATE(
+    supplier_key = supplier_sale.supplier_key,
+    region=supplier_sale.nation.region.name,
+    total_sales=supplier_sale.total_sales,
+    rank=RANKING(by=supplier_sale.total_sales.DESC(), levels=1)
+)
+# Get the top 3 suppliers for each region
+top_suppliers_per_region = ranked_suppliers.WHERE(rank <= 3) 
+```
+","supplier_revenue = suppliers.CALCULATE(
+    supplier_key=key,
+    nation_key=nation_key,
+    total_revenue=SUM(lines.extended_price)
+)
+# Calculate the total sales for each supplier
+supplier_sales = PARTITION(supplier_revenue, name=""supplier_rev"", by=nation_key).CALCULATE(
+    supplier_key=supplier_rev.supplier_key,
+    total_sales=SUM(supplier_rev.total_revenue)
+)
+#Rank suppliers within each region by their total sales.
+ranked_suppliers = PARTITION(supplier_sales, name=""supplier_sale"", by=nation.region.name).CALCULATE(
+    supplier_key = supplier_sale.supplier_key,
+    region=supplier_sale.nation.region.name,
+    total_sales=supplier_sale.total_sales,
+    rank=RANKING(by=supplier_sale.total_sales.DESC(), levels=1)
+)
+# Get the top 3 suppliers for each region
+top_suppliers_per_region = ranked_suppliers.WHERE(rank <= 3)"
+"For each European country, list the number of customers and the number of orders they placed in 1995, including customers who didn't place any orders that year.","SELECT n_name AS country_name, COUNT(DISTINCT c_custkey) AS total_customers, COUNT(DISTINCT CASE WHEN o_orderdate >= '1995-01-01' AND o_orderdate <= '1995-12-31' THEN o_orderkey END) AS total_orders_1995 FROM nation JOIN region ON n_regionkey = r_regionkey JOIN customer ON n_nationkey = c_nationkey LEFT JOIN orders ON c_custkey = o_custkey WHERE r_name = 'EUROPE' GROUP BY n_name;","```python
+european_customers_orders = nations.WHERE(region.name == ""EUROPE"").CALCULATE(
+    country=name,
+    n_customers=COUNT(customers),
+    n_orders_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+) 
+```","european_customers_orders = nations.WHERE(region.name == ""EUROPE"").CALCULATE(
+    country=name,
+    n_customers=COUNT(customers),
+    n_orders_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+)"
+Retrieve the customer name of the customers who placed more orders in 1995 than in 1994,"SELECT c_name AS customer_name FROM customer JOIN orders ON c_custkey = o_custkey WHERE (strftime('%Y', o_orderdate) = '1994' OR strftime('%Y', o_orderdate) = '1995') GROUP BY c_custkey, c_name HAVING SUM(CASE WHEN strftime('%Y', o_orderdate) = '1995' THEN 1 ELSE 0 END) > SUM(CASE WHEN strftime('%Y', o_orderdate) = '1994' THEN 1 ELSE 0 END);","```python
+customer_orders = customers.CALCULATE(
+    customer_name = name,
+    orders_1994 = COUNT(orders.WHERE(YEAR(order_date) == 1994)),
+    orders_1995 = COUNT(orders.WHERE(YEAR(order_date) == 1995))
+).WHERE(orders_1995 > orders_1994).CALCULATE(customer_name=customer_name)
+```","customer_orders = customers.CALCULATE(
+    customer_name = name,
+    orders_1994 = COUNT(orders.WHERE(YEAR(order_date) == 1994)),
+    orders_1995 = COUNT(orders.WHERE(YEAR(order_date) == 1995))
+).WHERE(orders_1995 > orders_1994).CALCULATE(customer_name=customer_name)"
+Which is the average order value per Nation? List the nation name and average order value. The order value is defined as extended_price * quantity,"SELECT n_name AS nation_name, AVG(l_extendedprice * l_quantity) AS average_order_value FROM nation JOIN customer ON n_nationkey = c_nationkey JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey GROUP BY n_name;","```python
+nation_avg_order_value = nations.CALCULATE(
+    nation_name = name,
+    avg_order_value = AVG(customers.orders.lines.CALCULATE(order_value = extended_price * quantity).order_value)
+)
+```
+","nation_avg_order_value = nations.CALCULATE(
+    nation_name = name,
+    avg_order_value = AVG(customers.orders.lines.CALCULATE(order_value = extended_price * quantity).order_value)
+)"
+What 3 product brands saw the largest positive change in quantity sold from 1995 to 1996.,"SELECT s.s_name, COUNT(*) FROM partsupp ps JOIN supplier s ON s.s_suppkey = ps.ps_suppkey GROUP BY s.s_name;","```python
+part_sales_1995 = PARTITION(
+    Lines.WHERE(YEAR(order_date) == 1995),
+    name=""sales_1995"",
+    by=part.brand
+).CALCULATE(
+    brand=sales_1995.part.brand,
+    quantity_1995=SUM(sales_1995.quantity)
+)
+part_sales_1996 = PARTITION(
+    Lines.WHERE(YEAR(order_date) == 1996),
+    name=""sales_1996"",
+    by=part.brand
+).CALCULATE(
+    brand=sales_1996.part.brand,
+    quantity_1996=SUM(sales_1996.quantity)
+)
+brand_sales_diff = part_sales_1995.CALCULATE(
+    brand=brand,
+    quantity_1995=quantity_1995,
+    quantity_1996=part_sales_1996.quantity_1996
+).CALCULATE(
+    brand=brand,
+    quantity_diff=quantity_1996 - quantity_1995
+).ORDER_BY(
+    quantity_diff.DESC()
+).TOP_K(3)
+```
+","part_sales_1995 = PARTITION(
+    Lines.WHERE(YEAR(order_date) == 1995),
+    name=""sales_1995"",
+    by=part.brand
+).CALCULATE(
+    brand=sales_1995.part.brand,
+    quantity_1995=SUM(sales_1995.quantity)
+)
+part_sales_1996 = PARTITION(
+    Lines.WHERE(YEAR(order_date) == 1996),
+    name=""sales_1996"",
+    by=part.brand
+).CALCULATE(
+    brand=sales_1996.part.brand,
+    quantity_1996=SUM(sales_1996.quantity)
+)
+brand_sales_diff = part_sales_1995.CALCULATE(
+    brand=brand,
+    quantity_1995=quantity_1995,
+    quantity_1996=part_sales_1996.quantity_1996
+).CALCULATE(
+    brand=brand,
+    quantity_diff=quantity_1996 - quantity_1995
+).ORDER_BY(
+    quantity_diff.DESC()
+).TOP_K(3)"
+What is the total revenue generated by each customer in 1994?,"SELECT c.c_custkey AS custkey, SUM(l.l_extendedprice * (1 - l.l_discount)) AS total_revenue FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey JOIN lineitem l ON o.o_orderkey = l.l_orderkey WHERE strftime('%Y', o.o_orderdate) = '1994' GROUP BY c.c_custkey ORDER BY total_revenue DESC;","```python
+customer_revenue_1994 = customers.CALCULATE(
+    customer_name = name,
+    total_revenue_1994 = SUM(orders.WHERE(YEAR(order_date) == 1994).total_price)
+)
+```
+","customer_revenue_1994 = customers.CALCULATE(
+    customer_name = name,
+    total_revenue_1994 = SUM(orders.WHERE(YEAR(order_date) == 1994).total_price)
+)"
+Find all customers whose name ends with a zero and are in the 30-lowest account balances,"SELECT c_custkey, c_name, c_acctbal FROM customer WHERE c_name LIKE '%0' ORDER BY c_acctbal ASC LIMIT 30;","```python
+customers_low_balance_zero_name = customers.WHERE((PERCENTILE(by=acctbal.ASC()) <= 30) & ENDSWITH(name, '0')) 
+```","customers_low_balance_zero_name = customers.WHERE((PERCENTILE(by=acctbal.ASC()) <= 30) & ENDSWITH(name, '0'))"
+"For each of the 5 largest part sizes, find the part of that size with the largest retail price","WITH top_sizes AS (SELECT DISTINCT p_size FROM part ORDER BY p_size DESC LIMIT 5), ranked_parts AS (SELECT p.p_partkey, p.p_name, p.p_size, p.p_retailprice, RANK() OVER (PARTITION BY p.p_size ORDER BY p.p_retailprice DESC) AS price_rank FROM part p WHERE p.p_size IN (SELECT p_size FROM top_sizes)) SELECT p_partkey, p_name, p_size, p_retailprice FROM ranked_parts WHERE price_rank = 1 ORDER BY p_size DESC, p_retailprice DESC;","```python
+part_size_ranks = PARTITION(parts, name=""size_rank"", by=size).CALCULATE(
+    size=size,
+    retail_price=MAX(size_rank.retail_price)
+).TOP_K(5, by=size.DESC())
+
+largest_part_by_size = parts.CALCULATE(
+    p_size = size,
+    p_retail_price=retail_price
+).WHERE(
+    (p_size, p_retail_price) IN part_size_ranks
+)
+```","part_size_ranks = PARTITION(parts, name=""size_rank"", by=size).CALCULATE(
+    size=size,
+    retail_price=MAX(size_rank.retail_price)
+).TOP_K(5, by=size.DESC())
+
+largest_part_by_size = parts.CALCULATE(
+    p_size = size,
+    p_retail_price=retail_price
+).WHERE(
+    (p_size, p_retail_price) IN part_size_ranks
+)"
+"Using TPCH. For each customer and each of his suppliers, show the ratio of costs paid by this customer to this supplier as a percent of the total cost that this customer paid worldwide, , as well as the ratio of revenue that this supplier received from this customer to the total revenue that this supplier received from all customers",,"```python
+customer_supplier_ratio = PARTITION(customers.orders.lines, name='customer_lines', by=(customer.key, supplier.key)).CALCULATE(
+    customer_key=customer.key,
+    supplier_key=supplier.key,
+    customer_spend_on_supplier=SUM(customer_lines.extended_price)
+).PARTITION(by=customer_key).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_on_supplier=customer_spend_on_supplier,
+    customer_total_spend=SUM(customer_spend_on_supplier)
+).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_ratio=ROUND((customer_spend_on_supplier / customer_total_spend) * 100, 2)
+).PARTITION(by=supplier_key).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_ratio=customer_spend_ratio,
+    supplier_total_revenue=SUM(customer_spend_on_supplier)
+).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_ratio=customer_spend_ratio,
+    supplier_revenue_ratio=ROUND((customer_spend_on_supplier / supplier_total_revenue) * 100, 2)
+)
+```
+","customer_supplier_ratio = PARTITION(customers.orders.lines, name='customer_lines', by=(customer.key, supplier.key)).CALCULATE(
+    customer_key=customer.key,
+    supplier_key=supplier.key,
+    customer_spend_on_supplier=SUM(customer_lines.extended_price)
+).PARTITION(by=customer_key).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_on_supplier=customer_spend_on_supplier,
+    customer_total_spend=SUM(customer_spend_on_supplier)
+).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_ratio=ROUND((customer_spend_on_supplier / customer_total_spend) * 100, 2)
+).PARTITION(by=supplier_key).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_ratio=customer_spend_ratio,
+    supplier_total_revenue=SUM(customer_spend_on_supplier)
+).CALCULATE(
+    customer_key=customer_key,
+    supplier_key=supplier_key,
+    customer_spend_ratio=customer_spend_ratio,
+    supplier_revenue_ratio=ROUND((customer_spend_on_supplier / supplier_total_revenue) * 100, 2)
+)"
+"Using TPCH. For each customer and each of his suppliers, show the ratio of costs paid by this customer to this supplier as a percent of the total cost that this customer paid to all suppliers of this supplier's country,  as well as the ratio of revenue that this supplier received from this customer to the total revenue that this supplier received from all customers of the country of this customer",,"```python
+customer_supplier_ratios = PARTITION(customers, name=""cust"", by=(nation_key, key)).CALCULATE(
+    customer_key=key,
+    nation_key=nation_key,
+    customer_total_cost=SUM(cust.orders.lines.part_and_supplier.supplycost)
+).JOIN(
+    PARTITION(suppliers, name=""sup"", by=(nation_key, key)).CALCULATE(
+        supplier_key=key,
+        nation_key=nation_key,
+        supplier_total_revenue=SUM(sup.lines.part_and_supplier.supplycost)
+    ),
+    on=nation_key
+).JOIN(
+    PARTITION(Orders.lines.CALCULATE(
+        customer_key=customer.key,
+        supplier_key=supplier_key,
+        cost=part_and_supplier.supplycost
+    ), name=""pair"", by=(customer_key, supplier_key)),
+    on=(customer_key, supplier_key)
+).CALCULATE(
+    customer_supplier_cost=SUM(pair.cost),
+    cost_ratio=SUM(pair.cost) * 100 / customer_total_cost,
+    revenue_ratio=SUM(pair.cost) * 100 / supplier_total_revenue
+)
+```
+","customer_supplier_ratios = PARTITION(customers, name=""cust"", by=(nation_key, key)).CALCULATE(
+    customer_key=key,
+    nation_key=nation_key,
+    customer_total_cost=SUM(cust.orders.lines.part_and_supplier.supplycost)
+).JOIN(
+    PARTITION(suppliers, name=""sup"", by=(nation_key, key)).CALCULATE(
+        supplier_key=key,
+        nation_key=nation_key,
+        supplier_total_revenue=SUM(sup.lines.part_and_supplier.supplycost)
+    ),
+    on=nation_key
+).JOIN(
+    PARTITION(Orders.lines.CALCULATE(
+        customer_key=customer.key,
+        supplier_key=supplier_key,
+        cost=part_and_supplier.supplycost
+    ), name=""pair"", by=(customer_key, supplier_key)),
+    on=(customer_key, supplier_key)
+).CALCULATE(
+    customer_supplier_cost=SUM(pair.cost),
+    cost_ratio=SUM(pair.cost) * 100 / customer_total_cost,
+    revenue_ratio=SUM(pair.cost) * 100 / supplier_total_revenue
+)"
