@@ -16,7 +16,12 @@
 **2. CALCULATE EXPRESSIONS**  
 
 - **Purpose**: Derive new fields, rename existing ones or select specific fields.  
-
+  The value of one of these terms in a `CALCULATE` must be expressions that are singular with regards to the current context. That can mean:
+  - Referencing one of the scalar properties of the current collection.
+  - Creating a literal.
+  - Referencing a singular expression of a sub-collection of the current collection that is singular with regards to the current collection.
+  - Calling a non-aggregation function on more singular expressions.
+  - Calling an aggregation function on a plural expression.
 - **Syntax**:  
   Collection.CALCULATE(field=expression, ...)  
 
