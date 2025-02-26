@@ -497,7 +497,7 @@
   *Code:* 
   ```python                                                                                              
   customer_transactions  = transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
-  transaction_summary  = PARTITION(tables, name="t", by=(cust_id, cust_name)
+  transaction_summary  = PARTITION(customer_transactions, name="t", by=(cust_id, cust_name)
                 ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
                     success_tx = COUNT(t.WHERE(status == "success"))
                 )
