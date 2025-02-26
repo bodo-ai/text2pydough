@@ -36,6 +36,147 @@
         cost_per_unit=package_cost / quantity  
     )  
 
+**Good Example #1**: For every person, fetch just their first name and last name.
+
+```py
+People.CALCULATE(first_name, last_name)
+```
+
+**Good Example #2**: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
+
+```py
+Packages.CALCULATE(
+    package_id,
+    first_name=customer.first_name,
+    last_name=customer.last_name,
+    shipping_state=shipping_address.state,
+    secret_key="alphabet soup",
+)
+```
+
+**Good Example #3**: For every person, find their full name (without the middle name) and count how many packages they purchased.
+
+```py
+People.CALCULATE(
+    name=JOIN_STRINGS("", first_name, last_name),
+    n_packages_ordered=COUNT(packages),
+)
+```
+
+**Good Example #4**: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
+
+```py
+People.CALCULATE(
+    has_middle_name=PRESENT(middle_name)
+    full_name_with_middle=JOIN_STRINGS(" ", first_name, middle_name, last_name),
+    full_name_without_middle=JOIN_STRINGS(" ", first_name, last_name),
+).CALCULATE(
+    full_name=IFF(has_middle_name, full_name_with_middle, full_name_without_middle),
+    email=email,
+)
+```
+
+**Good Example #5**: For every person, find the year of the most recent package they purchased and the year of their first package purchase.
+
+```py
+People.CALCULATE(
+    most_recent_package_year=YEAR(MAX(packages.order_date)),
+    first_ever_package_year=YEAR(MIN(packages.order_date)),
+)
+```
+
+**Good Example #6**: Count how many people, packages, and addresses are known in the system.
+
+```py
+GRAPH.CALCULATE(
+    n_people=COUNT(People),
+    n_packages=COUNT(Packages),
+    n_addresses=COUNT(Addresses),
+)
+```
+
+**Good Example #7**: For each package, list the package id and whether the package was shipped to the current address of the person who ordered it.
+
+```py
+Packages.CALCULATE(
+    package_id,
+    shipped_to_curr_addr=shipping_address.address_id == customer.current_address.address_id
+)
+```
+
+**Bad Example #1**: For each person, list their first name, last name, and phone number. This is invalid because `People` does not have a property named `phone_number`.
+
+```py
+People.CALCULATE(first_name, last_name, phone_number)
+```
+
+**Bad Example #2**: For each person, list their combined first & last name followed by their email. This is invalid because a positional argument is included after a keyword argument.
+
+```py
+People.CALCULATE(
+    full_name=JOIN_STRINGS(" ", first_name, last_name),
+    email
+)
+```
+
+**Bad Example #3**: For each person, list the address_id of packages they have ordered. This is invalid because `packages` is a plural property of `People`, so its properties cannot be included in a `CALCULATE` term of `People` unless aggregated.
+
+```py
+People.CALCULATE(packages.address_id)
+```
+
+**Bad Example #4**: For each person, list their first/last name followed by the concatenated city/state name of their current address. This is invalid because `current_address` is a plural property of `People`, so its properties cannot be included in a `CALCULATE` term of `People` unless aggregated.
+
+```py
+People.CALCULATE(
+    first_name,
+    last_name,
+    location=JOIN_STRINGS(", ", current_address.city, current_address.state),
+)
+```
+
+**Bad Example #5**: For each address, find whether the state name starts with `"C"`. This is invalid because it calls the builtin Python `.startswith` string method, which is not supported in PyDough (should have instead used a defined PyDough behavior, like the `STARTSWITH` function).
+
+```py
+Addresses.CALCULATE(is_c_state=state.startswith("c"))
+```
+
+**Bad Example #6**: For each address, find the state bird of the state it is in. This is invalid because the `state` property of each record of `Addresses` is a scalar expression, not a subcolleciton, so it does not have any properties that can be accessed with `.` syntax.
+
+```py
+Addresses.CALCULATE(state_bird=state.bird)
+```
+
+**Bad Example #7**: For each current occupant of each address, list their first name, last name, and city/state they live in. This is invalid because `city` and `state` are not properties of the current collection (`People`, accessed via `current_occupants` of each record of `Addresses`).
+
+```py
+Addresses.current_occupants.CALCULATE(first_name, last_name, city, state)
+```
+
+**Bad Example #8**: For each person include their ssn and current address. This is invalid because a collection cannot be a `CALCULATE` term, and `current_address` is a sub-collection property of `People`. Instead, properties of `current_address` can be accessed.
+
+```py
+People.CALCULATE(ssn, current_address)
+```
+
+**Bad Example #9**: For each person, list their first name, last name, and the sum of the package costs. This is invalid because `SUM` is an aggregation function and cannot be used in a `CALCULATE` term without specifying the sub-collection it should be applied to.
+
+```py
+People.CALCULATE(first_name, last_name, total_cost=SUM(package_cost))
+```
+
+**Bad Example #9**: For each person, list their first name, last name, and the ratio between the cost of all packages they apply ordered and the number of packages they ordered. This is invalid the `total_cost` and `n_packages` are used to define `ratio` in the same `CALCULATE` where they are defined.
+
+```py
+People.CALCULATE(
+    first_name,
+    last_name,
+    total_cost=SUM(packages.package_cost),
+    n_packages=COUNT(packages),
+    ratio=total_cost/n_packages,
+)
+```
+
 - **Rules**:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
   - Positional arguments must precede keyword arguments.
