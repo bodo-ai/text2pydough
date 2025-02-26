@@ -486,6 +486,16 @@
       (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)  
   )
 
+* **Find the parts that contain "STEEL" in their name and show the total available quantity, ordered by the highest available quantity**
+  *Goal: Find the parts that contains STEEL in their name.*          
+  *Code:*                                                                                                
+  availability_parts= supply_records.WHERE(CONTAINS(part.name, "steel")).CALCULATE(part_name= part.name)
+  output= PARTITION(availability_parts, name="supp", by=part_name
+              ).CALCULATE(
+              part_name= part_name,
+              total_available= SUM(supp.availqty)
+  ).ORDER_BY(total_available.DESC())
+
 **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
