@@ -18,11 +18,12 @@ Your objective is to analyze the provided natural language description that outl
    - Properly references fields and tables as defined in the Database Structure Reference File.
    - Includes comments for any complex operations, where necessary.
    - Assigns the final query to a variable.
-   - Make sure the indent is rigth.
-   - Ensure the code adheres to the syntax and structure outlined in the PyDough Reference File.
-   - Ensure you are using the properly references fields and tables defined in the Database Structure Reference File.
-   - Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
+   - Ensures proper indentation.
+   - Adheres to the syntax and structure outlined in the PyDough Reference File.
+   - Returns only the exact data requested, without adding additional fields or information.
 
-3. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+3. Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
+
+4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 Use this structure to ensure clarity, consistency, and adherence to PyDough syntax in your outputs.
