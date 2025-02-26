@@ -158,6 +158,12 @@ def main(git_hash):
     # Use `store_false` if --no-eval_results is passed
     parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
 
+   # Use `store_true` to set eval_results to True if argument is passed
+    parser.add_argument("--eval_benchmark", action="store_true", help="Evaluate the TPCH Benchmark")
+    
+    # Use `store_false` if --no-eval_results is passed
+    parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not Evaluate the TPCH Benchmark")
+
     # Default value for eval_results is False
     parser.set_defaults(eval_results=False)
     args = parser.parse_args()
