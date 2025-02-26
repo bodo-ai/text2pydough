@@ -1,6 +1,10 @@
 **PYDOUGH CHEAT SHEET**  
 
-**IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
+**IMPORTANT NOTES**: 
+
+  - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
+
+  - Solve step by step. It means, if you need to filter the result, first apply the filter, then calculate the parameters that you need base on this. 
 
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
