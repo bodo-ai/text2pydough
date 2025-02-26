@@ -1,5 +1,7 @@
 **PYDOUGH CHEAT SHEET**  
 
+**IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
+
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
 - **Syntax**: Access collections/sub-collections using dot notation.  
@@ -79,7 +81,9 @@
 
   .DESC(na_pos='first') → Sort descending, nulls first.
 
-**5. SORTING (TOP_K)**  
+**5. SORTING TOP_K(k, by=field.DESC())**  
+
+  **IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
 
 - **Select top k records.**
 
@@ -89,6 +93,9 @@
 - **Example:**  
   Top 10 customers by orders count:  
   customers.TOP_K(10, by=COUNT(orders).DESC())
+
+  Top 10 customers by orders count (but also selecting only the name):  
+  customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())
 
 **6. AGGREGATION FUNCTIONS**  
 

@@ -1,4 +1,4 @@
-Queries,SQL,pydough,pydough-sql
+Queries,SQL,pydough,pydough-backOverhaul,pydough-sql
 Find All Customers in the Asia Region,"SELECT c_custkey, c_name, c_address 
 FROM customer c
 JOIN nation n ON c.c_nationkey = n.n_nationkey
@@ -7,7 +7,18 @@ WHERE r_name = 'ASIA';","filter_c= nations.WHERE(region.name == ""ASIA"").custom
         c_name=name,
         c_address=address,
         n_nation= BACK(1).name
-       )","SELECT 
+       )
+","%%pydough
+
+filter_c = nations.WHERE(region.name == ""ASIA"").CALCULATE(
+    n_nation=name
+).customers.CALCULATE(
+    n_nation,
+    c_name=name,
+    c_address=address,
+)
+
+pydough.to_df(filter_c)","SELECT 
     c_name, 
     c_address, 
     n_nation
@@ -64,6 +75,10 @@ WHERE name_6 = 'ASIA';"
 FROM orders o 
 WHERE strftime('%Y', o.o_orderdate) = '1998';","orders_1998= TPCH(total_orders=COUNT(orders.WHERE(YEAR(order_date) == 1998)))
 
+pydough.to_df(orders_1998)","%%pydough
+
+orders_1998= TPCH.CALCULATE(total_orders=COUNT(orders.WHERE(YEAR(order_date) == 1998)))
+
 pydough.to_df(orders_1998)","SELECT COUNT() AS total_orders FROM (SELECT clerk FROM (SELECT o_clerk AS clerk, o_orderdate AS order_date FROM main.ORDERS) WHERE CAST(STRFTIME('%Y', order_date) AS INTEGER) = 1998)"
 total revenue for each customer region.,"SELECT r_name, SUM(l_extendedprice * (1 - l_discount)) AS total_revenue
 FROM region r
@@ -85,7 +100,19 @@ output = PARTITION(line_info, name=""l"", by=(region_name))(
     REVENUE.DESC(),
 )
 pydough.to_df(output)
-","SELECT 
+","%%pydough
+
+line_info = lines.CALCULATE(
+    region_name=order.customer.nation.region.name,
+    revenue=extended_price * (1 - discount),
+)
+output = PARTITION(line_info, name=""l"", by=(region_name)).CALCULATE(
+    REGION=region_name,
+    REVENUE= SUM(l.revenue)
+).ORDER_BY(
+    REVENUE.DESC(),
+)
+pydough.to_df(output)","SELECT 
     REGION, 
     REVENUE 
 FROM (
@@ -185,7 +212,24 @@ output = PARTITION(line_info, name=""l"", by=(key,region_name, num_orders))(
     NUM_ORDERS.DESC(),
 )
 
-pydough.to_df(output)",
+pydough.to_df(output)","%%pydough
+
+line_info = customers.CALCULATE(
+    key,
+    region_name=name,
+    num_orders=COUNT(
+        orders.WHERE(YEAR(order_date) == 1992)
+    ),
+)
+output = PARTITION(line_info, name=""l"", by=(key,region_name, num_orders)).CALCULATE(
+    key,
+    REGION=region_name,
+    NUM_ORDERS=num_orders
+).TOP_K(1,
+    NUM_ORDERS.DESC(),
+)
+
+pydough.to_df(output)",
 Find the top 5 customers with the highest total order value:,"SELECT c_custkey, c_name, SUM(l_extendedprice * (1 - l_discount)) AS total_revenue
 FROM customer c
 JOIN orders o ON c.c_custkey = o.o_custkey
@@ -202,8 +246,41 @@ output = PARTITION(line_info, name=""l"", by=(customer_key,customer_name))(
     customer_key= customer_key,
     total_revenue=SUM(l.revenue)
 ).TOP_K(5, by=total_revenue.DESC())
-pydough.to_df(output)",
-Identify suppliers who have never supplied any parts,,,
+pydough.to_df(output)","%%pydough
+
+line_info = lines.CALCULATE(
+    customer_key= order.customer.key,
+    customer_name=order.customer.name,
+    revenue=extended_price * (1 - discount),
+)
+output = PARTITION(line_info, name=""l"", by=(customer_key,customer_name)).CALCULATE(
+    customer_name=customer_name,
+    customer_key= customer_key,
+    total_revenue=SUM(l.revenue)
+).TOP_K(5, by=total_revenue.DESC())
+pydough.to_df(output)",
+Identify suppliers who have never supplied any parts,"SELECT s.s_suppkey, s.s_name
+FROM supplier s
+LEFT JOIN partsupp ps ON s.s_suppkey = ps.ps_suppkey
+WHERE ps.ps_suppkey IS NULL;","%%pydough
+
+result = suppliers.WHERE(
+    HASNOT(supply_records) 
+).(
+    suppkey=key,
+    name=name
+)
+
+pydough.to_df(result)","%%pydough
+
+result = suppliers.WHERE(
+    HASNOT(supply_records) 
+).CALCULATE(
+    suppkey=key,
+    name=name
+)
+
+pydough.to_df(result)",
 Number of Orders per Customer made in 1995,"SELECT
     c.c_custkey,
     c.c_name,
@@ -229,8 +306,28 @@ output = customers(
     C_NAME=name,
     NUM_ORDERS=COUNT(selected_lines.key),
 ).TOP_K(20, by=(NUM_ORDERS.DESC()))
-pydough.to_df(output)",
-Orders Shipped Late in 1998 - Customer Details,,,
+pydough.to_df(output)","%%pydough
+
+selected_lines = orders.WHERE(
+    (YEAR(order_date) == 1995)
+).CALCULATE(key=key)
+
+output = customers.CALCULATE(
+    C_CUSTKEY=key,
+    C_NAME=name,
+    NUM_ORDERS=COUNT(selected_lines.key),
+).WHERE(NUM_ORDERS > 0).ORDER_BY(NUM_ORDERS.DESC())
+
+output= pydough.to_df(output)",
+Orders Shipped Late in 1998 - Customer Details,,,"%%pydough
+
+selected_lines = lines.WHERE(
+    (ship_date < commit_date)
+    & (commit_date < receipt_date)
+    & (receipt_date >= datetime.date(1998, 1, 1))
+    & (receipt_date < datetime.date(1999, 1, 1))
+)
+output = selected_lines.order.customer",
 Determine the number of orders placed in each month of a year:,"SELECT
     strftime('%m', o_orderdate) AS order_month,
     COUNT(o_orderkey) AS num_orders            
@@ -253,6 +350,17 @@ output = PARTITION(selected_lines, name=""o"", by=(o_month))(
     o_month=o_month,
     num_orders= COUNT(o.key)
 )
+pydough.to_df(output)","%%pydough
+
+selected_lines = orders.CALCULATE(key=key, o_month=MONTH(order_date)).WHERE(
+    (order_date >= datetime.date(1998, 1, 1))
+    & (order_date < datetime.date(1999, 1, 1))
+)
+
+output = PARTITION(selected_lines, name=""o"", by=(o_month)).CALCULATE(
+    o_month=o_month,
+    num_orders= COUNT(o.key)
+)
 pydough.to_df(output)",
 "Retrieve the names and comments of nations whose names start with the letter ""A""","SELECT N_NAME, N_COMMENT
 FROM nation
@@ -265,6 +373,12 @@ nations_startwith= nations(n_name=name, n_comment= comment).WHERE(STARTSWITH(nam
 nations_like= nations(n_name=name, n_comment= comment).WHERE(LIKE(name,'A%'))
 
 print(pydough.to_df(nations_startwith))
+pydough.to_df(nations_like)","%%pydough
+
+nations_startwith= nations.CALCULATE(n_name=name, n_comment= comment).WHERE(STARTSWITH(name,'A'))
+
+nations_like= nations.CALCULATE(n_name=name, n_comment= comment).WHERE(LIKE(name,'A%'))
+
 pydough.to_df(nations_like)","SELECT n_name, n_comment
 FROM (
     SELECT n_name AS name, n_comment AS n_comment, n_name AS n_name
@@ -275,11 +389,17 @@ Retrieve the names of customers who are from Peru.,"SELECT C.C_NAME
 FROM customers C
 JOIN nation N
 ON C.C_NATIONKEY = N.N_NATIONKEY
-WHERE N.N_NAME = 'Peru';","%%pydough
+WHERE N.N_NAME = 'PERU';","%%pydough
 
 peru_nations= customers.WHERE(nation.name == ""PERU"")
 
 customers_from_peru= peru_nations(n_name=name)
+
+pydough.to_df(customers_from_peru)","%%pydough
+
+peru_nations= customers.WHERE(nation.name == ""PERU"")
+
+customers_from_peru= peru_nations.CALCULATE(n_name=name)
 
 pydough.to_df(customers_from_peru)","SELECT name AS n_name
 FROM (
@@ -314,7 +434,20 @@ customer_in_debt= customers(
     (nation.region.name == ""AMERICA"") &
     (nation.name != ""BRAZIL""))
 
-pydough.to_df(customer_in_debt)","SELECT name
+pydough.to_df(customer_in_debt)","%%pydough 
+
+customer_in_debt = customers.CALCULATE(
+    c_id=key,
+    c_name=name,
+).WHERE(
+    (acctbal < 0) &  
+    (COUNT(orders.key) > 5) &  
+    (nation.region.name == ""AMERICA"") & 
+    (nation.name != ""BRAZIL"") 
+)
+
+output = pydough.to_df(customer_in_debt)
+output","SELECT name
 FROM (
     SELECT _table_alias_2.name AS name, acctbal, agg_0, name_3, _table_alias_3.name AS name_6
     FROM (
@@ -357,11 +490,19 @@ WHERE (acctbal < 0)
   AND (COALESCE(agg_0, 0) >= 5)
   AND (name_3 = 'AMERICA')
   AND (name_6 <> 'BRAZIL');"
-Find the total number of orders per customers placed in 1998,"SELECT c.c_custkey, c.c_name, COUNT(o.o_orderkey) AS total_orders
-FROM customer c
+Find the total number of orders per customers placed in 1998,"SELECT
+    c.c_custkey,
+    c.c_name,
+    COUNT(o.o_orderkey) AS num_orders
+FROM
+    customer c
 JOIN orders o ON c.c_custkey = o.o_custkey
-WHERE strftime('%Y', o.o_orderdate) = '1998'  
-ORDER BY total_orders DESC;","%%pydough
+WHERE
+    strftime('%Y', o.o_orderdate) = '1998'  
+GROUP BY
+    c.c_custkey, c.c_name
+ORDER BY
+    num_orders DESC;","%%pydough
 
 customers_orders = customers(
     key,
@@ -371,7 +512,17 @@ customers_orders = customers(
         orders.WHERE(YEAR(order_date) == 1998)
     ),
 ).ORDER_BY(num_orders.DESC())
-pydough.to_sql(customers_orders)","SELECT key, name, num_orders
+pydough.to_sql(customers_orders)","%%pydough
+
+customers_orders = customers.CALCULATE(
+    key,
+    name,
+    num_orders=COUNT(
+        orders.WHERE(YEAR(order_date) == 1998)
+    ),
+).ORDER_BY(num_orders.DESC())
+
+pydough.to_df(customers_orders)","SELECT key, name, num_orders
 FROM (
     SELECT name, key, COALESCE(agg_0, 0) AS num_orders, COALESCE(agg_0, 0) AS ordering_1
     FROM (
@@ -410,7 +561,21 @@ grouped_orders= PARTITION(
     orders_count=COUNT(o.o_keys)
 ).ORDER_BY(orders_count.DESC())
 pydough.to_df(grouped_orders)
-","SELECT region_name, orders_count
+","%%pydough
+
+orders_by_nation = orders.CALCULATE(
+    o_keys=key,
+    region_name=customer.nation.name 
+)
+
+grouped_orders = PARTITION(
+    orders_by_nation, name=""o"", by=region_name
+).CALCULATE(
+    region_name,
+    orders_count=COUNT(o.o_keys)
+).ORDER_BY(orders_count.DESC())
+
+pydough.to_df(grouped_orders)","SELECT region_name, orders_count
 FROM (
     SELECT region_name, COALESCE(agg_0, 0) AS orders_count, COALESCE(agg_0, 0) AS ordering_1
     FROM (
@@ -461,7 +626,19 @@ output = PARTITION(selected_lines, name=""o"", by=(o_month))(
     o_month=o_month,
     num_orders= COUNT(o.key)
 )
-pydough.to_df(output)","SELECT o_month, COALESCE(agg_0, 0) AS num_orders
+pydough.to_df(output)","%%pydough
+
+selected_lines = orders.CALCULATE(key=key,  o_month=MONTH(order_date)).WHERE(
+    (YEAR(order_date) == 1998)
+)
+
+output = PARTITION(selected_lines, name=""o"", by=(o_month)).CALCULATE(
+    order_month=o_month,
+    num_orders= COUNT(o.key)
+)
+
+output=pydough.to_df(output)
+output","SELECT o_month, COALESCE(agg_0, 0) AS num_orders
 FROM (
     SELECT o_month, COUNT(key) AS agg_0
     FROM (
@@ -487,6 +664,14 @@ GROUP BY c.c_custkey, c.c_name
 HAVING SUM(o.o_totalprice) > 1000;","%%pydough
 
 filter_c= customers(
+        c_key= key,
+        c_name=name,
+        TOTAL_PRICE=SUM(orders.total_price)
+       ).WHERE((TOTAL_PRICE > 1000 ) & (nation.region.name == ""ASIA""))
+
+pydough.to_df(filter_c)","%%pydough
+
+filter_c= customers.CALCULATE(
         c_key= key,
         c_name=name,
         TOTAL_PRICE=SUM(orders.total_price)
@@ -548,6 +733,18 @@ output = PARTITION(selected_customers, ""cust"", by=customer_region_name)(
     REGION_NAME=customer_region_name,
     TOTALREVENUE= AVG(cust.orders_price)
 )
+pydough.to_df(output)","%%pydough
+
+selected_customers = customers.CALCULATE(
+    customer_region_name=nation.region.name
+).orders.CALCULATE(
+    orders_price=total_price
+)
+
+output = PARTITION(selected_customers, ""cust"", by=customer_region_name).CALCULATE(
+    REGION_NAME=customer_region_name,
+    TOTALREVENUE= AVG(cust.orders_price)
+)
 pydough.to_df(output)","SELECT customer_region_name AS REGION_NAME, AVG(orders_price) AS TOTALREVENUE FROM (SELECT customer_region_name, total_price AS orders_price FROM (SELECT _table_alias_2.key AS key, name_3 AS customer_region_name FROM (SELECT c_custkey AS key, c_nationkey AS nation_key FROM main.CUSTOMER) AS _table_alias_2 LEFT JOIN (SELECT _table_alias_0.key AS key, name AS name_3 FROM (SELECT n_regionkey AS region_key, n_nationkey AS key FROM main.NATION) AS _table_alias_0 INNER JOIN (SELECT r_regionkey AS key, r_name AS name FROM main.REGION) AS _table_alias_1 ON region_key = _table_alias_1.key) AS _table_alias_3 ON nation_key = _table_alias_3.key) INNER JOIN (SELECT o_totalprice AS total_price, o_custkey AS customer_key FROM main.ORDERS) ON key = customer_key) GROUP BY customer_region_name"
 Find the top 5 regions with the highest total revenue from orders.,"SELECT 
     r.r_name AS RegionName, 
@@ -570,6 +767,19 @@ output = PARTITION(selected_customers, ""cust"", by=customer_region_name)(
     REGION_NAME=customer_region_name,
     TOTALREVENUE= SUM(cust.orders_price)
 ).TOP_K(5, by=TOTALREVENUE.DESC())
+pydough.to_df(output)","%%pydough
+
+selected_customers = customers.CALCULATE(
+    customer_region_name=nation.region.name
+).orders.CALCULATE(
+    orders_price=total_price
+)
+
+output = PARTITION(selected_customers, ""cust"", by=customer_region_name).CALCULATE(
+    REGION_NAME=customer_region_name,
+    TOTALREVENUE= SUM(cust.orders_price)
+).TOP_K(5, by=TOTALREVENUE.DESC())
+
 pydough.to_df(output)","SELECT REGION_NAME, TOTALREVENUE FROM (SELECT REGION_NAME, TOTALREVENUE, ordering_1 FROM (SELECT customer_region_name AS REGION_NAME, COALESCE(agg_0, 0) AS TOTALREVENUE, COALESCE(agg_0, 0) AS ordering_1 FROM (SELECT customer_region_name, SUM(orders_price) AS agg_0 FROM (SELECT customer_region_name, total_price AS orders_price FROM (SELECT _table_alias_2.key AS key, name_3 AS customer_region_name FROM (SELECT c_custkey AS key, c_nationkey AS nation_key FROM main.CUSTOMER) AS _table_alias_2 LEFT JOIN (SELECT _table_alias_0.key AS key, name AS name_3 FROM (SELECT n_regionkey AS region_key, n_nationkey AS key FROM main.NATION) AS _table_alias_0 INNER JOIN (SELECT r_regionkey AS key, r_name AS name FROM main.REGION) AS _table_alias_1 ON region_key = _table_alias_1.key) AS _table_alias_3 ON nation_key = _table_alias_3.key) INNER JOIN (SELECT o_totalprice AS total_price, o_custkey AS customer_key FROM main.ORDERS) ON key = customer_key) GROUP BY customer_region_name)) ORDER BY ordering_1 DESC LIMIT 5) ORDER BY ordering_1 DESC"
 "For each region and nation, calculate the maximum and minimum order values, the difference between them, and the total number of orders, ordered by the order value difference in descending order.","SELECT 
     r.r_name AS region_name,
@@ -598,7 +808,26 @@ output= PARTITION(selected_orders, ""o"", by=(region_name, nation_name))(
     total_orders= COUNT(o.total_price)
 ).ORDER_BY(order_value_difference.DESC())
 
-pydough.to_df(output)","SELECT region_name, nation_name, max_order_value, min_order_value, order_value_difference, total_orders FROM (SELECT region_name, nation_name, agg_0 AS max_order_value, agg_1 AS min_order_value, agg_2 - agg_3 AS order_value_difference, COALESCE(agg_4, 0) AS total_orders, agg_2 - agg_3 AS ordering_5 FROM (SELECT region_name, nation_name, MAX(total_price) AS agg_0, MIN(total_price) AS agg_1, MAX(total_price) AS agg_2, MIN(total_price) AS agg_3, COUNT(total_price) AS agg_4 FROM (SELECT nation_name, region_name, total_price FROM (SELECT _table_alias_4.key AS key, name AS nation_name, name_3 AS region_name FROM (SELECT _table_alias_2.key AS key, nation_key, name_3 FROM (SELECT c_custkey AS key, c_nationkey AS nation_key FROM main.CUSTOMER) AS _table_alias_2 LEFT JOIN (SELECT _table_alias_0.key AS key, name AS name_3 FROM (SELECT n_regionkey AS region_key, n_nationkey AS key FROM main.NATION) AS _table_alias_0 INNER JOIN (SELECT r_regionkey AS key, r_name AS name FROM main.REGION) AS _table_alias_1 ON region_key = _table_alias_1.key) AS _table_alias_3 ON nation_key = _table_alias_3.key) AS _table_alias_4 LEFT JOIN (SELECT n_nationkey AS key, n_name AS name FROM main.NATION) AS _table_alias_5 ON nation_key = _table_alias_5.key) INNER JOIN (SELECT o_totalprice AS total_price, o_custkey AS customer_key FROM main.ORDERS) ON key = customer_key) GROUP BY region_name, nation_name)) ORDER BY ordering_5 DESC"
+pydough.to_df(output)","%%pydough
+
+selected_orders = customers.CALCULATE(
+    region_name=nation.region.name,
+    nation_name=nation.name
+).orders.CALCULATE(
+    total_price=total_price
+)
+
+
+output = PARTITION(selected_orders, name=""o"", by=(region_name, nation_name)).CALCULATE(
+    region_name,
+    nation_name,
+    max_order_value=MAX(o.total_price),
+    min_order_value=MIN(o.total_price),
+    order_value_difference=MAX(o.total_price) - MIN(o.total_price),
+    total_orders=COUNT(o.total_price)
+).ORDER_BY(order_value_difference.DESC())
+
+pydough.to_df(output)","SELECT region_name, nation_name, max_order_value, min_order_value, order_value_difference, total_orders FROM (SELECT region_name, nation_name, agg_0 AS max_order_value, agg_1 AS min_order_value, agg_2 - agg_3 AS order_value_difference, COALESCE(agg_4, 0) AS total_orders, agg_2 - agg_3 AS ordering_5 FROM (SELECT region_name, nation_name, MAX(total_price) AS agg_0, MIN(total_price) AS agg_1, MAX(total_price) AS agg_2, MIN(total_price) AS agg_3, COUNT(total_price) AS agg_4 FROM (SELECT nation_name, region_name, total_price FROM (SELECT _table_alias_4.key AS key, name AS nation_name, name_3 AS region_name FROM (SELECT _table_alias_2.key AS key, nation_key, name_3 FROM (SELECT c_custkey AS key, c_nationkey AS nation_key FROM main.CUSTOMER) AS _table_alias_2 LEFT JOIN (SELECT _table_alias_0.key AS key, name AS name_3 FROM (SELECT n_regionkey AS region_key, n_nationkey AS key FROM main.NATION) AS _table_alias_0 INNER JOIN (SELECT r_regionkey AS key, r_name AS name FROM main.REGION) AS _table_alias_1 ON region_key = _table_alias_1.key) AS _table_alias_3 ON nation_key = _table_alias_3.key) AS _table_alias_4 LEFT JOIN (SELECT n_nationkey AS key, n_name AS name FROM main.NATION) AS _table_alias_5 ON nation_key = _table_alias_5.key) INNER JOIN (SELECT o_totalprice AS total_price, o_custkey AS customer_key FROM main.ORDERS) ON key = customer_key) GROUP BY region_name, nation_name)) ORDER BY ordering_5 DESC"
 "List the nations and the count of customers in the ""Machinery"" and ""Automobile"" market segments, ordered by the number of customers in descending order.","SELECT 
     n.n_name AS nation_name,
     COUNT(c.c_custkey) AS customer_count
@@ -616,7 +845,18 @@ output= PARTITION(selected_customers, name=""cust"", by=(nation_name))(
     customer_count= COUNT(cust.key)
 ).ORDER_BY(customer_count.DESC())
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","%%pydough
+
+selected_customers = customers.WHERE(ISIN(mktsegment, ('MACHINERY', 'AUTOMOBILE'))).CALCULATE(
+    nation_name=nation.name, 
+    key=key)
+
+output= PARTITION(selected_customers, name=""cust"", by=(nation_name)).CALCULATE(
+    nation_name= nation_name,
+    customer_count= COUNT(cust.key)
+).ORDER_BY(customer_count.DESC())
+
+pydough.to_df(output)","SELECT 
     nation_name, 
     customer_count 
 FROM 
@@ -696,7 +936,22 @@ output= PARTITION(selected_orders, name=""o"", by=(region_name))(
     high_priority_percentage= ROUND((SUM(o.is_prioritary) * 100 ) / COUNT(o.key),2)
 ).ORDER_BY(high_priority_percentage.DESC())
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)
+","%%pydough
+
+selected_orders = customers.CALCULATE(
+    region_name=nation.region.name
+).orders.CALCULATE(
+    key,
+    is_prioritary=IFF(ISIN(order_priority, ('1-URGENT', '2-HIGH')), 1, 0)
+)
+
+output = PARTITION(selected_orders, name=""o"", by=region_name).CALCULATE(
+    region_name,
+    high_priority_percentage=ROUND((SUM(o.is_prioritary) * 100) / COUNT(o.key), 2)
+).ORDER_BY(high_priority_percentage.DESC())
+
+pydough.to_df(output)","SELECT 
     region_name, 
     high_priority_percentage 
 FROM 
@@ -791,7 +1046,11 @@ customers_without_orders= customers.WHERE(HASNOT(orders)==1)
 selected_customers = customers_without_orders(key, name)
 
 
-pydough.to_df(selected_customers)","SELECT key, name FROM 
+pydough.to_df(selected_customers)","%%pydough
+
+customers_without_orders= customers.WHERE(HASNOT(orders)==1).CALCULATE(key, name)
+
+pydough.to_df(customers_without_orders)","SELECT key, name FROM 
 	(SELECT name, key, agg_0 FROM (SELECT c_name AS name, c_custkey AS key FROM main.CUSTOMER)
 	LEFT JOIN (SELECT customer_key, COUNT() AS agg_0 FROM (SELECT o_custkey AS customer_key FROM main.ORDERS) 
 	GROUP BY customer_key) ON key = customer_key) 
@@ -818,6 +1077,20 @@ output = PARTITION(selected_customers, ""cust"", by=customer_nation_name)(
     ACTIVE_CUSTOMERS=NDISTINCT(cust.active_customers),
     INACTIVE_CUSTOMERS=NDISTINCT(cust.inactive_customers),
 ).ORDER_BY(TOTAL_CUSTOMERS.DESC())
+pydough.to_df(output)","%%pydough
+
+selected_customers = customers.CALCULATE(
+    customer_nation_name= nation.name, 
+    active_customers=KEEP_IF(key,HAS(orders)),
+    inactive_customers= KEEP_IF(key, HASNOT(orders))
+)
+output = PARTITION(selected_customers, ""cust"", by=customer_nation_name).CALCULATE(
+    NATION_NAME=customer_nation_name,
+    TOTAL_CUSTOMERS= COUNT(cust.key),
+    ACTIVE_CUSTOMERS=NDISTINCT(cust.active_customers),
+    INACTIVE_CUSTOMERS=NDISTINCT(cust.inactive_customers),
+).ORDER_BY(TOTAL_CUSTOMERS.DESC())
+
 pydough.to_df(output)","SELECT NATION_NAME, TOTAL_CUSTOMERS, ACTIVE_CUSTOMERS, INACTIVE_CUSTOMERS FROM (SELECT agg_4 AS ACTIVE_CUSTOMERS, agg_5 AS INACTIVE_CUSTOMERS, customer_nation_name AS NATION_NAME, COALESCE(agg_6, 0) AS TOTAL_CUSTOMERS, COALESCE(agg_6, 0) AS ordering_7 FROM (SELECT _table_alias_4.customer_nation_name AS customer_nation_name, agg_4, agg_5, agg_6 FROM (SELECT customer_nation_name FROM (SELECT name_3 AS customer_nation_name FROM (SELECT _table_alias_0.key AS key, name AS name_3 FROM (SELECT c_nationkey AS nation_key, c_custkey AS key FROM main.CUSTOMER) AS _table_alias_0 LEFT JOIN (SELECT n_nationkey AS key, n_name AS name FROM main.NATION) AS _table_alias_1 ON nation_key = _table_alias_1.key) LEFT JOIN (SELECT customer_key FROM (SELECT o_custkey AS customer_key FROM main.ORDERS) GROUP BY customer_key) ON key = customer_key) GROUP BY customer_nation_name) AS _table_alias_4 LEFT JOIN (SELECT customer_nation_name, COUNT(DISTINCT active_customers) AS agg_4, COUNT(DISTINCT inactive_customers) AS agg_5, COUNT(key) AS agg_6 FROM (SELECT key, CASE WHEN COALESCE(agg_2, 0) > 0 THEN key ELSE NULL END AS active_customers, name_6 AS customer_nation_name, CASE WHEN COALESCE(agg_3, 0) = 0 THEN key ELSE NULL END AS inactive_customers FROM (SELECT key, name_6, agg_2, agg_3 FROM (SELECT _table_alias_2.key AS key, name AS name_6 FROM (SELECT c_nationkey AS nation_key, c_custkey AS key FROM main.CUSTOMER) AS _table_alias_2 LEFT JOIN (SELECT n_nationkey AS key, n_name AS name FROM main.NATION) AS _table_alias_3 ON nation_key = _table_alias_3.key) LEFT JOIN (SELECT customer_key, COUNT() AS agg_2, COUNT() AS agg_3 FROM (SELECT o_custkey AS customer_key FROM main.ORDERS) GROUP BY customer_key) ON key = customer_key)) GROUP BY customer_nation_name) AS _table_alias_5 ON _table_alias_4.customer_nation_name = _table_alias_5.customer_nation_name)) ORDER BY ordering_7 DESC"
 Retrieve customers who belong to the top 10% in account balance but rank in the bottom 25% in terms of order activity,"SELECT c_name, c_acctbal, total_orders
 FROM (
@@ -845,7 +1118,17 @@ output= PARTITION(selected_customers, name=""cust"", by=(key, name, acctbal))(
     name= name,
     acctbal= acctbal
 ).ORDER_BY(acctbal.DESC())
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","%%pydough
+
+selected_customers= customers.WHERE(
+    (PERCENTILE(by=acctbal.DESC()) <= 10) & (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)
+).CALCULATE(
+    key, 
+    name, 
+    acctbal
+).ORDER_BY(acctbal.DESC())
+
+pydough.to_df(selected_customers)","SELECT 
     key, 
     name, 
     acctbal 
@@ -927,7 +1210,21 @@ supply_cost_by_regions= PARTITION(
 
 sort= supply_cost_by_regions.ORDER_BY(total_supply_cost.DESC())
 
-pydough.to_df(sort)","SELECT region_name, total_supply_cost 
+pydough.to_df(sort)","%%pydough
+
+supply= supply_records.CALCULATE(
+    region_name= supplier.nation.region.name, 
+    supply_cost= supplycost, 
+    availqty= availqty
+)
+
+supply_cost_by_regions= PARTITION(supply, name=""supp"", by=region_name).CALCULATE(
+    region_name,
+    total_supply_cost= SUM(supp.supplycost * supp.availqty)
+).ORDER_BY(total_supply_cost.DESC())
+
+
+pydough.to_df(supply_cost_by_regions)","SELECT region_name, total_supply_cost 
 FROM (
     SELECT region_name, COALESCE(agg_0, 0) AS total_supply_cost, COALESCE(agg_0, 0) AS ordering_1 
     FROM (
@@ -975,7 +1272,13 @@ parts_by_supplycost = supply_records.part(part_name= name, supply_cost= BACK(1).
 
 output=parts_by_supplycost.TOP_K(5,supply_cost.DESC())
 
-pydough.to_df(output)","SELECT part_name, supply_cost 
+pydough.to_df(output)","%%pydough
+
+parts_by_supplycost = supply_records.CALCULATE(supply_cost = supplycost
+                                        ).part.CALCULATE(part_name= name, 
+                                        supply_cost = supply_cost)
+
+output=parts_by_supplycost.TOP_K(5,supply_cost.DESC())","SELECT part_name, supply_cost 
 FROM (
     SELECT part_name, supply_cost, ordering_0 
     FROM (
@@ -1006,6 +1309,16 @@ availability_parts= supply_records.WHERE(CONTAINS(part.name, ""steel""))(part_na
 output= PARTITION(availability_parts, name=""supp"", by=part_name)(
     part_name= part_name,
     total_available= SUM(supp.availqty)
+).ORDER_BY(total_available.DESC())
+pydough.to_df(output)","%%pydough
+
+availability_parts= supply_records.WHERE(CONTAINS(part.name, ""steel"")
+                                         ).CALCULATE(part_name= part.name)
+
+output= PARTITION(availability_parts, name=""supp"", by=part_name
+            ).CALCULATE(
+            part_name= part_name,
+            total_available= SUM(supp.availqty)
 ).ORDER_BY(total_available.DESC())
 pydough.to_df(output)","SELECT part_name, total_available 
 FROM (
@@ -1053,7 +1366,21 @@ output= PARTITION(availability_parts, name=""supp"", by=(supplier_name,nation))(
     total_units_supplied= SUM(supp.availqty)
 ).WHERE(total_units_supplied > 1000).ORDER_BY(total_units_supplied.DESC())
 pydough.to_df(output)
-","SELECT supplier_name, nation, total_units_supplied
+","%%pydough
+
+availability_parts= supply_records.WHERE(
+    CONTAINS(part.part_type, ""BRASS"")
+    ).CALCULATE(supplier_name= supplier.name, 
+                nation= supplier.nation.name)
+
+output= PARTITION(availability_parts, name=""supp"", 
+                  by=(supplier_name,nation)).CALCULATE(
+    supplier_name= supplier_name,
+    nation= nation,
+    total_units_supplied= SUM(supp.availqty)
+).WHERE(total_units_supplied > 1000
+        ).ORDER_BY(total_units_supplied.DESC())
+pydough.to_df(output)","SELECT supplier_name, nation, total_units_supplied
 FROM (
     SELECT supplier_name, nation, total_units_supplied, total_units_supplied AS ordering_1
     FROM (
@@ -1120,7 +1447,17 @@ output= PARTITION(availability_parts, name=""supp"", by=(part_name))(
     part_name= part_name,
     number_of_nations= NDISTINCT(supp.nation)
 ).WHERE(number_of_nations > 5).ORDER_BY(number_of_nations.DESC())
-pydough.to_df(output)",
+pydough.to_df(output)
+","%%pydough
+
+availability_parts= supply_records.CALCULATE(part_name= part.name, 
+                                             nation= supplier.nation.name)
+
+output= PARTITION(availability_parts, name=""supp"", by=(part_name)
+            ).CALCULATE(
+            part_name= part_name,
+            number_of_nations= NDISTINCT(supp.nation)
+).WHERE(number_of_nations > 5).ORDER_BY(number_of_nations.DESC())",
 "Which 10 customers purchased the highest quantity of products with ""green"" in the product name during 1998? Provide their names, adress and the total quantity ordered.
 
 ","SELECT c_name AS customer_name, c_address AS customer_address, SUM(l_quantity) AS total_quantity_ordered
@@ -1143,17 +1480,36 @@ result = customers(
     address,
     total_quantity=SUM(selected_lines.quantity)
 ).TOP_K(10, by=total_quantity.DESC())
-pydough.to_df(result)",
-"Find the top 10 suppliers supplying ECONOMY parts (by total quantity).","SELECT 
+pydough.to_df(result)","%%pydough
+
+selected_orders = orders.WHERE(YEAR(order_date) == 1998)
+selected_lines = selected_orders.lines.WHERE(
+    CONTAINS(part.name, ""green"")
+)
+output = customers.CALCULATE(
+    name,
+    address,
+    total_quantity=SUM(selected_lines.quantity)
+).TOP_K(10, by=total_quantity.DESC())",
+"Find the top 10 suppliers supplying Brand#21 parts (by total quantity).
+","SELECT 
     s.S_NAME AS SupplierName,
-    SUM(ps.AVAILQTY) AS TotalQuantitySupplied
+    SUM(ps.PS_AVAILQTY) AS TotalQuantitySupplied
 FROM SUPPLIER s
 JOIN PARTSUPP ps ON s.S_SUPPKEY = ps.PS_SUPPKEY
 JOIN PART p ON ps.PS_PARTKEY = p.P_PARTKEY
-WHERE p.P_BRAND LIKE 'ECONOMY%'
+WHERE p.P_BRAND LIKE '%Brand#21%'
 GROUP BY s.S_NAME
 ORDER BY TotalQuantitySupplied DESC
-LIMIT 10;",,
+LIMIT 10;",,"%%pydough
+
+tables = supply_records.CALCULATE(supp_name = supplier.name
+                            ).WHERE(part.brand == 'Brand#21')
+
+output = PARTITION(tables, name= 't', by=supp_name
+            ).CALCULATE(supp_name, 
+                Total_qty_supplied = SUM(t.availqty)
+            ).TOP_K(10, Total_qty_supplied.DESC())",
 Retrieve all parts," SELECT
      p.p_name
  FROM
@@ -1161,7 +1517,9 @@ Retrieve all parts," SELECT
 
 output = parts(name)
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","%%pydough
+
+output = parts.CALCULATE(name)","SELECT 
     p_name AS name 
 FROM 
     main.PART"
@@ -1173,7 +1531,11 @@ Retrieve all parts where the retail price is greater than 2000," SELECT
      p.p_retail_price > 2000","%%pydough
 
 parts_list = parts.WHERE(retail_price > 2000)
-pydough.to_df(parts_list)","SELECT 
+pydough.to_df(parts_list)","%%pydough
+
+parts_list = parts.WHERE(retail_price > 2000)
+
+output = parts_list.CALCULATE(name)","SELECT 
     key, 
     name, 
     manufacturer, 
@@ -1205,10 +1567,18 @@ Retrieve the 100 priciest parts by retail price," SELECT
  FROM
      part p
  ORDER BY
-     p.p_retailprize DESC","%%pydough
+     p.p_retailprice DESC
+ LIMIT 100;","%%pydough
 
 priciest_parts = parts.TOP_K(100, by=retail_price.DESC())
-pydough.to_df(priciest_parts)","SELECT 
+pydough.to_df(priciest_parts)
+","%%pydough
+
+priciest_parts = parts.TOP_K(
+    100, by=retail_price.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output","SELECT 
     key, 
     name, 
     manufacturer, 
@@ -1272,7 +1642,15 @@ filter = tables.WHERE(CONTAINS(part_type, ""BRASS""))
 
 output = filter(product_name=name, supplier_name = BACK(2).name, supply_cost = BACK(1).supplycost)
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","%%pydough
+
+tables = suppliers.CALCULATE(supplier_name = name
+                            ).supply_records.CALCULATE(supply_cost = supplycost
+                            ).part.CALCULATE(product_name = name)
+
+filter = tables.WHERE(CONTAINS(part_type, ""BRASS""))
+
+output = filter.CALCULATE(product_name, supplier_name, supply_cost)","SELECT 
     name_4 AS product_name, 
     name AS supplier_name, 
     supplycost AS supply_cost 
@@ -1336,7 +1714,13 @@ parts_supp_partsupp= suppliers.supply_records.part
 
 filter = parts_supp_partsupp.WHERE(part_type == ""STANDARD BRUSHED TIN"")
 
-pydough.to_sql(filter(BACK(2).name, part_type, name))","SELECT 
+pydough.to_sql(filter(BACK(2).name, part_type, name))","%%pydough
+
+parts_supp_partsupp= suppliers.CALCULATE(supplier_name = name).supply_records.part
+
+filter = parts_supp_partsupp.WHERE(part_type == ""STANDARD BRUSHED TIN"")
+
+output = filter.CALCULATE(supplier_name)","SELECT 
     part_type, 
     name AS name 
 FROM 
@@ -1384,19 +1768,31 @@ Provide the parts named LAVENDER SPRING that have a stock of 10+ from ordered by
 JOIN 
     part p on ps.ps_partkey = p.p_partkey
 WHERE
-    p.p_name LIKE 'LAVENDER SPRING%' AND
+    p.p_name LIKE '%LAVENDER SPRING%' AND
     ps.ps_availqty >= 10
 ORDER BY
     ps.ps_supplycost ASC
-LIMIT 1;","%%pydough
+LIMIT 10;","%%pydough
 
 tables = suppliers.supply_records
 
-filter = tables.WHERE(availqty >= 10).part.WHERE(CONTAINS(name, ""LAVENDER SPRING"")).TOP_K(1, by=BACK(1).supplycost.ASC())
+filter = tables.WHERE(availqty >= 10).part.WHERE(CONTAINS(name, ""LAVENDER SPRING"")).TOP_K(10, by=BACK(1).supplycost.ASC())
 
 output = filter(product_name=name, supplier_name = BACK(2).name, supply_cost = BACK(1).supplycost, avail_quantity = BACK(1).availqty)
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","%%pydough
+
+tables = suppliers.CALCULATE(supplier_name = name
+                        ).supply_records.CALCULATE(
+                            supply_cost = supplycost, 
+                            avail_quantity = availqty)
+
+filter = tables.WHERE(availqty >= 10).part.WHERE(
+                                        CONTAINS(name, ""LAVENDER SPRING"")
+                                        ).TOP_K(10, by=supply_cost.ASC())
+
+output = filter.CALCULATE(product_name=name, supplier_name = supplier_name, 
+                          supply_cost = supply_cost, avail_quantity = avail_quantity)","SELECT 
     product_name, 
     supplier_name, 
     supply_cost, 
@@ -1498,7 +1894,19 @@ filter = tables.WHERE(CONTAINS(name, ""GREEN DODGER"") & (brand == ""Brand#41"")
 
 output = filter(product_name=name, supplier_name = BACK(2).name, supply_cost = BACK(1).supplycost, avail_quantity = BACK(1).availqty, country_of_origin = BACK(3).name)
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","tables = nations.CALCULATE(nation_of_origin = name
+                            ).suppliers.CALCULATE(supplier_name = name
+                            ).supply_records.CALCULATE(avail_qty = availqty, 
+                                                supply_cost = supplycost).part
+
+filter = tables.WHERE(CONTAINS(name, ""GREEN DODGER"") 
+                      & (brand == ""Brand#41"") 
+                      & CONTAINS(comment, ""bold"")
+                      ).TOP_K(10, by=avail_qty.DESC())
+
+output = filter.CALCULATE(product_name=name, supplier_name = supplier_name, 
+                          supply_cost = supply_cost, avail_qty = avail_qty, 
+                          nation_of_origin = nation_of_origin)","SELECT 
     product_name, 
     supplier_name, 
     supply_cost, 
@@ -1617,7 +2025,13 @@ filter = PARTITION(tables, name=""t"", by=(name))
 
 output = filter(name, products_by_supp = COUNT(t.key))
 
-pydough.to_df(output)","SELECT 
+pydough.to_df(output)","%%pydough
+
+tables = supply_records.supplier
+
+filter = PARTITION(tables, name=""t"", by=(name))
+
+output = filter.CALCULATE(name, products_by_supp = COUNT(t.key))","SELECT 
     name, 
     COALESCE(agg_0, 0) AS products_by_supp 
 FROM 
@@ -1679,7 +2093,20 @@ ordered_tables= partitioned_tables.ORDER_BY(countries_names.ASC(), customer_mkts
 
 output = ordered_tables(countries_names, customer_mktsgm, average_order_amount)
 
-pydough.to_df(output)","SELECT
+pydough.to_df(output)","%%pydough
+
+tables = regions.nations.CALCULATE(nation_name = name
+                            ).customers.CALCULATE(customer_mktsgm = mktsegment).orders.lines
+
+partitioned_tables = PARTITION(tables, name=""tabs"", by=(nation_name, customer_mktsgm)
+                               ).CALCULATE(average_order_amount = 
+                                           AVG(tabs.extended_price * (1 - tabs.discount))
+                                           )
+
+ordered_tables= partitioned_tables.ORDER_BY(nation_name.ASC(), 
+                                            customer_mktsgm.ASC())
+
+output = ordered_tables.CALCULATE(nation_name, customer_mktsgm, average_order_amount)","SELECT
     countries_names,
     customer_mktsgm,
     average_order_amount
@@ -1796,7 +2223,27 @@ ordered_tables = partitioned_tables.ORDER_BY(region_name.ASC(), nation_name.ASC(
 
 output = ordered_tables(sup_name, nation_name, region_name, number_of_parts_supplied)
 
-print(pydough.to_df(output))","SELECT
+print(pydough.to_df(output))","%%pydough
+
+tables = regions.CALCULATE( region_name = name
+                            ).nations.CALCULATE(nation_name = name
+                            ).suppliers.CALCULATE(supp_name = name
+                            ).supply_records.part
+
+filtered_tables = tables.WHERE((size > 20) 
+                               & (CONTAINS(part_type, 'STEEL')))
+
+partitioned_tables = PARTITION(filtered_tables, name = ""tabs""
+                               , by=(supp_name, nation_name, region_name)
+                               ).CALCULATE(number_of_parts_supplied = NDISTINCT(tabs.key))
+
+ordered_tables = partitioned_tables.ORDER_BY(
+                            region_name.ASC()
+                            , nation_name.ASC()
+                            , supp_name.ASC())
+
+output = ordered_tables.CALCULATE(supp_name, nation_name, 
+                                  region_name, number_of_parts_supplied)","SELECT
     sup_name,
     nation_name,
     region_name,
@@ -1931,6 +2378,24 @@ ordered_tables = partitioned_tables.ORDER_BY(order_year.ASC(), revenue.DESC())
 
 output = ordered_tables(order_year, manufacturer, revenue)
 
+print(pydough.to_df(output))","%%pydough
+
+tables = orders.CALCULATE(order_year = YEAR(order_date)
+                          ).lines.CALCULATE(ext_price = extended_price
+                                            , disc = discount).part
+
+filtered_tables = tables.WHERE(brand == ""Brand#13"")
+
+partitioned_tables = PARTITION(filtered_tables, name = ""tabs"", by=(order_year, manufacturer)
+                               ).CALCULATE(
+                                   number_of_parts_supplied = NDISTINCT(tabs.key)
+                                   , revenue = SUM(tabs.ext_price * (1 - tabs.disc))
+                                )
+
+ordered_tables = partitioned_tables.ORDER_BY(order_year.ASC(), revenue.DESC())
+
+output = ordered_tables.CALCULATE(order_year, manufacturer, revenue)
+
 print(pydough.to_df(output))","SELECT
     order_year,
     manufacturer,
@@ -2026,7 +2491,10 @@ Give me a list of the customers that have placed  orders and display their names
 
 active_custs = customers.WHERE(HAS(orders) == 1)(Customer_name = name)
 
-pydough.to_df(active_custs)","SELECT
+pydough.to_df(active_custs)","%%pydough
+
+active_custs = customers.WHERE(HAS(orders) == 1
+                        ).CALCULATE(Customer_name = name)","SELECT
     name AS Customer_name
 FROM
     (
@@ -2084,6 +2552,15 @@ output = PARTITION(supplier, name=""part"", by=(region_name, supplier_name))(
     region_name,
     supplier_name,
     total_sales=SUM(part.lines.extended_price * (1 - part.lines.discount))
+).TOP_K(3, by=total_sales.DESC())","%%pydough
+
+supplier = suppliers.CALCULATE(region_name=nation.region.name, supplier_name=name)
+
+output = PARTITION(supplier, name=""part"", by=(region_name, supplier_name)
+            ).CALCULATE(
+            region_name,
+            supplier_name,
+            total_sales=SUM(part.lines.extended_price * (1 - part.lines.discount))
 ).TOP_K(3, by=total_sales.DESC())","SELECT 
     region_name, 
     supplier_name, 
@@ -2260,6 +2737,13 @@ LIMIT 5;","output = PARTITION(customers, name=""cust"", by=(name, mktsegment))(
     customer_name=name,
     market_segment=mktsegment,
     return_count=COUNT(cust.orders.lines.WHERE(return_flag == ""R""))
+).TOP_K(5, by=return_count.DESC())","%%pydough
+
+output = PARTITION(customers, name=""cust"", by=(name, mktsegment)
+            ).CALCULATE(
+            customer_name=name,
+            market_segment=mktsegment,
+            return_count=COUNT(cust.orders.lines.WHERE(return_flag == ""R""))
 ).TOP_K(5, by=return_count.DESC())","SELECT 
     customer_name, 
     market_segment, 
@@ -2405,6 +2889,15 @@ FROM CustomerPurchases P
 JOIN CustomerInfo C ON P.O_CUSTKEY = C.C_CUSTKEY
 ORDER BY P.TotalSpent DESC
 LIMIT 20;","output = customers(
+    customer_id=key,
+    customer_name=name,
+    Nation=nation.name,
+    Region=nation.region.name,
+    TotalOrders=COUNT(orders),
+    TotalSpent=SUM(orders.lines.extended_price * (1 - orders.lines.discount))
+).TOP_K(20, TotalSpent.DESC())","%%pydough
+
+output = customers.CALCULATE(
     customer_id=key,
     customer_name=name,
     Nation=nation.name,
@@ -2572,4 +3065,996 @@ FROM
     ) 
 ORDER BY 
     ordering_2 DESC;
+"
+"Average discount applied on orders for each market segment. 
+This query allows you to analyze which market segments receive higher discounts on their orders. This can help assess whether discount strategies are aligned with business objectives and whether certain segments are getting too high or too low discounts compared to others.","SELECT 
+    C.C_MKTSEGMENT AS MarketSegment,
+    AVG(L.L_DISCOUNT) * 100 AS AvgDiscountPercentage
+FROM CUSTOMER C
+JOIN ORDERS O ON C.C_CUSTKEY = O.O_CUSTKEY
+JOIN LINEITEM L ON O.O_ORDERKEY = L.L_ORDERKEY
+GROUP BY C.C_MKTSEGMENT
+ORDER BY AvgDiscountPercentage DESC;","output = PARTITION(customers, name=""part"", by=mktsegment)(
+    MarketSegment=mktsegment,
+    AvgDiscountPercentage=AVG(part.orders.lines.discount)*100
+).ORDER_BY(AvgDiscountPercentage.DESC())","%%pydough
+
+output = PARTITION(customers, name=""part"", by=mktsegment
+            ).CALCULATE(
+            MarketSegment=mktsegment,
+            AvgDiscountPercentage=AVG(part.orders.lines.discount)*100
+).ORDER_BY(AvgDiscountPercentage.DESC())
+
+pydough_output = pydough.to_df(output)
+pydough_output","SELECT 
+    MarketSegment, 
+    AvgDiscountPercentage 
+FROM 
+    (
+        SELECT 
+            agg_0 * 100 AS AvgDiscountPercentage, 
+            mktsegment AS MarketSegment, 
+            agg_0 * 100 AS ordering_1 
+        FROM 
+            (
+                SELECT 
+                    _table_alias_2.mktsegment AS mktsegment, 
+                    agg_0 
+                FROM 
+                    (
+                        SELECT 
+                            mktsegment 
+                        FROM 
+                            (
+                                SELECT 
+                                    c_mktsegment AS mktsegment 
+                                FROM 
+                                    main.CUSTOMER
+                            ) 
+                        GROUP BY 
+                            mktsegment
+                    ) AS _table_alias_2 
+                    LEFT JOIN 
+                    (
+                        SELECT 
+                            mktsegment, 
+                            AVG(discount) AS agg_0 
+                        FROM 
+                            (
+                                SELECT 
+                                    mktsegment, 
+                                    discount 
+                                FROM 
+                                    (
+                                        SELECT 
+                                            mktsegment, 
+                                            _table_alias_1.key AS key_2 
+                                        FROM 
+                                            (
+                                                SELECT 
+                                                    c_custkey AS key, 
+                                                    c_mktsegment AS mktsegment 
+                                                FROM 
+                                                    main.CUSTOMER
+                                            ) AS _table_alias_0 
+                                            INNER JOIN 
+                                            (
+                                                SELECT 
+                                                    o_orderkey AS key, 
+                                                    o_custkey AS customer_key 
+                                                FROM 
+                                                    main.ORDERS
+                                            ) AS _table_alias_1 
+                                            ON _table_alias_0.key = customer_key
+                                    ) 
+                                    INNER JOIN 
+                                    (
+                                        SELECT 
+                                            l_discount AS discount, 
+                                            l_orderkey AS order_key 
+                                        FROM 
+                                            main.LINEITEM
+                                    ) 
+                                    ON key_2 = order_key
+                            ) 
+                        GROUP BY 
+                            mktsegment
+                    ) AS _table_alias_3 
+                    ON _table_alias_2.mktsegment = _table_alias_3.mktsegment
+            )
+    ) 
+ORDER BY 
+    ordering_1 DESC;"
+"This query allows you to identify the countries that generate the most sales and the total revenue generated in each. It is useful for assessing business performance in different markets and making strategic decisions on expansion, resource allocation and optimization of logistics and distribution.
+
+Total revenues is defined as the sum of (extended price times one less discount).","SELECT 
+    N.N_NAME AS Nation,
+    COUNT(DISTINCT O.O_ORDERKEY) AS TotalOrders,
+    SUM(L.L_EXTENDEDPRICE * (1 - L.L_DISCOUNT)) AS TotalSales
+FROM NATION N
+JOIN CUSTOMER C ON N.N_NATIONKEY = C.C_NATIONKEY
+JOIN ORDERS O ON C.C_CUSTKEY = O.O_CUSTKEY
+JOIN LINEITEM L ON O.O_ORDERKEY = L.L_ORDERKEY
+WHERE L.L_LINESTATUS = 'O'
+GROUP BY N.N_NAME
+ORDER BY TotalSales DESC
+LIMIT 10;","selected_lines = lines(Nation=order.customer.nation.name).WHERE(LIKE(status,""O""))
+
+output = PARTITION(selected_lines, name=""part"", by=Nation)(
+    Nation=Nation,
+    TotalOrders=NDISTINCT(part.order.key),
+    TotalSales=SUM(part.extended_price * (1 - part.discount))
+).TOP_K(10, by=TotalSales.DESC())","%%pydough
+
+selected_lines = lines.CALCULATE(Nation=order.customer.nation.name
+                                 ).WHERE(LIKE(status,""O""))
+
+output = PARTITION(selected_lines, name=""part"", by=Nation
+            ).CALCULATE(
+            Nation=Nation,
+            TotalOrders=NDISTINCT(part.order.key),
+            TotalSales=SUM(part.extended_price * (1 - part.discount))
+).TOP_K(10, by=TotalSales.DESC())","SELECT 
+    Nation, 
+    TotalOrders, 
+    TotalSales 
+FROM (
+    SELECT 
+        Nation, 
+        TotalOrders, 
+        TotalSales, 
+        ordering_2 
+    FROM (
+        SELECT 
+            Nation, 
+            agg_0 AS TotalOrders, 
+            COALESCE(agg_1, 0) AS TotalSales, 
+            COALESCE(agg_1, 0) AS ordering_2 
+        FROM (
+            SELECT 
+                _table_alias_8.Nation AS Nation, 
+                agg_1, 
+                agg_0 
+            FROM (
+                SELECT 
+                    Nation, 
+                    SUM(extended_price * (1 - discount)) AS agg_1 
+                FROM (
+                    SELECT 
+                        extended_price, 
+                        discount, 
+                        Nation 
+                    FROM (
+                        SELECT 
+                            extended_price, 
+                            status, 
+                            discount, 
+                            name_5 AS Nation 
+                        FROM (
+                            SELECT 
+                                l_extendedprice AS extended_price, 
+                                l_linestatus AS status, 
+                                l_discount AS discount, 
+                                l_orderkey AS order_key 
+                            FROM main.LINEITEM
+                        ) 
+                        LEFT JOIN (
+                            SELECT 
+                                _table_alias_2.key AS key, 
+                                name AS name_5 
+                            FROM (
+                                SELECT 
+                                    _table_alias_0.key AS key, 
+                                    nation_key 
+                                FROM (
+                                    SELECT 
+                                        o_orderkey AS key, 
+                                        o_custkey AS customer_key 
+                                    FROM main.ORDERS
+                                ) AS _table_alias_0
+                                INNER JOIN (
+                                    SELECT 
+                                        c_custkey AS key, 
+                                        c_nationkey AS nation_key 
+                                    FROM main.CUSTOMER
+                                ) AS _table_alias_1 
+                                ON customer_key = _table_alias_1.key
+                            ) AS _table_alias_2
+                            INNER JOIN (
+                                SELECT 
+                                    n_name AS name, 
+                                    n_nationkey AS key 
+                                FROM main.NATION
+                            ) AS _table_alias_3 
+                            ON nation_key = _table_alias_3.key
+                        ) 
+                        ON order_key = key
+                    ) 
+                    WHERE status LIKE 'O'
+                ) 
+                GROUP BY Nation
+            ) AS _table_alias_8
+            LEFT JOIN (
+                SELECT 
+                    Nation, 
+                    COUNT(DISTINCT key) AS agg_0 
+                FROM (
+                    SELECT 
+                        Nation, 
+                        key 
+                    FROM (
+                        SELECT 
+                            order_key, 
+                            Nation 
+                        FROM (
+                            SELECT 
+                                status, 
+                                order_key, 
+                                name_10 AS Nation 
+                            FROM (
+                                SELECT 
+                                    l_linestatus AS status, 
+                                    l_orderkey AS order_key 
+                                FROM main.LINEITEM
+                            ) 
+                            LEFT JOIN (
+                                SELECT 
+                                    _table_alias_6.key AS key, 
+                                    name AS name_10 
+                                FROM (
+                                    SELECT 
+                                        _table_alias_4.key AS key, 
+                                        nation_key 
+                                    FROM (
+                                        SELECT 
+                                            o_orderkey AS key, 
+                                            o_custkey AS customer_key 
+                                        FROM main.ORDERS
+                                    ) AS _table_alias_4
+                                    INNER JOIN (
+                                        SELECT 
+                                            c_custkey AS key, 
+                                            c_nationkey AS nation_key 
+                                        FROM main.CUSTOMER
+                                    ) AS _table_alias_5 
+                                    ON customer_key = _table_alias_5.key
+                                ) AS _table_alias_6
+                                INNER JOIN (
+                                    SELECT 
+                                        n_name AS name, 
+                                        n_nationkey AS key 
+                                    FROM main.NATION
+                                ) AS _table_alias_7 
+                                ON nation_key = _table_alias_7.key
+                            ) 
+                            ON order_key = key
+                        ) 
+                        WHERE status LIKE 'O'
+                    ) 
+                    INNER JOIN (
+                        SELECT 
+                            o_orderkey AS key 
+                        FROM main.ORDERS
+                    ) 
+                    ON order_key = key
+                ) 
+                GROUP BY Nation
+            ) AS _table_alias_9 
+            ON _table_alias_8.Nation = _table_alias_9.Nation
+        )
+    ) 
+    ORDER BY ordering_2 DESC 
+    LIMIT 10
+) 
+ORDER BY ordering_2 DESC;"
+"This query identifies customers with the highest average spend per order. It is useful for segmenting high-value customers, customizing loyalty strategies and optimizing sales campaigns focused on customers with higher purchasing power.
+
+Get the top 10 customers with the most orders.","SELECT 
+    C.C_NAME AS CustomerName,
+    C.C_MKTSEGMENT AS MarketSegment,
+    COUNT(DISTINCT O.O_ORDERKEY) AS TotalOrders,
+    SUM(L.L_EXTENDEDPRICE * (1 - L.L_DISCOUNT)) AS TotalSpent,
+    (SUM(L.L_EXTENDEDPRICE * (1 - L.L_DISCOUNT)) / COUNT(DISTINCT O.O_ORDERKEY)) AS AvgOrderValue
+FROM CUSTOMER C
+JOIN ORDERS O ON C.C_CUSTKEY = O.O_CUSTKEY
+JOIN LINEITEM L ON O.O_ORDERKEY = L.L_ORDERKEY
+WHERE L.L_LINESTATUS = 'O'
+GROUP BY C.C_NAME, C.C_MKTSEGMENT
+ORDER BY TotalOrders DESC
+LIMIT 10;","selected_lines = lines(
+    CustomerName=order.customer.name,
+    MarketSegment=order.customer.mktsegment,
+).WHERE(LIKE(status,""O""))
+
+partition = PARTITION(selected_lines, name=""part"", by=(CustomerName, MarketSegment))(
+    CustomerName,
+    MarketSegment,
+    TotalOrders=NDISTINCT(part.order.key),
+    TotalSpent=SUM(part.extended_price * (1 - part.discount))
+).TOP_K(10, by=TotalOrders.DESC())
+
+output = partition(
+    CustomerName,
+    MarketSegment,
+    TotalOrders,
+    TotalSpent,
+    AvgOrderValue=(TotalSpent / TotalOrders)
+)
+","%%pydough
+
+selected_lines = lines.CALCULATE(
+    CustomerName=order.customer.name,
+    MarketSegment=order.customer.mktsegment,
+).WHERE(LIKE(status,""O""))
+
+partition = PARTITION(selected_lines, name=""part"", by=(CustomerName, MarketSegment)
+                ).CALCULATE(
+                CustomerName,
+                MarketSegment,
+                TotalOrders=NDISTINCT(part.order.key),
+                TotalSpent=SUM(part.extended_price * (1 - part.discount))
+).TOP_K(10, by=TotalOrders.DESC())
+
+output = partition.CALCULATE(
+    CustomerName,
+    MarketSegment,
+    TotalOrders,
+    TotalSpent,
+    AvgOrderValue=(TotalSpent / TotalOrders)
+)","SELECT 
+    CustomerName, 
+    MarketSegment, 
+    TotalOrders, 
+    TotalSpent, 
+    AvgOrderValue 
+FROM (
+    SELECT 
+        MarketSegment, 
+        CustomerName, 
+        TotalOrders, 
+        TotalSpent, 
+        ordering_2, 
+        CAST(TotalSpent AS REAL) / TotalOrders AS AvgOrderValue 
+    FROM (
+        SELECT 
+            MarketSegment, 
+            CustomerName, 
+            TotalOrders, 
+            TotalSpent, 
+            ordering_2 
+        FROM (
+            SELECT 
+                MarketSegment, 
+                CustomerName, 
+                agg_0 AS TotalOrders, 
+                COALESCE(agg_1, 0) AS TotalSpent, 
+                agg_0 AS ordering_2 
+            FROM (
+                SELECT 
+                    _table_alias_4.MarketSegment AS MarketSegment, 
+                    _table_alias_4.CustomerName AS CustomerName, 
+                    agg_1, 
+                    agg_0 
+                FROM (
+                    SELECT 
+                        MarketSegment, 
+                        CustomerName, 
+                        SUM(extended_price * (1 - discount)) AS agg_1 
+                    FROM (
+                        SELECT 
+                            extended_price, 
+                            discount, 
+                            CustomerName, 
+                            MarketSegment 
+                        FROM (
+                            SELECT 
+                                extended_price, 
+                                status, 
+                                discount, 
+                                name AS CustomerName, 
+                                mktsegment AS MarketSegment 
+                            FROM (
+                                SELECT 
+                                    l_extendedprice AS extended_price, 
+                                    l_linestatus AS status, 
+                                    l_discount AS discount, 
+                                    l_orderkey AS order_key 
+                                FROM main.LINEITEM
+                            ) 
+                            LEFT JOIN (
+                                SELECT 
+                                    _table_alias_0.key AS key, 
+                                    mktsegment, 
+                                    name 
+                                FROM (
+                                    SELECT 
+                                        o_orderkey AS key, 
+                                        o_custkey AS customer_key 
+                                    FROM main.ORDERS
+                                ) AS _table_alias_0
+                                INNER JOIN (
+                                    SELECT 
+                                        c_name AS name, 
+                                        c_custkey AS key, 
+                                        c_mktsegment AS mktsegment 
+                                    FROM main.CUSTOMER
+                                ) AS _table_alias_1 
+                                ON customer_key = _table_alias_1.key
+                            ) 
+                            ON order_key = key
+                        ) 
+                        WHERE status LIKE 'O'
+                    ) 
+                    GROUP BY MarketSegment, CustomerName
+                ) AS _table_alias_4
+                LEFT JOIN (
+                    SELECT 
+                        CustomerName, 
+                        MarketSegment, 
+                        COUNT(DISTINCT key) AS agg_0 
+                    FROM (
+                        SELECT 
+                            CustomerName, 
+                            MarketSegment, 
+                            key 
+                        FROM (
+                            SELECT 
+                                order_key, 
+                                CustomerName, 
+                                MarketSegment 
+                            FROM (
+                                SELECT 
+                                    status, 
+                                    order_key, 
+                                    name AS CustomerName, 
+                                    mktsegment AS MarketSegment 
+                                FROM (
+                                    SELECT 
+                                        l_linestatus AS status, 
+                                        l_orderkey AS order_key 
+                                    FROM main.LINEITEM
+                                ) 
+                                LEFT JOIN (
+                                    SELECT 
+                                        _table_alias_2.key AS key, 
+                                        mktsegment, 
+                                        name 
+                                    FROM (
+                                        SELECT 
+                                            o_orderkey AS key, 
+                                            o_custkey AS customer_key 
+                                        FROM main.ORDERS
+                                    ) AS _table_alias_2
+                                    INNER JOIN (
+                                        SELECT 
+                                            c_name AS name, 
+                                            c_custkey AS key, 
+                                            c_mktsegment AS mktsegment 
+                                        FROM main.CUSTOMER
+                                    ) AS _table_alias_3 
+                                    ON customer_key = _table_alias_3.key
+                                ) 
+                                ON order_key = key
+                            ) 
+                            WHERE status LIKE 'O'
+                        ) 
+                        INNER JOIN (
+                            SELECT 
+                                o_orderkey AS key 
+                            FROM main.ORDERS
+                        ) 
+                        ON order_key = key
+                    ) 
+                    GROUP BY CustomerName, MarketSegment
+                ) AS _table_alias_5 
+                ON (
+                    _table_alias_4.CustomerName = _table_alias_5.CustomerName
+                ) AND (
+                    _table_alias_4.MarketSegment = _table_alias_5.MarketSegment
+                )
+            )
+        ) 
+        ORDER BY ordering_2 DESC 
+        LIMIT 10
+    )
+) 
+ORDER BY ordering_2 DESC;"
+"This query identifies the product categories that have generated the highest sales volume, allowing you to optimize inventories, adjust pricing strategies and focus marketing efforts on the most profitable products.","SELECT 
+    P.P_TYPE AS ProductCategory,
+    SUM(L.L_QUANTITY) AS TotalUnitsSold,
+    SUM(L.L_EXTENDEDPRICE * (1 - L.L_DISCOUNT)) AS TotalRevenue
+FROM PART P
+JOIN LINEITEM L ON P.P_PARTKEY = L.L_PARTKEY
+WHERE L.L_LINESTATUS = 'O'
+GROUP BY P.P_TYPE
+ORDER BY TotalUnitsSold DESC
+LIMIT 10;","selected_lines = lines(
+    ProductCategory=part.part_type
+).WHERE(LIKE(status,""O""))
+
+output = PARTITION(selected_lines, name=""part"", by=ProductCategory)(
+    ProductCategory,
+    TotalUnitsSold=SUM(part.quantity),
+    TotalRevenue=SUM(part.extended_price * (1 - part.discount))
+).TOP_K(10, TotalUnitsSold.DESC())","%%pydough
+
+selected_lines = lines.CALCULATE(
+    ProductCategory=part.part_type
+).WHERE(LIKE(status,""O""))
+
+output = PARTITION(selected_lines, name=""part"", by=ProductCategory
+                ).CALCULATE(ProductCategory,
+                    TotalUnitsSold=SUM(part.quantity),
+                    TotalRevenue=SUM(part.extended_price * (1 - part.discount))
+).TOP_K(10, TotalUnitsSold.DESC())","SELECT 
+    ProductCategory, 
+    TotalUnitsSold, 
+    TotalRevenue 
+FROM (
+    SELECT 
+        ProductCategory, 
+        TotalRevenue, 
+        TotalUnitsSold, 
+        ordering_2 
+    FROM (
+        SELECT 
+            ProductCategory, 
+            COALESCE(agg_0, 0) AS TotalRevenue, 
+            COALESCE(agg_1, 0) AS TotalUnitsSold, 
+            COALESCE(agg_1, 0) AS ordering_2 
+        FROM (
+            SELECT 
+                ProductCategory, 
+                SUM(extended_price * (1 - discount)) AS agg_0, 
+                SUM(quantity) AS agg_1 
+            FROM (
+                SELECT 
+                    quantity, 
+                    extended_price, 
+                    discount, 
+                    ProductCategory 
+                FROM (
+                    SELECT 
+                        quantity, 
+                        extended_price, 
+                        status, 
+                        discount, 
+                        part_type AS ProductCategory 
+                    FROM (
+                        SELECT 
+                            l_partkey AS part_key, 
+                            l_quantity AS quantity, 
+                            l_extendedprice AS extended_price, 
+                            l_linestatus AS status, 
+                            l_discount AS discount 
+                        FROM main.LINEITEM
+                    ) 
+                    LEFT JOIN (
+                        SELECT 
+                            p_type AS part_type, 
+                            p_partkey AS key 
+                        FROM main.PART
+                    ) 
+                    ON part_key = key
+                ) 
+                WHERE status LIKE 'O'
+            ) 
+            GROUP BY ProductCategory
+        )
+    ) 
+    ORDER BY ordering_2 DESC 
+    LIMIT 10
+) 
+ORDER BY ordering_2 DESC;"
+"This query identifies the 20 most popular products within each market segment, which helps customize sales and marketing strategies for each customer group.","SELECT 
+    C.C_MKTSEGMENT AS MarketSegment,
+    P.P_NAME AS ProductName,
+    SUM(L.L_QUANTITY) AS TotalUnitsSold
+FROM CUSTOMER C
+JOIN ORDERS O ON C.C_CUSTKEY = O.O_CUSTKEY
+JOIN LINEITEM L ON O.O_ORDERKEY = L.L_ORDERKEY
+JOIN PART P ON L.L_PARTKEY = P.P_PARTKEY
+WHERE L.L_LINESTATUS = 'O'
+GROUP BY C.C_MKTSEGMENT, P.P_NAME
+ORDER BY TotalUnitsSold DESC
+LIMIT 20;","selected_lines = lines(
+    MarketSegment=order.customer.mktsegment,
+    ProductName=part.name
+).WHERE(LIKE(status,""O""))
+
+output = PARTITION(selected_lines, name=""part"", by=(MarketSegment, ProductName))(
+    MarketSegment,
+    ProductName,
+    TotalUnitsSold=SUM(part.quantity)
+).TOP_K(20, TotalUnitsSold.DESC())","%%pydough
+
+selected_lines = lines.CALCULATE(
+    MarketSegment=order.customer.mktsegment,
+    ProductName=part.name
+).WHERE(LIKE(status,""O""))
+
+output = PARTITION(selected_lines, name=""part"", by=(MarketSegment, ProductName)
+                   ).CALCULATE(
+                        MarketSegment,
+                        ProductName,
+                        TotalUnitsSold=SUM(part.quantity)
+).TOP_K(20, TotalUnitsSold.DESC())","SELECT 
+    MarketSegment, 
+    ProductName, 
+    TotalUnitsSold 
+FROM (
+    SELECT 
+        MarketSegment, 
+        ProductName, 
+        TotalUnitsSold, 
+        ordering_1 
+    FROM (
+        SELECT 
+            MarketSegment, 
+            ProductName, 
+            COALESCE(agg_0, 0) AS TotalUnitsSold, 
+            COALESCE(agg_0, 0) AS ordering_1 
+        FROM (
+            SELECT 
+                MarketSegment, 
+                ProductName, 
+                SUM(quantity) AS agg_0 
+            FROM (
+                SELECT 
+                    quantity, 
+                    MarketSegment, 
+                    ProductName 
+                FROM (
+                    SELECT 
+                        quantity, 
+                        status, 
+                        mktsegment AS MarketSegment, 
+                        name AS ProductName 
+                    FROM (
+                        SELECT 
+                            part_key, 
+                            quantity, 
+                            status, 
+                            mktsegment 
+                        FROM (
+                            SELECT 
+                                l_partkey AS part_key, 
+                                l_quantity AS quantity, 
+                                l_linestatus AS status, 
+                                l_orderkey AS order_key 
+                            FROM main.LINEITEM
+                        ) 
+                        LEFT JOIN (
+                            SELECT 
+                                _table_alias_0.key AS key, 
+                                mktsegment 
+                            FROM (
+                                SELECT 
+                                    o_orderkey AS key, 
+                                    o_custkey AS customer_key 
+                                FROM main.ORDERS
+                            ) AS _table_alias_0
+                            INNER JOIN (
+                                SELECT 
+                                    c_custkey AS key, 
+                                    c_mktsegment AS mktsegment 
+                                FROM main.CUSTOMER
+                            ) AS _table_alias_1 
+                            ON customer_key = _table_alias_1.key
+                        ) 
+                        ON order_key = key
+                    ) 
+                    LEFT JOIN (
+                        SELECT 
+                            p_name AS name, 
+                            p_partkey AS key 
+                        FROM main.PART
+                    ) 
+                    ON part_key = key
+                ) 
+                WHERE status LIKE 'O'
+            ) 
+            GROUP BY MarketSegment, ProductName
+        )
+    ) 
+    ORDER BY ordering_1 DESC 
+    LIMIT 20
+) 
+ORDER BY ordering_1 DESC;"
+"This query provides a detailed view of each sale, including which customer purchased, which product was purchased, who supplied it and from which country both the customer and the supplier originate. This is useful for analyzing the relationship between suppliers and customers on an international level. Get the firs 10 results ordered by quantity sold.","SELECT 
+    O.O_ORDERKEY AS OrderID,
+    C.C_NAME AS CustomerName,
+    C.C_MKTSEGMENT AS MarketSegment,
+    N_C.N_NAME AS CustomerNation,
+    P.P_NAME AS ProductName,
+    P.P_TYPE AS ProductCategory,
+    S.S_NAME AS SupplierName,
+    N_S.N_NAME AS SupplierNation,
+    L.L_QUANTITY AS QuantitySold,
+    L.L_EXTENDEDPRICE * (1 - L.L_DISCOUNT) AS TotalSaleValue,
+    O.O_ORDERDATE AS OrderDate,
+    L.L_SHIPDATE AS ShipDate
+FROM ORDERS O
+JOIN CUSTOMER C ON O.O_CUSTKEY = C.C_CUSTKEY
+JOIN NATION N_C ON C.C_NATIONKEY = N_C.N_NATIONKEY
+JOIN LINEITEM L ON O.O_ORDERKEY = L.L_ORDERKEY
+JOIN PART P ON L.L_PARTKEY = P.P_PARTKEY
+JOIN SUPPLIER S ON L.L_SUPPKEY = S.S_SUPPKEY
+JOIN NATION N_S ON S.S_NATIONKEY = N_S.N_NATIONKEY
+WHERE L.L_LINESTATUS = 'O'
+ORDER BY L.L_QUANTITY DESC
+LIMIT 10;","output = lines(
+    OrderID=order_key,
+    CustomerName=order.customer.name,
+    MarketSegment=order.customer.mktsegment,
+    CustomerNation=order.customer.nation.name,
+    ProductName=part.name,
+    ProductCategory=part.part_type,
+    SupplierName=supplier.name,
+    SupplierNation=supplier.nation.name,
+    QuantitySold=quantity,
+    TotalSaleValue=extended_price * (1 - discount),
+    OrderDate=order.order_date,
+    ShipDate=ship_date
+).WHERE(LIKE(status,""O"")).TOP_K(10, QuantitySold.DESC()
+","%%pydough
+
+output = lines.CALCULATE(
+    OrderID=order_key,
+    CustomerName=order.customer.name,
+    MarketSegment=order.customer.mktsegment,
+    CustomerNation=order.customer.nation.name,
+    ProductName=part.name,
+    ProductCategory=part.part_type,
+    SupplierName=supplier.name,
+    SupplierNation=supplier.nation.name,
+    QuantitySold=quantity,
+    TotalSaleValue=extended_price * (1 - discount),
+    OrderDate=order.order_date,
+    ShipDate=ship_date
+).WHERE(LIKE(status,""O"")).TOP_K(10, QuantitySold.DESC())","SELECT 
+    OrderID, 
+    CustomerName, 
+    MarketSegment, 
+    CustomerNation, 
+    ProductName, 
+    ProductCategory, 
+    SupplierName, 
+    SupplierNation, 
+    QuantitySold, 
+    TotalSaleValue, 
+    OrderDate, 
+    ShipDate 
+FROM (
+    SELECT 
+        CustomerName, 
+        CustomerNation, 
+        MarketSegment, 
+        OrderDate, 
+        OrderID, 
+        ProductCategory, 
+        ProductName, 
+        QuantitySold, 
+        ShipDate, 
+        SupplierName, 
+        SupplierNation, 
+        TotalSaleValue, 
+        ordering_0 
+    FROM (
+        SELECT 
+            CustomerName, 
+            CustomerNation, 
+            MarketSegment, 
+            OrderDate, 
+            OrderID, 
+            ProductCategory, 
+            ProductName, 
+            QuantitySold, 
+            ShipDate, 
+            SupplierName, 
+            SupplierNation, 
+            TotalSaleValue, 
+            QuantitySold AS ordering_0 
+        FROM (
+            SELECT 
+                status, 
+                name AS CustomerName, 
+                name_7 AS CustomerNation, 
+                mktsegment AS MarketSegment, 
+                order_date AS OrderDate, 
+                order_key AS OrderID, 
+                part_type AS ProductCategory, 
+                name_9 AS ProductName, 
+                quantity AS QuantitySold, 
+                ship_date AS ShipDate, 
+                name_13 AS SupplierName, 
+                name_18 AS SupplierNation, 
+                extended_price * (1 - discount) AS TotalSaleValue 
+            FROM (
+                SELECT 
+                    discount, 
+                    status, 
+                    quantity, 
+                    ship_date, 
+                    extended_price, 
+                    order_key, 
+                    mktsegment, 
+                    name, 
+                    name_7, 
+                    name_9, 
+                    part_type, 
+                    name_13, 
+                    name_18, 
+                    order_date 
+                FROM (
+                    SELECT 
+                        supplier_key, 
+                        discount, 
+                        status, 
+                        quantity, 
+                        ship_date, 
+                        extended_price, 
+                        order_key, 
+                        mktsegment, 
+                        _table_alias_8.name AS name, 
+                        name_7, 
+                        name_9, 
+                        part_type, 
+                        _table_alias_9.name AS name_13 
+                    FROM (
+                        SELECT 
+                            supplier_key, 
+                            discount, 
+                            status, 
+                            quantity, 
+                            ship_date, 
+                            extended_price, 
+                            order_key, 
+                            mktsegment, 
+                            _table_alias_6.name AS name, 
+                            name_7, 
+                            _table_alias_7.name AS name_9, 
+                            part_type 
+                        FROM (
+                            SELECT 
+                                part_key, 
+                                supplier_key, 
+                                discount, 
+                                status, 
+                                quantity, 
+                                ship_date, 
+                                extended_price, 
+                                order_key, 
+                                mktsegment, 
+                                name, 
+                                name_7 
+                            FROM (
+                                SELECT 
+                                    part_key, 
+                                    supplier_key, 
+                                    discount, 
+                                    status, 
+                                    quantity, 
+                                    ship_date, 
+                                    extended_price, 
+                                    order_key, 
+                                    mktsegment, 
+                                    name 
+                                FROM (
+                                    SELECT 
+                                        l_partkey AS part_key, 
+                                        l_suppkey AS supplier_key, 
+                                        l_discount AS discount, 
+                                        l_linestatus AS status, 
+                                        l_quantity AS quantity, 
+                                        l_shipdate AS ship_date, 
+                                        l_extendedprice AS extended_price, 
+                                        l_orderkey AS order_key 
+                                    FROM main.LINEITEM
+                                ) 
+                                LEFT JOIN (
+                                    SELECT 
+                                        _table_alias_0.key AS key, 
+                                        mktsegment, 
+                                        name 
+                                    FROM (
+                                        SELECT 
+                                            o_custkey AS customer_key, 
+                                            o_orderkey AS key 
+                                        FROM main.ORDERS
+                                    ) AS _table_alias_0
+                                    INNER JOIN (
+                                        SELECT 
+                                            c_mktsegment AS mktsegment, 
+                                            c_name AS name, 
+                                            c_custkey AS key 
+                                        FROM main.CUSTOMER
+                                    ) AS _table_alias_1 
+                                    ON customer_key = _table_alias_1.key
+                                ) 
+                                ON order_key = key
+                            ) 
+                            LEFT JOIN (
+                                SELECT 
+                                    _table_alias_4.key AS key, 
+                                    name AS name_7 
+                                FROM (
+                                    SELECT 
+                                        _table_alias_2.key AS key, 
+                                        nation_key 
+                                    FROM (
+                                        SELECT 
+                                            o_custkey AS customer_key, 
+                                            o_orderkey AS key 
+                                        FROM main.ORDERS
+                                    ) AS _table_alias_2
+                                    INNER JOIN (
+                                        SELECT 
+                                            c_nationkey AS nation_key, 
+                                            c_custkey AS key 
+                                        FROM main.CUSTOMER
+                                    ) AS _table_alias_3 
+                                    ON customer_key = _table_alias_3.key
+                                ) AS _table_alias_4
+                                INNER JOIN (
+                                    SELECT 
+                                        n_nationkey AS key, 
+                                        n_name AS name 
+                                    FROM main.NATION
+                                ) AS _table_alias_5 
+                                ON nation_key = _table_alias_5.key
+                            ) 
+                            ON order_key = key
+                        ) AS _table_alias_6
+                        LEFT JOIN (
+                            SELECT 
+                                p_name AS name, 
+                                p_type AS part_type, 
+                                p_partkey AS key 
+                            FROM main.PART
+                        ) AS _table_alias_7 
+                        ON part_key = key
+                    ) AS _table_alias_8
+                    LEFT JOIN (
+                        SELECT 
+                            s_name AS name, 
+                            s_suppkey AS key 
+                        FROM main.SUPPLIER
+                    ) AS _table_alias_9 
+                    ON supplier_key = key
+                ) 
+                LEFT JOIN (
+                    SELECT 
+                        _table_alias_10.key AS key, 
+                        name AS name_18 
+                    FROM (
+                        SELECT 
+                            s_nationkey AS nation_key, 
+                            s_suppkey AS key 
+                        FROM main.SUPPLIER
+                    ) AS _table_alias_10
+                    INNER JOIN (
+                        SELECT 
+                            n_nationkey AS key, 
+                            n_name AS name 
+                        FROM main.NATION
+                    ) AS _table_alias_11 
+                    ON nation_key = _table_alias_11.key
+                ) 
+                ON supplier_key = key
+            ) 
+            LEFT JOIN (
+                SELECT 
+                    o_orderkey AS key, 
+                    o_orderdate AS order_date 
+                FROM main.ORDERS
+            ) 
+            ON order_key = key
+        ) 
+        WHERE status LIKE 'O'
+    ) 
+    ORDER BY ordering_0 DESC 
+    LIMIT 10
+) 
+ORDER BY ordering_0 DESC;
 "
