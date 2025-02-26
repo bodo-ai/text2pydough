@@ -492,6 +492,20 @@
               total_available= SUM(supp.availqty)
   ).ORDER_BY(total_available.DESC())
 
+* **For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate**
+  *Goal: Determine the transaction success rate for customers who have made at least five transactions*          
+  *Code:* 
+  ```python                                                                                              
+  customer_transactions  = transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
+  transaction_summary  = PARTITION(tables, name="t", by=(cust_id, cust_name)
+                ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
+                    success_tx = COUNT(t.WHERE(status == "success"))
+                )
+  transaction_rate  = transaction_summary.CALCULATE(
+                    success_rate = success_tx / total_tx * 100
+                    ).WHERE(total_tx >= 5)
+  output = transaction_rate .CALCULATE(cust_name, success_rate)
+  ```
 **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
