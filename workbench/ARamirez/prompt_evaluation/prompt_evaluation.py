@@ -143,6 +143,7 @@ def process_questions(provider, model_id, formatted_prompt, questions):
 
 def main(git_hash):
     # Argument Parser
+    # this is an example: python prompt_evaluation.py  "Experiment for testing azure" "Azure test" cheatsheet_v4_examples.md tcph_graph.md prompt2.txt questions.csv google gemini-1.5-pro-001 --eval_results
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
