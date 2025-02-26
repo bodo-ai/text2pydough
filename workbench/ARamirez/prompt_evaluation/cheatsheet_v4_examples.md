@@ -504,7 +504,7 @@
   transaction_rate  = transaction_summary.CALCULATE(
                     success_rate = success_tx / total_tx * 100
                     ).WHERE(total_tx >= 5)
-  output = transaction_rate .CALCULATE(cust_name, success_rate)
+  output = transaction_rate.CALCULATE(cust_name, success_rate)
   ```
 **GENERAL NOTES**
 

@@ -205,10 +205,10 @@ def main(git_hash):
             output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
-            counts = responses['comparison_result'].value_counts()
-
+            counts = responses['comparison_result'].dropna().value_counts()
             total = counts.sum()
-            percentages = (counts / total) 
+            percentages = counts / total
+
             mlflow.log_metrics(
                     percentages
                 )
