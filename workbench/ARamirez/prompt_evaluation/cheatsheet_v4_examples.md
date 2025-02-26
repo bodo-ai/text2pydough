@@ -33,13 +33,9 @@
 
 - **Rules**:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
-
   - Positional arguments must precede keyword arguments.
-
   - Terms defined in a CALCULATE do not take effect until after the CALCULATE completes.
-
   - Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
-
   - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
 
 **3. FILTERING (WHERE)**  
