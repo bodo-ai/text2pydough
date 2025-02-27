@@ -226,7 +226,7 @@ def main(git_hash):
             formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
             # Process questions
-            responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
+            responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist(), args.temperature)
             questions_df["response"] = responses
             output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
