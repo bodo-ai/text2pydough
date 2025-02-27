@@ -344,6 +344,30 @@ total_orders_in_1996 = regions.CALCULATE(
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
 
+  is_february = MONTH(order_date) == 2
+  
+  february_value = KEEP_IF(package_cost, is_february)
+  aug_packages = packages.CALCULATE(
+      is_february=is_february,
+      february_value=february_value,
+      is_valentines_day=is_february & (DAY(order_date) == 14)
+  )
+  n_feb_packages = SUM(aug_packages.is_february)
+  People.CALCULATE(
+      ssn,
+      total_february_value=SUM(aug_packages.february_value),
+      n_february_packages=n_feb_packages,
+      most_expensive_february_package=MAX(aug_packages.february_value),
+      pct_valentine=n_feb_packages / SUM(aug_packages.is_valentines_day)
+  )
+- **Rules**:
+  - Only use them in contexts where all referenced fields exist.
+  - Use variables only as expression substitutes, not for accessing non-existent subcollections.
+  - Each contextless expression should represent a complete calculation.
+  - Only use with collections containing all required fields.
+  - Using a contextless expression should work the same as writing the code directly in-context.
+  - Don't use to define standalone collection operations without proper context.
+
 **BINARY OPERATORS****Arithmetic**
 
 *   Operators: +, -, \*, /, \*\* (addition, subtraction, multiplication, division, exponentiation).
