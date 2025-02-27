@@ -278,7 +278,7 @@ Rules: Aggregations Function does not support calling aggregations inside of agg
   - Example: Filter top 5% by account balance:  
     Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
 
-9. CONTEXTLESS EXPRESSIONS   
+### CONTEXTLESS EXPRESSIONS   
 
 - Purpose: Reusable code snippets.  
 
@@ -287,16 +287,17 @@ Rules: Aggregations Function does not support calling aggregations inside of agg
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
 
-BINARY OPERATORSArithmetic
+### BINARY OPERATORS
 
-*   Operators: +, -, \*, /, \*\* (addition, subtraction, multiplication, division, exponentiation).
+
+*   Arithmetic Operators: +, -, \*, /, \*\* (addition, subtraction, multiplication, division, exponentiation).
     
 *   Example:Lineitems(value = (extended\_price \* (1 - (discount \*\* 2)) + 1.0) / part.retail\_price)
     
 *   Warning: Division by 0 behavior depends on the database.
     
 
-Comparisons
+### Comparisons
 
 *   Operators: <=, <, ==, !=, >, >=.
     
@@ -305,7 +306,7 @@ Comparisons
 *   Warning: Avoid chained inequalities (e.g., a <= b <= c). Use (a <= b) & (b <= c) or MONOTONIC.
     
 
-Logical
+### Logical
 
 *   Operators: & (AND), | (OR), ~ (NOT).
     
@@ -314,14 +315,14 @@ Logical
 *   Warning: Use &, |, ~ instead of Python’s and, or, not.
     
 
-UNARY OPERATORSNegation
+### UNARY OPERATORS
 
-*   Operator: - (flips sign).
+*   Negation Operator: - (flips sign).
     
 *   Example:Lineitems(lost\_value = extended\_price \* (-discount))
     
 
-OTHER OPERATORSSlicing
+### OTHER OPERATORSSlicing
 
 *   Syntax: string\[start:stop:step\].
     
@@ -330,7 +331,7 @@ OTHER OPERATORSSlicing
 *   Restrictions: step must be 1 or omitted; start/stop non-negative or omitted.
     
 
-STRING FUNCTIONS
+### STRING FUNCTIONS
 
 *   LOWER(s): Converts string to lowercase.Example: LOWER(name) → "apple".
     
@@ -349,7 +350,7 @@ STRING FUNCTIONS
 *   JOIN\_STRINGS(delim, s1, s2, ...): Joins strings with a delimiter.Example: JOIN\_STRINGS("-", "A", "B") → "A-B".
     
 
-DATETIME FUNCTIONS
+### DATETIME FUNCTIONS
 
 *   YEAR(dt): Extracts year.Example: YEAR(order\_date) == 1995.
     
@@ -412,7 +413,7 @@ DATETIME FUNCTIONS
   - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
 
   - Example:
-  ```python
+  ```
   # Calculates, for each order, the number of days since January 1st 1992
   # that the order was placed:
   Orders.CALCULATE( 
@@ -420,7 +421,7 @@ DATETIME FUNCTIONS
   )
   ```
 
-CONDITIONAL FUNCTIONS
+### CONDITIONAL FUNCTIONS
 
 *   IFF(cond, a, b): Returns a if cond is True, else b.Example: IFF(acctbal > 0, acctbal, 0).
     
@@ -437,7 +438,7 @@ CONDITIONAL FUNCTIONS
 *   MONOTONIC(a, b, c): Checks ascending order.Example: MONOTONIC(5, part.size, 10) → True/False.
     
 
-NUMERICAL FUNCTIONS
+### NUMERICAL FUNCTIONS
 
 *   ABS(x): Absolute value.Example: ABS(-5) → 5.
     
@@ -448,7 +449,7 @@ NUMERICAL FUNCTIONS
 *   SQRT(x): Square root of x.Example: SQRT(16) → 4.
     
 
-GENERAL NOTES
+### GENERAL NOTES
 
 *   Use &, |, ~ for logical operations (not and, or, not).
     
@@ -581,7 +582,7 @@ GENERAL NOTES
                     ).WHERE(total_tx >= 5)
   output = transaction_rate.CALCULATE(cust_name, success_rate)
   ```
-GENERAL NOTES
+### GENERAL NOTES
 
 *   Use &, |, ~ for logical operations (not and, or, not).
     
