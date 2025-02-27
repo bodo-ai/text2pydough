@@ -1,6 +1,6 @@
-**PYDOUGH CHEAT SHEET**  
+## PYDOUGH CHEAT SHEET 
 
-**1. COLLECTIONS & SUB-COLLECTIONS**  
+### 1. COLLECTIONS & SUB-COLLECTIONS**  
 
 - **Syntax**: Access collections/sub-collections using dot notation.  
 
@@ -13,7 +13,7 @@
   - Sub-collections must exist in the metadata graph (e.g., `People.packages` is valid; undefined sub-collections like `People.orders` are invalid).  
   - Avoid reassigning collection names to variables (e.g., `Addresses = 42` breaks subsequent access).
 
-**2. CALCULATE EXPRESSIONS**  
+### 2. CALCULATE EXPRESSIONS**  
 
 - **Purpose**: Derive new fields, rename existing ones or select specific fields.  
   The value of one of these terms in a `CALCULATE` must be expressions that are singular with regards to the current context. That can mean:
@@ -111,7 +111,7 @@ Packages.CALCULATE(
   - Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
   - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
 
-**3. FILTERING (WHERE)**  
+### 3. FILTERING (WHERE)
 
 - **Syntax**: .WHERE(condition)  
 
@@ -130,7 +130,7 @@ Packages.CALCULATE(
   - Use & (AND), | (OR), ~ (NOT) instead of and, or, not.  
   - Avoid chained comparisons (e.g., replace a < b < c with (a < b) & (b < c)).
 
-**4. SORTING (ORDER_BY)**  
+## 4. SORTING (ORDER_BY)  
 
 - **Syntax**: .ORDER_BY(field.ASC()/DESC(), ...)  
 
@@ -148,7 +148,7 @@ Packages.CALCULATE(
 
   .DESC(na_pos='first') → Sort descending, nulls first.
 
-**5. SORTING (TOP_K)**  
+## 5. SORTING (TOP_K) 
 
 - **Select top k records.**
 
@@ -159,7 +159,7 @@ Packages.CALCULATE(
   Top 10 customers by orders count:  
   customers.TOP_K(10, by=COUNT(orders).DESC())
 
-**6. AGGREGATION FUNCTIONS**  
+## 6. AGGREGATION FUNCTIONS
 
 - **COUNT(collection)**: Count non-null records.  
   Example: COUNT(People.packages)  
@@ -184,27 +184,27 @@ Packages.CALCULATE(
 
 **Rules**: Aggregations Function does not support calling aggregations inside of aggregations
 
-**7. grouping (GROUP_BY)**  
+## 7. grouping (PARTITION) 
 
 - **Purpose**: Group records by keys.  
 
-- **Syntax**: GROUP_BY(Collection, name='group_name', by=(key1, key2))  
+- **Syntax**: PARTITION(Collection, name='group_name', by=(key1, key2))  
 
 - **Good Examples**:  
 
   - **Group addresses by state and count occupants**:  
-    GROUP_BY(Addresses, name='addrs', by=state).CALCULATE(  
+    PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
         state,  
         total_occupants=COUNT(addrs.current_occupants)  
     )  
 
   - **Group packages by year/month**:  
-    GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
+    PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
 - **WRONG USES**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
     ```python 
-    GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
+    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
         birth_year,
         email,
         n_people=COUNT(ppl)
@@ -213,20 +213,20 @@ Packages.CALCULATE(
 
   - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
      ```python
-     GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
+     PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     ) 
     ```
 
   - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
      ```python
-    GROUP_BY(People, name='ppl', by=current_address.state).CALCULATE(
+    PARTITION(People, name='ppl', by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     ) 
     ```
 
     ```python
-     suppliers_with_brass_parts = GROUP_BY(suppliers, name='supplier_group', by=(name, nation.name)).CALCULATE(
+     suppliers_with_brass_parts = PARTITION(suppliers, name='supplier_group', by=(name, nation.name)).CALCULATE(
         supplier_name=name,
         nation_name=nation.name,
         total_quantity=SUM(supplier_group.supply_records.part.WHERE(CONTAINS(part_type, 'BRASS')).lines.quantity)
@@ -234,15 +234,15 @@ Packages.CALCULATE(
     ```
 
 - **Rules**:  
-  - GROUP_BY keys must be scalar fields from the collection. 
-  - You must use Aggregation functions to call plural values inside GROUP_BY. 
-  - Within a group_by, you must use the `name` argument to be able to access any property or subcollections. 
-  - Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in GROUP_BY Instead, create a named reference using CALCULATE before using it in GROUP_BY.
-  - Directly referencing nested attributes (e.g., table.column.subfield) in GROUP_BY is not allowed. 
+  - PARTITION keys must be scalar fields from the collection. 
+  - You must use Aggregation functions to call plural values inside PARTITION. 
+  - Within a PARTITION, you must use the `name` argument to be able to access any property or subcollections. 
+  - Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in PARTITION Instead, create a named reference using CALCULATE before using it in PARTITION.
+  - Directly referencing nested attributes (e.g., table.column.subfield) in PARTITION is not allowed. 
   - Assign the nested value to a named reference using CALCULATE before grouping.
   - All terms in a grouping or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate the datas
 
-**8. WINDOW FUNCTIONS**  
+### 8. WINDOW FUNCTIONS
 
 - **RANKING:**  
   - **Syntax**: RANKING(by=field.DESC(), levels=1, allow_ties=False)  
@@ -454,12 +454,12 @@ Packages.CALCULATE(
     
 *   Aggregation functions convert plural values (e.g., collections) to singular values.
     
-**12. EXAMPLE QUERIES**  
+### 12. EXAMPLE QUERIES
 
 * **Top 5 States by Average Occupants:**  
 
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
-  average_occupants=GROUP_BY(addr_info, name="addrs", by=state).CALCULATE(  
+  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
       state=state,  
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
