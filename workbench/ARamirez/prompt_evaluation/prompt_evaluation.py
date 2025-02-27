@@ -167,6 +167,10 @@ def main(git_hash):
     # Default value for eval_results and eval_benchmark is False
     parser.set_defaults(eval_results=False, eval_benchmark=False)
     args = parser.parse_args()
+
+        # Debugging the argument values
+    print(f"Eval Results: {args.eval_results}")
+    print(f"Eval Benchmark: {args.eval_benchmark}")
     # Create result directory if not exists
     folder_path = f"./results/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
