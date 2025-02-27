@@ -212,7 +212,10 @@ total_orders_in_1996 = regions.CALCULATE(
 
 - **Syntax:**  
   .TOP_K(k, by=field.DESC())
-
+   
+- **Params:**
+  k= the number of records to return
+  by= he field to sort by, with optional sorting order
 - **Example:**  
   Top 10 customers by orders count:  
   customers.TOP_K(10, by=COUNT(orders).DESC())
@@ -663,4 +666,4 @@ total_orders_in_1996 = regions.CALCULATE(
     
 *   Aggregation functions convert plural values (e.g., collections) to singular values.
 
-* When using functions like TOP_K, ORDER_BY, you are expected to provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection.
+*   When using functions like TOP_K, ORDER_BY, you are expected to provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection.
