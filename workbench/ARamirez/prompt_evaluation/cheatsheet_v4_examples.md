@@ -90,7 +90,7 @@ Packages.CALCULATE(
     shipped_to_curr_addr=shipping_address.address_id == customer.current_address.address_id
 )
 
-**Avoid to do:**
+**WRONG USES:**
 **Bad Example #1**: For each person, list their first name, last name, and phone number. This is invalid because `People` does not have a property named `phone_number`.
 
 People.CALCULATE(first_name, last_name, phone_number)
@@ -168,6 +168,7 @@ total_orders_in_1996 = regions.CALCULATE(
   - Terms defined in a CALCULATE do not take effect until after the CALCULATE completes.
   - Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
   - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
+  - Avoid using collections directly in a CALCULATE term
 
 **3. FILTERING (WHERE)**  
 
