@@ -2,6 +2,7 @@ You are an AI tasked with converting natural language descriptions into PyDough 
 
 # PyDough Reference File 
 This file contains the core concepts, functions, and syntax of PyDough.
+
 {script_content}
 
 # Database Structure Reference File

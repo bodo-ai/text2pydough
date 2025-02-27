@@ -6,9 +6,9 @@
   Access collections/sub-collections using dot notation.  
 
 - Examples:  
-  - `People` → Access all records in the 'People' collection.  
-  - `People.current_address` → Access current addresses linked to people.  
-  - `Packages.customer` → Access customers linked to packages.  
+  - `People`: Access all records in the 'People' collection.  
+  - `People.current_address`: Access current addresses linked to people.  
+  - `Packages.customer`: Access customers linked to packages.  
 
 - Warnings:  
   - Sub-collections must exist in the metadata graph (e.g., `People.packages` is valid; undefined sub-collections like `People.orders` are invalid).  
@@ -24,28 +24,28 @@
   - Calling a non-aggregation function on more singular expressions.
   - Calling an aggregation function on a plural expression.
 - Syntax:  
-  Collection.CALCULATE(field=expression, ...)  
+  `Collection.CALCULATE(field=expression, ...)`
 
 - Examples:  
 
   - Select fields:  
-    People.CALCULATE(first_name=first_name, last_name=last_name)  
+    `People.CALCULATE(first_name=first_name, last_name=last_name)`
 
   - Derived fields:  
     Packages.CALCULATE(  
         customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),  
         cost_per_unit=package_cost / quantity  
-    )  
+    )`  
 
 Good Example #1: For every person, fetch just their first name and last name.
 
-```py
+```
 People.CALCULATE(first_name, last_name)
 ```
 
 Good Example #2: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
 
-```py
+```
 Packages.CALCULATE(
     package_id,
     first_name=customer.first_name,
@@ -57,7 +57,7 @@ Packages.CALCULATE(
 
 Good Example #3: For every person, find their full name (without the middle name) and count how many packages they purchased.
 
-```py
+```
 People.CALCULATE(
     name=JOIN_STRINGS("", first_name, last_name),
     n_packages_ordered=COUNT(packages),
@@ -66,7 +66,7 @@ People.CALCULATE(
 
 Good Example #4: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
 
-```py
+```
 People.CALCULATE(
     has_middle_name=PRESENT(middle_name)
     full_name_with_middle=JOIN_STRINGS(" ", first_name, middle_name, last_name),
@@ -79,7 +79,7 @@ People.CALCULATE(
 
 Good Example #5: For every person, find the year of the most recent package they purchased and the year of their first package purchase.
 
-```py
+```
 People.CALCULATE(
     most_recent_package_year=YEAR(MAX(packages.order_date)),
     first_ever_package_year=YEAR(MIN(packages.order_date)),
@@ -88,7 +88,7 @@ People.CALCULATE(
 
 Good Example #6: Count how many people, packages, and addresses are known in the system.
 
-```py
+```
 GRAPH.CALCULATE(
     n_people=COUNT(People),
     n_packages=COUNT(Packages),
@@ -98,7 +98,7 @@ GRAPH.CALCULATE(
 
 Good Example #7: For each package, list the package id and whether the package was shipped to the current address of the person who ordered it.
 
-```py
+```
 Packages.CALCULATE(
     package_id,
     shipped_to_curr_addr=shipping_address.address_id == customer.current_address.address_id
@@ -204,7 +204,7 @@ Rules: Aggregations Function does not support calling aggregations inside of agg
 
 - WRONG USES:
   - group by people by their birth year to find the number of people born in each year: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
-    ```python 
+    ```
     PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
         birth_year,
         email,
@@ -213,20 +213,20 @@ Rules: Aggregations Function does not support calling aggregations inside of agg
     ```
 
   - Count how many packages were ordered in each year: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-     ```python
+     ```
      PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     ) 
     ```
 
   - Count how many people live in each state: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-     ```python
+     ```
     PARTITION(People, name='ppl', by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     ) 
     ```
 
-    ```python
+    ```
      suppliers_with_brass_parts = PARTITION(suppliers, name='supplier_group', by=(name, nation.name)).CALCULATE(
         supplier_name=name,
         nation_name=nation.name,
@@ -389,6 +389,7 @@ DATETIME FUNCTIONS
   # 3. Exactly 12 hours from now
   # 4. The last day of the previous year
   # 5. The current day, at midnight
+  ```
   TPCH.CALCULATE(
     ts_1=DATETIME('now'),
     ts_2=DATETIME('NoW', 'start of month'),
@@ -396,7 +397,7 @@ DATETIME FUNCTIONS
     ts_4=DATETIME('Current Timestamp', 'start of y', '- 1 D'),
     ts_5=DATETIME('NOW', '  Start  of  Day  '),
   )
-
+```
   # For each order, truncates the order date to the first day of the year
   Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
   ```
@@ -569,7 +570,7 @@ GENERAL NOTES
 * For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate
   *Goal: Determine the transaction success rate for customers who have made at least five transactions*          
   *Code:* 
-  ```python                                                                                              
+  ```                                                                                            
   customer_transactions  = transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
   transaction_summary  = PARTITION(customer_transactions, name="t", by=(cust_id, cust_name)
                 ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
