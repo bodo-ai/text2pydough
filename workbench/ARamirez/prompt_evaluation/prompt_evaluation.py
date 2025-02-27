@@ -167,10 +167,7 @@ def main(git_hash):
     # Default value for eval_results and eval_benchmark is False
     parser.set_defaults(eval_results=False, eval_benchmark=False)
     args = parser.parse_args()
-
-        # Debugging the argument values
-    print(f"Eval Results: {args.eval_results}")
-    print(f"Eval Benchmark: {args.eval_benchmark}")
+    
     # Create result directory if not exists
     folder_path = f"./results/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
@@ -208,7 +205,6 @@ def main(git_hash):
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
         if args.eval_results:
-            print("eval results if")
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
@@ -226,7 +222,7 @@ def main(git_hash):
         if args.eval_benchmark:
             folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
             os.makedirs(folder_path, exist_ok=True)
-            
+            questions_df = pd.read_csv("./TPCH Queries - All Queries.csv", encoding="utf-8")
             # Format prompt once
             formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
