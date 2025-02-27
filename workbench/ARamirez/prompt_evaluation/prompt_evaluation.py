@@ -208,6 +208,7 @@ def main(git_hash):
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
         if args.eval_results:
+            print("eval results if")
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
