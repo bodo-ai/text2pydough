@@ -161,7 +161,6 @@ total_orders_in_1996 = regions.CALCULATE(
     total_discount=SUM(nations.customers.orders_1996.lines.discount)
 ).TOP_K(1, by=total_orders.DESC())
 
- 
 - **Rules**:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
   - Positional arguments must precede keyword arguments.
