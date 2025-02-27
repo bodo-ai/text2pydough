@@ -1,3 +1,4 @@
+# %%
 import boto3
 import json
 
@@ -14,10 +15,12 @@ with open("./tcph_graph.md", "r", encoding="utf-8") as f:
 
         # Read Questions
 questions_df = pd.read_csv("./questions.csv", encoding="utf-8")
-similar_code = questions_df["similar_queries"].tolist()
+similar_code = questions_df["question"].tolist()
 
 def ask_claude(prompt, question):
     body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens":10000 ,   
         "thinking": {
         "type": "enabled",
         "budget_tokens": 4000
@@ -32,13 +35,21 @@ def ask_claude(prompt, question):
         "temperature": 0.0,
     })
 
-    modelId = 'anthropic.claude-3-7-sonnet-20250219-v1:0'
+    modelId = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
     accept = 'application/json'
     contentType = 'application/json'
 
     response = brt.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
 
     response_body = json.loads(response.get('body').read())
+    return response_body
 
-# text
-print(response_body.get('completion'))
+# Loop through all questions in the 'similar_queries' column
+for question in similar_code[:3]:
+    # Ask the model for each question
+    response_body = ask_claude(prompt, question)
+    
+    # Print the model's response
+    print(f"Question: {question}")
+    print(f"Response: {response_body.get('completion')}")
+    print("-" * 50)
