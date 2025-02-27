@@ -1,48 +1,49 @@
 ## PYDOUGH CHEAT SHEET 
 
-### 1. COLLECTIONS & SUB-COLLECTIONS**  
+### 1. COLLECTIONS & SUB-COLLECTIONS  
 
-- **Syntax**: Access collections/sub-collections using dot notation.  
+#### Syntax 
+  Access collections/sub-collections using dot notation.  
 
-- **Examples**:  
+- Examples:  
   - `People` → Access all records in the 'People' collection.  
   - `People.current_address` → Access current addresses linked to people.  
   - `Packages.customer` → Access customers linked to packages.  
 
-- **Warnings**:  
+- Warnings:  
   - Sub-collections must exist in the metadata graph (e.g., `People.packages` is valid; undefined sub-collections like `People.orders` are invalid).  
   - Avoid reassigning collection names to variables (e.g., `Addresses = 42` breaks subsequent access).
 
-### 2. CALCULATE EXPRESSIONS**  
+### 2. CALCULATE EXPRESSIONS  
 
-- **Purpose**: Derive new fields, rename existing ones or select specific fields.  
+- Purpose: Derive new fields, rename existing ones or select specific fields.  
   The value of one of these terms in a `CALCULATE` must be expressions that are singular with regards to the current context. That can mean:
   - Referencing one of the scalar properties of the current collection.
   - Creating a literal.
   - Referencing a singular expression of a sub-collection of the current collection that is singular with regards to the current collection.
   - Calling a non-aggregation function on more singular expressions.
   - Calling an aggregation function on a plural expression.
-- **Syntax**:  
+- Syntax:  
   Collection.CALCULATE(field=expression, ...)  
 
-- **Examples**:  
+- Examples:  
 
-  - **Select fields**:  
+  - Select fields:  
     People.CALCULATE(first_name=first_name, last_name=last_name)  
 
-  - **Derived fields**:  
+  - Derived fields:  
     Packages.CALCULATE(  
         customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),  
         cost_per_unit=package_cost / quantity  
     )  
 
-**Good Example #1**: For every person, fetch just their first name and last name.
+Good Example #1: For every person, fetch just their first name and last name.
 
 ```py
 People.CALCULATE(first_name, last_name)
 ```
 
-**Good Example #2**: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
+Good Example #2: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
 
 ```py
 Packages.CALCULATE(
@@ -54,7 +55,7 @@ Packages.CALCULATE(
 )
 ```
 
-**Good Example #3**: For every person, find their full name (without the middle name) and count how many packages they purchased.
+Good Example #3: For every person, find their full name (without the middle name) and count how many packages they purchased.
 
 ```py
 People.CALCULATE(
@@ -63,7 +64,7 @@ People.CALCULATE(
 )
 ```
 
-**Good Example #4**: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
+Good Example #4: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
 
 ```py
 People.CALCULATE(
@@ -76,7 +77,7 @@ People.CALCULATE(
 )
 ```
 
-**Good Example #5**: For every person, find the year of the most recent package they purchased and the year of their first package purchase.
+Good Example #5: For every person, find the year of the most recent package they purchased and the year of their first package purchase.
 
 ```py
 People.CALCULATE(
@@ -85,7 +86,7 @@ People.CALCULATE(
 )
 ```
 
-**Good Example #6**: Count how many people, packages, and addresses are known in the system.
+Good Example #6: Count how many people, packages, and addresses are known in the system.
 
 ```py
 GRAPH.CALCULATE(
@@ -95,7 +96,7 @@ GRAPH.CALCULATE(
 )
 ```
 
-**Good Example #7**: For each package, list the package id and whether the package was shipped to the current address of the person who ordered it.
+Good Example #7: For each package, list the package id and whether the package was shipped to the current address of the person who ordered it.
 
 ```py
 Packages.CALCULATE(
@@ -104,7 +105,7 @@ Packages.CALCULATE(
 )
 ```
 
-- **Rules**:  
+- Rules:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
   - Positional arguments must precede keyword arguments.
   - Terms defined in a CALCULATE do not take effect until after the CALCULATE completes.
@@ -113,36 +114,36 @@ Packages.CALCULATE(
 
 ### 3. FILTERING (WHERE)
 
-- **Syntax**: .WHERE(condition)  
+- Syntax: .WHERE(condition)  
 
-- **Examples**:  
+- Examples:  
 
-  - **Filter people with negative account balance**:  
+  - Filter people with negative account balance:  
     People.WHERE(acctbal < 0)  
 
-  - **Filter packages ordered in 2023**:  
+  - Filter packages ordered in 2023:  
     Packages.WHERE(YEAR(order_date) == 2023)  
 
-  - **Filter addresses with occupants**:  
+  - Filter addresses with occupants:  
     Addresses.WHERE(HAS(current_occupants))  
 
-- **Warnings**:  
+- Warnings:  
   - Use & (AND), | (OR), ~ (NOT) instead of and, or, not.  
   - Avoid chained comparisons (e.g., replace a < b < c with (a < b) & (b < c)).
 
 ## 4. SORTING (ORDER_BY)  
 
-- **Syntax**: .ORDER_BY(field.ASC()/DESC(), ...)  
+- Syntax: .ORDER_BY(field.ASC()/DESC(), ...)  
 
-- **Examples**:  
+- Examples:  
 
-  - **Alphabetical sort**:  
+  - Alphabetical sort:  
     People.ORDER_BY(last_name.ASC(), first_name.ASC())  
 
-  - **Most expensive packages first**:  
+  - Most expensive packages first:  
     Packages.ORDER_BY(package_cost.DESC())  
 
-- **Parameters**:  
+- Parameters:  
 
   .ASC(na_pos='last') → Sort ascending, nulls last.  
 
@@ -150,59 +151,59 @@ Packages.CALCULATE(
 
 ## 5. SORTING (TOP_K) 
 
-- **Select top k records.**
+- Select top k records.
 
-- **Syntax:**  
+- Syntax:  
   .TOP_K(k, by=field.DESC())
 
-- **Example:**  
+- Example:  
   Top 10 customers by orders count:  
   customers.TOP_K(10, by=COUNT(orders).DESC())
 
 ## 6. AGGREGATION FUNCTIONS
 
-- **COUNT(collection)**: Count non-null records.  
+- COUNT(collection): Count non-null records.  
   Example: COUNT(People.packages)  
 
-- **SUM(collection)**: Sum values.  
+- SUM(collection): Sum values.  
   Example: SUM(Packages.package_cost)  
 
-- **AVG(collection)**: Average values.  
+- AVG(collection): Average values.  
   Example: AVG(Packages.quantity)  
 
-- **MIN/MAX(collection)**: Min/Max value.  
+- MIN/MAX(collection): Min/Max value.  
   Example: MIN(Packages.order_date)  
 
-- **NDISTINCT(collection)**: Distinct count.  
+- NDISTINCT(collection): Distinct count.  
   Example: NDISTINCT(Addresses.state)  
 
-- **HAS(collection)**: True if ≥1 record exists.  
+- HAS(collection): True if ≥1 record exists.  
   Example: HAS(People.packages)
 
-- **HASNOT(collection)**: True if collection is empty.
+- HASNOT(collection): True if collection is empty.
   Example: HASNOT(orders)
 
-**Rules**: Aggregations Function does not support calling aggregations inside of aggregations
+Rules: Aggregations Function does not support calling aggregations inside of aggregations
 
 ## 7. grouping (PARTITION) 
 
-- **Purpose**: Group records by keys.  
+- Purpose: Group records by keys.  
 
-- **Syntax**: PARTITION(Collection, name='group_name', by=(key1, key2))  
+- Syntax: PARTITION(Collection, name='group_name', by=(key1, key2))  
 
-- **Good Examples**:  
+- Good Examples:  
 
-  - **Group addresses by state and count occupants**:  
+  - Group addresses by state and count occupants:  
     PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
         state,  
         total_occupants=COUNT(addrs.current_occupants)  
     )  
 
-  - **Group packages by year/month**:  
+  - Group packages by year/month:  
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
-- **WRONG USES**:
-  - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
+- WRONG USES:
+  - group by people by their birth year to find the number of people born in each year: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
     ```python 
     PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
         birth_year,
@@ -211,14 +212,14 @@ Packages.CALCULATE(
     )
     ```
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
+  - Count how many packages were ordered in each year: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
      ```python
      PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     ) 
     ```
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
+  - Count how many people live in each state: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
      ```python
     PARTITION(People, name='ppl', by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
@@ -233,7 +234,7 @@ Packages.CALCULATE(
     ).WHERE(total_quantity > 1000) 
     ```
 
-- **Rules**:  
+- Rules:  
   - PARTITION keys must be scalar fields from the collection. 
   - You must use Aggregation functions to call plural values inside PARTITION. 
   - Within a PARTITION, you must use the `name` argument to be able to access any property or subcollections. 
@@ -244,8 +245,8 @@ Packages.CALCULATE(
 
 ### 8. WINDOW FUNCTIONS
 
-- **RANKING:**  
-  - **Syntax**: RANKING(by=field.DESC(), levels=1, allow_ties=False)  
+- RANKING:  
+  - Syntax: RANKING(by=field.DESC(), levels=1, allow_ties=False)  
   - *   Parameters:
     
     *   by: Ordering criteria (e.g., acctbal.DESC()).
@@ -258,12 +259,12 @@ Packages.CALCULATE(
         
   - *   Example:Nations.customers(r = RANKING(by=acctbal.DESC(), levels=1))
 
-  - **Example**: Rank customers by balance per nation:  
+  - Example: Rank customers by balance per nation:  
     Customers(r=RANKING(by=acctbal.DESC(), levels=1))  
 
-- **PERCENTILE:**  
+- PERCENTILE:  
 
-  - **Syntax**: PERCENTILE(by=field.ASC(), n_buckets=100)  
+  - Syntax: PERCENTILE(by=field.ASC(), n_buckets=100)  
   - *   Parameters:
     
     *   by: Ordering criteria.
@@ -274,19 +275,19 @@ Packages.CALCULATE(
         
   - *   Example:Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n\_buckets=1000) == 1000).
   
-  - **Example**: Filter top 5% by account balance:  
+  - Example: Filter top 5% by account balance:  
     Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
 
-**9. CONTEXTLESS EXPRESSIONS**   
+9. CONTEXTLESS EXPRESSIONS   
 
-- **Purpose**: Reusable code snippets.  
+- Purpose: Reusable code snippets.  
 
-- **Example**: Define and reuse filters:  
+- Example: Define and reuse filters:  
 
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
 
-**BINARY OPERATORS****Arithmetic**
+BINARY OPERATORSArithmetic
 
 *   Operators: +, -, \*, /, \*\* (addition, subtraction, multiplication, division, exponentiation).
     
@@ -295,7 +296,7 @@ Packages.CALCULATE(
 *   Warning: Division by 0 behavior depends on the database.
     
 
-**Comparisons**
+Comparisons
 
 *   Operators: <=, <, ==, !=, >, >=.
     
@@ -304,7 +305,7 @@ Packages.CALCULATE(
 *   Warning: Avoid chained inequalities (e.g., a <= b <= c). Use (a <= b) & (b <= c) or MONOTONIC.
     
 
-**Logical**
+Logical
 
 *   Operators: & (AND), | (OR), ~ (NOT).
     
@@ -313,14 +314,14 @@ Packages.CALCULATE(
 *   Warning: Use &, |, ~ instead of Python’s and, or, not.
     
 
-**UNARY OPERATORS****Negation**
+UNARY OPERATORSNegation
 
 *   Operator: - (flips sign).
     
 *   Example:Lineitems(lost\_value = extended\_price \* (-discount))
     
 
-**OTHER OPERATORS****Slicing**
+OTHER OPERATORSSlicing
 
 *   Syntax: string\[start:stop:step\].
     
@@ -329,7 +330,7 @@ Packages.CALCULATE(
 *   Restrictions: step must be 1 or omitted; start/stop non-negative or omitted.
     
 
-**STRING FUNCTIONS**
+STRING FUNCTIONS
 
 *   LOWER(s): Converts string to lowercase.Example: LOWER(name) → "apple".
     
@@ -348,7 +349,7 @@ Packages.CALCULATE(
 *   JOIN\_STRINGS(delim, s1, s2, ...): Joins strings with a delimiter.Example: JOIN\_STRINGS("-", "A", "B") → "A-B".
     
 
-**DATETIME FUNCTIONS**
+DATETIME FUNCTIONS
 
 *   YEAR(dt): Extracts year.Example: YEAR(order\_date) == 1995.
     
@@ -418,7 +419,7 @@ Packages.CALCULATE(
   )
   ```
 
-**CONDITIONAL FUNCTIONS**
+CONDITIONAL FUNCTIONS
 
 *   IFF(cond, a, b): Returns a if cond is True, else b.Example: IFF(acctbal > 0, acctbal, 0).
     
@@ -435,7 +436,7 @@ Packages.CALCULATE(
 *   MONOTONIC(a, b, c): Checks ascending order.Example: MONOTONIC(5, part.size, 10) → True/False.
     
 
-**NUMERICAL FUNCTIONS**
+NUMERICAL FUNCTIONS
 
 *   ABS(x): Absolute value.Example: ABS(-5) → 5.
     
@@ -446,7 +447,7 @@ Packages.CALCULATE(
 *   SQRT(x): Square root of x.Example: SQRT(16) → 4.
     
 
-**GENERAL NOTES**
+GENERAL NOTES
 
 *   Use &, |, ~ for logical operations (not and, or, not).
     
@@ -456,7 +457,7 @@ Packages.CALCULATE(
     
 ### 12. EXAMPLE QUERIES
 
-* **Top 5 States by Average Occupants:**  
+* Top 5 States by Average Occupants:  
 
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
   average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
@@ -464,7 +465,7 @@ Packages.CALCULATE(
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
 
-* **Monthly Trans-Coastal Shipments:**  
+* Monthly Trans-Coastal Shipments:  
 
   west_coast = (\"CA\", \"OR\", \"WA\")  
   east_coast = (\"NY\", \"NJ\", \"MA\")  
@@ -476,19 +477,19 @@ Packages.CALCULATE(
       year=YEAR(order_date)  
   )
 
-* **Calculates, for each order, the number of days since January 1st 1992**:
+* Calculates, for each order, the number of days since January 1st 1992:
   
   orders.CALCULATE( 
    days_since=DATEDIFF("days",datetime.date(1992, 1, 1), order_date)
   )
 
-* **Filter Nations by Name**  
+* Filter Nations by Name  
   *Goal: Find nations whose names start with \"A\".*  
   *Code:*  
   nations_startwith = nations.CALCULATE(n_name=name, n_comment=comment).WHERE(STARTSWITH(name, 'A'))  
   nations_like = nations.CALCULATE(n_name=name, n_comment=comment).WHERE(LIKE(name, 'A%'))  
 
-* **Customers in Debt from Specific Region**  
+* Customers in Debt from Specific Region  
   *Goal: Identify customers in debt (negative balance) with ≥5 orders, from \"AMERICA\" (excluding Brazil).*  
   *Code:*  
   customer_in_debt = customers.CALCULATE(customer_name = name).WHERE(  
@@ -498,11 +499,11 @@ Packages.CALCULATE(
       (nation.name != "BRAZIL")  
   )
 
-* **For each order, truncates the order date to the first day of the year**:
+* For each order, truncates the order date to the first day of the year:
   
   orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
 
-* **Orders per Customer in 1998**  
+* Orders per Customer in 1998  
   *Goal: Count orders per customer in 1998 and sort by activity.*  
   *Code:*  
   customer_order_counts = customers.CALCULATE(  
@@ -511,7 +512,7 @@ Packages.CALCULATE(
       num_orders=COUNT(orders.WHERE(YEAR(order_date) == 1998))  
   ).ORDER_BY(num_orders.DESC())  
 
-* **High-Value Customers in Asia**  
+* High-Value Customers in Asia  
   *Goal: Find customers in Asia with total spending > $1000.*  
   *Code:*  
   high_value_customers_in_asia = customers.CALCULATE(  
@@ -520,7 +521,7 @@ Packages.CALCULATE(
       total_spent=SUM(orders.total_price)  
   ).WHERE((total_spent > 1000) & (nation.region.name == "ASIA"))  
 
-* **Top 5 Most Profitable Regions**  
+* Top 5 Most Profitable Regions  
   *Goal: Identify regions with highest revenue.*  
   *Code:*  
   selected_regions = nations.CALCULATE(  
@@ -528,7 +529,7 @@ Packages.CALCULATE(
       Total_revenue=SUM(customers.orders.total_price)  
   ).TOP_K(5, Total_revenue.DESC())  
 
-* **Inactive Customers**  
+* Inactive Customers  
   *Goal: Find customers who never placed orders.*  
   *Code:*  
   customers_without_orders = customers.WHERE(HASNOT(orders)).CALCULATE(  
@@ -536,7 +537,7 @@ Packages.CALCULATE(
       customer_name=name  
   )  
 
-* **Customer Activity by Nation**  
+* Customer Activity by Nation  
   *Goal: Track active/inactive customers per nation.*  
   *Code:*  
   cust_info = customers.CALCULATE(is_active=HAS(orders))  
@@ -547,7 +548,7 @@ Packages.CALCULATE(
       inactive_customers=COUNT(cust_info) - SUM(cust_info.is_active)  
   ).ORDER_BY(total_customers.DESC())  
 
-* **High Balance, Low Spending Customers**  
+* High Balance, Low Spending Customers  
   *Goal: Find top 10% in balance but bottom 25% in orders.*  
   *Code:*  
   customers_in_low_percentiles = customers.WHERE(  
@@ -555,7 +556,7 @@ Packages.CALCULATE(
       (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)  
   )
 
-* **Find the parts that contain "STEEL" in their name and show the total available quantity, ordered by the highest available quantity**
+* Find the parts that contain "STEEL" in their name and show the total available quantity, ordered by the highest available quantity
   *Goal: Find the parts that contains STEEL in their name.*          
   *Code:*                                                                                                
   availability_parts= supply_records.WHERE(CONTAINS(part.name, "steel")).CALCULATE(part_name= part.name)
@@ -565,7 +566,7 @@ Packages.CALCULATE(
               total_available= SUM(supp.availqty)
   ).ORDER_BY(total_available.DESC())
 
-* **For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate**
+* For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate
   *Goal: Determine the transaction success rate for customers who have made at least five transactions*          
   *Code:* 
   ```python                                                                                              
@@ -579,7 +580,7 @@ Packages.CALCULATE(
                     ).WHERE(total_tx >= 5)
   output = transaction_rate.CALCULATE(cust_name, success_rate)
   ```
-**GENERAL NOTES**
+GENERAL NOTES
 
 *   Use &, |, ~ for logical operations (not and, or, not).
     
