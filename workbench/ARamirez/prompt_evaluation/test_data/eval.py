@@ -213,12 +213,12 @@ def process_row(row, db_path):
         
         if result is not None:
             extracted_sql = query_sqlite_db(row["sql"], db_path)
-            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
+            comparison_result = compare_df(result, extracted_sql,query_category="a", question="a")
             
             return 'Match' if comparison_result else 'No Match', None
         else:
             return 'Query Error', exception
-    return 'Unknow', None  
+    return 'Unknown', None  
 
 def compare_output(folder_path, csv_file_path, db_path):
     """

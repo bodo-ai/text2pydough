@@ -4,7 +4,7 @@
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - Solve step by step. It means, if you need to filter the result, first apply the filter, then calculate the parameters that you need base on this. 
+  - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
 
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
@@ -132,7 +132,9 @@
 
 - **Syntax**: PARTITION(Collection, name='group_name', by=(key1, key2))  
 
-- **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
+  - **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
+
+  - **IMPORTANT**: Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
 
 - **Good Examples**:  
 
@@ -141,6 +143,7 @@
         state=state,  
         total_occupants=COUNT(addrs.current_occupants)  
     )  
+    **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
 
   - **Group packages by year/month**:  
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
