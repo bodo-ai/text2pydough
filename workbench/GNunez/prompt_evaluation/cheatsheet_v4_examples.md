@@ -6,6 +6,8 @@
 
   - Solve step by step. It means, if you need to filter the result, first apply the filter, then calculate the parameters that you need base on this. 
 
+  - - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
+
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
 - **Syntax**: Access collections/sub-collections using dot notation.  
