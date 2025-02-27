@@ -13,7 +13,7 @@ with open("./tcph_graph.md", "r", encoding="utf-8") as f:
             database_content = f.read()
 
         # Read Questions
-questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
+questions_df = pd.read_csv("./questions.csv", encoding="utf-8")
 similar_code = questions_df["similar_queries"].tolist()
 
 def ask_claude(prompt, question):
