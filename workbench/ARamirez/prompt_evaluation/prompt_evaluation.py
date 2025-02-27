@@ -228,8 +228,18 @@ def main(git_hash):
         if args.eval_benchmark:
             folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
             os.makedirs(folder_path, exist_ok=True)
+            
+            # Format prompt once
+            formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
-            output_file, responses= compare_output(folder_path,"./TPCH Queries - All Queries.csv", "./test_data/tpch.db")
+            # Process questions
+            responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
+            questions_df["response"] = responses
+            output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
+
+            questions_df.to_csv(output_file, index=False, encoding="utf-8")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
