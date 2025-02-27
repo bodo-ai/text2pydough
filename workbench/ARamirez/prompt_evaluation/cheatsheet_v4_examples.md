@@ -261,7 +261,7 @@ total_orders_in_1996 = regions.CALCULATE(
 
 - **WRONG USES**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
-    thon 
+     
     GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
         birth_year,
         email,
@@ -269,21 +269,19 @@ total_orders_in_1996 = regions.CALCULATE(
     )
     
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-     thon
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALCULATE so it is accessible as a named reference).
+     
      GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     ) 
     
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-     thon
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALCULATE so it is accessible as a named reference).
+     
     GROUP_BY(People, name='ppl', by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     ) 
-    
 
-    thon
      suppliers_with_brass_parts = GROUP_BY(suppliers, name='supplier_group', by=(name, nation.name)).CALCULATE(
         supplier_name=name,
         nation_name=nation.name,
@@ -299,7 +297,7 @@ total_orders_in_1996 = regions.CALCULATE(
   - Directly referencing nested attributes (e.g., table.column.subfield) in GROUP_BY is not allowed. 
   - Assign the nested value to a named reference using CALCULATE before grouping.
   - All terms in a grouping or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate the datas
-
+  
 **8. WINDOW FUNCTIONS**  
 
 - **RANKING:**  
@@ -345,7 +343,7 @@ total_orders_in_1996 = regions.CALCULATE(
   high_value_packages = Packages.WHERE(is_high_value)
 
   is_february = MONTH(order_date) == 2
-  
+
   february_value = KEEP_IF(package_cost, is_february)
   aug_packages = packages.CALCULATE(
       is_february=is_february,
@@ -463,7 +461,7 @@ total_orders_in_1996 = regions.CALCULATE(
 
   If there are multiple modifiers, they operate left-to-right.
   Usage examples:
-  thon
+  
   # Returns the following datetime moments:
   # 1. The current timestamp
   # 2. The start of the current month
@@ -492,14 +490,12 @@ total_orders_in_1996 = regions.CALCULATE(
   - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
 
   - Example:
-  thon
-  # Calculates, for each order, the number of days since January 1st 1992
-  # that the order was placed:
+  
+  # Calculates, for each order, the number of days since January 1st 1992 that the order was placed:
   Orders.CALCULATE( 
     days_since=DATEDIFF("days", datetime.date(1992, 1, 1), order_date)
   )
   
-
 **CONDITIONAL FUNCTIONS**
 
 *   IFF(cond, a, b): Returns a if cond is True, else b.Example: IFF(acctbal > 0, acctbal, 0).
@@ -516,7 +512,6 @@ total_orders_in_1996 = regions.CALCULATE(
     
 *   MONOTONIC(a, b, c): Checks ascending order.Example: MONOTONIC(5, part.size, 10) → True/False.
     
-
 **NUMERICAL FUNCTIONS**
 
 *   ABS(x): Absolute value.Example: ABS(-5) → 5.
@@ -527,7 +522,6 @@ total_orders_in_1996 = regions.CALCULATE(
     
 *   SQRT(x): Square root of x.Example: SQRT(16) → 4.
     
-
 **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
@@ -650,7 +644,7 @@ total_orders_in_1996 = regions.CALCULATE(
 * **For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate**
   *Goal: Determine the transaction success rate for customers who have made at least five transactions*          
   *Code:* 
-  thon                                                                                              
+                                                                                                
   customer_transactions  = transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
   transaction_summary  = PARTITION(customer_transactions, name="t", by=(cust_id, cust_name)
                 ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
@@ -668,3 +662,5 @@ total_orders_in_1996 = regions.CALCULATE(
 *   For chained inequalities, use MONOTONIC or explicit comparisons.
     
 *   Aggregation functions convert plural values (e.g., collections) to singular values.
+
+* When using functions like TOP_K, ORDER_BY, you are expected to provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection.
