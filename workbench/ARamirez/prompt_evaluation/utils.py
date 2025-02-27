@@ -84,7 +84,7 @@ def autocommit(
     """
     try:
         result: List[str]=  execute_command(['git', 'add', '.'], cwd=cwd)
-        result_commit: List[str]= execute_command(['git', 'commit', '-m', message], cwd=cwd)
+        result_commit: List[str]= execute_command(['git', 'commit', "-a", '-m', message], cwd=cwd)
     except:
         # Nothing to commit
         pass
