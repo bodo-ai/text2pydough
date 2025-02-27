@@ -16,12 +16,16 @@ with open("./tcph_graph.md", "r", encoding="utf-8") as f:
         # Read Questions
 questions_df = pd.read_csv("./questions.csv", encoding="utf-8")
 similar_code = questions_df["question"].tolist()
+formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
 def ask_claude(prompt, question):
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens":24000 ,   
-     
+        "thinking": {
+        "type": "enabled",
+        "budget_tokens": 4000
+    },
         "system": prompt,  # Wrap "string" in quotes to make it a valid string
         "messages": [
             {
@@ -42,11 +46,11 @@ def ask_claude(prompt, question):
     return response_body
 
 # Loop through all questions in the 'similar_queries' column
-for question in similar_code[:3]:
+for question in similar_code[:1]:
     # Ask the model for each question
-    response_body = ask_claude(prompt, question)
+    response_body = ask_claude(formatted_prompt, question)
     
     # Print the model's response
     print(f"Question: {question}")
-    print(f"Response: {response_body.get('completion')}")
+    print(f"Response: {response_body}")
     print("-" * 50)
