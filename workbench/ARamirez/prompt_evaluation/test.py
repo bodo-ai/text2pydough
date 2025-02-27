@@ -20,11 +20,8 @@ similar_code = questions_df["question"].tolist()
 def ask_claude(prompt, question):
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens":10000 ,   
-        "thinking": {
-        "type": "enabled",
-        "budget_tokens": 4000
-    },
+        "max_tokens":24000 ,   
+     
         "system": prompt,  # Wrap "string" in quotes to make it a valid string
         "messages": [
             {
@@ -32,7 +29,7 @@ def ask_claude(prompt, question):
                 "content": question
             }
         ],
-        "temperature": 0.0,
+        "temperature": 1,
     })
 
     modelId = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
