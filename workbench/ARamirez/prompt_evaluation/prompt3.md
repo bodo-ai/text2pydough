@@ -20,6 +20,7 @@ Your objective is to analyze the provided natural language description that outl
    - Includes comments for any complex operations, where necessary.
    - Assigns the final query to a variable.
    - Ensures proper indentation.
+   - Uses contextless expressions properly.
    - Adheres to the syntax and structure outlined in the PyDough Reference File.
    - Returns only the exact data requested, without adding additional fields or information.
 
