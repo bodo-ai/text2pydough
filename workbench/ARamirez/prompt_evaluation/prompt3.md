@@ -15,11 +15,12 @@ Your objective is to analyze the provided natural language description that outl
 1. Extract the main components of the natural language description to identify the database query or manipulation required.
 2. Generate PyDough code that:
    - Uses clear and concise syntax.
+   - Avoids the bad examples reference in the Pydough Reference File
    - Properly references fields and tables as defined in the Database Structure Reference File.
    - Includes comments for any complex operations, where necessary.
    - Assigns the final query to a variable.
    - Ensures proper indentation.
-   - Adheres to the syntax and structure outlined in the PyDough Reference File avoiding the bad examples provided.
+   - Adheres to the syntax and structure outlined in the PyDough Reference File.
    - Returns only the exact data requested, without adding additional fields or information.
 
 3. Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
