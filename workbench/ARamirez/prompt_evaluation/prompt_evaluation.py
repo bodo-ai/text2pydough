@@ -124,6 +124,7 @@ def get_other_provider_response(client, provider, model_id, prompt, question):
         response = client.chat.completions.create(
             model=f"{provider}:{model_id}",
             messages=messages,
+            temperature= 0.0
         )
         return response.choices[0].message.content
     except Exception as e:
