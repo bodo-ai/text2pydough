@@ -151,6 +151,16 @@ total_orders_in_1996 = regions.CALCULATE(
     region_name=name,
     total_orders=COUNT(nations.customers.orders_1996)
 ).TOP_K(1, by=total_orders.DESC())
+
+**Bad Example #11**: Find the total orders placed and total discount by region in 1996. This is invalid since `customers` has no field called `orders_1996`. The variable `orders_1996` can only be used to substitute in a contextless expression, not to access a subcollection of a current context. 
+
+orders_1996 = orders.WHERE(YEAR(order_date) == 1996)
+total_orders_in_1996 = regions.CALCULATE(
+    region_name=name,
+    total_orders=COUNT(nations.customers.orders_1996)
+    total_discount=SUM(nations.customers.orders_1996.lines.discount)
+).TOP_K(1, by=total_orders.DESC())
+
  
 - **Rules**:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
