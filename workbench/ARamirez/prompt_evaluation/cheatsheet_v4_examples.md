@@ -1,4 +1,4 @@
-**PYDOUGH CHEAT SHEET**  
+# PYDOUGH CHEAT SHEET
 
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
@@ -38,13 +38,10 @@
 
 **Good Example #1**: For every person, fetch just their first name and last name.
 
-```py
 People.CALCULATE(first_name, last_name)
-```
 
 **Good Example #2**: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
 
-```py
 Packages.CALCULATE(
     package_id,
     first_name=customer.first_name,
@@ -52,20 +49,16 @@ Packages.CALCULATE(
     shipping_state=shipping_address.state,
     secret_key="alphabet soup",
 )
-```
 
 **Good Example #3**: For every person, find their full name (without the middle name) and count how many packages they purchased.
 
-```py
 People.CALCULATE(
     name=JOIN_STRINGS("", first_name, last_name),
     n_packages_ordered=COUNT(packages),
 )
-```
 
 **Good Example #4**: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
 
-```py
 People.CALCULATE(
     has_middle_name=PRESENT(middle_name)
     full_name_with_middle=JOIN_STRINGS(" ", first_name, middle_name, last_name),
@@ -74,99 +67,75 @@ People.CALCULATE(
     full_name=IFF(has_middle_name, full_name_with_middle, full_name_without_middle),
     email=email,
 )
-```
 
 **Good Example #5**: For every person, find the year of the most recent package they purchased and the year of their first package purchase.
 
-```py
 People.CALCULATE(
     most_recent_package_year=YEAR(MAX(packages.order_date)),
     first_ever_package_year=YEAR(MIN(packages.order_date)),
 )
-```
 
 **Good Example #6**: Count how many people, packages, and addresses are known in the system.
 
-```py
 GRAPH.CALCULATE(
     n_people=COUNT(People),
     n_packages=COUNT(Packages),
     n_addresses=COUNT(Addresses),
 )
-```
 
 **Good Example #7**: For each package, list the package id and whether the package was shipped to the current address of the person who ordered it.
 
-```py
 Packages.CALCULATE(
     package_id,
     shipped_to_curr_addr=shipping_address.address_id == customer.current_address.address_id
 )
-```
+
 **Avoid to do:**
 **Bad Example #1**: For each person, list their first name, last name, and phone number. This is invalid because `People` does not have a property named `phone_number`.
 
-```py
 People.CALCULATE(first_name, last_name, phone_number)
-```
 
 **Bad Example #2**: For each person, list their combined first & last name followed by their email. This is invalid because a positional argument is included after a keyword argument.
 
-```py
 People.CALCULATE(
     full_name=JOIN_STRINGS(" ", first_name, last_name),
     email
 )
-```
 
 **Bad Example #3**: For each person, list the address_id of packages they have ordered. This is invalid because `packages` is a plural property of `People`, so its properties cannot be included in a `CALCULATE` term of `People` unless aggregated.
-```py
+
 People.CALCULATE(packages.address_id)
-```
 
 **Bad Example #4**: For each person, list their first/last name followed by the concatenated city/state name of their current address. This is invalid because `current_address` is a plural property of `People`, so its properties cannot be included in a `CALCULATE` term of `People` unless aggregated.
 
-```py
 People.CALCULATE(
     first_name,
     last_name,
     location=JOIN_STRINGS(", ", current_address.city, current_address.state),
 )
-```
 
 **Bad Example #5**: For each address, find whether the state name starts with `"C"`. This is invalid because it calls the builtin Python `.startswith` string method, which is not supported in PyDough (should have instead used a defined PyDough behavior, like the `STARTSWITH` function).
 
-```py
 Addresses.CALCULATE(is_c_state=state.startswith("c"))
-```
 
 **Bad Example #6**: For each address, find the state bird of the state it is in. This is invalid because the `state` property of each record of `Addresses` is a scalar expression, not a subcolleciton, so it does not have any properties that can be accessed with `.` syntax.
 
-```py
 Addresses.CALCULATE(state_bird=state.bird)
-```
 
 **Bad Example #7**: For each current occupant of each address, list their first name, last name, and city/state they live in. This is invalid because `city` and `state` are not properties of the current collection (`People`, accessed via `current_occupants` of each record of `Addresses`).
 
-```py
 Addresses.current_occupants.CALCULATE(first_name, last_name, city, state)
-```
 
 **Bad Example #8**: For each person include their ssn and current address. This is invalid because a collection cannot be a `CALCULATE` term, and `current_address` is a sub-collection property of `People`. Instead, properties of `current_address` can be accessed.
 
-```py
 People.CALCULATE(ssn, current_address)
-```
 
 **Bad Example #9**: For each person, list their first name, last name, and the sum of the package costs. This is invalid because `SUM` is an aggregation function and cannot be used in a `CALCULATE` term without specifying the sub-collection it should be applied to.
 
-```py
 People.CALCULATE(first_name, last_name, total_cost=SUM(package_cost))
-```
 
 **Bad Example #9**: For each person, list their first name, last name, and the ratio between the cost of all packages they apply ordered and the number of packages they ordered. This is invalid the `total_cost` and `n_packages` are used to define `ratio` in the same `CALCULATE` where they are defined.
 
-```py
 People.CALCULATE(
     first_name,
     last_name,
@@ -174,15 +143,15 @@ People.CALCULATE(
     n_packages=COUNT(packages),
     ratio=total_cost/n_packages,
 )
-```
+
 **Bad Example #10**: Find the total orders placed by region in 1996. This is invalid since `customers` has no field called `orders_1996`. The variable `orders_1996` can only be used to substitute in a contextless expression, not to access a subcollection of a current context. 
-```py
+
 orders_1996 = orders.WHERE(YEAR(order_date) == 1996)
 total_orders_in_1996 = regions.CALCULATE(
     region_name=name,
     total_orders=COUNT(nations.customers.orders_1996)
 ).TOP_K(1, by=total_orders.DESC())
-``` 
+ 
 - **Rules**:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
   - Positional arguments must precede keyword arguments.
@@ -282,35 +251,35 @@ total_orders_in_1996 = regions.CALCULATE(
 
 - **WRONG USES**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
-    ```python 
+    thon 
     GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
         birth_year,
         email,
         n_people=COUNT(ppl)
     )
-    ```
+    
 
   - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-     ```python
+     thon
      GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     ) 
-    ```
+    
 
   - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALC so it is accessible as a named reference).
-     ```python
+     thon
     GROUP_BY(People, name='ppl', by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     ) 
-    ```
+    
 
-    ```python
+    thon
      suppliers_with_brass_parts = GROUP_BY(suppliers, name='supplier_group', by=(name, nation.name)).CALCULATE(
         supplier_name=name,
         nation_name=nation.name,
         total_quantity=SUM(supplier_group.supply_records.part.WHERE(CONTAINS(part_type, 'BRASS')).lines.quantity)
     ).WHERE(total_quantity > 1000) 
-    ```
+    
 
 - **Rules**:  
   - GROUP_BY keys must be scalar fields from the collection. 
@@ -460,7 +429,7 @@ total_orders_in_1996 = regions.CALCULATE(
 
   If there are multiple modifiers, they operate left-to-right.
   Usage examples:
-  ```python
+  thon
   # Returns the following datetime moments:
   # 1. The current timestamp
   # 2. The start of the current month
@@ -477,7 +446,7 @@ total_orders_in_1996 = regions.CALCULATE(
 
   # For each order, truncates the order date to the first day of the year
   Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
-  ```
+  
 
 * DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time:     years, months, days, hours, minutes, or seconds.
 
@@ -489,13 +458,13 @@ total_orders_in_1996 = regions.CALCULATE(
   - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
 
   - Example:
-  ```python
+  thon
   # Calculates, for each order, the number of days since January 1st 1992
   # that the order was placed:
   Orders.CALCULATE( 
     days_since=DATEDIFF("days", datetime.date(1992, 1, 1), order_date)
   )
-  ```
+  
 
 **CONDITIONAL FUNCTIONS**
 
@@ -647,7 +616,7 @@ total_orders_in_1996 = regions.CALCULATE(
 * **For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate**
   *Goal: Determine the transaction success rate for customers who have made at least five transactions*          
   *Code:* 
-  ```python                                                                                              
+  thon                                                                                              
   customer_transactions  = transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
   transaction_summary  = PARTITION(customer_transactions, name="t", by=(cust_id, cust_name)
                 ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
@@ -657,7 +626,7 @@ total_orders_in_1996 = regions.CALCULATE(
                     success_rate = success_tx / total_tx * 100
                     ).WHERE(total_tx >= 5)
   output = transaction_rate.CALCULATE(cust_name, success_rate)
-  ```
+  
 **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
