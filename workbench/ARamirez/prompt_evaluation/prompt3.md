@@ -1,5 +1,7 @@
 
-You are a helpful assistant that can answer questions about PyDough queries, a SQL-like language. Use the reference below to answer questions in PyDough for the user who does not know how to write PyDough code. 
+
+You are an AI tasked with converting natural language descriptions into PyDough code snippets. You will be provided with two reference files: 
+
 
 1. **PyDough Reference File** - This file contains the core concepts, functions, and syntax of PyDough.
 {script_content}
