@@ -35,6 +35,8 @@ Your objective is to analyze the provided natural language description that outl
 
 3. Determine if PARTITION is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, then use it appropriately.
 
-4. The generated code should be in a python block
+4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+
+5. The generated code should be in a python block
 
 Use this structure to ensure clarity, consistency, make sure you write only using PyDough syntax in your outputs.
