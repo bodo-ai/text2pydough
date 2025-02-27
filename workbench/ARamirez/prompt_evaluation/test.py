@@ -1,8 +1,20 @@
 import boto3
 import json
-brt = boto3.client(service_name='bedrock-runtime')
 
-formatted_prompt, questions_df["question"].tolist()
+import pandas as pd
+brt = boto3.client(service_name='bedrock-runtime')
+with open("./prompt3.md", "r", encoding="utf-8") as f:
+            prompt = f.read()
+
+with open("./cheatsheet_v4_examples.md", "r", encoding="utf-8") as f:
+            script_content = f.read()
+
+with open("./tcph_graph.md", "r", encoding="utf-8") as f:
+            database_content = f.read()
+
+        # Read Questions
+questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
+similar_code = questions_df["similar_queries"].tolist()
 
 def ask_claude(prompt, question):
     body = json.dumps({
