@@ -1,12 +1,5 @@
 # PYDOUGH CHEAT SHEET
 
-
-## Important notes:
-
-  - When using functions like TOP_K, ORDER_BY, you are expected to provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection.
-
-  - PyDough does not support use different childs in operations, for example you cannot do `total = SUM(orders.lines.extended_price * (1 - orders. lines. discount) )` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders. lines. CALCULATE(total = extended_price * (1 - discount) ) . total)`
-
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
 - **Syntax**: Access collections/sub-collections using dot notation.  
@@ -672,3 +665,9 @@ total_orders_in_1996 = regions.CALCULATE(
 *   For chained inequalities, use MONOTONIC or explicit comparisons.
     
 *   Aggregation functions convert plural values (e.g., collections) to singular values.
+
+*   When using functions like TOP_K, ORDER_BY, you are expected to provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection.
+
+* In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like ORDER_BY or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
+
+* PyDough does not support use different childs in operations, for example you cannot do `total = SUM(orders.lines.extended_price * (1 - orders. lines. discount) )` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders. lines. CALCULATE(total = extended_price * (1 - discount) ) . total)`
