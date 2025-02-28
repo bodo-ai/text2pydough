@@ -1,5 +1,3 @@
-
-
 You are an AI tasked with converting natural language descriptions into PyDough code snippets. You will be provided with two reference files: 
 
 
