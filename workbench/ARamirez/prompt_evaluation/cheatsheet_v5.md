@@ -496,4 +496,4 @@ Within a group_by, you must use the `name` argument to be able to access any pro
     
 *   For chained inequalities, use MONOTONIC or explicit comparisons.
     
-*   Aggregation functions convert plural values (e.g., collections) to singular values.
+*   Aggregation functions convert plural values (e.g.,collections) to singular values.
