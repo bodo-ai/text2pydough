@@ -658,14 +658,14 @@ total_orders_in_1996 = regions.CALCULATE(
                     ).WHERE(total_tx >= 5)
   output = transaction_rate.CALCULATE(cust_name, success_rate)
   
-**GENERAL NOTES**
+**IMPORTANT NOTES**
 
-*   Use &, |, ~ for logical operations (not and, or, not).
+*  Use &, |, ~ for logical operations (not and, or, not).
     
-*   For chained inequalities, use MONOTONIC or explicit comparisons.
+* For chained inequalities, use MONOTONIC or explicit comparisons.
     
-*   Aggregation functions convert plural values (e.g., collections) to singular values.
+* Aggregation functions convert plural values (e.g., collections) to singular values.
 
-*   When using functions like TOP_K, ORDER_BY, you must provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection.
+* When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
 * GROUP_BY function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions.
