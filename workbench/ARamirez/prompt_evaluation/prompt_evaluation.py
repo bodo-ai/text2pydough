@@ -55,7 +55,9 @@ WORDS_MAP = {
     "round": "ROUND",
     "power": "POWER",
     "sqrt": "SQRT",
-    "calculate": "CALCULATE"
+    "calculate": "CALCULATE",
+    "asc": "ASC",
+    "desc": "DESC"
 }
 
 def replace_with_upper(text):
