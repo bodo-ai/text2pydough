@@ -57,7 +57,9 @@ WORDS_MAP = {
     "sqrt": "SQRT",
     "calculate": "CALCULATE",
     "asc": "ASC",
-    "desc": "DESC"
+    "desc": "DESC",
+    "datetime": "DATETIME",
+    "datediff": "DATEDIFF"
 }
 
 def replace_with_upper(text):
