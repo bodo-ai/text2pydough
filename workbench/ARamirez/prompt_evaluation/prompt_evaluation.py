@@ -109,7 +109,7 @@ def get_azure_response(client, prompt, question, model_id):
         print(f"Azure AI error: {e}")
         return None
 
-def get_other_provider_response(client, provider, model_id, prompt, question):
+def get_other_provider_response(client, provider, model_id, prompt, question,temperature):
     """Generates a response using aisuite."""
     messages = [
         {"role": "system", "content": prompt},
@@ -124,14 +124,14 @@ def get_other_provider_response(client, provider, model_id, prompt, question):
         response = client.chat.completions.create(
             model=f"{provider}:{model_id}",
             messages=messages,
-            temperature= 0.0
+            temperature= temperature
         )
         return response.choices[0].message.content
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
 
-def process_questions(provider, model_id, formatted_prompt, questions):
+def process_questions(provider, model_id, formatted_prompt, questions, temperature):
     responses = []
     
     if provider == "azure":
@@ -139,7 +139,7 @@ def process_questions(provider, model_id, formatted_prompt, questions):
         get_response = lambda q: get_azure_response(client, formatted_prompt, q, model_id)
     else:
         client = ai.Client()
-        get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q)
+        get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q, temperature)
     
     with ThreadPoolExecutor(max_workers=20) as executor:
         responses = list(executor.map(get_response, questions))
@@ -158,22 +158,16 @@ def main(git_hash):
     parser.add_argument("--questions_csv", type=str, help="Path to the questions CSV file.")
     parser.add_argument("--provider", type=str, help="Model provider (either 'azure' or another provider).")
     parser.add_argument("--model_id", type=str, help="Model ID.")
-   # Use `store_true` to set eval_results to True if argument is passed
+    parser.add_argument("--temperature", type=float, help="Set the temperature to the model")
     parser.add_argument("--eval_results", action="store_true", help="Evaluate the LLM output against the ground truth data.")
-    
-    # Use `store_false` if --no-eval_results is passed
-    parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
-
-   # Use `store_true` to set eval_results to True if argument is passed
     parser.add_argument("--eval_benchmark", action="store_true", help="Evaluate the TPCH Benchmark")
-    
-    # Use `store_false` if --no-eval_results is passed
-    parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not Evaluate the TPCH Benchmark")
+    parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
+    parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not evaluate the TPCH Benchmark")
 
-    # Default value for eval_results is False
+    # Default value for eval_results and eval_benchmark is False
     parser.set_defaults(eval_results=False, eval_benchmark=False)
     args = parser.parse_args()
-
+    
     # Create result directory if not exists
     folder_path = f"./results/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
@@ -201,7 +195,7 @@ def main(git_hash):
         formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
-        responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist())
+        responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist(), args.temperature)
 
         # Save responses
         questions_df["response"] = responses
@@ -228,8 +222,18 @@ def main(git_hash):
         if args.eval_benchmark:
             folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
             os.makedirs(folder_path, exist_ok=True)
+            questions_df = pd.read_csv("./TPCH Queries - All Queries.csv", encoding="utf-8")
+            # Format prompt once
+            formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
-            output_file, responses= compare_output(folder_path,"./TPCH Queries - All Queries.csv", "./test_data/tpch.db")
+            # Process questions
+            responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist(), args.temperature)
+            questions_df["response"] = responses
+            output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
+
+            questions_df.to_csv(output_file, index=False, encoding="utf-8")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
