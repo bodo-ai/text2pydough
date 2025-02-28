@@ -130,7 +130,7 @@ def get_other_provider_response(client, provider, model_id, prompt, question,tem
     ]
     
     try:
-        time.sleep(0.9)
+        time.sleep(0.5)
         response = client.chat.completions.create(
             model=f"{provider}:{model_id}",
             messages=messages,
@@ -152,7 +152,7 @@ def process_questions(provider, model_id, formatted_prompt, questions, temperatu
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q, temperature)
     
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
