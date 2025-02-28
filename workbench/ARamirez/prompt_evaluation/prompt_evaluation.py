@@ -99,7 +99,7 @@ def extract_python_code(text):
     if match:
         python_code = match.group(1).strip()
         # Convert the extracted code to uppercase
-        return python_code.lower()
+        return python_code
     else:
         return ""
 
@@ -122,11 +122,11 @@ def get_azure_response(client, prompt, question, model_id):
 def get_other_provider_response(client, provider, model_id, prompt, question,temperature):
     """Generates a response using aisuite."""
     messages = [
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": question},
+        #{"role": "system", "content": prompt},
+        #{"role": "user", "content": question},
 
-        #{"role": "system", "content": "You are a helpful assistant that can answer questions about PyDough queries a SQL-like language. Use the reference below to answer questions in PyDough "},
-        #{"role": "user", "content": f"Using the following reference: {prompt} \n Answer the following question: {question}"},
+        {"role": "system", "content": "You are an AI tasked with converting natural language descriptions into PyDough code snippets. You will be provided with two reference files"},
+        {"role": "user", "content": f"{prompt} \n Answer the user question: {question}"},
     ]
     
     try:
