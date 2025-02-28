@@ -130,7 +130,7 @@ def get_other_provider_response(client, provider, model_id, prompt, question,tem
     ]
     
     try:
-        time.sleep(0.9)
+        time.sleep(0.5)
         response = client.chat.completions.create(
             model=f"{provider}:{model_id}",
             messages=messages,
