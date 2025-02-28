@@ -6,8 +6,6 @@
 
   - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
 
-  - LIKE, CONTAINS, STARTSWITH and ENDSWITH needs 2 arguments. 
-
   - In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
 
   - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
