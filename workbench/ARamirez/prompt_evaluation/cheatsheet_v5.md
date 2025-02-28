@@ -132,7 +132,7 @@
 
 **Rules**: Aggregations Function does not support calling aggregations inside of aggregations
 
-**7. Grouping By (GROUP_BY)**  
+**7. Grouping (GROUP_BY)**  
 
 - **Purpose**: Group records by keys.  
 
@@ -496,4 +496,4 @@ Within a group_by, you must use the `name` argument to be able to access any pro
     
 *   For chained inequalities, use MONOTONIC or explicit comparisons.
     
-*   Aggregation functions convert plural values (e.g.,collections) to singular values.
+*   Aggregation functions convert plural values (e.g., collections) to singular values.
