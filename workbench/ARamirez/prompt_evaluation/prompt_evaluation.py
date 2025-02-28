@@ -126,7 +126,7 @@ def get_other_provider_response(client, provider, model_id, prompt, question,tem
         #{"role": "user", "content": question},
 
         {"role": "system", "content": "You are an AI tasked with converting natural language descriptions into PyDough code snippets. You will be provided with two reference files"},
-        {"role": "assistant", "content": f"{prompt} \n Answer the user question: {question}"},
+        {"role": "user", "content": f"{prompt} \n User's question: {question}"},
     ]
     
     try:
