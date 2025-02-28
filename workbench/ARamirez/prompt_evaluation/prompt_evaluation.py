@@ -152,7 +152,7 @@ def process_questions(provider, model_id, formatted_prompt, questions, temperatu
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q, temperature)
     
-    with ThreadPoolExecutor(max_workers=1) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
@@ -271,7 +271,8 @@ def main(git_hash):
                 "prompt": prompt,
                 "questions_file": args.questions_csv,
                 "provider": args.provider,
-                "model_id": args.model_id
+                "model_id": args.model_id,
+                "temperature": args.temperature
             }
         )
        
