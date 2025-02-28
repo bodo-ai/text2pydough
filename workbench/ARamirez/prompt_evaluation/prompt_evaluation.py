@@ -122,11 +122,11 @@ def get_azure_response(client, prompt, question, model_id):
 def get_other_provider_response(client, provider, model_id, prompt, question,temperature):
     """Generates a response using aisuite."""
     messages = [
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": question},
+        #{"role": "system", "content": prompt},
+        #{"role": "user", "content": question},
 
-        #{"role": "system", "content": "You are a helpful assistant that can answer questions about PyDough queries a SQL-like language. Use the reference below to answer questions in PyDough "},
-        #{"role": "user", "content": f"Using the following reference: {prompt} \n Answer the following question: {question}"},
+        {"role": "system", "content": "You are a helpful assistant that can answer questions about PyDough queries a SQL-like language."},
+        {"role": "user", "content": f"{prompt} \n User request: {question}"},
     ]
     
     try:
