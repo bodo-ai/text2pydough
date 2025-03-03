@@ -92,12 +92,12 @@ def extract_python_code(text):
 class Result:
     def __init__(self, pydough_code=None, full_explanation=None, df=None, exception=None, original_question=None,
                  sql_output=None, base_prompt=None, cheat_sheet=None, knowledge_graph=None):
-        self.pydough_code = pydough_code
+        self.code = pydough_code
         self.full_explanation = full_explanation
         self.df = df
         self.exception = exception
         self.original_question = original_question
-        self.sql_output = sql_output
+        self.sql = sql_output
         self.base_prompt = base_prompt
         self.cheat_sheet = cheat_sheet
         self.knowledge_graph = knowledge_graph
@@ -167,19 +167,19 @@ class LLMClient:
             extracted_code = extract_python_code(response)
             extracted_code = replace_with_upper(extracted_code)
             
-            # Generate SQL and Pydough DataFrame
+            # Fill the result object
+            result.code = extracted_code
+            result.full_explanation = response
+            result.base_prompt = self.prompt
+            result.cheat_sheet = self.script
+            result.knowledge_graph = self.database
+            
             pydough_sql = self.get_pydough_sql(extracted_code)
             pydough_df = self.get_pydough_code(extracted_code)
             
-            # Fill the result object
-            result.pydough_code = extracted_code
-            result.full_explanation = response
             result.df = pydough_df
-            result.sql_output = pydough_sql
-            result.base_prompt = self.prompt
-            result.cheat_sheet = self.script
-            result.database = self.database
-            
+            result.sql = pydough_sql
+
             return result
         
         except Exception as e:
