@@ -54,7 +54,12 @@ WORDS_MAP = {
     "abs": "ABS",
     "round": "ROUND",
     "power": "POWER",
-    "sqrt": "SQRT"
+    "sqrt": "SQRT",
+    "calculate": "CALCULATE",
+    "asc": "ASC",
+    "desc": "DESC",
+    "datetime": "DATETIME",
+    "datediff": "DATEDIFF"
 }
 
 def replace_with_upper(text):
@@ -91,7 +96,12 @@ def extract_python_code(text):
         return ""
 
     match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
-    return match.group(1).strip() if match else ""
+    if match:
+        python_code = match.group(1).strip()
+        # Convert the extracted code to uppercase
+        return python_code
+    else:
+        return ""
 
 def get_azure_response(client, prompt, question, model_id):
     """Generates a response using Azure AI."""
@@ -130,6 +140,7 @@ def get_other_provider_response(client, provider, model_id, prompt, question,tem
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
+
 
 def process_questions(provider, model_id, formatted_prompt, questions, temperature):
     responses = []
@@ -260,7 +271,8 @@ def main(git_hash):
                 "prompt": prompt,
                 "questions_file": args.questions_csv,
                 "provider": args.provider,
-                "model_id": args.model_id
+                "model_id": args.model_id,
+                "temperature": args.temperature
             }
         )
        
