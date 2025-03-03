@@ -8,7 +8,7 @@
   - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
 
   - GROUP_BY function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated in CALCULATE, because the parameter only accept expressions.
-  
+
   - In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
 
   - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
@@ -143,7 +143,7 @@
 
   - **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
 
-  - **IMPORTANT**: Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
+  - **IMPORTANT**: All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
 
 - **Good Examples**:  
 
@@ -157,6 +157,7 @@
   - **Group packages by year/month**:  
     GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
+**AVOID TO DO**:
 - **Bad Examples**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group_by.
     GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
