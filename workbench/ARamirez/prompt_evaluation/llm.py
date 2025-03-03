@@ -184,7 +184,7 @@ class LLMClient:
         
         except Exception as e:
             # If any exception occurs, capture it in the result object
-            result.exception = str(e)
+            result.exception = e
             return result
         
     def correct(self, result):
@@ -204,7 +204,7 @@ class LLMClient:
 
             except Exception as e:
                 # Return a new Result object with the new exception
-                return Result(original_question=result.original_question, exception=str(e))
+                return Result(original_question=result.original_question, exception=e)
 
         else:
             # If no exception, return the original result
