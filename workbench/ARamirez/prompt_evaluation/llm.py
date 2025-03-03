@@ -89,6 +89,19 @@ def extract_python_code(text):
 
     return combined_code
 
+class Result:
+    def __init__(self, pydough_code=None, full_explanation=None, df=None, exception=None, original_question=None,
+                 sql_output=None, base_prompt=None, cheat_sheet=None, knowledge_graph=None):
+        self.pydough_code = pydough_code
+        self.full_explanation = full_explanation
+        self.df = df
+        self.exception = exception
+        self.original_question = original_question
+        self.sql_output = sql_output
+        self.base_prompt = base_prompt
+        self.cheat_sheet = cheat_sheet
+        self.knowledge_graph = knowledge_graph
+
 class PydoughCodeError(Exception):
     """Custom exception for errors related to Pydough code execution."""
     pass
@@ -98,47 +111,80 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, provider, model, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md"):
+    def __init__(self, provider, model, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.0):
         """
         Initializes the LLMClient with the provider and model.
         """
         self.provider = provider
         self.model = model
         self.client = ai.Client()
-        prompt= read_file(prompt_file)
-        script_content= read_file(script_file)
-        database_content= read_file(database_file)
-        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content)
-        self.prompt_file = formatted_prompt
+        self.prompt = read_file(prompt_file)
+        self.script = read_file(script_file)
+        self.database = read_file(database_file)
+        self.temperature = temperature
         
 
+    def get_pydough_sql(self,text):
+            try:
+                local_env = {"pydough": pydough, "datetime": datetime}
+                
+                transformed_source = transform_cell(text, "pydough.active_session.metadata", set(local_env))
+                exec(transformed_source, {}, local_env)
+                last_variable = list(local_env.values())[-1]
+                result_sql = pydough.to_sql(last_variable)
+                return result_sql
+            except Exception as e:
+                raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
+            
     def get_pydough_code(self,text):
         try:
             local_env = {"pydough": pydough, "datetime": datetime}
-            extracted_code = extract_python_code(text)
-            extracted_code = replace_with_upper(extracted_code)
-            transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
+            
+            transformed_source = transform_cell(text, "pydough.active_session.metadata", set(local_env))
             exec(transformed_source, {}, local_env)
             last_variable = list(local_env.values())[-1]
             result_df = pydough.to_df(last_variable)
-            return extracted_code, result_df
+            return result_df
         except Exception as e:
            raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
     
     def ask(self, question):
-        """Generates a response using aisuite."""
-        messages = [{"role": "system", "content": self.prompt_file}, {"role": "user", "content": question}]
+        """Generates a response using aisuite and returns a Result object."""
+        # Initialize the result object to ensure it is always created
+        result = Result(original_question=question)
+
         try:
-            response = self.client.chat.completions.create(
+            formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+            messages = [{"role": "system", "content": formatted_prompt}, {"role": "user", "content": question}]
+            completion = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model}",
                 messages=messages,
-                temperature=0.0
+                temperature=self.temperature
             )
             
-            code,pydough_df= self.get_pydough_code(response.choices[0].message.content)
-            return code, pydough_df
+            # Extract and process the response
+            response = completion.choices[0].message.content
+            extracted_code = extract_python_code(response)
+            extracted_code = replace_with_upper(extracted_code)
+            
+            # Generate SQL and Pydough DataFrame
+            pydough_sql = self.get_pydough_sql(extracted_code)
+            pydough_df = self.get_pydough_code(extracted_code)
+            
+            # Fill the result object
+            result.pydough_code = extracted_code
+            result.full_explanation = response
+            result.df = pydough_df
+            result.sql_output = pydough_sql
+            result.base_prompt = self.prompt
+            result.cheat_sheet = self.script
+            result.database = self.database
+            
+            return result
+        
         except Exception as e:
-            raise PydoughCodeError(f"An error occurred while asking the llm: {str(e)}")
-    
+            # If any exception occurs, capture it in the result object
+            result.exception = str(e)
+            return result
 
 # %%
