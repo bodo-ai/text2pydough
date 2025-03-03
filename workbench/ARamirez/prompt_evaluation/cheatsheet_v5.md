@@ -1,7 +1,8 @@
 **PYDOUGH CHEAT SHEET**  
 
 **VERY IMPORTANT NOTES**: 
-
+  -  You must ensure the correct use of functions by calling them with the right parameters.
+  
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
   - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
