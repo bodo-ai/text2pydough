@@ -11,6 +11,8 @@
 
   - In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
 
+  - CALCULATE cannot have plural expressions. Instead, use aggregation functions such as SUM(), AVG(), COUNT(), etc., to perform the necessary calculations on the data.
+  
   - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
 
   - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, you cannot do: `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULAT(supplier_name=supplier_name,total_sales=total_sales)` because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections. 
