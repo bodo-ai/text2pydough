@@ -31,5 +31,5 @@ Your objective is to analyze the provided natural language description that outl
 
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
-5. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does.
+5. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does, step by step
 Use this structure to ensure clarity, consistency, and adherence to PyDough syntax in your outputs.
