@@ -1,8 +1,7 @@
 **PYDOUGH CHEAT SHEET**  
 
 **VERY IMPORTANT NOTES**: 
-
-  - You must make sure the functions are callable by passing all the parameters.
+  -  You must ensure the correct use of functions by calling them with the right parameters.
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
