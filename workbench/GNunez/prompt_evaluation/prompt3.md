@@ -27,9 +27,7 @@ Your objective is to analyze the provided natural language description that outl
    - Adheres to the syntax and structure outlined in the PyDough Reference File.
    - Returns only the exact data requested, without adding additional fields or information.
 
-3. Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
+3. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
-4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
-
-5. The reasoning process should be included in the answer. The generated code should be enclosed in a Python code block.
+4. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does, step by step
 Use this structure to ensure clarity, consistency, and adherence to PyDough syntax in your outputs.
