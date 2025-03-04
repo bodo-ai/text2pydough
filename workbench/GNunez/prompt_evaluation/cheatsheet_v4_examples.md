@@ -185,7 +185,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
     
     *   by: Ordering criteria (e.g., acctbal.DESC()).
         
-    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking).
+    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking). Must be a positive integer.
         
     *   allow\_ties (default False): Allow tied ranks.
         
