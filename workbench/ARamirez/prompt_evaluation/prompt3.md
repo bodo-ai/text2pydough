@@ -25,6 +25,7 @@ Your objective is to analyze the provided natural language description that outl
    - Ensures proper indentation.
    - Follows the rules for using contextless expressions properly.
    - Adheres to the syntax and structure outlined in the PyDough Reference File.
+   - Make sure the functions are callable by passing all the parameters.
    - Returns only the exact data requested, without adding additional fields or information.
 
 3. Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
