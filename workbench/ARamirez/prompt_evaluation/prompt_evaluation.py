@@ -13,6 +13,7 @@ from azure.core.pipeline.transport import RequestsTransport
 import mlflow
 from test_data.eval import compare_output
 from utils import autocommit, get_git_commit, modified_files, untracked_files
+from claude import ClaudeModel
 
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -145,13 +146,16 @@ def get_other_provider_response(client, provider, model_id, prompt, question,tem
 def process_questions(provider, model_id, formatted_prompt, questions, temperature):
     responses = []
     
+
     if provider == "azure":
         client = setup_azure_client()
         get_response = lambda q: get_azure_response(client, formatted_prompt, q, model_id)
+    elif provider=="aws-thinking":
+        client = ClaudeModel()
+        get_response = lambda q: client.ask_claude_with_stream(q, formatted_prompt, model_id, provider)
     else:
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q, temperature)
-    
     with ThreadPoolExecutor(max_workers=20) as executor:
         responses = list(executor.map(get_response, questions))
 
