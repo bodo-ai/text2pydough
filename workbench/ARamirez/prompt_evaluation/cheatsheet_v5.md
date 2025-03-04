@@ -27,10 +27,37 @@
 
 **2. CALCULATE EXPRESSIONS**  
 
-- **Purpose**: Derive new fields, rename existing ones or select specific fields.  
+- **Purpose**: Derive new fields, rename existing ones or select specific fields. 
+
+- **Key Features**:
+    - Positional Arguments: Use existing property names or get auto-generated names.
+
+    - Keyword Arguments: Explicitly name output fields (e.g., full_name=...).
+
+    - Scope: All original collection properties remain accessible but aren't included in the final output unless explicitly added.
+
+    - Overrides: Duplicate names in CALCULATE override existing properties.
+
+    - Order Matters: Terms in the same CALCULATE cannot reference each other. Use multiple CALCULATE steps for dependencies.
+
+    - Graph-Level Aggregation: Use GRAPH.CALCULATE() to compute global metrics (e.g., total counts). 
+
 
 - **Syntax**:  
   Collection.CALCULATE(field=expression, ...)  
+
+- **Valid Expressions**
+  - Expressions must be singular in the current context. Valid types include:
+
+  - Scalar properties (e.g., first_name).
+
+  - Literals (e.g., "alphabet soup").
+
+  - Singular sub-collections (e.g., customer.first_name).
+
+  - Non-aggregate functions on singular values (e.g., YEAR(...)).
+
+  - Aggregate functions on plural sub-collections (e.g., COUNT(packages)).
 
 - **Examples**:  
 
