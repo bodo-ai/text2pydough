@@ -110,7 +110,7 @@ import os
 def format_prompt(prompt, data, question, database_content, similar_code):
     ids = data[question]["context_id"]
     contexts = (
-        open(f"./pydough_files/{id}", 'r').read() if os.path.exists(id) else ''
+        open(f"./pydough_files/{id}", 'r').read() if os.path.exists(f"./pydough_files/{id}") else ''
         for id in ids
     )
     
