@@ -223,7 +223,7 @@ def main(git_hash):
             database_content = f.read()
 
         with open("./queries_context.json","r") as json_data:
-            data = json.loads(json_data)
+            data = json.load(json_data)
 
         script_content = pd.read_csv(args.script_file, encoding="utf-8")
         context_dict = dict(zip(script_content['id'], script_content['context']))
