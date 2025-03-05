@@ -38,4 +38,4 @@ Your objective is to analyze the provided natural language description that outl
 
 5. The generated code should be in a python block
 
-Use this structure to ensure clarity, consistency, make sure you write only using PyDough syntax in your outputs.
+Make sure you write only using PyDough syntax in your outputs.
