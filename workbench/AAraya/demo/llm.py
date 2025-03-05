@@ -111,12 +111,15 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, provider = "aws", model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0", database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.0):
+    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.0):
         """
         Initializes the LLMClient with the provider and model.
         """
-        self.provider = provider
-        self.model = model
+        default_provider = "aws"
+        default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    
+        self.provider = default_provider
+        self.model = default_model
         self.client = ai.Client()
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
