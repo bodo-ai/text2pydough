@@ -1,8 +1,8 @@
 **VERY IMPORTANT NOTES**
 
-  - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific ""k"" number of records.
+  - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
   
-  - TOP_K function ALWAYS need 2 parameters `k and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. 
+  - TOP_K function ALWAYS need 2 parameters `k and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. The k is the number of records you want to return
 
 **SORTING (ORDER_BY)**  
 
