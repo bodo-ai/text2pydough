@@ -1,16 +1,4 @@
-**PYDOUGH CHEAT SHEET**  
-
-**VERY IMPORTANT NOTES**: 
-
-  - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
-
-  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. 
-
-  - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
-
-  - In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
-
-  - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
+# PYDOUGH CHEAT SHEET
 
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
@@ -28,7 +16,12 @@
 **2. CALCULATE EXPRESSIONS**  
 
 - **Purpose**: Derive new fields, rename existing ones or select specific fields.  
-
+  The value of one of these terms in a `CALCULATE` must be expressions that are singular with regards to the current context. That can mean:
+  - Referencing one of the scalar properties of the current collection.
+  - Creating a literal.
+  - Referencing a singular expression of a sub-collection of the current collection that is singular with regards to the current collection.
+  - Calling a non-aggregation function on more singular expressions.
+  - Calling an aggregation function on a plural expression.
 - **Syntax**:  
   Collection.CALCULATE(field=expression, ...)  
 
@@ -43,16 +36,138 @@
         cost_per_unit=package_cost / quantity  
     )  
 
+**Good Example #1**: For every person, fetch just their first name and last name.
+
+People.CALCULATE(first_name, last_name)
+
+**Good Example #2**: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
+
+Packages.CALCULATE(
+    package_id,
+    first_name=customer.first_name,
+    last_name=customer.last_name,
+    shipping_state=shipping_address.state,
+    secret_key="alphabet soup",
+)
+
+**Good Example #3**: For every person, find their full name (without the middle name) and count how many packages they purchased.
+
+People.CALCULATE(
+    name=JOIN_STRINGS("", first_name, last_name),
+    n_packages_ordered=COUNT(packages),
+)
+
+**Good Example #4**: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
+
+People.CALCULATE(
+    has_middle_name=PRESENT(middle_name)
+    full_name_with_middle=JOIN_STRINGS(" ", first_name, middle_name, last_name),
+    full_name_without_middle=JOIN_STRINGS(" ", first_name, last_name),
+).CALCULATE(
+    full_name=IFF(has_middle_name, full_name_with_middle, full_name_without_middle),
+    email=email,
+)
+
+**Good Example #5**: For every person, find the year of the most recent package they purchased and the year of their first package purchase.
+
+People.CALCULATE(
+    most_recent_package_year=YEAR(MAX(packages.order_date)),
+    first_ever_package_year=YEAR(MIN(packages.order_date)),
+)
+
+**Good Example #6**: Count how many people, packages, and addresses are known in the system.
+
+GRAPH.CALCULATE(
+    n_people=COUNT(People),
+    n_packages=COUNT(Packages),
+    n_addresses=COUNT(Addresses),
+)
+
+**Good Example #7**: For each package, list the package id and whether the package was shipped to the current address of the person who ordered it.
+
+Packages.CALCULATE(
+    package_id,
+    shipped_to_curr_addr=shipping_address.address_id == customer.current_address.address_id
+)
+
+**WRONG USES:**
+**Bad Example #1**: For each person, list their first name, last name, and phone number. This is invalid because `People` does not have a property named `phone_number`.
+
+People.CALCULATE(first_name, last_name, phone_number)
+
+**Bad Example #2**: For each person, list their combined first & last name followed by their email. This is invalid because a positional argument is included after a keyword argument.
+
+People.CALCULATE(
+    full_name=JOIN_STRINGS(" ", first_name, last_name),
+    email
+)
+
+**Bad Example #3**: For each person, list the address_id of packages they have ordered. This is invalid because `packages` is a plural property of `People`, so its properties cannot be included in a `CALCULATE` term of `People` unless aggregated.
+
+People.CALCULATE(packages.address_id)
+
+**Bad Example #4**: For each person, list their first/last name followed by the concatenated city/state name of their current address. This is invalid because `current_address` is a plural property of `People`, so its properties cannot be included in a `CALCULATE` term of `People` unless aggregated.
+
+People.CALCULATE(
+    first_name,
+    last_name,
+    location=JOIN_STRINGS(", ", current_address.city, current_address.state),
+)
+
+**Bad Example #5**: For each address, find whether the state name starts with `"C"`. This is invalid because it calls the builtin Python `.startswith` string method, which is not supported in PyDough (should have instead used a defined PyDough behavior, like the `STARTSWITH` function).
+
+Addresses.CALCULATE(is_c_state=state.startswith("c"))
+
+**Bad Example #6**: For each address, find the state bird of the state it is in. This is invalid because the `state` property of each record of `Addresses` is a scalar expression, not a subcolleciton, so it does not have any properties that can be accessed with `.` syntax.
+
+Addresses.CALCULATE(state_bird=state.bird)
+
+**Bad Example #7**: For each current occupant of each address, list their first name, last name, and city/state they live in. This is invalid because `city` and `state` are not properties of the current collection (`People`, accessed via `current_occupants` of each record of `Addresses`).
+
+Addresses.current_occupants.CALCULATE(first_name, last_name, city, state)
+
+**Bad Example #8**: For each person include their ssn and current address. This is invalid because a collection cannot be a `CALCULATE` term, and `current_address` is a sub-collection property of `People`. Instead, properties of `current_address` can be accessed.
+
+People.CALCULATE(ssn, current_address)
+
+**Bad Example #9**: For each person, list their first name, last name, and the sum of the package costs. This is invalid because `SUM` is an aggregation function and cannot be used in a `CALCULATE` term without specifying the sub-collection it should be applied to.
+
+People.CALCULATE(first_name, last_name, total_cost=SUM(package_cost))
+
+**Bad Example #9**: For each person, list their first name, last name, and the ratio between the cost of all packages they apply ordered and the number of packages they ordered. This is invalid the `total_cost` and `n_packages` are used to define `ratio` in the same `CALCULATE` where they are defined.
+
+People.CALCULATE(
+    first_name,
+    last_name,
+    total_cost=SUM(packages.package_cost),
+    n_packages=COUNT(packages),
+    ratio=total_cost/n_packages,
+)
+
+**Bad Example #10**: Find the total orders placed by region in 1996. This is invalid since `customers` has no field called `orders_1996`. The variable `orders_1996` can only be used to substitute in a contextless expression, not to access a subcollection of a current context. 
+
+orders_1996 = orders.WHERE(YEAR(order_date) == 1996)
+total_orders_in_1996 = regions.CALCULATE(
+    region_name=name,
+    total_orders=COUNT(nations.customers.orders_1996)
+).TOP_K(1, by=total_orders.DESC())
+
+**Bad Example #11**: Find the total orders placed and total discount by region in 1996. This is invalid since `customers` has no field called `orders_1996`. The variable `orders_1996` can only be used to substitute in a contextless expression, not to access a subcollection of a current context. 
+
+orders_1996 = orders.WHERE(YEAR(order_date) == 1996)
+total_orders_in_1996 = regions.CALCULATE(
+    region_name=name,
+    total_orders=COUNT(nations.customers.orders_1996)
+    total_discount=SUM(nations.customers.orders_1996.lines.discount)
+).TOP_K(1, by=total_orders.DESC())
+
 - **Rules**:  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
-
   - Positional arguments must precede keyword arguments.
-
   - Terms defined in a CALCULATE do not take effect until after the CALCULATE completes.
-
   - Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
-
   - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
+  - Avoid using collections directly in a CALCULATE term
 
 **3. FILTERING (WHERE)**  
 
@@ -91,21 +206,19 @@
 
   .DESC(na_pos='first') → Sort descending, nulls first.
 
-**5. SORTING TOP_K(k, by=field.DESC())**  
-
-  **IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
+**5. SORTING (TOP_K)**  
 
 - **Select top k records.**
 
 - **Syntax:**  
   .TOP_K(k, by=field.DESC())
-
+   
+- **Params:**
+  k= the number of records to return
+  by= he field to sort by, with optional sorting order
 - **Example:**  
   Top 10 customers by orders count:  
   customers.TOP_K(10, by=COUNT(orders).DESC())
-
-  Top 10 customers by orders count (but also selecting only the name):  
-  customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())
 
 **6. AGGREGATION FUNCTIONS**  
 
@@ -132,51 +245,62 @@
 
 **Rules**: Aggregations Function does not support calling aggregations inside of aggregations
 
-**7. PARTITION**  
+**7. grouping (GROUP_BY)**  
 
 - **Purpose**: Group records by keys.  
 
-- **Syntax**: PARTITION(Collection, name='group_name', by=(key1, key2))  
-
-  - **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
-
-  - **IMPORTANT**: Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
+- **Syntax**: GROUP_BY(Collection, name='group_name', by=(key1, key2))  
 
 - **Good Examples**:  
 
   - **Group addresses by state and count occupants**:  
-    PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
-        state=state,  
+    GROUP_BY(Addresses, name='addrs', by=state).CALCULATE(  
+        state,  
         total_occupants=COUNT(addrs.current_occupants)  
     )  
-    **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
 
   - **Group packages by year/month**:  
-    PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
+    GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
-- **Bad Examples**:
-  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
-    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
+- **WRONG USES**:
+  - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group by.
+     
+    GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year).CALCULATE(
         birth_year,
         email,
         n_people=COUNT(ppl)
     )
+    
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group by term (it must be placed in a CALCULATE so it is accessible as a named reference).
+     
+     GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
-    )
+    ) 
+    
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group by term (it must be placed in a CALCULATE so it is accessible as a named reference).
+     
+    GROUP_BY(People, name='ppl', by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
-    )
+    ) 
 
-- **Rules**: 
-Partition keys must be scalar fields from the collection. 
-You must use Aggregation functions to call plural values inside PARTITION.
-Within a partition, you must use the `name` argument to be able to access any property or subcollections. 
+     suppliers_with_brass_parts = GROUP_BY(suppliers, name='supplier_group', by=(name, nation.name)).CALCULATE(
+        supplier_name=name,
+        nation_name=nation.name,
+        total_quantity=SUM(supplier_group.supply_records.part.WHERE(CONTAINS(part_type, 'BRASS')).lines.quantity)
+    ).WHERE(total_quantity > 1000) 
+    
 
+- **Rules**:  
+  - GROUP_BY keys must be scalar fields from the collection. 
+  - You must use Aggregation functions to call plural values inside GROUP_BY. 
+  - Within a group_by, you must use the `name` argument to be able to access any property or subcollections. 
+  - Functions, expressions, or transformations (e.g., YEAR(order_date)) cannot be used directly in GROUP_BY Instead, create a named reference using CALCULATE before using it in GROUP_BY.
+  - Directly referencing nested attributes (e.g., table.column.subfield) in GROUP_BY is not allowed. 
+  - Assign the nested value to a named reference using CALCULATE before grouping.
+  - All terms in a grouping or grouping expression must be singular. Plural expressions, such as lines.part.name, refer to multiple values and cannot be used directly. Instead, aggregate the datas
+  
 **8. WINDOW FUNCTIONS**  
 
 - **RANKING:**  
@@ -185,7 +309,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
     
     *   by: Ordering criteria (e.g., acctbal.DESC()).
         
-    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking). Must be a positive integer.
+    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking).
         
     *   allow\_ties (default False): Allow tied ranks.
         
@@ -220,6 +344,30 @@ Within a partition, you must use the `name` argument to be able to access any pr
 
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
+
+  is_february = MONTH(order_date) == 2
+
+  february_value = KEEP_IF(package_cost, is_february)
+  aug_packages = packages.CALCULATE(
+      is_february=is_february,
+      february_value=february_value,
+      is_valentines_day=is_february & (DAY(order_date) == 14)
+  )
+  n_feb_packages = SUM(aug_packages.is_february)
+  People.CALCULATE(
+      ssn,
+      total_february_value=SUM(aug_packages.february_value),
+      n_february_packages=n_feb_packages,
+      most_expensive_february_package=MAX(aug_packages.february_value),
+      pct_valentine=n_feb_packages / SUM(aug_packages.is_valentines_day)
+  )
+- **Rules**:
+  - Only use them in contexts where all referenced fields exist.
+  - Use variables only as expression substitutes, not for accessing non-existent subcollections.
+  - Each contextless expression should represent a complete calculation.
+  - Only use with collections containing all required fields.
+  - Using a contextless expression should work the same as writing the code directly in-context.
+  - Don't use to define standalone collection operations without proper context.
 
 **BINARY OPERATORS****Arithmetic**
 
@@ -316,7 +464,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
 
   If there are multiple modifiers, they operate left-to-right.
   Usage examples:
-  ```python
+  
   # Returns the following datetime moments:
   # 1. The current timestamp
   # 2. The start of the current month
@@ -333,7 +481,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
 
   # For each order, truncates the order date to the first day of the year
   Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
-  ```
+  
 
 * DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time:     years, months, days, hours, minutes, or seconds.
 
@@ -345,14 +493,12 @@ Within a partition, you must use the `name` argument to be able to access any pr
   - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
 
   - Example:
-  ```python
-  # Calculates, for each order, the number of days since January 1st 1992
-  # that the order was placed:
+  
+  # Calculates, for each order, the number of days since January 1st 1992 that the order was placed:
   Orders.CALCULATE( 
     days_since=DATEDIFF("days", datetime.date(1992, 1, 1), order_date)
   )
-  ```
-
+  
 **CONDITIONAL FUNCTIONS**
 
 *   IFF(cond, a, b): Returns a if cond is True, else b.Example: IFF(acctbal > 0, acctbal, 0).
@@ -369,7 +515,6 @@ Within a partition, you must use the `name` argument to be able to access any pr
     
 *   MONOTONIC(a, b, c): Checks ascending order.Example: MONOTONIC(5, part.size, 10) → True/False.
     
-
 **NUMERICAL FUNCTIONS**
 
 *   ABS(x): Absolute value.Example: ABS(-5) → 5.
@@ -380,7 +525,6 @@ Within a partition, you must use the `name` argument to be able to access any pr
     
 *   SQRT(x): Square root of x.Example: SQRT(16) → 4.
     
-
 **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
@@ -394,7 +538,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
 * **Top 5 States by Average Occupants:**  
 
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
-  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
+  average_occupants=GROUP_BY(addr_info, name="addrs", by=state).CALCULATE(  
       state=state,  
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
@@ -413,7 +557,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
 
 * **Calculates, for each order, the number of days since January 1st 1992**:
   
-  Orders.CALCULATE( 
+  orders.CALCULATE( 
    days_since=DATEDIFF("days",datetime.date(1992, 1, 1), order_date)
   )
 
@@ -435,7 +579,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
 
 * **For each order, truncates the order date to the first day of the year**:
   
-  Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
+  orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
 
 * **Orders per Customer in 1998**  
   *Goal: Count orders per customer in 1998 and sort by activity.*  
@@ -490,10 +634,38 @@ Within a partition, you must use the `name` argument to be able to access any pr
       (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)  
   )
 
-**GENERAL NOTES**
+* **Find the parts that contain "STEEL" in their name and show the total available quantity, ordered by the highest available quantity**
+  *Goal: Find the parts that contains STEEL in their name.*          
+  *Code:*                                                                                                
+  availability_parts= supply_records.WHERE(CONTAINS(part.name, "steel")).CALCULATE(part_name= part.name)
+  output= PARTITION(availability_parts, name="supp", by=part_name
+              ).CALCULATE(
+              part_name= part_name,
+              total_available= SUM(supp.availqty)
+  ).ORDER_BY(total_available.DESC())
 
-*   Use &, |, ~ for logical operations (not and, or, not).
+* **For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate**
+  *Goal: Determine the transaction success rate for customers who have made at least five transactions*          
+  *Code:* 
+                      
+  customer_transactions  = transactions.CALCULATE(cust_id = customer._id, cust_name = customer.name)
+  transaction_summary  = PARTITION(customer_transactions, name="t", by=(cust_id, cust_name)
+                ).CALCULATE(cust_name, total_tx = COUNT(t.transaction_id), 
+                    success_tx = COUNT(t.WHERE(status == "success"))
+                )
+  transaction_rate  = transaction_summary.CALCULATE(
+                    success_rate = success_tx / total_tx * 100
+                    ).WHERE(total_tx >= 5)
+  output = transaction_rate.CALCULATE(cust_name, success_rate)
+  
+**IMPORTANT NOTES**
+
+*  Use &, |, ~ for logical operations (not and, or, not).
     
-*   For chained inequalities, use MONOTONIC or explicit comparisons.
+* For chained inequalities, use MONOTONIC or explicit comparisons.
     
-*   Aggregation functions convert plural values (e.g., collections) to singular values.
+* Aggregation functions convert plural values (e.g., collections) to singular values.
+
+* When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
+
+* GROUP_BY function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. GROUP_BY does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(region_name=name, top_suppliers=nations.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection. 

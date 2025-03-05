@@ -2,15 +2,21 @@
 
 **VERY IMPORTANT NOTES**: 
 
+  - You must make sure the functions are callable by passing all the parameters.
+
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. 
+  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTITION(selected_nations, name="nation", by=(nation_name)).CALCULATE(region_name=name, top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection. 
 
   - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
+
+  - CALCULATE cannot handle plural expressions. Instead, use aggregation functions such as SUM(), AVG(), COUNT(), etc., to perform the necessary calculations on the data. CALCULATE does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `top_suppliers_by_region = regions.CALCULATE(region_name=name, top_suppliers=nations.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC()))` because TOP_K returns a collection.
 
   - In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
 
   - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
+
+  - When using functions like TOP_K, PARTITION, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, you cannot do: `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name,total_sales=total_sales)` because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections. 
 
 **1. COLLECTIONS & SUB-COLLECTIONS**  
 
@@ -140,7 +146,7 @@
 
   - **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
 
-  - **IMPORTANT**: Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
+  - **IMPORTANT**: AlL the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
 
 - **Good Examples**:  
 
@@ -185,7 +191,7 @@ Within a partition, you must use the `name` argument to be able to access any pr
     
     *   by: Ordering criteria (e.g., acctbal.DESC()).
         
-    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking). Must be a positive integer.
+    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking).
         
     *   allow\_ties (default False): Allow tied ranks.
         
