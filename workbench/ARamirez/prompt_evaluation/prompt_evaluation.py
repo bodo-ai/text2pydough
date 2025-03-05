@@ -136,7 +136,7 @@ def get_azure_response(client, prompt, data, question, model_id, database_conten
         print(f"Azure AI error: {e}")
         return None
 
-def get_other_provider_response(client, provider, model_id, prompt, data, question,temperature, script_content, database_content, similar_code):
+def get_other_provider_response(client, provider, model_id, prompt, data, question,temperature, database_content, similar_code):
     """Generates a response using aisuite."""
     formatted_prompt = format_prompt(prompt,data,question,database_content,similar_code)
 
