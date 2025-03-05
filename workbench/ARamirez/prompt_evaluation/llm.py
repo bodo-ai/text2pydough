@@ -111,7 +111,7 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, provider, model, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.0):
+    def __init__(self, provider, model, database_file='./data/database/tcph_graph.md', prompt_file='./data/prompts/prompt4.md', script_file="./data/pydough_files/cheatsheet_v4_examples.md", temperature= 0.0):
         """
         Initializes the LLMClient with the provider and model.
         """
