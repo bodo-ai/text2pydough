@@ -139,7 +139,7 @@ def get_azure_response(client, prompt, data, question, model_id, database_conten
 def get_other_provider_response(client, provider, model_id, prompt, data, question,temperature, database_content, similar_code):
     """Generates a response using aisuite."""
     formatted_prompt = format_prompt(prompt,data,question,database_content,similar_code)
-
+    print(formatted_prompt)
     messages = [
         {"role": "system", "content": formatted_prompt},
         {"role": "user", "content": question},
@@ -179,7 +179,7 @@ def process_questions(data,provider, model_id, formatted_prompt, questions, temp
     else:
         client = ai.Client()
         get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, data, q, temperature, database_content, similar_code)
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         responses = list(executor.map(get_response, questions))
 
     return responses
