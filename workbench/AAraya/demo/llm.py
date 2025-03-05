@@ -4,7 +4,7 @@ import os
 import re
 import pandas as pd
 import aisuite as ai
-import time
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
@@ -18,6 +18,9 @@ import re
 
 pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/test_data/tpch.db")
+
+with open('./demo_queries.json', "r") as json_file:
+    demo_dict = json.load(json_file)
 
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -76,6 +79,16 @@ def replace_with_upper(text):
     # Replace the matched words using the replacer function
     return re.sub(r'\b\w+\b', replacer, text)
 
+def format_prompt(prompt, data, question, database_content):
+    ids = data[question]["context_id"]
+    contexts = (
+        open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
+        for id in ids
+    )
+    
+    prompt_string = ' '.join(contexts)
+    return prompt.format(script_content=prompt_string, database_content=database_content)
+
 def extract_python_code(text):
     """Extracts all Python code from triple backticks in the given text and combines them."""
     if not isinstance(text, str):  # Ensure text is a string
@@ -115,8 +128,8 @@ class LLMClient:
         """
         Initializes the LLMClient with the provider and model.
         """
-        default_provider = "aws"
-        default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+        default_provider = "google"
+        default_model = "gemini-2.0-flash-001"
     
         self.provider = default_provider
         self.model = default_model
@@ -164,7 +177,17 @@ class LLMClient:
         result = Result(original_question=question)
 
         try:
-            formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+            if question in demo_dict:
+                database_content = self.database
+                formatted_prompt = format_prompt(
+                    self.prompt,
+                    demo_dict,
+                    question,
+                    database_content
+                )
+            else:
+                # Si no está, usa el prompt predeterminado
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
             
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
