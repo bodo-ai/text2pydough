@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import re
 import pandas as pd
@@ -104,9 +105,21 @@ def extract_python_code(text):
     else:
         return ""
 
-def get_azure_response(client, prompt, question, model_id):
+def format_prompt(prompt, data, question,script_content, database_content, similar_code):
+    ids= data[question]["ids"]
+    contexts = [script_content.get(id, '') for id in ids]
+    
+    # Join the contexts into a single string
+    prompt_string = ' '.join(contexts)
+
+    formatted_prompt = prompt.format(script_content=prompt_string, database_content=database_content, similar_queries=similar_code)
+    return formatted_prompt
+
+def get_azure_response(client, prompt, data, question, model_id, script_content, database_content, similar_code):
     """Generates a response using Azure AI."""
-    messages = [SystemMessage(prompt), UserMessage(question)]
+    formatted_prompt = format_prompt(prompt,data,question,script_content,database_content,similar_code)
+
+    messages = [SystemMessage(formatted_prompt), UserMessage(question)]
     
     try:
         completion = client.complete(messages=messages, max_tokens=20000, model=model_id, stream=True)
@@ -120,10 +133,12 @@ def get_azure_response(client, prompt, question, model_id):
         print(f"Azure AI error: {e}")
         return None
 
-def get_other_provider_response(client, provider, model_id, prompt, question,temperature):
+def get_other_provider_response(client, provider, model_id, prompt, data, question,temperature, script_content, database_content, similar_code):
     """Generates a response using aisuite."""
+    formatted_prompt = format_prompt(prompt,data,question,script_content,database_content,similar_code)
+
     messages = [
-        {"role": "system", "content": prompt},
+        {"role": "system", "content": formatted_prompt},
         {"role": "user", "content": question},
 
         #{"role": "system", "content": "You are a helpful assistant that can answer questions about PyDough queries a SQL-like language. Use the reference below to answer questions in PyDough "},
@@ -142,20 +157,25 @@ def get_other_provider_response(client, provider, model_id, prompt, question,tem
         print(f"AI Suite error: {e}")
         return None
 
+def get_claude_response(client, provider, model_id, prompt, data, question, script_content, database_content, similar_code):
+    """Generates a response using aisuite."""
+    formatted_prompt = format_prompt(prompt,data,question,script_content,database_content,similar_code)
+    reponse= client.ask_claude_with_stream(question, formatted_prompt, model_id, provider)
+    return reponse
 
-def process_questions(provider, model_id, formatted_prompt, questions, temperature):
+
+def process_questions(data,provider, model_id, formatted_prompt, questions, temperature, script_content, database_content, similar_code):
     responses = []
-    
 
     if provider == "azure":
         client = setup_azure_client()
-        get_response = lambda q: get_azure_response(client, formatted_prompt, q, model_id)
+        get_response = lambda q: get_azure_response(client, formatted_prompt, data,q, model_id,script_content, database_content, similar_code)
     elif provider=="aws-thinking":
         client = ClaudeModel()
-        get_response = lambda q: client.ask_claude_with_stream(q, formatted_prompt, model_id, provider)
+        get_response = lambda q: get_claude_response(client, provider, model_id, formatted_prompt, data, q, script_content, database_content, similar_code)
     else:
         client = ai.Client()
-        get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, q, temperature)
+        get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, data, q, temperature, script_content, database_content, similar_code)
     with ThreadPoolExecutor(max_workers=20) as executor:
         responses = list(executor.map(get_response, questions))
 
@@ -196,21 +216,26 @@ def main(git_hash):
         with open(args.prompt_file, "r", encoding="utf-8") as f:
             prompt = f.read()
 
-        with open(args.script_file, "r", encoding="utf-8") as f:
-            script_content = f.read()
+        #with open(args.script_file, "r", encoding="utf-8") as f:
+        #    script_content = f.read()
 
         with open(args.database_structure, "r", encoding="utf-8") as f:
             database_content = f.read()
 
+        with open("./queries_context.json","r") as json_data:
+            data = json.loads(json_data)
+
+        script_content = pd.read_csv(args.script_file, encoding="utf-8")
+        context_dict = dict(zip(script_content['id'], script_content['context']))
         # Read Questions
         questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
         similar_code = questions_df["similar_queries"].tolist()
 
         # Format prompt once
-        formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
+        #formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
-        responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist(), args.temperature)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,context_dict,database_content,similar_code)
 
         # Save responses
         questions_df["response"] = responses
