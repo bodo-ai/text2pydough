@@ -148,6 +148,13 @@ class LLMClient:
         except Exception as e:
            raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
     
+    def discourse(self, result, follow_up):
+        if not result or not result.original_question:
+            return follow_up
+        
+        new_query = f"{result.original_question} {follow_up}"
+        return self.ask(new_query) 
+    
     def ask(self, question):
         """Generates a response using aisuite and returns a Result object."""
         # Initialize the result object to ensure it is always created
@@ -155,6 +162,10 @@ class LLMClient:
 
         try:
             formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+            
+            if isinstance(question, tuple):  # Soporte para (result, follow_up)
+                question = self.discourse(*question)  
+                
             messages = [{"role": "system", "content": formatted_prompt}, {"role": "user", "content": question}]
             completion = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model}",
