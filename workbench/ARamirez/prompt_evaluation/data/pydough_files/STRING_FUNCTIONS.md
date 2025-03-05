@@ -1,6 +1,6 @@
 **VERY IMPORTANT NOTES**
 
-- Functions STARTSWITH, ENDSWITH, CONTAINS and LIKE needs two parameters (no optional), the attribute to compare, and the string to search for. 
+- Functions STARTSWITH, ENDSWITH, CONTAINS and LIKE must have two parameters (no optional), the attribute to compare, and the string to search for. 
 
 **14. STRING FUNCTIONS**
 
