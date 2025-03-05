@@ -106,7 +106,7 @@ def extract_python_code(text):
         return ""
 
 def format_prompt(prompt, data, question,script_content, database_content, similar_code):
-    ids= data[question]["ids"]
+    ids= data[question]["id"]
     contexts = [script_content.get(id, '') for id in ids]
     
     # Join the contexts into a single string
