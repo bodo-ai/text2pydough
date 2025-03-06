@@ -2,6 +2,8 @@
 
 - Aggregations Function does not support calling aggregations inside of aggregations
 
+- Functions must have one parameter (no optional).
+
 **AGGREGATION FUNCTIONS**  
 
 - **COUNT(collection)**: Count non-null records.  
@@ -24,4 +26,3 @@
 
 - **HASNOT(collection)**: True if collection is empty.
   Example: HASNOT(orders)
-  
