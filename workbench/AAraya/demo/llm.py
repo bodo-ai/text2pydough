@@ -16,8 +16,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 
-pydough.active_session.load_metadata_graph(f"/home/ara/tekdatum/ara-text2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"/home/ara/tekdatum/ara-text2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/test_data/tpch.db")
+pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
+pydough.active_session.connect_database("sqlite", database=f"./test_data/tpch.db")
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
@@ -168,7 +168,8 @@ class LLMClient:
         if not result or not result.original_question:
             return follow_up
         
-        new_query = f"{result.original_question} {follow_up}"
+        new_query = (f"You solved this question: {result.original_question}. using this code: {result.code}." 
+                     f"Now that you have solved the first part, follow up the question by adding:  '{follow_up}'. ")
         return self.ask(new_query) 
     
     def ask(self, question):
