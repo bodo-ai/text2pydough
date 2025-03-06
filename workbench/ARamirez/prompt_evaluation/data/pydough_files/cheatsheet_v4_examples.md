@@ -182,7 +182,7 @@ total_orders_in_1996 = regions.CALCULATE(
     Packages.WHERE(YEAR(order_date) == 2023)  
 
   - **Filter addresses with occupants**:  
-    Addresses.WHERE(HAS(current_occupants))  
+    Addresses.WHERE(HAS(current_occupants)==1) 
 
 - **Warnings**:  
   - Use & (AND), | (OR), ~ (NOT) instead of and, or, not.  
@@ -238,10 +238,10 @@ total_orders_in_1996 = regions.CALCULATE(
   Example: NDISTINCT(Addresses.state)  
 
 - **HAS(collection)**: True if ≥1 record exists.  
-  Example: HAS(People.packages)
+  Example: HAS(People.packages)==1
 
 - **HASNOT(collection)**: True if collection is empty.
-  Example: HASNOT(orders)
+  Example: HASNOT(orders)==1
 
 **Rules**: Aggregations Function does not support calling aggregations inside of aggregations
 
@@ -610,7 +610,7 @@ total_orders_in_1996 = regions.CALCULATE(
 * **Inactive Customers**  
   *Goal: Find customers who never placed orders.*  
   *Code:*  
-  customers_without_orders = customers.WHERE(HASNOT(orders)).CALCULATE(  
+  customers_without_orders = customers.WHERE(HASNOT(orders)==1).CALCULATE(  
       customer_key=key,  
       customer_name=name  
   )  
@@ -618,7 +618,7 @@ total_orders_in_1996 = regions.CALCULATE(
 * **Customer Activity by Nation**  
   *Goal: Track active/inactive customers per nation.*  
   *Code:*  
-  cust_info = customers.CALCULATE(is_active=HAS(orders))  
+  cust_info = customers.CALCULATE(is_active=HAS(orders)==1)  
   nation_summary = nations.CALCULATE(  
       nation_name=name,  
       total_customers=COUNT(cust_info),  
