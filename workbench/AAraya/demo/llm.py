@@ -16,8 +16,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 
-pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/test_data/tpch.db")
+pydough.active_session.load_metadata_graph(f"/home/ara/tekdatum/ara-text2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/test_data/tpch_demo_graph.json", "TPCH")
+pydough.active_session.connect_database("sqlite", database=f"/home/ara/tekdatum/ara-text2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/test_data/tpch.db")
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
@@ -128,8 +128,8 @@ class LLMClient:
         """
         Initializes the LLMClient with the provider and model.
         """
-        default_provider = "aws"
-        default_model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        default_provider = "google"
+        default_model = "gemini-2.0-flash-001"
     
         self.provider = default_provider
         self.model = default_model
@@ -189,7 +189,6 @@ class LLMClient:
                 # If not in dict, use the standard prompt.
                 formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
             
-            print(formatted_prompt)
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
                 
