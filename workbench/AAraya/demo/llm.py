@@ -82,7 +82,7 @@ def replace_with_upper(text):
 def format_prompt(prompt, data, question, database_content):
     ids = data[question]["context_id"]
     contexts = (
-        open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
+        open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}") else ''
         for id in ids
     )
     
@@ -128,8 +128,8 @@ class LLMClient:
         """
         Initializes the LLMClient with the provider and model.
         """
-        default_provider = "google"
-        default_model = "gemini-2.0-flash-001"
+        default_provider = "aws"
+        default_model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
     
         self.provider = default_provider
         self.model = default_model
@@ -189,6 +189,7 @@ class LLMClient:
                 # Si no está, usa el prompt predeterminado
                 formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
             
+            print(formatted_prompt)
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
                 
