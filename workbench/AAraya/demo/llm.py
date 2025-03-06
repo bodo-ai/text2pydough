@@ -4,7 +4,7 @@ import os
 import re
 import pandas as pd
 import aisuite as ai
-import time
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
@@ -18,6 +18,9 @@ import re
 
 pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/test_data/tpch.db")
+
+with open('./demo_queries.json', "r") as json_file:
+    demo_dict = json.load(json_file)
 
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -76,6 +79,16 @@ def replace_with_upper(text):
     # Replace the matched words using the replacer function
     return re.sub(r'\b\w+\b', replacer, text)
 
+def format_prompt(prompt, data, question, database_content):
+    ids = data[question]["context_id"]
+    contexts = (
+        open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
+        for id in ids
+    )
+    
+    prompt_string = ' '.join(contexts)
+    return prompt.format(script_content=prompt_string, database_content=database_content)
+
 def extract_python_code(text):
     """Extracts all Python code from triple backticks in the given text and combines them."""
     if not isinstance(text, str):  # Ensure text is a string
@@ -111,12 +124,15 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, provider, model, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.0):
+    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.0):
         """
         Initializes the LLMClient with the provider and model.
         """
-        self.provider = provider
-        self.model = model
+        default_provider = "google"
+        default_model = "gemini-2.0-flash-001"
+    
+        self.provider = default_provider
+        self.model = default_model
         self.client = ai.Client()
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
@@ -148,13 +164,34 @@ class LLMClient:
         except Exception as e:
            raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
     
+    def discourse(self, result, follow_up):
+        if not result or not result.original_question:
+            return follow_up
+        
+        new_query = f"{result.original_question} {follow_up}"
+        return self.ask(new_query) 
+    
     def ask(self, question):
         """Generates a response using aisuite and returns a Result object."""
         # Initialize the result object to ensure it is always created
         result = Result(original_question=question)
 
         try:
-            formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+            if question in demo_dict:
+                database_content = self.database
+                formatted_prompt = format_prompt(
+                    self.prompt,
+                    demo_dict,
+                    question,
+                    database_content
+                )
+            else:
+                # Si no está, usa el prompt predeterminado
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+            
+            if isinstance(question, tuple):  # Soporte para (result, follow_up)
+                question = self.discourse(*question)  
+                
             messages = [{"role": "system", "content": formatted_prompt}, {"role": "user", "content": question}]
             completion = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model}",
