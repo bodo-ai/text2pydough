@@ -79,15 +79,15 @@ def replace_with_upper(text):
     # Replace the matched words using the replacer function
     return re.sub(r'\b\w+\b', replacer, text)
 
-def format_prompt(prompt, data, question, database_content):
+def format_prompt(script_content,prompt, data, question, database_content):
     ids = data[question]["context_id"]
-    contexts = (
-        open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}") else ''
-        for id in ids
-    )
+    #contexts = (
+    #    open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}") else ''
+    #    for id in ids
+    #)
     
-    prompt_string = ' '.join(contexts)
-    return prompt.format(script_content=prompt_string, database_content=database_content)
+    prompt_string = ' '.join(ids)
+    return prompt.format(script_content=script_content, database_content=database_content, recomendation=prompt_string )
 
 def extract_python_code(text):
     """Extracts all Python code from triple backticks in the given text and combines them."""
@@ -180,6 +180,7 @@ class LLMClient:
             if question in demo_dict:
                 database_content = self.database
                 formatted_prompt = format_prompt(
+                    self.script,
                     self.prompt,
                     demo_dict,
                     question,
@@ -187,7 +188,7 @@ class LLMClient:
                 )
             else:
                 # If not in dict, use the standard prompt.
-                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,recomendation= "")
             
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
@@ -210,7 +211,7 @@ class LLMClient:
             result.base_prompt = self.prompt
             result.cheat_sheet = self.script
             result.knowledge_graph = self.database
-            
+            print(extracted_code)
             pydough_sql = self.get_pydough_sql(extracted_code)
             pydough_df = self.get_pydough_code(extracted_code)
             
@@ -228,7 +229,7 @@ class LLMClient:
         """Try to correct a Result object if an exception exists."""
         if result.exception:
             try:
-                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,recomendation="")
                 # create base prompt to request error fix
                 corrective_question = (f"An error occurred while processing this code: {result.code}. "
                                        f"The error is: '{result.exception}'. "

@@ -22,11 +22,16 @@ Your objective is to analyze the provided natural language description that outl
    - Ensures proper indentation.
    - Follows the rules for using contextless expressions properly.
    - Adheres to the syntax and structure outlined in the PyDough Reference File.
-   - Returns only the exact data requested, without adding additional fields or information.
+   - When need HAS ALWAYS compare if is equal to 1.
+   - Ensures the variables names are different than the fields of the Database
+   - Returns only the exact data requested, without adding additional fields or information, do not return the key from the collections.
 
 3. Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
 
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 5. The generated code should be in a python block
+
+{recomendation}
+
 Use this structure to ensure clarity, consistency, and adherence to PyDough syntax in your outputs.
