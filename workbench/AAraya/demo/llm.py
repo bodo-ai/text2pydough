@@ -2,6 +2,7 @@
 import argparse
 import os
 import re
+import matplotlib.pyplot as plt
 import pandas as pd
 import aisuite as ai
 import json
