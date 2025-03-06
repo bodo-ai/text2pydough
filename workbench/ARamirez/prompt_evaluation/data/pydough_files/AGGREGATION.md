@@ -22,7 +22,7 @@
   Example: NDISTINCT(Addresses.state)  
 
 - **HAS(collection)**: True if ≥1 record exists.  
-  Example: HAS(People.packages)
+  Example: HAS(People.packages) ==1
 
 - **HASNOT(collection)**: True if collection is empty.
-  Example: HASNOT(orders)
+  Example: HASNOT(orders) ==1

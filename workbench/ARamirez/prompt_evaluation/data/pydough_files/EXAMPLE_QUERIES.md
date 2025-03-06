@@ -75,7 +75,7 @@
 * **Inactive Customers**  
   *Goal: Find customers who never placed orders.*  
   *Code:*  
-  customers_without_orders = customers.WHERE(HASNOT(orders)).CALCULATE(  
+  customers_without_orders = customers.WHERE(HASNOT(orders)==1).CALCULATE(  
       customer_key=key,  
       customer_name=name  
   )  
@@ -83,7 +83,7 @@
 * **Customer Activity by Nation**  
   *Goal: Track active/inactive customers per nation.*  
   *Code:*  
-  cust_info = customers.CALCULATE(is_active=HAS(orders))  
+  cust_info = customers.CALCULATE(is_active=HAS(orders)==1)  
   nation_summary = nations.CALCULATE(  
       nation_name=name,  
       total_customers=COUNT(cust_info),  
