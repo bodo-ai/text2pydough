@@ -1,3 +1,15 @@
+### The `TPCH` collection contains the following columns:
+**WARNING**:
+TPCH is used primarily for performing calculations, such as average, sum, count, etc.
+- **customers**: A list of all customer.
+- **lines**: A list of all lines items.
+- **nations**: A list of all nations.
+- **orders**: A list of all orders placed.
+- **parts**: A list of all parts available.
+- **regions**: A list of all regions.
+- **suppliers**: A list of all suppliers
+- **supply_records**: A list of all supply records for suppliers and parts.
+
 ### The `customers` collection contains the following columns:
 - **acctbal**: The account balance of the customer.
 - **address**: The address of the customer.
@@ -94,6 +106,12 @@
 - **lines**: A list of all line items that reference this supply record (reverse of `lines.part_and_supplier`).
 - **part**: The corresponding part for this supply record (reverse of `parts.supply_records`).
 - **supplier**: The corresponding supplier for this supply record (reverse of `suppliers.supply_records`).
+
+### Getting the total count of orders:
+To get the total orders:
+```python
+total_orders = TPCH.CALCULATE(total_orders= COUNT(orders))
+```
 
 ### Retrieving Customers for a Nation
 To get all customers from a specific nation:
