@@ -38,19 +38,8 @@ st.markdown(
     - **Base Prompt**: The initial instruction given to the LLM to generate the query.
     - **Cheat Sheet**: A reference guide or example queries to help the LLM structure responses.
     - **Knowledge Graph**: The metadata structure that informs the LLM about available collections and relationships.
-    
     """
 )
-
-# Initialize client
-if "client" not in st.session_state:
-    try:
-        from llm import LLMClient
-        st.session_state.client = LLMClient()
-        st.success("LLMClient initialized successfully! ✅")
-    except Exception as e:
-        st.error(f"Error initializing LLMClient: {e}")
-
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
@@ -59,14 +48,18 @@ st.markdown("Enter a natural language query, and let PyDough generate the corres
 query = st.text_input("Enter your query:", "List all customers from United States")
 
 if st.button("Run Query"):
-    if "client" in st.session_state:
-        try:
-            # Call the LLM client to generate the PyDough query
-            result = st.session_state.client.ask(query)
-            st.session_state.result = result
-            st.success("Query executed successfully! ✅")
-        except Exception as e:
-            st.error(f"Error running query: {e}")
+    try:
+        # Create a new LLMClient instance inside the query execution (fixes SQLite thread issue)
+        from llm import LLMClient
+        client = LLMClient()  
+        
+        # Call the LLM client to generate the PyDough query
+        result = client.ask(query)
+        st.session_state.result = result  # Store only result, not the client
+
+        st.success("Query executed successfully! ✅")
+    except Exception as e:
+        st.error(f"Error running query: {e}")
 
 # ---------------------- DISPLAY RESULTS ----------------------
 if "result" in st.session_state:
