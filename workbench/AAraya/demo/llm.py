@@ -186,7 +186,7 @@ class LLMClient:
                     database_content
                 )
             else:
-                # Si no está, usa el prompt predeterminado
+                # If not in dict, use the standard prompt.
                 formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database)
             
             print(formatted_prompt)
