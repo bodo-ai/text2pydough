@@ -11,7 +11,7 @@
     Packages.WHERE(YEAR(order_date) == 2023)  
 
   - **Filter addresses with occupants**:  
-    Addresses.WHERE(HAS(current_occupants))  
+    Addresses.WHERE(HAS(current_occupants)==1)  
 
 - **Warnings**:  
   - Use & (AND), | (OR), ~ (NOT) instead of and, or, not.  
