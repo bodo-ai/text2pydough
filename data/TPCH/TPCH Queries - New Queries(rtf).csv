@@ -1,0 +1,424 @@
+Query Number,English Query,SQLite,Pydough
+1,"For every year, identify how many customers made their only order ever in that year.","SELECT year, COUNT(*) AS n_only_order
+FROM (
+    SELECT strftime('%Y', MIN(o_orderdate)) AS year
+    FROM orders
+    GROUP BY o_custkey
+    HAVING COUNT(*) = 1
+)
+GROUP BY year
+ORDER BY year ASC;","%%pydough
+
+single_order_customers = PARTITION(orders, name=""o"", by=customer_key).CALCULATE( 
+    customer_key, 
+    first_order_year=YEAR(MIN(o.order_date)),  
+    order_count=COUNT(o.key)  
+).WHERE(order_count == 1)  
+
+only_orders_per_year = PARTITION(single_order_customers, name=""s"", by=first_order_year).CALCULATE(
+    year=first_order_year,
+    n_only_order=COUNT(s.customer_key)  
+).ORDER_BY(year.ASC())
+
+pydough.to_df(only_orders_per_year)"
+,"For every year, identify how many customers made only a single order in that year.","SELECT year, COUNT(*) as n_only_order
+FROM (
+    SELECT year(o_orderdate) as year
+    FROM tpch_sf1.orders
+    GROUP BY o_custkey, year
+    HAVING COUNT(*) = 1
+)
+GROUP BY year
+ORDER BY year asc","%%pydough
+
+orders_with_year = orders.CALCULATE(
+    customer_key,
+    order_year=YEAR(order_date) 
+)
+
+single_order_customers_per_year = PARTITION(orders_with_year, name=""o"", by=(customer_key, order_year)).CALCULATE(
+    customer_key, 
+    order_year,  
+    order_count=COUNT(o.key)  
+).WHERE(order_count == 1)  
+
+only_orders_per_year = PARTITION(single_order_customers_per_year, name=""s"", by=order_year).CALCULATE(
+    year=order_year,
+    n_only_order=COUNT(s.customer_key)  
+).ORDER_BY(year.ASC())
+
+
+pydough.to_df(only_orders_per_year)"
+,"For every year, identify what percentage of all orders were the only order made by that customer in that year.","SELECT year, 100 * COUNT_IF(n_orders = 1) / SUM(n_orders) as pct_only_orer
+FROM (
+    SELECT year(o_orderdate) as year, COUNT(*) as n_orders
+    FROM tpch_sf1.orders
+    GROUP BY o_custkey, year
+)
+GROUP BY year
+ORDER BY year asc
+;
+","%%pydough
+
+
+orders_with_year = orders.CALCULATE(
+    customer_key,
+    order_year=YEAR(order_date) 
+)
+
+customer_orders_per_year = PARTITION(orders_with_year, name=""o"", by=(customer_key, order_year)).CALCULATE(
+    customer_key, 
+    order_year,
+    order_count=COUNT(o.key)  
+)
+
+single_order_customers_per_year = PARTITION(customer_orders_per_year, name=""s"", by=order_year).CALCULATE(
+    year=order_year,
+    total_orders=SUM(s.order_count),
+    single_orders=SUM(IFF(s.order_count == 1, 1, 0)) 
+)
+
+only_order_percentage = single_order_customers_per_year.CALCULATE(
+    year,
+    pct_only_order=100.0 * single_orders / total_orders 
+).ORDER_BY(year.ASC())
+
+
+pydough.to_df(only_order_percentage)"
+,"For every year, identify how many customers made their first ever purchase in that year","SELECT year, COUNT(*) as pct_only_orer
+FROM (
+    SELECT year(o_orderdate) as year
+    FROM tpch_sf1.orders
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY o_custkey ORDER BY o_orderdate) = 1
+)
+GROUP BY year
+ORDER BY year asc
+;
+","%%pydough
+
+first_order_per_customer = PARTITION(orders, name=""o"", by=customer_key).CALCULATE(
+    customer_key,
+    first_order_year=YEAR(MIN(o.order_date)) 
+)
+
+first_orders_per_year = PARTITION(first_order_per_customer, name=""s"", by=first_order_year).CALCULATE(
+    year=first_order_year,
+    n_first_orders=COUNT(s.customer_key)  
+).ORDER_BY(year.ASC())
+
+pydough.to_df(first_orders_per_year)"
+,"For every year, identify how many customers made a purchase that year but did not in the previous year","SELECT year, COUNT(*) as n_not_prev
+FROM (
+    SELECT *
+    FROM (SELECT DISTINCT o_custkey, year(o_orderdate) as year FROM tpch_sf1.orders)
+    QUALIFY LAG(year, 1, 0) OVER (PARTITION BY o_custkey ORDER BY year) <> (year - 1)
+    ORDER BY o_custkey
+)
+GROUP BY year
+ORDER BY year asc
+;
+",##########
+,Which 5 countries have the highest number of customers who have never ordered a package containing a red product.,"SELECT n_name, COUNT(*) as n_never_ordered
+FROM tpch_sf1.nation, tpch_sf1.customer
+WHERE NOT EXISTS (
+    SELECT *
+    FROM tpch_sf1.orders, tpch_sf1.lineitem, tpch_sf1.part
+    WHERE c_custkey = o_custkey
+    AND o_orderkey = l_orderkey
+    AND l_partkey = p_partkey
+    AND p_name LIKE '%red%'
+) AND n_nationkey = c_nationkey
+GROUP BY n_name
+ORDER BY n_never_ordered DESC
+LIMIT 5
+;
+","customers_without_red_orders = customers.WHERE(
+    HASNOT(orders.lines.WHERE(LIKE(part.name, ""%red%"")))==1
+).CALCULATE(
+    n_name = nation.name
+)
+
+top_nations = PARTITION(customers_without_red_orders, name=""c"", by=n_name).CALCULATE(
+    n_name,
+    n_never_ordered=COUNT(c.key) 
+).TOP_K(5, by=n_never_ordered.DESC())"
+,"For every year & month, what nation had the highest percentage of its customers order a package with priority ""1-URGENT""? Include the nation and the percentage.","SELECT year, month, name, 100 * (COUNT(*) / ANY_VALUE(T2.n_cust)) AS percentage
+FROM (
+    SELECT DISTINCT
+        YEAR(o_orderdate) as year,
+        MONTH(o_orderdate) as month,
+        n_nationkey as nationkey,
+        n_name as name,
+        c_custkey as custkey
+    FROM tpch_sf1.nation, tpch_sf1.customer, tpch_sf1.orders
+    WHERE n_nationkey = c_nationkey AND c_custkey = o_custkey
+    AND o_orderpriority = '1-URGENT'
+) T1
+INNER JOIN (
+    SELECT c_nationkey as nationkey, COUNT(*) as n_cust
+    FROM tpch_sf1.customer
+    GROUP BY nationkey
+) T2
+ON T1.nationkey = T2.nationkey
+GROUP BY year, month, name
+QUALIFY ROW_NUMBER() OVER (PARTITION BY year, month ORDER BY percentage DESC) = 1
+ORDER BY year, month
+;",##########
+,"Identify the 5 suppliers whose average discount rate has increased the most from 1994 to 1997, along with the change in their average discount percentage.","SELECT s_name, 100 * (AVG(disc97) - AVG(disc94)) AS pct_change
+FROM tpch_sf1.supplier
+INNER JOIN (
+    SELECT l_suppkey, IFF(YEAR(l_shipdate) = 1994, l_discount, NULL) disc94, IFF(YEAR(l_shipdate) = 1997, l_discount, NULL) disc97
+    FROM tpch_sf1.lineitem
+    WHERE YEAR(l_shipdate) IN (1994, 1997)
+) T
+ON s_suppkey = T.l_suppkey
+GROUP BY 1
+ORDER BY pct_change DESC
+LIMIT 5;","%%pydough
+
+supplier_discounts = PARTITION(lines, name=""l"", by=supplier_key).CALCULATE(
+    supplier_id=supplier_key,
+    supplier_name=MAX(l.supplier.name),
+)
+
+supplier_discounts2 = lines.CALCULATE(
+    discount,
+    ship_date,
+    supplier_id=supplier_key,
+    supplier_name=supplier.name,
+    disc94=KEEP_IF(discount, YEAR(ship_date) == 1994),
+    disc97=KEEP_IF(discount, YEAR(ship_date) == 1997) 
+)
+
+avg_discount_per_supplier = PARTITION(supplier_discounts2, name=""s"", by=supplier_id).CALCULATE(
+    supplier_name=MAX(s.supplier_name),
+    avg_disc94=AVG(s.disc94),
+    avg_disc97=AVG(s.disc97)
+)
+
+top_suppliers = avg_discount_per_supplier.CALCULATE(supplier_name, pct_change=100 * (avg_disc97 - avg_disc94)).TOP_K(5, by=pct_change.DESC())
+
+pydough.to_df(top_suppliers)"
+,"For every year, identify the percentage of all revenue generated that year was from repeat customers who have made a previous purchase from the same supplier.","SELECT year, 100.0 * SUM(repeat_revenue) / SUM(revenue) as pct_repeat_revenue
+FROM (
+    SELECT
+        year(o_orderdate) as year,
+        l_extendedprice * (1-l_discount) AS revenue, 
+        IFF(ROW_NUMBER() OVER (PARTITION BY o_custkey, l_suppkey ORDER BY o_orderdate) > 1, revenue, 0) AS repeat_revenue
+    FROM tpch_sf1.lineitem, tpch_sf1.orders
+    WHERE l_orderkey = o_orderkey
+)
+GROUP BY year
+ORDER BY year
+;
+",
+,"Identify the 4 suppliers who have the highest total revenue generated by repeat customers who have already made a purchase from them. Include the suppliers' names, the repeat revenue, and the percentage of their total revenue that is from the repeat revenue.","SELECT s_name, SUM(repeat_revenue) as repeat_revenue, 100.0 * SUM(repeat_revenue) / SUM(revenue) as pct_repeat_revenue
+FROM tpch_sf1.supplier S
+INNER JOIN (
+    SELECT
+        l_suppkey,
+        l_extendedprice * (1-l_discount) AS revenue, 
+        IFF(ROW_NUMBER() OVER (PARTITION BY o_custkey, l_suppkey ORDER BY o_orderdate) > 1, revenue, 0) AS repeat_revenue
+    FROM tpch_sf1.lineitem, tpch_sf1.orders,
+    WHERE l_orderkey = o_orderkey
+) T
+ON S.s_suppkey = T.l_suppkey
+GROUP BY s_name
+ORDER BY pct_repeat_revenue DESC
+LIMIT 10
+;
+",
+,Which 5 nations' suppliers generate the most total revenue from customers in other nations. Include the revenue from those international shipments and and the percentage of all revenue in that nation that is from it.,"SELECT n_name, SUM(IFF(n_nationkey = c_nationkey, 0, l_extendedprice*(1-l_discount))) AS intl_revenue, 100.0 * intl_revenue / SUM(l_extendedprice*(1-l_discount)) AS intl_pct
+FROM tpch_sf1.nation, tpch_sf1.supplier, tpch_sf1.lineitem, tpch_sf1.orders, tpch_sf1.customer
+WHERE n_nationkey = s_nationkey AND s_suppkey = l_suppkey AND l_orderkey = o_orderkey AND o_custkey = c_custkey
+GROUP BY n_name
+ORDER BY intl_revenue DESC
+LIMIT 5
+;",
+,,"SELECT COUNT(*), COUNT_IF(l_tax > 0)
+FROM tpch_sf1.lineitem
+;",
+,,"SELECT p_container, 100.0 * COUNT_IF((l_tax > 0) AND (l_shipmode = 'RAIL')) / COUNT(*) as pct_taxed
+FROM tpch_sf1.lineitem, tpch_sf1.part
+WHERE l_partkey = p_partkey AND (l_shipmode = 'RAIL')
+GROUP BY 1
+ORDER BY pct_taxed DESC
+;",
+,"Which 4 container categories generate the most taxes from railway shipments? Ignore the size of the container (e.g. SM, MED, LG).","SELECT SUBSTR(p_container, POSITION(' ', p_container) + 1) AS container_category, SUM(l_extendedprice * (1-l_discount) * l_tax) as tax_amt
+FROM tpch_sf1.part, tpch_sf1.lineitem
+WHERE p_partkey = l_partkey AND l_shipmode = 'RAIL'
+GROUP BY container_category
+ORDER BY tax_amt DESC
+LIMIT 4
+;
+",
+,"For every region, identify the average of the early delivery rates for the suppliers in that region in the top 1% highest early delivery rates for suppliers in that region.","SELECT r_name, AVG(pct_on_time) AS avg_top_1pct_on_time
+FROM (
+    SELECT r_name, pct_on_time
+    FROM tpch_sf1.region, tpch_sf1.nation, (
+        SELECT s_suppkey, 100.0 * COUNT_IF(l_receiptdate < l_commitdate) / COUNT(*) as pct_on_time, ANY_VALUE(s_nationkey) as s_nationkey
+        FROM tpch_sf1.supplier, tpch_sf1.lineitem
+        WHERE s_suppkey = l_suppkey
+        GROUP BY 1
+    )
+    WHERE r_regionkey = n_regionkey AND n_nationkey = s_nationkey
+    QUALIFY NTILE(100) OVER (PARTITION BY r_name ORDER BY pct_on_time ASC) = 1
+)
+GROUP BY r_name
+ORDER BY r_name ASC
+;",
+,What percentage of quantities purchased for parts containing at least 3 colors from the rainbow in their name happen in June?,"SELECT 100.0 * SUM(IFF(MONTH(o_orderdate) = 6, l_quantity, 0)) / SUM(l_quantity) AS pct_rainbow_june
+FROM tpch_sf1.lineitem, tpch_sf1.orders
+WHERE l_orderkey = o_orderkey AND l_partkey IN (
+    SELECT p_partkey
+    FROM tpch_sf1.part
+    WHERE (
+        CONTAINS(p_name, 'red')::INTEGER + 
+        CONTAINS(p_name, 'orange')::INTEGER + 
+        CONTAINS(p_name, 'yellow')::INTEGER + 
+        CONTAINS(p_name, 'green')::INTEGER + 
+        CONTAINS(p_name, 'blue')::INTEGER + 
+        CONTAINS(p_name, 'indigo')::INTEGER + 
+        CONTAINS(p_name, 'violet')::INTEGER
+    ) >= 3
+)
+;",
+,What 5 colors have the highest standard deviation of the number of purchases of parts with that color in their name?,"SELECT color, STDDEV(color_purchases_in_month) as variation
+FROM (
+    SELECT MONTH(o_orderdate) as month, TO_CHAR(l.value) AS color, COUNT(*) AS color_purchases_in_month
+    FROM tpch_sf1.lineitem, tpch_sf1.orders, tpch_sf1.part, LATERAL FLATTEN (split(p_name, ' ')) l
+    WHERE l_orderkey = o_orderkey AND l_partkey = p_partkey
+    GROUP BY 1, 2
+)
+GROUP BY color
+ORDER BY variation DESC
+LIMIT 5
+;",
+,"Identify the top 5 suppliers that have the highest dependency on a single customer, where dependency is defined as the percentage of the supplier's total revenue derived from that customer. For each supplier, list the customer, revenue percentage, and total revenue.","SELECT s_name, c_name, single_cust_revenue, pct_dependance
+FROM (
+    SELECT s_name, c_name, SUM(l_extendedprice * (1-l_discount)) as single_cust_revenue, 100.0 * RATIO_TO_REPORT(single_cust_revenue) OVER (PARTITION BY s_name) as pct_dependance
+    FROM tpch_sf1.supplier, tpch_sf1.lineitem, tpch_sf1.orders, tpch_sf1.customer
+    WHERE s_suppkey = l_suppkey AND l_orderkey = o_orderkey AND o_custkey = c_custkey
+    GROUP BY 1, 2
+)
+QUALIFY ROW_NUMBER() OVER (PARTITION BY s_name ORDER BY pct_dependance DESC) = 1
+ORDER BY pct_dependance DESC
+LIMIT 5
+;",
+,Find the 10 suppliers with the highest positive-or-negative correlation between the discount they offer and the delivery delay for their shipments.,"SELECT s_name AS supplier_name, correlation
+FROM tpch_sf1.supplier, (
+    SELECT l_suppkey, CORR(l_discount, GREATEST(0, DATEDIFF('DAY', l_commitdate, l_receiptdate))) AS correlation
+    FROM tpch_sf1.lineitem
+    GROUP BY 1
+)
+WHERE l_suppkey = s_suppkey
+ORDER BY ABS(correlation) DESC
+LIMIT 10
+;
+",
+,Identify how often each month of the year is the month with the highest number of orders that entire year for a part type.,"SELECT month, COUNT(*) as n_best_month
+FROM (
+    SELECT p_type, YEAR(o_orderdate) AS year, MONTH(o_orderdate) AS month, COUNT(*) as n_orders
+    FROM tpch_sf1.part, tpch_sf1.lineitem, tpch_sf1.orders
+    WHERE p_partkey = l_partkey AND l_orderkey = o_orderkey
+    GROUP BY 1, 2, 3
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY p_type, year ORDER BY n_orders DESC) = 1
+)
+GROUP BY 1
+ORDER BY month
+;",
+,"Break down the average delay in delivery for for shipments by the number of suppliers who are shipping at least one part in the order. If a product arrives early, its delay is negative.","SELECT n_suppliers, AVG(delay_days) as avg_delay
+FROM (
+    SELECT
+        DATEDIFF('DAY', l_commitdate, l_receiptdate) AS delay_days,
+        COUNT(DISTINCT l_suppkey) OVER (PARTITION BY l_orderkey) AS n_suppliers
+    FROM tpch_sf1.lineitem
+)
+GROUP BY 1
+ORDER BY n_suppliers
+;",
+,"Identify the 10 products with the highest dependence on a single shipping mode, by number of purchases. For each product, list the shipping mode, number of purchases, and percentage of all purchases for that product that are for that shipping mode. Break ties alphabetically.","SELECT p_name AS part_name, l_shipmode AS ship_mode, n_orders, pct_dependance
+FROM tpch_sf1.part, (
+    SELECT l_partkey, l_shipmode, COUNT(*) AS n_orders, 100.0 * RATIO_TO_REPORT(n_orders) OVER (PARTITION BY l_partkey) AS pct_dependance
+    FROM tpch_sf1.lineitem
+    GROUP BY 1, 2
+)
+WHERE p_partkey = l_partkey
+QUALIFY ROW_NUMBER() OVER (PARTITION BY p_name ORDER BY pct_dependance DESC) = 1
+ORDER BY pct_dependance DESC, part_name ASC
+LIMIT 10
+;","%%pydough
+
+total_shipped = lines.CALCULATE(shipping_mode = ship_mode).part.CALCULATE(name, total_purchases = COUNT(lines))
+
+shipped_by_mode = PARTITION(total_shipped, name = 'total', by = (shipping_mode, name)
+                            ).CALCULATE(mode_purchases = COUNT(total), 
+                                total_purchases = MAX(total.total_purchases)
+                            ).CALCULATE(percentage = 100* mode_purchases/total_purchases)
+
+part_shipped = PARTITION(shipped_by_mode, name = 'mode', by = name)
+
+result = part_shipped.mode.WHERE(RANKING(by=percentage.DESC(), levels=1) ==1
+                                ).TOP_K(10, by= (percentage.DESC(), name.ASC())
+                                ).CALCULATE(name, shipping_mode, mode_purchases, percentage)
+
+pydough.to_df(result)"
+,What color name had the largest total quantity of parts containing the color in their name shipped in 1994?,"SELECT TO_CHAR(l.value) AS color, SUM(l_quantity) AS total_quantity
+FROM tpch_sf1.lineitem, tpch_sf1.part, LATERAL FLATTEN (split(p_name, ' ')) l
+WHERE l_partkey = p_partkey AND year(l_shipdate) = 1994
+GROUP BY 1
+ORDER BY total_quantity DESC
+LIMIT 1",
+,What color name had the largest total quantity of parts containing the color in their name shipped in 1994?,"SELECT TO_CHAR(l.value) AS color, SUM(l_quantity) AS total_quantity
+FROM tpch_sf1.lineitem, tpch_sf1.part, LATERAL FLATTEN (split(p_name, ' ')) l
+WHERE l_partkey = p_partkey AND year(l_shipdate) = 1994
+GROUP BY 1
+ORDER BY total_quantity DESC
+LIMIT 1
+;",
+,"How many suppliers do not supply any parts with ""tomato"" in the name?","SELECT COUNT(*)
+FROM tpch_sf1.supplier WHERE NOT EXISTS (
+    SELECT ps_suppkey
+    FROM tpch_sf1.partsupp, tpch_sf1.part
+    WHERE s_suppkey = ps_suppkey AND ps_partkey = p_partkey AND CONTAINS(p_name, 'tomato')
+)
+;","%%pydough
+
+suppliers_without_tomato = suppliers.WHERE(
+    HASNOT(supply_records.part.WHERE(CONTAINS(name, 'tomato'))) == 1
+)
+
+number_of_supps = TPCH.CALCULATE( COUNT(suppliers_without_tomato))
+
+pydough.to_df(number_of_supps)"
+,Identify every instance where a brand constitutes more than 15% of all parts supplied by a supplier.,"SELECT s_name, p_brand
+FROM tpch_sf1.supplier, tpch_sf1.partsupp, tpch_sf1.part
+WHERE s_suppkey = ps_suppkey AND ps_partkey = p_partkey
+GROUP BY 1, 2
+QUALIFY RATIO_TO_REPORT(COUNT(*)) OVER (PARTITION BY s_name)  > 0.15
+ORDER BY s_name, p_brand
+;
+","%%pydough
+
+ps_info = suppliers.CALCULATE(supplier_name=name).supply_records.part
+supplier_brand_combos = PARTITION(ps_info, name=""parts"", by=(supplier_name, brand)).CALCULATE(n_parts_of_brand=COUNT(parts))
+supplier_info = PARTITION(supplier_brand_combos, name=""brands"", by=supplier_name).CALCULATE(n_parts_supplied=SUM(brands.n_parts_of_brand))
+result = supplier_info.brands.CALCULATE(supplier_name, brand, pct=100.0*(n_parts_of_brand/n_parts_supplied)).WHERE(pct > 15.0)
+
+pydough.to_df(result)"
+,"For each brand, what supplier makes up the largest percentage of all sales of products of that brand, by quantity purchased?","SELECT p_brand, s_name, 100.0 * RATIO_TO_REPORT(SUM(l_quantity)) OVER (PARTITION BY p_brand) AS pct_suplier
+FROM tpch_sf1.supplier, tpch_sf1.lineitem, tpch_sf1.part
+WHERE s_suppkey = l_suppkey AND l_partkey = p_partkey
+GROUP BY p_brand, s_name
+QUALIFY ROW_NUMBER() OVER (PARTITION BY p_brand ORDER BY SUM(l_quantity) DESC) = 1
+ORDER BY p_brand","%%pydough
+
+sales_info = lines.CALCULATE(line_qty = quantity).part_and_supplier.CALCULATE(part_brand = part.brand, part_sup = supplier.name)
+total_sales_bysupp = PARTITION(sales_info, name = 'total', by = (part_sup, part_brand)).CALCULATE(part_sup = part_sup, sales_by_supp_brand = SUM(total.line_qty))
+brand_sales = PARTITION(total_sales_bysupp, name = 'brand', by = (part_brand)
+                        ).CALCULATE(sales_by_brand = SUM(brand.sales_by_supp_brand), most_supplied = MAX(brand.sales_by_supp_brand)
+                        ).CALCULATE(part_brand, supp_name = MAX(brand.WHERE(most_supplied ==sales_by_supp_brand).part_sup), 
+                                    pct = (100*most_supplied/sales_by_brand))
+result = brand_sales
+
+pydough.to_df(brand_sales)"
