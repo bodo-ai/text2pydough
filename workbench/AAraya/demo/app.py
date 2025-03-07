@@ -1,22 +1,25 @@
 import streamlit as st
 import psutil
 
-# Custom CSS to style the dropdown
+import streamlit as st
+import psutil
+
+#Custom CSS to style logo
 st.markdown(
     """
     <style>
-    .centered-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-    .dropdown-box select {
-        width: 50% !important;  /* Force a smaller dropdown */
-        min-width: 250px;       /* Ensure it doesn’t get too small */
-        max-width: 400px;       /* Limit its maximum size */
-        text-align: center;
-    }
+        .logo-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+        }
+        .logo-container img {
+            width: 150px; /* Ajusta el tamaño del logo */
+        }
     </style>
+    <div class="logo-container">
+        <img src="logo.png">
+    </div>
     """,
     unsafe_allow_html=True
 )
@@ -46,6 +49,9 @@ st.header("Try it Out!")
 st.markdown("Enter a natural language query, and let PyDough generate the corresponding query.")
 
 query = st.text_input("Enter your query:", "List all customers from United States")
+
+st.markdown("---")  
+
 
 if st.button("Run Query"):
     try:
