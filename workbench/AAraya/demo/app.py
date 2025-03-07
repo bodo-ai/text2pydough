@@ -2,7 +2,6 @@ import streamlit as st
 import psutil
 
 st.image("logo.png", width=150, use_container_width=False)
-st.title("PyDough LLM Demo")
 
 # ---------------------- APP HEADER ----------------------
 st.title("PyDough LLM Demo")
