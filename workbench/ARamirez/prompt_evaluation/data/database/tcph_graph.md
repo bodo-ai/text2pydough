@@ -1,6 +1,6 @@
 ### The `TPCH` collection contains the following columns:
 **WARNING**:
-TPCH is used primarily for performing calculations, such as average, sum, count, etc.
+TPCH is used ONLY for performing calculations, such as average, sum, count, etc.
 - **customers**: A list of all customer.
 - **lines**: A list of all lines items.
 - **nations**: A list of all nations.
