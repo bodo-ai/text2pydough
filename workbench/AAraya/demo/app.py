@@ -7,9 +7,9 @@ st.markdown(
     <style>
         .logo-container {
             position: absolute;
-            top: 10px;
-            left: -580px;
-            z-index: 1100; /* Ensures it's always on top */
+            top: 100px;
+            left: -560px;
+            z-index: 1000; /* Ensures it's always on top */
         }
         .logo-container img {
             width: 150px; /* Adjusts the logo size */
