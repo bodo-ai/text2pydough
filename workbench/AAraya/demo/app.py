@@ -1,10 +1,27 @@
 import streamlit as st
 import psutil
 
-col1, col2 = st.columns([1, 3])  # Creates a two-column layout
+# Custom CSS to style the logo in the top-left corner
+st.markdown(
+    """
+    <style>
+        .logo-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000; /* Ensures it's always on top */
+        }
+        .logo-container img {
+            width: 150px; /* Adjusts the logo size */
+        }
+    </style>
+    <div class="logo-container">
+        <img src="https://awsmp-logos.s3.amazonaws.com/e4ddeded-08ce-43aa-ab95-23adacfbec40/9e8c3b5d7d59ca6f24b8b1ccd841a1c0.png">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-with col1:  # Place the logo in the left column
-    st.image("logo.png", width=150)  # Adjust width as needed
 
 # ---------------------- APP HEADER ----------------------
 st.title("PyDough LLM Demo")
