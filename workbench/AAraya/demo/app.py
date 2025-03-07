@@ -1,28 +1,7 @@
 import streamlit as st
 import psutil
 
-import streamlit as st
-import psutil
-
-#Custom CSS to style logo
-st.markdown(
-    """
-    <style>
-        .logo-container {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-        }
-        .logo-container img {
-            width: 150px; /* Ajusta el tamaño del logo */
-        }
-    </style>
-    <div class="logo-container">
-        <img src="logo.png">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.image("logo.png", width=150, use_container_width=False)
 
 # ---------------------- APP HEADER ----------------------
 st.title("PyDough LLM Demo")
@@ -48,9 +27,7 @@ st.markdown(
 st.header("Try it Out!")
 st.markdown("Enter a natural language query, and let PyDough generate the corresponding query.")
 
-query = st.text_input("Enter your query:", "List all customers from United States")
-
-st.markdown("---")  
+query = st.text_input("Enter your query:", "List all customers from United States") 
 
 
 if st.button("Run Query"):
@@ -82,21 +59,37 @@ if "result" in st.session_state:
 
     # Display the selected part of the result
     if selected_output == "Code":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.code(result.code, language="python")
     elif selected_output == "Full Explanation":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.write(result.full_explanation)
     elif selected_output == "DataFrame":
+        st.markdown("Output:")
+        st.markdown("---") 
         if hasattr(result, "df"):
             st.dataframe(result.df)
         else:
             st.write("No dataframe available.")
     elif selected_output == "Exception":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.write(result.exception)
     elif selected_output == "Original Question":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.write(result.original_question)
     elif selected_output == "Base Prompt":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.write(result.base_prompt)
     elif selected_output == "Cheat Sheet":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.write(result.cheat_sheet)
     elif selected_output == "Knowledge Graph":
+        st.markdown("Output:")
+        st.markdown("---") 
         st.write(result.knowledge_graph)
