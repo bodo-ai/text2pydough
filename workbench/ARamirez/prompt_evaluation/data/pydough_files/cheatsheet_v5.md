@@ -494,7 +494,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 
 **GENERAL NOTES**
 
-*   Use &, |, ~ for logical operations (not and, or, not).
+*   You need to use `&` instead of `and`, `|` instead of `or`, and `~` instead of `not`, and each condition needs to be properly enclosed in parentheses when combining them with logical operators.
     
 *   For chained inequalities, use MONOTONIC or explicit comparisons.
     
