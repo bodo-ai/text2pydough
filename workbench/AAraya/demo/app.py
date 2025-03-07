@@ -1,25 +1,10 @@
 import streamlit as st
 import psutil
 
-#Custom CSS to style logo
-st.markdown(
-    """
-    <style>
-        .logo-container {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-        }
-        .logo-container img {
-            width: 150px; /* Ajusta el tamaño del logo */
-        }
-    </style>
-    <div class="logo-container">
-        <img src="logo.png">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+col1, col2 = st.columns([1, 3])  # Creates a two-column layout
+
+with col1:  # Place the logo in the left column
+    st.image("logo.png", width=150)  # Adjust width as needed
 
 # ---------------------- APP HEADER ----------------------
 st.title("PyDough LLM Demo")
@@ -77,29 +62,37 @@ if "result" in st.session_state:
 
     # Display the selected part of the result
     if selected_output == "Code":
+        st.markdown("Output:")
         st.markdown("---") 
         st.code(result.code, language="python")
     elif selected_output == "Full Explanation":
+        st.markdown("Output:")
         st.markdown("---") 
         st.write(result.full_explanation)
     elif selected_output == "DataFrame":
+        st.markdown("Output:")
         st.markdown("---") 
         if hasattr(result, "df"):
             st.dataframe(result.df)
         else:
             st.write("No dataframe available.")
     elif selected_output == "Exception":
+        st.markdown("Output:")
         st.markdown("---") 
         st.write(result.exception)
     elif selected_output == "Original Question":
+        st.markdown("Output:")
         st.markdown("---") 
         st.write(result.original_question)
     elif selected_output == "Base Prompt":
+        st.markdown("Output:")
         st.markdown("---") 
         st.write(result.base_prompt)
     elif selected_output == "Cheat Sheet":
+        st.markdown("Output:")
         st.markdown("---") 
         st.write(result.cheat_sheet)
     elif selected_output == "Knowledge Graph":
+        st.markdown("Output:")
         st.markdown("---") 
         st.write(result.knowledge_graph)
