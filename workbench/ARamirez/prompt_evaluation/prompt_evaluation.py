@@ -266,9 +266,7 @@ def main(git_hash):
             folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
             os.makedirs(folder_path, exist_ok=True)
             questions_df = pd.read_csv("./TPCH Queries - All Queries.csv", encoding="utf-8")
-            # Format prompt once
-            formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
-
+            
             # Process questions
             responses = process_questions(args.provider.lower(), args.model_id, formatted_prompt, questions_df["question"].tolist(), args.temperature)
             questions_df["response"] = responses
