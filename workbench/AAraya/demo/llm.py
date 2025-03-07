@@ -131,6 +131,8 @@ class LLMClient:
         """
         default_provider = "aws"
         default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+        #default_provider = "google"
+        #default_model = "gemini-2.0-flash-thinking-exp-01-21"
     
         self.provider = default_provider
         self.model = default_model
