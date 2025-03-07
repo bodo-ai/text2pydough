@@ -1,27 +1,8 @@
 import streamlit as st
 import psutil
 
-# Custom CSS to style the logo in the top-left corner
-st.markdown(
-    """
-    <style>
-        .logo-container {
-            position: absolute;
-            top: 100px;
-            left: -560px;
-            z-index: 1000; /* Ensures it's always on top */
-        }
-        .logo-container img {
-            width: 150px; /* Adjusts the logo size */
-        }
-    </style>
-    <div class="logo-container">
-        <img src="https://awsmp-logos.s3.amazonaws.com/e4ddeded-08ce-43aa-ab95-23adacfbec40/9e8c3b5d7d59ca6f24b8b1ccd841a1c0.png">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
+st.image("logo.png", width=150, use_container_width=False)
+st.title("PyDough LLM Demo")
 
 # ---------------------- APP HEADER ----------------------
 st.title("PyDough LLM Demo")
