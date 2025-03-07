@@ -119,3 +119,176 @@ INNER JOIN CountryAvg ca ON c.country_code = ca.country_code
 WHERE o.O_CUSTKEY IS NULL
     AND c.C_ACCTBAL > ca.avg_balance
 GROUP BY c.country_code;",
+Find the names of all customers and the number of orders placed in 1995 in Europe that placed a least one order in that same year. Sorted in descending order by the number of orders.,"SELECT
+    c.c_name AS customer_name,
+    COUNT(o.o_orderkey) AS order_count
+FROM
+    customer c
+JOIN
+    orders o ON c.c_custkey = o.o_custkey
+JOIN
+    nation n ON c.c_nationkey = n.n_nationkey
+WHERE
+    strftime('%Y', o.o_orderdate) = '1995'
+    AND n.n_regionkey = (
+        SELECT r_regionkey
+        FROM region
+        WHERE r_name = 'EUROPE'
+    )
+GROUP BY
+    c.c_custkey, c.c_name
+ORDER BY
+    order_count DESC;",
+"List customers who ordered in 1996 but not in 1997 with a total spent of over 1000$. Include the number of months since the last order and sort by total spent, highest first.","SELECT
+  customer_name,
+  total_spent,
+  months_since_last_order
+FROM (
+  SELECT
+    total_spent AS ordering_4,
+    customer_name,
+    months_since_last_order,
+    total_spent
+  FROM (
+    SELECT
+      agg_2,
+      agg_3,
+      customer_name,
+      months_since_last_order,
+      total_spent
+    FROM (
+      SELECT
+        agg_2,
+        customer_name,
+        key,
+        months_since_last_order,
+        total_spent
+      FROM (
+        SELECT
+          COALESCE(agg_1, 0) AS total_spent,
+          name AS customer_name,
+          (
+            CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', agg_0) AS INTEGER)
+          ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', agg_0) AS INTEGER) AS months_since_last_order,
+          key
+        FROM (
+          SELECT
+            agg_0,
+            agg_1,
+            key,
+            name
+          FROM (
+            SELECT
+              c_custkey AS key,
+              c_name AS name
+            FROM main.CUSTOMER
+          )
+          LEFT JOIN (
+            SELECT
+              MAX(order_date) AS agg_0,
+              SUM(total_price) AS agg_1,
+              customer_key
+            FROM (
+              SELECT
+                o_custkey AS customer_key,
+                o_orderdate AS order_date,
+                o_totalprice AS total_price
+              FROM main.ORDERS
+            )
+            GROUP BY
+              customer_key
+          )
+            ON key = customer_key
+        )
+      )
+      LEFT JOIN (
+        SELECT
+          COUNT() AS agg_2,
+          customer_key
+        FROM (
+          SELECT
+            customer_key
+          FROM (
+            SELECT
+              o_custkey AS customer_key,
+              o_orderdate AS order_date
+            FROM main.ORDERS
+          )
+          WHERE
+            CAST(STRFTIME('%Y', order_date) AS INTEGER) = 1996
+        )
+        GROUP BY
+          customer_key
+      )
+        ON key = customer_key
+    )
+    LEFT JOIN (
+      SELECT
+        COUNT() AS agg_3,
+        customer_key
+      FROM (
+        SELECT
+          customer_key
+        FROM (
+          SELECT
+            o_custkey AS customer_key,
+            o_orderdate AS order_date
+          FROM main.ORDERS
+        )
+        WHERE
+          CAST(STRFTIME('%Y', order_date) AS INTEGER) = 1997
+      )
+      GROUP BY
+        customer_key
+    )
+      ON key = customer_key
+  )
+  WHERE
+    (
+      (
+        COALESCE(agg_2, 0) > 0
+      ) = 1
+    )
+    AND (
+      (
+        COALESCE(agg_3, 0) = 0
+      ) = 1
+    )
+    AND (
+      total_spent > 1000
+    )
+)
+ORDER BY
+  ordering_4 DESC",
+"What is the february 1996 SPM for the almond antique blue royal burnished part in China? SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100
+","SELECT
+  ROUND(
+    (
+      (
+        -- Total Sales (Revenue after discount)
+        SUM(l.l_extendedprice) 
+        - 
+        (
+          -- Total Tax (on discounted sales)
+          SUM(l.l_extendedprice  * l.l_tax) 
+          + 
+          -- Total Commission (discount amount)
+          SUM(l.l_extendedprice * l.l_discount)
+        )
+      ) 
+      / 
+      SUM(l.l_extendedprice) 
+    ) * 100, 2
+  ) AS spm
+FROM part p
+JOIN lineitem l ON p.p_partkey = l.l_partkey
+JOIN orders o ON l.l_orderkey = o.o_orderkey
+JOIN customer c ON o.o_custkey = c.c_custkey
+JOIN nation n ON c.c_nationkey = n.n_nationkey
+WHERE
+  -- Match the part name (case-sensitive wildcards)
+  p.p_name LIKE '%rosy%black%navajo%cream%sky%'
+  -- Filter for February 1996 orders
+  AND strftime('%Y-%m', o.o_orderdate) = '1996-02'
+  -- Optional: Filter for a specific nation (e.g., China)
+  -- AND n.n_name = 'CHINA';",
