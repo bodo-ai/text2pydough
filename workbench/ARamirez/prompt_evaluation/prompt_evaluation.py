@@ -249,20 +249,27 @@ def get_claude_response(client, prompt, data, question, database_content, script
     corrected_response = correct(client, question, response,formatted_prompt)
     return corrected_response
 
-def process_questions(data,provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
-    original_responses = []
+def process_question_wrapper(args):
+    """ Wrapper function to handle multiprocessing calls. """
+    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content = args
 
     if provider == "azure":
         client = AzureAIProvider(model_id)
-        get_response = lambda q: get_azure_response(client, formatted_prompt, data,q, database_content, script_content)
-    elif provider=="aws-thinking":
-        client = ClaudeAIProvider(provider,model_id)
-        get_response = lambda q: get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)
+    elif provider == "aws-thinking":
+        client = ClaudeAIProvider(provider, model_id)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
-        client = OtherAIProvider(provider,model_id,temperature)
-        get_response = lambda q: get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        original_responses = list(executor.map(get_response, questions))
+        client = OtherAIProvider(provider, model_id, temperature)
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
+
+def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
+    """ Processes questions in parallel using multiprocessing. """
+    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
+        original_responses = pool.map(
+            process_question_wrapper, 
+            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
+        )
     
     return original_responses
 
