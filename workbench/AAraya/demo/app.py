@@ -54,7 +54,7 @@ if "result" in st.session_state:
     selected_output = st.selectbox(
         "Select what to view:",
         ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", "Original Question", 
-        "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  # ✅ Added "SQL" option here
+        "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  
         key="dropdown",
     )
 
