@@ -261,7 +261,7 @@ def process_questions(data,provider, model_id, formatted_prompt, questions, temp
     else:
         client = OtherAIProvider(provider,model_id,temperature)
         get_response = lambda q: get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         original_responses = list(executor.map(get_response, questions))
     
     return original_responses
