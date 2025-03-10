@@ -84,4 +84,43 @@ if "result" in st.session_state:
         st.write(result.cheat_sheet)
     elif selected_output == "Knowledge Graph":
         st.write(result.knowledge_graph)
+        
+# ---------------------- DISCOURSE FUNCTIONALITY ----------------------
+st.header("Improve Query with Discourse")
+
+follow_up = st.text_input("Add follow-up information to refine the query:")
+
+if st.button("Run Discourse"):
+    if "result" in st.session_state and follow_up:
+        try:
+            improved_result = client.discourse(result, follow_up)
+            st.session_state.improved_result = improved_result
+            st.success("Query refined successfully! ✅")
+        except Exception as e:
+            st.error(f"Error running discourse: {e}")
+    else:
+        st.warning("Run a query first and enter follow-up information.")
+
+# ---------------------- DISPLAY IMPROVED RESULTS ----------------------
+if "improved_result" in st.session_state:
+    improved_result = st.session_state.improved_result
+
+    st.subheader("Refined Query Results")
+    
+    selected_output_improved = st.selectbox(
+        "Select what to view (Refined Query):",
+        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
+        key="dropdown_improved",
+    )
+
+    if selected_output_improved == "Code":
+        st.code(improved_result.code, language="python")
+    elif selected_output_improved == "Full Explanation":
+        st.write(improved_result.full_explanation)
+    elif selected_output_improved == "DataFrame":
+        st.dataframe(improved_result.df) if hasattr(improved_result, "df") else st.write("No dataframe available.")
+    elif selected_output_improved == "SQL": 
+        st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
+    elif selected_output_improved == "Exception":
+        st.write(improved_result.exception)
 
