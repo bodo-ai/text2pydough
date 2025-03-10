@@ -159,6 +159,7 @@ def execute_code_and_extract_result(extracted_code, local_env):
         last_variable = list(local_env.values())[-1]
         print(last_variable)
         result_df = convert_to_df(last_variable)
+        print(result_df)
         return result_df, None  # Return result and no exception
     except Exception as e:
         return None, str(e)  # Return None as result and exception message
