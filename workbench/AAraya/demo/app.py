@@ -43,6 +43,9 @@ if st.button("Run Query"):
 if "result" in st.session_state:
     result = st.session_state.result
 
+    st.subheader("Output:")
+    st.markdown("---")  # Separator for better readability
+
     selected_output = st.selectbox(
         "Select what to view:",
         ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
@@ -71,6 +74,13 @@ if "result" in st.session_state:
 
     # ---------------------- DISCOURSE FUNCTIONALITY ----------------------
     st.header("Improve Query with Discourse")
+    st.markdown(
+        """
+        You can **refine your query** by adding follow-up information.  
+        Each time you run Discourse, it will **update the query with new details**.  
+        If you want a completely new query, change it in the first section above.
+        """
+    )
 
     follow_up = st.text_input("Add follow-up information to refine the query:")
 
@@ -90,8 +100,9 @@ if "result" in st.session_state:
     if "improved_result" in st.session_state:
         improved_result = st.session_state.improved_result
 
-        st.subheader("Refined Query Results")
-        
+        st.subheader("Refined Query Output:")
+        st.markdown("---")  # Separator for better readability
+
         selected_output_improved = st.selectbox(
             "Select what to view (Refined Query):",
             ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
@@ -108,5 +119,6 @@ if "result" in st.session_state:
             st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
         elif selected_output_improved == "Exception":
             st.write(improved_result.exception)
+
 
 
