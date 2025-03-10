@@ -13,10 +13,10 @@ from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
 from azure.core.pipeline.transport import RequestsTransport
 import mlflow
-from test_data.eval import compare_output
+from test_data.eval import compare_output, execute_code_and_extract_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 from claude import ClaudeModel
-
+import pydough
 from abc import ABC, abstractmethod
 
 # === Abstract Class for AI Providers ===
@@ -200,22 +200,18 @@ def format_prompt(prompt, data, question, database_content, script_content):
     #prompt_string = ' '.join(contexts)
     return prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
-def correct(client, code, script_code, database_content):
-    corrective_question = (f"""You are an AI designed to analyze, correct, and verify the validity of PyDough code. You will be provided with two reference files:
-    1. **PyDough Reference File** - This file contains the core concepts, functions, and syntax of PyDough.
-    {script_code}
+def correct(client, question,  code, prompt):
+    extracted_code= extract_python_code(code)
+    local_env = {"pydough": pydough, "datetime": datetime}
+    response= code    
+    result, exception= execute_code_and_extract_result(extracted_code, local_env)
+    if not result:
+        q= (f"""An error occurred while processing this code: {extracted_code}. "
+        The error is: '{exception}'. "
+        The original question was: '{question}'. "
+        Can you help me fix the issue?""")
 
-    2. **Database Structure Reference File** - This file outlines the database schema, collections, fields, and relationships.
-    {database_content}
-    3. **Output**: 
-    - If the provided PyDough code is valid and free of errors, return the same output.
-    - Make sure to follow the rules in the provided PyDough code
-    - If the code contains errors or does not adhere to the best practices, provide the same output but with the corrected version of the code
-
-    4. **Formatting**: Ensure that the returned code is well-formatted and easy to read, maintaining the original style as much as possible.
-    Now, process the PyDough code provided by the user according to the steps outlined above.""")
-
-    response= client.ask(code, corrective_question)
+        response=client.ask(q, prompt)
     return response
    
 def get_azure_response(client, prompt, data, question, database_content, script_content):
@@ -225,7 +221,7 @@ def get_azure_response(client, prompt, data, question, database_content, script_
     
     try:
         response= client.ask(question, formatted_prompt)
-        corrected_response= correct(client,response, script_content,database_content)
+        corrected_response= correct(client,question,response, formatted_prompt)
         return corrected_response
     except Exception as e:
         print(f"Azure AI error: {e}")
@@ -238,7 +234,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
     try:
         time.sleep(0.5)
         response=client.ask(question,formatted_prompt)
-        corrected_response= correct(client, response,script_content,database_content)
+        corrected_response= correct(client, question, response,formatted_prompt)
         return corrected_response
     except Exception as e:
         print(f"AI Suite error: {e}")
@@ -247,8 +243,8 @@ def get_other_provider_response(client, prompt, data, question, database_content
 def get_claude_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using aisuite."""
     formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-    reponse= client.ask(question, formatted_prompt)
-    corrected_response = correct(client,reponse,script_content,database_content)
+    response= client.ask(question, formatted_prompt)
+    corrected_response = correct(client, question, response,formatted_prompt)
     return corrected_response
 
 def process_question_wrapper(args):
