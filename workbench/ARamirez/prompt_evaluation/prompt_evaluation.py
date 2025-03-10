@@ -213,6 +213,8 @@ def correct(client, question,  code, prompt):
         Can you help me fix the issue?""")
 
         response=client.ask(q, prompt)
+
+    print(f"response {response}")
     return response
    
 def get_azure_response(client, prompt, data, question, database_content, script_content):
