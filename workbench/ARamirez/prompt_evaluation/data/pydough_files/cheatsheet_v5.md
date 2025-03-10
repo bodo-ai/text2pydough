@@ -501,3 +501,5 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   Aggregation functions convert plural values (e.g., collections) to singular values.
 
 *   PyDough does not yet support non-expression arguments for aggregation function Function[NDISTINCT] 
+
+*   PyDough does yet support aggregations whose arguments mix between subcollection data of the current context and fields of the context itself
