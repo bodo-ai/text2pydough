@@ -11,10 +11,10 @@ class ClaudeModel:
     def ask_claude_with_stream(self, question, prompt, model, provider):
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 18000,
+            "max_tokens": 25000,
             "thinking": {
                 "type": "enabled",
-                "budget_tokens": 5000
+                "budget_tokens": 10000
             },
             "system": prompt,  # Wrap "string" in quotes to make it a valid string
             "messages": [
