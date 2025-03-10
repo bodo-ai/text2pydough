@@ -1,4 +1,4 @@
-### The `TPCH` collection contains the following columns:
+### The high-level graph `TPCH` collection contains the following columns:
 **WARNING**:
 TPCH is used ONLY for performing calculations, such as average, sum, count, etc. Do not use it for anything else.
 - **customers**: A list of all customer.
