@@ -206,7 +206,8 @@ def correct(client, question,  code, prompt):
     response= code    
     result, exception= execute_code_and_extract_result(extracted_code, local_env)
     
-    if not result:
+    if result.empty:
+
         q= (f"""An error occurred while processing this code: {extracted_code}. "
         The error is: '{exception}'. "
         The original question was: '{question}'. "
