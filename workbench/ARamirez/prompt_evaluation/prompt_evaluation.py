@@ -16,6 +16,94 @@ from test_data.eval import compare_output
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 from claude import ClaudeModel
 
+from abc import ABC, abstractmethod
+
+# === Abstract Class for AI Providers ===
+class AIProvider(ABC):
+    """Abstract class defining the interface for AI providers."""
+
+    @abstractmethod
+    def ask(self, question):
+        """Returns a response for a given question."""
+        pass
+
+
+# === Azure AI Provider ===
+class AzureAIProvider(AIProvider):
+    """Handles responses from Azure AI."""
+
+    def __init__(self, model_id):
+        self.client = self.setup_azure_client()
+        self.model_id = model_id
+
+    def setup_azure_client(self):
+        """Initializes and returns the Azure ChatCompletionsClient."""
+        endpoint = os.getenv("AZURE_BASE_URL")
+        key = os.getenv("AZURE_API_KEY")
+
+        if not endpoint or not key:
+            raise ValueError("Azure environment variables are not set correctly.")
+
+        return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+
+    def ask(self, question, prompt):
+        """Generates a response using Azure AI."""
+        formatted_prompt = prompt
+        messages = [SystemMessage(formatted_prompt), UserMessage(question)]
+
+        try:
+            completion = self.client.complete(messages=messages, max_tokens=20000, model=self.model_id, stream=True)
+            response = [chunk.choices[0]["delta"]["content"] for chunk in completion if chunk.choices]
+            return "".join(response)
+        except Exception as e:
+            print(f"Azure AI error: {e}")
+            return None
+
+
+# === Claude AI Provider ===
+class ClaudeAIProvider(AIProvider):
+    """Handles responses from Claude AI."""
+
+    def __init__(self, provider, model_id):
+        self.client = ClaudeModel()
+        self.provider = provider
+        self.model_id = model_id
+
+    def ask(self, question, prompt):
+        """Generates a response using Claude AI."""
+        return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
+
+
+# === Other AI Providers (e.g., AI Suite) ===
+class OtherAIProvider(AIProvider):
+    """Handles responses from other AI providers like AI Suite."""
+
+    def __init__(self, provider, model_id, temperature):
+        self.client = ai.Client()
+        self.provider = provider
+        self.model_id = model_id
+        self.temperature= temperature
+
+
+    def ask(self, question, prompt):
+        """Generates a response using AI Suite."""
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": question},
+        ]
+
+        try:
+            time.sleep(0.5)  # Simulate slight delay
+            response = self.client.chat.completions.create(
+                model=f"{self.provider}:{self.model_id}",
+                messages=messages,
+                temperature=self.temperature
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"AI Suite error: {e}")
+            return None
+        
 WORDS_MAP = {
     "partition": "PARTITION",
     "group_by": "PARTITION",
@@ -82,16 +170,6 @@ def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
-def setup_azure_client():
-    """Initializes and returns the Azure ChatCompletionsClient."""
-    endpoint = os.getenv("AZURE_BASE_URL")
-    key = os.getenv("AZURE_API_KEY")
-
-    if not endpoint or not key:
-        raise ValueError("Azure environment variables are not set correctly.")
-
-    return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key))
-
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
     if not isinstance(text, str):  # Ensure text is a string
@@ -121,71 +199,72 @@ def format_prompt(prompt, data, question, database_content, script_content):
     #prompt_string = ' '.join(contexts)
     return prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
+def correct(client, code, script_code, database_content):
+    corrective_question = (f"""You are an AI designed to analyze, correct, and verify the validity of PyDough code. You will be provided with two reference files:
+    1. **PyDough Reference File** - This file contains the core concepts, functions, and syntax of PyDough.
+    {script_code}
 
-def get_azure_response(client, prompt, data, question, model_id, database_content, similar_code, script_content):
+    2. **Database Structure Reference File** - This file outlines the database schema, collections, fields, and relationships.
+    {database_content}
+    3. **Output**: 
+    - If the provided PyDough code is valid and free of errors, return the same output.
+    - If the code contains errors or does not adhere to the best practices, provide the same output but with the corrected version of the code
+
+    4. **Formatting**: Ensure that the returned code is well-formatted and easy to read, maintaining the original style as much as possible.
+    Now, process the PyDough code provided by the user according to the steps outlined above.""")
+
+    response= client.ask(code, corrective_question)
+    return response
+   
+def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
     formatted_prompt = format_prompt(prompt,data,question,database_content, script_content)
-
-    messages = [SystemMessage(formatted_prompt), UserMessage(question)]
+    
     
     try:
-        completion = client.complete(messages=messages, max_tokens=20000, model=model_id, stream=True)
-        response = []
-        for chunck in completion:
-            if chunck.choices != []:
-                response.append(chunck.choices[0]["delta"]["content"])
-        result = "".join(response)
-        return result
+        response= client.ask(question, formatted_prompt)
+        corrected_response= correct(client,response, script_content,database_content)
+        return corrected_response
     except Exception as e:
         print(f"Azure AI error: {e}")
         return None
 
-def get_other_provider_response(client, provider, model_id, prompt, data, question,temperature, database_content,script_content):
+def get_other_provider_response(client, prompt, data, question, database_content,script_content):
     """Generates a response using aisuite."""
     formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-    messages = [
-        {"role": "system", "content": formatted_prompt},
-        {"role": "user", "content": question},
-
-        #{"role": "system", "content": "You are a helpful assistant that can answer questions about PyDough queries a SQL-like language. Use the reference below to answer questions in PyDough "},
-        #{"role": "user", "content": f"Using the following reference: {prompt} \n Answer the following question: {question}"},
-    ]
-    
+   
     try:
         time.sleep(0.5)
-        response = client.chat.completions.create(
-            model=f"{provider}:{model_id}",
-            messages=messages,
-            temperature= temperature
-        )
-        return response.choices[0].message.content
+        response=client.ask(question,formatted_prompt)
+        corrected_response= correct(client, response,script_content,database_content)
+        return corrected_response
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
 
-def get_claude_response(client, provider, model_id, prompt, data, question, database_content, script_content):
+def get_claude_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using aisuite."""
     formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-    reponse= client.ask_claude_with_stream(question, formatted_prompt, model_id, provider)
-    return reponse
-
+    reponse= client.ask(question, formatted_prompt)
+    corrected_response = correct(client,reponse,script_content,database_content)
+    return corrected_response
 
 def process_questions(data,provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
-    responses = []
+    original_responses = []
 
     if provider == "azure":
-        client = setup_azure_client()
-        get_response = lambda q: get_azure_response(client, formatted_prompt, data,q, model_id, database_content, script_content)
+        client = AzureAIProvider(model_id)
+        get_response = lambda q: get_azure_response(client, formatted_prompt, data,q, database_content, script_content)
     elif provider=="aws-thinking":
-        client = ClaudeModel()
-        get_response = lambda q: get_claude_response(client, provider, model_id, formatted_prompt, data, q, database_content, script_content)
+        client = ClaudeAIProvider(provider,model_id)
+        get_response = lambda q: get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
-        client = ai.Client()
-        get_response = lambda q: get_other_provider_response(client, provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content)
+        client = OtherAIProvider(provider,model_id,temperature)
+        get_response = lambda q: get_other_provider_response(client, formatted_prompt, data, q, temperature, database_content, script_content)
     with ThreadPoolExecutor(max_workers=20) as executor:
-        responses = list(executor.map(get_response, questions))
-
-    return responses
+        original_responses = list(executor.map(get_response, questions))
+    
+    return original_responses
 
 def main(git_hash):
     # Argument Parser
