@@ -4,7 +4,7 @@
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - GROUP_BY function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. 
+  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. 
 
   - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
 
@@ -153,29 +153,6 @@
 
   - **Group packages by year/month**:  
     GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
-
-  - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage**:
-
-    PARTITION(Addresses, name="addrs", by=(city, state)).CALCULATE(
-        total_packages=COUNT(addrs.current_occupants.packages)
-    ).addrs.CALCULATE(city, state).current_occupants.CALCULATE(
-        first_name,
-        last_name,
-        city=city,
-        state=state,
-        pct_of_packages=100.0 * COUNT(packages) / total_packages,
-    )
-
-  - **Identify the states whose current occupants account for at least 1% of all packages purchased. List the state and the percentage**: Notice how `total_packages` is down-streamed from the graph-level `CALCULATE`.
-
-    GRAPH.CALCULATE(
-        total_packages=COUNT(Packages)
-    ).PARTITION(Addresses, name="addrs", by=state).CALCULATE(
-        state,
-        pct_of_packages=100.0 * COUNT(addrs.current_occupants.package) / total_packages
-    ).WHERE(pct_of_packages >= 1.0)
-
-    **IMPORTANT**: Look here, you use GRAPH.PARTITION when you are working within data at the graph level (as opposed to a single table) and do calculations over multiple relationships or dimensions.
 
 **AVOID TO DO**:
 - **Bad Examples**:
