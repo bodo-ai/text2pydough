@@ -42,15 +42,14 @@ if st.button("Run Query"):
 # ---------------------- DISPLAY RESULTS ----------------------
 if "result" in st.session_state:
     result = st.session_state.result
-
+    
+    st.subheader("Output:")
     selected_output = st.selectbox(
         "Select what to view:",
         ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
          "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  
         key="dropdown",
     )
-    
-    st.subheader("Output:")
     st.markdown("---")  # Separator for better readability
 
     if selected_output == "Code":
@@ -98,14 +97,13 @@ if "result" in st.session_state:
     # ---------------------- DISPLAY IMPROVED RESULTS ----------------------
     if "improved_result" in st.session_state:
         improved_result = st.session_state.improved_result
-
+        
+        st.subheader("Refined Query Output:")
         selected_output_improved = st.selectbox(
             "Select what to view (Refined Query):",
             ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
             key="dropdown_improved",
         )
-        
-        st.subheader("Refined Query Output:")
         st.markdown("---")  # Separator for better readability
 
         if selected_output_improved == "Code":
