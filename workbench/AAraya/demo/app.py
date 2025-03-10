@@ -43,15 +43,15 @@ if st.button("Run Query"):
 if "result" in st.session_state:
     result = st.session_state.result
 
-    st.subheader("Output:")
-    st.markdown("---")  # Separator for better readability
-
     selected_output = st.selectbox(
         "Select what to view:",
         ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
          "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  
         key="dropdown",
     )
+    
+    st.subheader("Output:")
+    st.markdown("---")  # Separator for better readability
 
     if selected_output == "Code":
         st.code(result.code, language="python")
@@ -76,8 +76,7 @@ if "result" in st.session_state:
     st.header("Improve Query with Discourse")
     st.markdown(
         """
-        You can **refine your query** by adding follow-up information.  
-        Each time you run Discourse, it will **update the query with new details**.  
+        You can **refine your query** by adding follow-up information. Each time you run Discourse, it will update the query with new details.  
         If you want a completely new query, change it in the first section above.
         """
     )
@@ -100,14 +99,14 @@ if "result" in st.session_state:
     if "improved_result" in st.session_state:
         improved_result = st.session_state.improved_result
 
-        st.subheader("Refined Query Output:")
-        st.markdown("---")  # Separator for better readability
-
         selected_output_improved = st.selectbox(
             "Select what to view (Refined Query):",
             ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
             key="dropdown_improved",
         )
+        
+        st.subheader("Refined Query Output:")
+        st.markdown("---")  # Separator for better readability
 
         if selected_output_improved == "Code":
             st.code(improved_result.code, language="python")
