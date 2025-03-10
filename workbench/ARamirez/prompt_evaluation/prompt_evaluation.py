@@ -208,6 +208,7 @@ def correct(client, code, script_code, database_content):
     {database_content}
     3. **Output**: 
     - If the provided PyDough code is valid and free of errors, return the same output.
+    - Make sure to follow the rules in the provided PyDough code
     - If the code contains errors or does not adhere to the best practices, provide the same output but with the corrected version of the code
 
     4. **Formatting**: Ensure that the returned code is well-formatted and easy to read, maintaining the original style as much as possible.
