@@ -58,30 +58,30 @@ selected_output = st.selectbox(
     key="dropdown",
 )
 
-st.markdown("</div>", unsafe_allow_html=True)
-# Display the selected part of the result
-if selected_output == "Code":
-    st.code(result.code, language="python")
-elif selected_output == "Full Explanation":
-    st.write(result.full_explanation)
-elif selected_output == "DataFrame":
-    if hasattr(result, "df"):
-        st.dataframe(result.df)
-    else:
-        st.write("No dataframe available.")
-elif selected_output == "SQL": 
-    if hasattr(result, "sql"):
-        st.code(result.sql, language="sql")
-    else:
-        st.write("No SQL available.")
-elif selected_output == "Exception":
-    st.write(result.exception)
-elif selected_output == "Original Question":
-    st.write(result.original_question)
-elif selected_output == "Base Prompt":
-    st.write(result.base_prompt)
-elif selected_output == "Cheat Sheet":
-    st.write(result.cheat_sheet)
-elif selected_output == "Knowledge Graph":
-    st.write(result.knowledge_graph)
+    st.markdown("</div>", unsafe_allow_html=True)
+    # Display the selected part of the result
+    if selected_output == "Code":
+        st.code(result.code, language="python")
+    elif selected_output == "Full Explanation":
+        st.write(result.full_explanation)
+    elif selected_output == "DataFrame":
+        if hasattr(result, "df"):
+            st.dataframe(result.df)
+        else:
+            st.write("No dataframe available.")
+    elif selected_output == "SQL": 
+        if hasattr(result, "sql"):
+            st.code(result.sql, language="sql")
+        else:
+            st.write("No SQL available.")
+    elif selected_output == "Exception":
+        st.write(result.exception)
+    elif selected_output == "Original Question":
+        st.write(result.original_question)
+    elif selected_output == "Base Prompt":
+        st.write(result.base_prompt)
+    elif selected_output == "Cheat Sheet":
+        st.write(result.cheat_sheet)
+    elif selected_output == "Knowledge Graph":
+        st.write(result.knowledge_graph)
 
