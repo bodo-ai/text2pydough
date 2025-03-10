@@ -1,5 +1,6 @@
 import streamlit as st
 import psutil
+from llm import LLMClient
 
 st.image("logo.png", width=150, use_container_width=False)
 
@@ -27,19 +28,13 @@ st.markdown(
 st.header("Try it Out!")
 st.markdown("Enter a natural language query, and let PyDough generate the corresponding query.")
 
-query = st.text_input("Enter your query:", "List all customers from United States") 
-
+query = st.text_input("Enter your query:", "List all customers from United States")
 
 if st.button("Run Query"):
     try:
-        
-        from llm import LLMClient
         client = LLMClient()  
-        
-        # Call the LLM client to generate the PyDough query
         result = client.ask(query)
         st.session_state.result = result  # Store only result, not the client
-
         st.success("Query executed successfully! ✅")
     except Exception as e:
         st.error(f"Error running query: {e}")
@@ -47,33 +42,24 @@ if st.button("Run Query"):
 # ---------------------- DISPLAY RESULTS ----------------------
 if "result" in st.session_state:
     result = st.session_state.result
-
-    st.markdown('<div class="centered-container">', unsafe_allow_html=True)
-    st.markdown('<div class="centered-container">', unsafe_allow_html=True)
-
+    
+    st.subheader("Output:")
     selected_output = st.selectbox(
         "Select what to view:",
-        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", "Original Question", 
-        "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  # ✅ Added "SQL" option here
+        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  
         key="dropdown",
     )
+    st.markdown("---")  # Separator for better readability
 
-    st.markdown("</div>", unsafe_allow_html=True)
-    # Display the selected part of the result
     if selected_output == "Code":
         st.code(result.code, language="python")
     elif selected_output == "Full Explanation":
         st.write(result.full_explanation)
     elif selected_output == "DataFrame":
-        if hasattr(result, "df"):
-            st.dataframe(result.df)
-        else:
-            st.write("No dataframe available.")
+        st.dataframe(result.df) if hasattr(result, "df") else st.write("No dataframe available.")
     elif selected_output == "SQL": 
-        if hasattr(result, "sql"):
-            st.code(result.sql, language="sql")
-        else:
-            st.write("No SQL available.")
+        st.code(result.sql, language="sql") if hasattr(result, "sql") else st.write("No SQL available.")
     elif selected_output == "Exception":
         st.write(result.exception)
     elif selected_output == "Original Question":
@@ -84,4 +70,52 @@ if "result" in st.session_state:
         st.write(result.cheat_sheet)
     elif selected_output == "Knowledge Graph":
         st.write(result.knowledge_graph)
+
+    # ---------------------- DISCOURSE FUNCTIONALITY ----------------------
+    st.header("Improve Query with Discourse")
+    st.markdown(
+        """
+        You can **refine your query** by adding follow-up information. Each time you run Discourse, it will update the query with new details.  
+        If you want a completely new query, change it in the first section above.
+        """
+    )
+
+    follow_up = st.text_input("Add follow-up information to refine the query:")
+
+    if st.button("Run Discourse"):
+        if follow_up:
+            try:
+                client = LLMClient()
+                improved_result = client.discourse(result, follow_up)
+                st.session_state.improved_result = improved_result
+                st.success("Query refined successfully! ✅")
+            except Exception as e:
+                st.error(f"Error running discourse: {e}")
+        else:
+            st.warning("Enter follow-up information.")
+
+    # ---------------------- DISPLAY IMPROVED RESULTS ----------------------
+    if "improved_result" in st.session_state:
+        improved_result = st.session_state.improved_result
+        
+        st.subheader("Refined Query Output:")
+        selected_output_improved = st.selectbox(
+            "Select what to view (Refined Query):",
+            ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
+            key="dropdown_improved",
+        )
+        st.markdown("---")  # Separator for better readability
+
+        if selected_output_improved == "Code":
+            st.code(improved_result.code, language="python")
+        elif selected_output_improved == "Full Explanation":
+            st.write(improved_result.full_explanation)
+        elif selected_output_improved == "DataFrame":
+            st.dataframe(improved_result.df) if hasattr(improved_result, "df") else st.write("No dataframe available.")
+        elif selected_output_improved == "SQL": 
+            st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
+        elif selected_output_improved == "Exception":
+            st.write(improved_result.exception)
+
+
 
