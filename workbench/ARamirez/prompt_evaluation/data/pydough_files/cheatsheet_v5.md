@@ -154,6 +154,29 @@
   - **Group packages by year/month**:  
     GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
+  - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage**:
+
+    PARTITION(Addresses, name="addrs", by=(city, state)).CALCULATE(
+        total_packages=COUNT(addrs.current_occupants.packages)
+    ).addrs.CALCULATE(city, state).current_occupants.CALCULATE(
+        first_name,
+        last_name,
+        city=city,
+        state=state,
+        pct_of_packages=100.0 * COUNT(packages) / total_packages,
+    )
+
+  - **Identify the states whose current occupants account for at least 1% of all packages purchased. List the state and the percentage**: Notice how `total_packages` is down-streamed from the graph-level `CALCULATE`.
+
+    GRAPH.CALCULATE(
+        total_packages=COUNT(Packages)
+    ).PARTITION(Addresses, name="addrs", by=state).CALCULATE(
+        state,
+        pct_of_packages=100.0 * COUNT(addrs.current_occupants.package) / total_packages
+    ).WHERE(pct_of_packages >= 1.0)
+
+    **IMPORTANT**: Look here, you use GRAPH.PARTITION when you are working within data at the graph level (as opposed to a single table) and do calculations over multiple relationships or dimensions.
+
 **AVOID TO DO**:
 - **Bad Examples**:
   - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group_by.
