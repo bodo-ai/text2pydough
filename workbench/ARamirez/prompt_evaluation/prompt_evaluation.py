@@ -249,45 +249,29 @@ def get_claude_response(client, prompt, data, question, database_content, script
     corrected_response = correct(client, question, response,formatted_prompt)
     return corrected_response
 
-import multiprocessing
+def process_question_wrapper(args):
+    """ Wrapper function to handle multiprocessing calls. """
+    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content = args
 
-def worker(question, response_queue, provider, model_id, formatted_prompt, data, temperature, database_content, script_content):
-    """Worker function to process a single question and put the response in the queue."""
     if provider == "azure":
         client = AzureAIProvider(model_id)
-        response = get_azure_response(client, formatted_prompt, data, question, database_content, script_content)
+        return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
-        response = get_claude_response(client, formatted_prompt, data, question, database_content, script_content)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
-        response = get_other_provider_response(client, formatted_prompt, data, question, database_content, script_content)
-    
-    response_queue.put((question, response))  # Store result in queue
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
-    processes = []
-    response_queue = multiprocessing.Queue()  # Shared queue to collect results
-
-    # Start a separate process for each question
-    for question in questions:
-        p = multiprocessing.Process(
-            target=worker, 
-            args=(question, response_queue, provider, model_id, formatted_prompt, data, temperature, database_content, script_content)
+    """ Processes questions in parallel using multiprocessing. """
+    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
+        original_responses = pool.map(
+            process_question_wrapper, 
+            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
         )
-        processes.append(p)
-        p.start()
-
-    # Collect responses
-    original_responses = []
-    for p in processes:
-        p.join()  # Wait for all processes to finish
     
-    while not response_queue.empty():
-        original_responses.append(response_queue.get())  # Retrieve responses
-
     return original_responses
-
 
 def main(git_hash):
     # Argument Parser
