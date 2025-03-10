@@ -32,7 +32,7 @@ query = st.text_input("Enter your query:", "List all customers from United State
 
 if st.button("Run Query"):
     try:
-        # Create a new LLMClient instance inside the query execution (fixes SQLite thread issue)
+        
         from llm import LLMClient
         client = LLMClient()  
         
@@ -49,47 +49,39 @@ if "result" in st.session_state:
     result = st.session_state.result
 
     st.markdown('<div class="centered-container">', unsafe_allow_html=True)
+    st.markdown('<div class="centered-container">', unsafe_allow_html=True)
+
     selected_output = st.selectbox(
         "Select what to view:",
-        ["Code", "Full Explanation", "DataFrame", "Exception", "Original Question", 
-         "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", "Original Question", 
+        "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  # ✅ Added "SQL" option here
         key="dropdown",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
+    st.markdown("</div>", unsafe_allow_html=True)
     # Display the selected part of the result
     if selected_output == "Code":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.code(result.code, language="python")
     elif selected_output == "Full Explanation":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.write(result.full_explanation)
     elif selected_output == "DataFrame":
-        st.markdown("Output:")
-        st.markdown("---") 
         if hasattr(result, "df"):
             st.dataframe(result.df)
         else:
             st.write("No dataframe available.")
+    elif selected_output == "SQL": 
+        if hasattr(result, "sql"):
+            st.code(result.sql, language="sql")
+        else:
+            st.write("No SQL available.")
     elif selected_output == "Exception":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.write(result.exception)
     elif selected_output == "Original Question":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.write(result.original_question)
     elif selected_output == "Base Prompt":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.write(result.base_prompt)
     elif selected_output == "Cheat Sheet":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.write(result.cheat_sheet)
     elif selected_output == "Knowledge Graph":
-        st.markdown("Output:")
-        st.markdown("---") 
         st.write(result.knowledge_graph)
+
