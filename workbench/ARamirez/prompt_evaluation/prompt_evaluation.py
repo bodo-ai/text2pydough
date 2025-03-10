@@ -205,7 +205,7 @@ def correct(client, question,  code, prompt):
     local_env = {"pydough": pydough, "datetime": datetime}
     response= code    
     result, exception= execute_code_and_extract_result(extracted_code, local_env)
-    print(f"result: {result}")
+    print(f"result: {result} {exception}")
     if not result:
         q= (f"""An error occurred while processing this code: {extracted_code}. "
         The error is: '{exception}'. "
