@@ -7,7 +7,7 @@ You are an AI tasked with converting natural language descriptions into PyDough 
 {database_content}
 
 3. **Examples for Context:** Here are some examples of PyDough code snippets along with their corresponding natural language questions that are similar to the user's query. These examples will help contextualize the task and guide you in understanding the user's requirements. Analyze if those examples are relevant to the user's query by comparing their structure, intent, and expected output. If the examples closely match the user's request, they can serve as a reference for constructing an appropriate PyDough query.
- 
+
 {similar_queries}
 
 Your objective is to analyze the provided natural language description that outlines a database query or manipulation task and generate a corresponding PyDough code snippet that adheres to the syntax and structure in the PyDough Reference File.
@@ -27,7 +27,7 @@ Your objective is to analyze the provided natural language description that outl
    - Ensures the variables names are different than the fields of the Database
    - Returns only the exact data requested, without adding additional fields or information.
 
-3. Determine if GROUP_BY is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If GROUP_BY is truly needed, then use it appropriately.
+3. Determine if PARTITION is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, then use it appropriately.
 
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
