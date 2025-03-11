@@ -24,7 +24,7 @@ st.markdown(
     """
 )
 
-# ---------------------- EXAMPLES MODAL (WIDE & DISCREET BUTTON) ----------------------
+# ---------------------- EXAMPLES MODAL (WIDE & SUBTLE BUTTON) ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large")  # ✅ Making the dialog wider
 def show_examples():
     st.header("Example Queries")
@@ -42,15 +42,23 @@ def show_examples():
     for example in examples:
         st.code(example, language="python")
 
-# ✅ Less noticeable button (styled to look like text)
+# ✅ Minimalist button for opening the modal
 st.markdown(
-    '<div style="text-align: left;">'
-    '<button onclick="parent.postMessage({type: \'openDialog\', name: \'show_examples\'}, \'*\');" '
-    'style="border: none; background: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 14px;">'
-    "Don't know what to write? Check out our Examples"
-    '</button></div>',
-    unsafe_allow_html=True
+    """<style>
+    div[data-testid="stButton"] > button {
+        border: none;
+        background: none;
+        color: #007bff;
+        text-decoration: underline;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    </style>""",
+    unsafe_allow_html=True,
 )
+
+if st.button("Don't know what to write? Check out our Examples"):
+    show_examples()
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
