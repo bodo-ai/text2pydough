@@ -64,11 +64,11 @@
       total_spent=SUM(orders.total_price)  
   ).WHERE((total_spent > 1000) & (nation.region.name == "ASIA"))  
 
-* **Top 5 Most Profitable Regions**  
+* **Top 5 Most Profitable Nations**  
   *Goal: Identify regions with highest revenue.*  
   *Code:*  
   selected_regions = nations.CALCULATE(  
-      region_name=region.name,  
+      region_name=name,  
       Total_revenue=SUM(customers.orders.total_price)  
   ).TOP_K(5, Total_revenue.DESC())  
 
