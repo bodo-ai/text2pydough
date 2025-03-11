@@ -21,14 +21,11 @@ st.markdown(
     - **Base Prompt**: The initial instruction given to the LLM to generate the query.
     - **Cheat Sheet**: A reference guide or example queries to help the LLM structure responses.
     - **Knowledge Graph**: The metadata structure that informs the LLM about available collections and relationships.
-    
-    **Don't know what to write?** [Check out our Examples](javascript:void(0);) 👇
-    """,
-    unsafe_allow_html=True
+    """
 )
 
-# ---------------------- EXAMPLES MODAL (WIDER DIALOG + OPEN ON CLICK) ----------------------
-@st.dialog("💡 Example Queries for TPCH", width="80%")  # ✅ Dialog is now wider
+# ---------------------- EXAMPLES MODAL (WIDE & DISCREET BUTTON) ----------------------
+@st.dialog("💡 Example Queries for TPCH", width="large")  # ✅ Making the dialog wider
 def show_examples():
     st.header("Example Queries")
     examples = [
@@ -42,31 +39,23 @@ def show_examples():
         "Identify the country with the highest number of distinct suppliers."
     ]
 
-    selected_example = st.selectbox("Select an example:", examples)
+    for example in examples:
+        st.code(example, language="python")
 
-    query_copy = st.text_input("Copy and Paste this example:", selected_example)
-
-    if st.button("Use this query"):
-        st.session_state.query = selected_example
-        st.rerun()
-
-# ✅ Automatically open dialog when hyperlink is clicked
+# ✅ Less noticeable button (styled to look like text)
 st.markdown(
-    """
-    <script>
-    function openExamples() {
-        window.parent.postMessage({type: "openDialog", name: "show_examples"}, "*");
-    }
-    document.querySelector("a[href='javascript:void(0);']").onclick = openExamples;
-    </script>
-    """,
+    '<div style="text-align: left;">'
+    '<button onclick="parent.postMessage({type: \'openDialog\', name: \'show_examples\'}, \'*\');" '
+    'style="border: none; background: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 14px;">'
+    "Don't know what to write? Check out our Examples"
+    '</button></div>',
     unsafe_allow_html=True
 )
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
 
-query = st.text_input("Enter your query:", st.session_state.get("query", "List all customers from United States"))
+query = st.text_input("Enter your query:", "List all customers from United States")
 
 if st.button("Run Query"):
     try:
