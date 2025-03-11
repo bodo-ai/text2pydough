@@ -40,9 +40,10 @@ def show_examples():
     ]
 
     for example in examples:
-        st.code(example, language="python")
+        # ✅ Displaying examples as plain text without code formatting
+        st.markdown(f"📌 {example}")
 
-# ✅ Minimalist button for opening the modal
+# ✅ Button styled as a hyperlink for "Examples" only
 st.markdown(
     """<style>
     div[data-testid="stButton"] > button {
@@ -57,8 +58,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if st.button("Don't know what to write? Check out our Examples"):
-    show_examples()
+col1, col2 = st.columns([0.15, 0.85])  # ✅ Keeps text inline with button
+with col1:
+    if st.button("Examples"):
+        show_examples()
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
