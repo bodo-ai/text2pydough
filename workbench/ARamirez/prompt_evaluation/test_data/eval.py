@@ -157,6 +157,7 @@ def execute_code_and_extract_result(extracted_code, local_env):
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
+        print(last_variable)
         result_df = convert_to_df(last_variable)
         return result_df, None  # Return result and no exception
     except Exception as e:
@@ -242,5 +243,5 @@ def compare_output(folder_path, csv_file_path, db_path):
     return output_file, df
 
 # %%
-#compare_output("../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/test", "../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/responses_2025_02_26-10_08_45.csv","./tpch.db")
+#compare_output("../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/test", "../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/responses_2025_03_11-09_47_42.csv","./tpch.db")
 # %%
