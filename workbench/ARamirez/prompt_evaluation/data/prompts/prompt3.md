@@ -6,7 +6,8 @@ You are an AI tasked with converting natural language descriptions into PyDough 
 2. **Database Structure Reference File** - This file outlines the database schema, collections, fields, and relationships.
 {database_content}
 
-3. **Examples for Context:** Here are some examples of PyDough code snippets along with their corresponding natural language questions that are similar to the user's query. These examples will help contextualize the task and guide you in understanding the user's requirements. Analyze if those examples are relevant to the user's query by comparing their structure, intent, and expected output. If the examples closely match the user's request, they can serve as a reference for constructing an appropriate PyDough query. 
+3. **Examples for Context:** Here are some examples of PyDough code snippets along with their corresponding natural language questions that are similar to the user's query. These examples will help contextualize the task and guide you in understanding the user's requirements. Analyze if those examples are relevant to the user's query by comparing their structure, intent, and expected output. If the examples closely match the user's request, they can serve as a reference for constructing an appropriate PyDough query.
+ 
 {similar_queries}
 
 Your objective is to analyze the provided natural language description that outlines a database query or manipulation task and generate a corresponding PyDough code snippet that adheres to the syntax and structure in the PyDough Reference File.
