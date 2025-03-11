@@ -58,10 +58,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-col1, col2 = st.columns([0.15, 0.85])  # ✅ Keeps text inline with button
+col1, col2 = st.columns([0.85, 0.15]) 
 with col1:
+    st.write("Don't know what to write? Check out our")
+with col2:
     if st.button("Examples"):
         show_examples()
+        
+st.markdown(
+    """<style>
+    div[data-testid="stButton"] > button {
+        all: unset;  /* ✅ Resets button styles everywhere */
+        padding: 4px 8px;
+        cursor: pointer;
+    }
+    </style>""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
