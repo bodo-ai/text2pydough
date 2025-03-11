@@ -24,6 +24,9 @@ st.markdown(
     """
 )
 
+# ---------------------- QUERY INPUT ----------------------
+st.header("Try it Out!")
+
 # ---------------------- EXAMPLES MODAL (WIDE & SUBTLE BUTTON) ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
@@ -55,9 +58,6 @@ with col1:
 with col2: 
     if st.button("Examples"):
         show_examples()
-
-# ---------------------- QUERY INPUT ----------------------
-st.header("Try it Out!")
 
 query = st.text_input("Enter your query:", "List all customers from United States")
 
