@@ -3,6 +3,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
 ## **GENERAL RULES**: 
 
+  - This is NOT SQL, so don't make assumptions about its syntax or behavior.
+  
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
   - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
