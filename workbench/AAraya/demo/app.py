@@ -61,7 +61,6 @@ st.markdown(
 col1, col2 = st.columns([0.85, 0.80]) 
 with col1:
     st.write("Don't know what to write? Check out our")
-with col2:
     if st.button("Examples"):
         show_examples()
 
