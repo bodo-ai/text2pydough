@@ -3,6 +3,8 @@ from llm import LLMClient
 
 st.image("logo.png", width=150, use_container_width=False)
 
+st.set_page_config(page_title="PyDough LLM Demo", page_icon="🧠")
+
 # ---------------------- APP HEADER ----------------------
 st.title("PyDough LLM Demo")
 
