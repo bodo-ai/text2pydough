@@ -15,7 +15,7 @@ st.markdown(
 
 @st.dialog("📊 TPCH Database Diagram", width="large")
 def show_db_diagram():
-    st.image("db_diag.png", use_column_width=True)
+    st.image("db_diag.png", use_container_width=True)
     
 if st.button("View TPCH Diagram 📊"):
     show_db_diagram()
