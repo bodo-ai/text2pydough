@@ -201,6 +201,7 @@ def format_prompt(prompt, data, question, database_content, script_content):
     return prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
 def correct(client, question,  code, prompt):
+    print(question)
     extracted_code= extract_python_code(code)
     local_env = {"pydough": pydough, "datetime": datetime}
     response= code    
