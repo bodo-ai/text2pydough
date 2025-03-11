@@ -343,7 +343,7 @@ def main(git_hash):
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/broker.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
@@ -366,7 +366,7 @@ def main(git_hash):
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 
             questions_df.to_csv(output_file, index=False, encoding="utf-8")
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/broker.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
