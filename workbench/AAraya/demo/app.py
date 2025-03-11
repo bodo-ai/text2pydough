@@ -28,6 +28,7 @@ st.markdown(
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
     st.header("Example Queries")
+    st.write("You can **copy** any of the examples by hovering on it and clicking at the copy button on the right side. Then paste it on the ")
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
         "Top 5 nations with most customer orders in 1995.",
@@ -48,7 +49,7 @@ def show_examples():
     for example in examples:
             st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 1.50]) 
+col1, col2 = st.columns([0.85, 1.25]) 
 with col1:
     st.write("Don't know what to write? Check out our")
 with col2: 
@@ -101,18 +102,18 @@ if "result" in st.session_state:
     elif selected_output == "Knowledge Graph":
         st.write(result.knowledge_graph)
 
-    # ---------------------- DISCOURSE FUNCTIONALITY (Only Show If Result Exists) ----------------------
-    st.header("Improve Query with Discourse")
+    # ---------------------- DISCOURSE FUNCTIONALITY ----------------------------
+    st.header("Improve or Refine Query")
     st.markdown(
         """
-        You can **refine your query** by adding follow-up information. Each time you run discourse, it will update the query with new details.  
+        You can **refine your query** by adding follow-up information. Each time you run the discourse, it will update the query with new details.  
         If you want a completely new query, change it in the first section above.
         """
     )
 
     follow_up = st.text_input("Add follow-up information to refine the query:")
 
-    if st.button("Run Discourse"):
+    if st.button("Refine Query"):
         if follow_up:
             try:
                 client = LLMClient()
