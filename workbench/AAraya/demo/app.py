@@ -22,12 +22,13 @@ st.markdown(
     - **Cheat Sheet**: A reference guide or example queries to help the LLM structure responses.
     - **Knowledge Graph**: The metadata structure that informs the LLM about available collections and relationships.
     
-    **Don't know what to write?** Check out our [Examples](#) below! 👇
-    """
+    **Don't know what to write?** [Check out our Examples](javascript:void(0);) 👇
+    """,
+    unsafe_allow_html=True
 )
 
-# ---------------------- EXAMPLES MODAL (USING st.dialog) ----------------------
-@st.dialog("💡 Example Queries for TPCH")
+# ---------------------- EXAMPLES MODAL (WIDER DIALOG + OPEN ON CLICK) ----------------------
+@st.dialog("💡 Example Queries for TPCH", width="80%")  # ✅ Dialog is now wider
 def show_examples():
     st.header("Example Queries")
     examples = [
@@ -43,16 +44,24 @@ def show_examples():
 
     selected_example = st.selectbox("Select an example:", examples)
 
-    # Provide a text input pre-filled with the selected example (this acts as a clipboard workaround)
     query_copy = st.text_input("Copy and Paste this example:", selected_example)
 
     if st.button("Use this query"):
         st.session_state.query = selected_example
         st.rerun()
 
-# Button to open the modal
-if st.button("Show Examples"):
-    show_examples()
+# ✅ Automatically open dialog when hyperlink is clicked
+st.markdown(
+    """
+    <script>
+    function openExamples() {
+        window.parent.postMessage({type: "openDialog", name: "show_examples"}, "*");
+    }
+    document.querySelector("a[href='javascript:void(0);']").onclick = openExamples;
+    </script>
+    """,
+    unsafe_allow_html=True
+)
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
@@ -100,48 +109,48 @@ if "result" in st.session_state:
     elif selected_output == "Knowledge Graph":
         st.write(result.knowledge_graph)
 
-# ---------------------- DISCOURSE FUNCTIONALITY ----------------------
-st.header("Improve Query with Discourse")
-st.markdown(
-    """
-    You can **refine your query** by adding follow-up information. Each time you run discourse, it will update the query with new details.  
-    If you want a completely new query, change it in the first section above.
-    """
-)
-
-follow_up = st.text_input("Add follow-up information to refine the query:")
-
-if st.button("Run Discourse"):
-    if follow_up:
-        try:
-            client = LLMClient()
-            improved_result = client.discourse(result, follow_up)
-            st.session_state.improved_result = improved_result
-            st.success("Query refined successfully! ✅")
-        except Exception as e:
-            st.error(f"Error running discourse: {e}")
-    else:
-        st.warning("Enter follow-up information.")
-
-# ---------------------- DISPLAY IMPROVED RESULTS ----------------------
-if "improved_result" in st.session_state:
-    improved_result = st.session_state.improved_result
-    
-    st.subheader("Refined Query Output:")
-    selected_output_improved = st.selectbox(
-        "Select what to view (Refined Query):",
-        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
-        key="dropdown_improved",
+    # ---------------------- DISCOURSE FUNCTIONALITY (Only Show If Result Exists) ----------------------
+    st.header("Improve Query with Discourse")
+    st.markdown(
+        """
+        You can **refine your query** by adding follow-up information. Each time you run discourse, it will update the query with new details.  
+        If you want a completely new query, change it in the first section above.
+        """
     )
-    st.markdown("---")  
 
-    if selected_output_improved == "Code":
-        st.code(improved_result.code, language="python")
-    elif selected_output_improved == "Full Explanation":
-        st.write(improved_result.full_explanation)
-    elif selected_output_improved == "DataFrame":
-        st.dataframe(improved_result.df) if hasattr(improved_result, "df") else st.write("No dataframe available.")
-    elif selected_output_improved == "SQL": 
-        st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
-    elif selected_output_improved == "Exception":
-        st.write(improved_result.exception)
+    follow_up = st.text_input("Add follow-up information to refine the query:")
+
+    if st.button("Run Discourse"):
+        if follow_up:
+            try:
+                client = LLMClient()
+                improved_result = client.discourse(result, follow_up)
+                st.session_state.improved_result = improved_result
+                st.success("Query refined successfully! ✅")
+            except Exception as e:
+                st.error(f"Error running discourse: {e}")
+        else:
+            st.warning("Enter follow-up information.")
+
+    # ---------------------- DISPLAY IMPROVED RESULTS ----------------------
+    if "improved_result" in st.session_state:
+        improved_result = st.session_state.improved_result
+
+        st.subheader("Refined Query Output:")
+        selected_output_improved = st.selectbox(
+            "Select what to view (Refined Query):",
+            ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
+            key="dropdown_improved",
+        )
+        st.markdown("---")  
+
+        if selected_output_improved == "Code":
+            st.code(improved_result.code, language="python")
+        elif selected_output_improved == "Full Explanation":
+            st.write(improved_result.full_explanation)
+        elif selected_output_improved == "DataFrame":
+            st.dataframe(improved_result.df) if hasattr(improved_result, "df") else st.write("No dataframe available.")
+        elif selected_output_improved == "SQL": 
+            st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
+        elif selected_output_improved == "Exception":
+            st.write(improved_result.exception)
