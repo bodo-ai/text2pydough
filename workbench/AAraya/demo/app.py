@@ -40,8 +40,8 @@ def show_examples():
     ]
 
     for example in examples:
-        # ✅ Displaying examples as plain text without code formatting
-        st.markdown(f"📌 {example}")
+        for example in examples:
+            st.code(example, language="")
 
 # ✅ Button styled as a hyperlink for "Examples" only
 st.markdown(
