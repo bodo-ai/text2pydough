@@ -216,7 +216,7 @@ def correct(client, question,  code, prompt):
         An error occurred while processing this code: {extracted_code}. 
         The error is: '{exception}'. 
         The original question was: '{question}'. 
-        Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code and avoid to do what pydough can not do.""")
+        Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
         response=client.ask(q, prompt)
 
