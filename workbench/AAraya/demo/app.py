@@ -34,7 +34,7 @@ if st.button("Run Query"):
     try:
         client = LLMClient()  
         result = client.ask(query)
-        st.session_state.result = result  # Store only result, not the client
+        st.session_state.result = result 
         st.success("Query executed successfully! ✅")
     except Exception as e:
         st.error(f"Error running query: {e}")
@@ -50,7 +50,7 @@ if "result" in st.session_state:
          "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  
         key="dropdown",
     )
-    st.markdown("---")  # Separator for better readability
+    st.markdown("---")  
 
     if selected_output == "Code":
         st.code(result.code, language="python")
@@ -75,7 +75,7 @@ if "result" in st.session_state:
     st.header("Improve Query with Discourse")
     st.markdown(
         """
-        You can **refine your query** by adding follow-up information. Each time you run Discourse, it will update the query with new details.  
+        You can **refine your query** by adding follow-up information. Each time you run discourse, it will update the query with new details.  
         If you want a completely new query, change it in the first section above.
         """
     )
@@ -104,7 +104,7 @@ if "result" in st.session_state:
             ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
             key="dropdown_improved",
         )
-        st.markdown("---")  # Separator for better readability
+        st.markdown("---")  
 
         if selected_output_improved == "Code":
             st.code(improved_result.code, language="python")
