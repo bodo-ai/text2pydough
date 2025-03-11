@@ -64,17 +64,6 @@ with col1:
 with col2:
     if st.button("Examples"):
         show_examples()
-        
-st.markdown(
-    """<style>
-    div[data-testid="stButton"] > button {
-        all: unset;  /* ✅ Resets button styles everywhere */
-        padding: 4px 8px;
-        cursor: pointer;
-    }
-    </style>""",
-    unsafe_allow_html=True,
-)
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
