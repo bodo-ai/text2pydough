@@ -171,18 +171,27 @@ def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
+import re
+
 def extract_python_code(text):
-    """Extracts Python code from triple backticks in text."""
+    """Extracts Python code from triple backticks in text, excluding import statements."""
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
     match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
     if match:
         python_code = match.group(1).strip()
-        # Convert the extracted code to uppercase
-        return python_code
+
+        # Remove import statements from the extracted code
+        python_code_lines = python_code.split("\n")
+        filtered_lines = [line for line in python_code_lines if not line.strip().startswith("import") and not line.strip().startswith("from")]
+        
+        # Join the remaining lines back together
+        filtered_code = "\n".join(filtered_lines)
+        return filtered_code
     else:
         return ""
+
 
 import os
 
