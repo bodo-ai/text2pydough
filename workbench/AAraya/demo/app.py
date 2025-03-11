@@ -1,5 +1,4 @@
 import streamlit as st
-import pyperclip 
 from llm import LLMClient
 
 st.image("logo.png", width=150, use_container_width=False)
@@ -22,25 +21,15 @@ st.markdown(
     - **Base Prompt**: The initial instruction given to the LLM to generate the query.
     - **Cheat Sheet**: A reference guide or example queries to help the LLM structure responses.
     - **Knowledge Graph**: The metadata structure that informs the LLM about available collections and relationships.
-    """
-)
-
-# ---------------------- QUERY INPUT ----------------------
-st.header("Try it Out!")
-
-st.markdown(
-    """
-    **Enter a natural language query**, and let PyDough generate the corresponding query.  
+    
     **Don't know what to write?** Check out our [Examples](#) below! 👇
     """
 )
 
-query = st.text_input("Enter your query:", "List all customers from United States")
-
 # ---------------------- EXAMPLES MODAL (USING st.dialog) ----------------------
-@st.dialog
+@st.dialog("💡 Example Queries for TPCH")
 def show_examples():
-    st.header("💡 Example Queries for TPCH")
+    st.header("Example Queries")
     examples = [
         "Find the top 5 customers with the highest total spend in 2023.",
         "List all suppliers located in Germany.",
@@ -52,20 +41,27 @@ def show_examples():
         "Identify the country with the highest number of distinct suppliers."
     ]
 
-    for example in examples:
-        st.code(example, language="python")
-        if st.button(f"Copy", key=example):
-            pyperclip.copy(example)  # Copy to clipboard
-            st.toast("Copied to clipboard!")
+    selected_example = st.selectbox("Select an example:", examples)
+
+    # Provide a text input pre-filled with the selected example (this acts as a clipboard workaround)
+    query_copy = st.text_input("Copy and Paste this example:", selected_example)
+
+    if st.button("Use this query"):
+        st.session_state.query = selected_example
+        st.rerun()
 
 # Button to open the modal
 if st.button("Show Examples"):
     show_examples()
 
-# ---------------------- RUN QUERY ----------------------
+# ---------------------- QUERY INPUT ----------------------
+st.header("Try it Out!")
+
+query = st.text_input("Enter your query:", st.session_state.get("query", "List all customers from United States"))
+
 if st.button("Run Query"):
     try:
-        client = LLMClient()  
+        client = LLMClient()
         result = client.ask(query)
         st.session_state.result = result 
         st.success("Query executed successfully! ✅")
@@ -149,5 +145,3 @@ if "improved_result" in st.session_state:
         st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
     elif selected_output_improved == "Exception":
         st.write(improved_result.exception)
-
-
