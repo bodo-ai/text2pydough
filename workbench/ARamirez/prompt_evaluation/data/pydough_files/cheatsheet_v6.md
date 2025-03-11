@@ -185,7 +185,16 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     ```python
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))
     ```  
-
+    - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how `packs` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level).
+    ```python
+    package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
+    PARTITION(package_info, name="packs", by=(order_year, order_month)).CALCULATE(
+        avg_package_cost=AVG(packs.package_cost)
+    ).packs.WHERE(
+        package_cost < avg_package_cost
+    )
+    ```
+    
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
     ```python

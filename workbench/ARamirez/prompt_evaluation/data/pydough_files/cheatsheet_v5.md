@@ -6,9 +6,9 @@
 
   - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
-  - GROUP_BY function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. GROUP_BY does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
+  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
 
-  - GROUP_BY must always be used as a function. It should only be used as a method when performing calculations with the high-level graph
+  - PARTITION must always be used as a function. It should only be used as a method when performing calculations with the high-level graph
   
   - CALCULATE function ALWAYS needs an expression, not a collection. For example, you cannot do: `nations.CALCULATE(nation_name=name, top_suppliers=suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection. 
 
@@ -136,52 +136,51 @@
 
 **Rules**: Aggregations Function does not support calling aggregations inside of aggregations
 
-**7. Grouping (GROUP_BY)**  
+**7. PARTITIONING (PARTITION)**  
 
 - **Purpose**: Group records by keys.  
 
-- **Syntax**: GROUP_BY(Collection, name='group_name', by=(key1, key2))  
+- **Syntax**: PARTITION(Collection, name='group_name', by=(key1, key2))  
 
   - **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
 
-  - **IMPORTANT**: All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
+  - **IMPORTANT**: All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the PARTITION. As opposed to any other term, which needs the name because that is the context. 
 
 - **Good Examples**:  
 
   - **Group addresses by state and count occupants**:  
-    GROUP_BY(Addresses, name='addrs', by=state).CALCULATE(  
+    PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
         state=state,  
         total_occupants=COUNT(addrs.current_occupants)  
     )  
     **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
 
   - **Group packages by year/month**:  
-    GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
+    PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
 
 **AVOID TO DO**:
 - **Bad Examples**:
-  - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group_by.
-    GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
+  - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
+    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
         email,
         n_people=COUNT(ppl)
     )
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group_by term (it must be placed in a CALC so it is accessible as a named reference).
-    GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     )
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group_by term (it must be placed in a CALC so it is accessible as a named reference).
-    GROUP_BY(People, name=\"ppl\", by=current_address.state).CALCULATE(
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     )
-
 
 - **Rules**: 
-GROUP_BY keys must be scalar fields from the collection. 
-You must use Aggregation functions to call plural values inside GROUP_BY.
-Within a group_by, you must use the `name` argument to be able to access any property or subcollections. 
+PARTITION keys must be scalar fields from the collection. 
+You must use Aggregation functions to call plural values inside PARTITION.
+Within a PARTITION, you must use the `name` argument to be able to access any property or subcollections. 
 
 **8. WINDOW FUNCTIONS**  
 
@@ -400,7 +399,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 * **Top 5 States by Average Occupants:**  
 
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
-  average_occupants=GROUP_BY(addr_info, name="addrs", by=state).CALCULATE(  
+  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
       state=state,  
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
