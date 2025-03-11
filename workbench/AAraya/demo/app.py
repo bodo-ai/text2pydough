@@ -43,26 +43,12 @@ def show_examples():
         for example in examples:
             st.code(example, language="")
 
-# ✅ Button styled as a hyperlink for "Examples" only
-st.markdown(
-    """<style>
-    div[data-testid="stButton"] > button {
-        border: none;
-        background: none;
-        color: #007bff;
-        text-decoration: underline;
-        cursor: pointer;
-        font-size: 14px;
-    }
-    </style>""",
-    unsafe_allow_html=True,
-)
-
 col1, col2 = st.columns([0.85, 0.80]) 
 with col1:
-    st.write("Don't know what to write? Check out our")
     if st.button("Examples"):
         show_examples()
+with col2:
+    st.write("Don't know what to write? Check out our")
 
 # ---------------------- QUERY INPUT ----------------------
 st.header("Try it Out!")
