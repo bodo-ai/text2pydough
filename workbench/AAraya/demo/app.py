@@ -58,7 +58,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-col1, col2 = st.columns([0.85, 0.15]) 
+col1, col2 = st.columns([0.85, 0.80]) 
 with col1:
     st.write("Don't know what to write? Check out our")
 with col2:
