@@ -8,8 +8,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 
-pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/broker_graph.json", "Broker")
-pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/broker.db")
+pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/tpch_demo_graph.json", "TPCH")
+pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db")
 
 
 
@@ -206,7 +206,7 @@ def query_sqlite_db(
 def process_row(row, db_path):
     extracted_code = row.get('extracted_python_code')
     question= row.get('question')
-    print(question)
+    
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
         

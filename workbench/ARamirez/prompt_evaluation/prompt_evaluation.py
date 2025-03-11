@@ -171,27 +171,18 @@ def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
-import re
-
 def extract_python_code(text):
-    """Extracts Python code from triple backticks in text, excluding import statements."""
+    """Extracts Python code from triple backticks in text."""
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
     match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
     if match:
         python_code = match.group(1).strip()
-
-        # Remove import statements from the extracted code
-        python_code_lines = python_code.split("\n")
-        filtered_lines = [line for line in python_code_lines if not line.strip().startswith("import") and not line.strip().startswith("from")]
-        
-        # Join the remaining lines back together
-        filtered_code = "\n".join(filtered_lines)
-        return filtered_code
+        # Convert the extracted code to uppercase
+        return python_code
     else:
         return ""
-
 
 import os
 
@@ -210,7 +201,6 @@ def format_prompt(prompt, data, question, database_content, script_content):
     return prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
 def correct(client, question,  code, prompt):
-    print(question)
     extracted_code= extract_python_code(code)
     local_env = {"pydough": pydough, "datetime": datetime}
     response= code    
@@ -226,7 +216,7 @@ def correct(client, question,  code, prompt):
         An error occurred while processing this code: {extracted_code}. 
         The error is: '{exception}'. 
         The original question was: '{question}'. 
-        Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code. Return the same output but with the corrected code""")
+        Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
         response=client.ask(q, prompt)
 
@@ -353,7 +343,7 @@ def main(git_hash):
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/broker.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
@@ -376,7 +366,7 @@ def main(git_hash):
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 
             questions_df.to_csv(output_file, index=False, encoding="utf-8")
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/broker.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
