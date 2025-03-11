@@ -1,5 +1,5 @@
 import streamlit as st
-import pyperclip  # Needed for copying to clipboard
+import pyperclip 
 from llm import LLMClient
 
 st.image("logo.png", width=150, use_container_width=False)
