@@ -49,10 +49,10 @@ def show_examples():
     for example in examples:
             st.code(example, language="")
 
-col1, col2 = st.columns([1.30, 0.85]) 
-with col2:
+col1, col2 = st.columns([0.85, 1.30]) 
+with col1:
     st.write("Don't know what to write? Check out our")
-with col1: 
+with col2: 
     if st.button("Examples"):
         show_examples()
 
