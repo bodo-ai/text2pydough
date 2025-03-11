@@ -52,12 +52,13 @@ def show_examples():
     for example in examples:
             st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 1.28]) 
+col1, col2 = st.columns([0.85, 0.15])  
 with col1:
-    st.write("Don't know what to write? Check out our")
+    st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
     if st.button("Examples"):
         show_examples()
+
 
 query = st.text_input("Enter your query:", "List all customers from United States")
 
