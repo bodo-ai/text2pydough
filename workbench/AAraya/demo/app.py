@@ -48,7 +48,7 @@ def show_examples():
     for example in examples:
             st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 0.95]) 
+col1, col2 = st.columns([0.85, 1.50]) 
 with col1:
     st.write("Don't know what to write? Check out our")
 with col2: 
