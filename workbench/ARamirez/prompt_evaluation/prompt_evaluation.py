@@ -314,7 +314,7 @@ def main(git_hash):
             prompt = f.read()
 
         with open(args.script_file, "r", encoding="utf-8") as f:
-            script_content = json.load(f)
+            script_content = f.read()
 
         with open(args.database_structure, "r", encoding="utf-8") as f:
             database_content = f.read()
