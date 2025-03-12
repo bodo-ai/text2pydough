@@ -4,6 +4,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 ## **GENERAL RULES**: 
 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
+
+  - RANKING is used as a function instead of method.
   
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
