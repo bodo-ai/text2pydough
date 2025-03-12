@@ -72,7 +72,7 @@ class DeepseekModel:
         messages= [
                 {
                     "role": "user",  # Wrap "string" in quotes to make it a valid string
-                    "content": question
+                    "content":[{"text": question}]
                 }
             ]
         
