@@ -1,4 +1,5 @@
 import argparse
+import ast
 import json
 import multiprocessing
 import os
@@ -79,8 +80,8 @@ class ClaudeAIProvider(AIProvider):
 class OtherAIProvider(AIProvider):
     """Handles responses from other AI providers like AI Suite."""
 
-    def __init__(self, provider, model_id, temperature):
-        self.client = ai.Client()
+    def __init__(self, provider, model_id, temperature, config= None):
+        self.client = ai.Client(config) if config else ai.Client()
         self.provider = provider
         self.model_id = model_id
         self.temperature= temperature
@@ -279,6 +280,12 @@ def process_questions(data, provider, model_id, formatted_prompt, questions, tem
     
     return original_responses
 
+def parse_dict(value):
+    try:
+        return ast.literal_eval(value) 
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid dictionary: {value}")
+    
 def main(git_hash):
     # Argument Parser
     # this is an example: python prompt_evaluation.py  "Experiment for testing azure" "Azure test" cheatsheet_v4_examples.md tcph_graph.md prompt2.txt questions.csv google gemini-1.5-pro-001 --eval_results
@@ -296,6 +303,7 @@ def main(git_hash):
     parser.add_argument("--eval_benchmark", action="store_true", help="Evaluate the TPCH Benchmark")
     parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
     parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not evaluate the TPCH Benchmark")
+    parser.add_argument("--config", type=dict, help="Path to the database file.", default=None)
 
     # Default value for eval_results and eval_benchmark is False
     parser.set_defaults(eval_results=False, eval_benchmark=False)

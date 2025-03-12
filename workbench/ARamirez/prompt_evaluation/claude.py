@@ -8,7 +8,7 @@ class ClaudeModel:
     def __init__(self, ):
         # Initialize AWS SDK and load necessary files
         config = Config(read_timeout=500)
-        self.brt = boto3.client(service_name='bedrock-runtime')
+        self.brt = boto3.client(service_name='bedrock-runtime', config= config)
 
     def ask_claude_with_stream(self, question, prompt, model, provider):
         body = json.dumps({
