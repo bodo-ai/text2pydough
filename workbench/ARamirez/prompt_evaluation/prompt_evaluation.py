@@ -303,7 +303,7 @@ def main(git_hash):
     parser.add_argument("--eval_benchmark", action="store_true", help="Evaluate the TPCH Benchmark")
     parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
     parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not evaluate the TPCH Benchmark")
-    parser.add_argument("--config", type=dict, help="Path to the database file.", default=None)
+    parser.add_argument("--config", type=parse_dict, help="Path to the database file.", default=None)
 
     # Default value for eval_results and eval_benchmark is False
     parser.set_defaults(eval_results=False, eval_benchmark=False)
