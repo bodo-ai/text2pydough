@@ -241,7 +241,6 @@ def get_other_provider_response(client, prompt, data, question, database_content
     formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
-        time.sleep(0.5)
         response=client.ask(question,formatted_prompt)
         corrected_response= correct(client, question, response,formatted_prompt)
         return corrected_response
@@ -316,7 +315,7 @@ def main(git_hash):
             prompt = f.read()
 
         with open(args.script_file, "r", encoding="utf-8") as f:
-            script_content = f.read()
+            script_content = json.load(f)
 
         with open(args.database_structure, "r", encoding="utf-8") as f:
             database_content = f.read()
