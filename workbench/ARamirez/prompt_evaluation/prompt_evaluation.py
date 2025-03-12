@@ -278,7 +278,7 @@ def process_question_wrapper(args):
         client = ClaudeAIProvider(provider, model_id)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-deepseek":
-        client = DeepseekModel(provider, model_id)
+        client = DeepSeekAIProvider(provider, model_id)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
