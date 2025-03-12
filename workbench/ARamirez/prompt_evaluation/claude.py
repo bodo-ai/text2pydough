@@ -5,7 +5,7 @@ import pandas as pd
 from botocore.config import Config
 
 class ClaudeModel:
-    def __init__(self, ):
+    def __init__(self):
         # Initialize AWS SDK and load necessary files
         config = Config(read_timeout=500)
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
@@ -62,7 +62,7 @@ import pandas as pd
 from botocore.config import Config
 
 class DeepseekModel:
-    def __init__(self, ):
+    def __init__(self ):
         # Initialize AWS SDK and load necessary files
         config = Config(read_timeout=500)
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
