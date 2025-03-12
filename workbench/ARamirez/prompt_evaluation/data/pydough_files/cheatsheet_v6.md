@@ -1,7 +1,7 @@
-# **PYDOUGH CHEAT SHEET**  
+## **PYDOUGH CHEAT SHEET**  
 This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code. 
 
-## **GENERAL RULES**: 
+### **GENERAL RULES**: 
 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
@@ -9,7 +9,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
   
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales) is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
+  - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales)` is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
   - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
 
@@ -44,12 +44,12 @@ Collection.CALCULATE(field=expression, ...)
 ### **Examples**:  
 
   - **Select fields**:  
-    ```python
+    ``` 
     People.CALCULATE(first_name=first_name, last_name=last_name)
     ```
 
   - **Derived fields**:
-    ```python  
+    ```   
     Packages.CALCULATE(  
         customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),  
         cost_per_unit=package_cost / quantity  
@@ -75,17 +75,17 @@ Collection.CALCULATE(field=expression, ...)
 ### **Examples** 
 
   - **Filter people with negative account balance**:  
-    ```python
+    ``` 
     People.WHERE(acctbal < 0)
     ```  
 
   - **Filter packages ordered in 2023**  
-    ```python
+    ``` 
     Packages.WHERE(YEAR(order_date) == 2023)
     ``` 
 
   - **Filter addresses with occupants** 
-    ```python
+    ``` 
     Addresses.WHERE(HAS(current_occupants)==1)
     ```  
 
@@ -107,12 +107,12 @@ Collection.CALCULATE(field=expression, ...)
 ### **Examples** 
 
   - **Alphabetical sort**:
-    ```python
+    ``` 
     People.ORDER_BY(last_name.ASC(), first_name.ASC())
     ```
 
   - **Most expensive packages first**:  
-    ```python
+    ``` 
     Packages.ORDER_BY(package_cost.DESC())
     ```  
 
@@ -126,12 +126,12 @@ Select top k records.
 
 ### **Example** 
   Top 10 customers by orders count:
-  ```python
+  ``` 
   customers.TOP_K(10, by=COUNT(orders).DESC())
   ```
 
   Top 10 customers by orders count (but also selecting only the name):
-  ```python  
+  ```   
   customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())
   ```
 
@@ -183,7 +183,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
 ### **Good Examples**  
 
   - **Group addresses by state and count occupants**: 
-    ```python 
+    ```  
     PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
         state=state,  
         total_occupants=COUNT(addrs.current_occupants)  
@@ -192,11 +192,11 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
 
   - **Group packages by year/month**:  
-    ```python
+    ```
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))
     ```  
-    - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how `packs` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level).
-    ```python
+  - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how `packs` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level).
+    ``` 
     package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
     PARTITION(package_info, name="packs", by=(order_year, order_month)).CALCULATE(
         avg_package_cost=AVG(packs.package_cost)
@@ -207,7 +207,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
 
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
-    ```python
+    ```
     PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
         email,
@@ -216,14 +216,14 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     ```
 
   - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    ```python
+    ```
     PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     )
     ```
 
   - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    ```python
+    ``` 
     PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     )
@@ -246,11 +246,11 @@ RANKING(by=field.DESC(), levels=1, allow_ties=False)
 - dense (default False): Use dense ranking.
         
 #### **Examples**
-```python
+``` 
 Nations.customers(r = RANKING(by=acctbal.DESC(), levels=1))
 ```
 Rank customers by balance per nation:  
-```python
+``` 
 Customers(r=RANKING(by=acctbal.DESC(), levels=1))
 ```
 
@@ -268,12 +268,12 @@ PERCENTILE(by=field.ASC(), n_buckets=100)
 - n\_buckets (default 100): Number of percentile buckets.
         
 #### **Example**
-```python
+``` 
 Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n\_buckets=1000) == 1000).
 ```
   
 Filter top 5% by account balance:  
-```python
+``` 
 Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
 ```
 
@@ -284,7 +284,7 @@ Reusable code snippets.
 
 ### **Example**
 Define and reuse filters:  
-  ```python
+  ``` 
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
   ```
@@ -391,7 +391,7 @@ Customers(country\_code = phone\[:3\])
 
   If there are multiple modifiers, they operate left-to-right.
   Usage examples:
-  ```python
+  ``` 
   # Returns the following datetime moments:
   # 1. The current timestamp
   # 2. The start of the current month
@@ -420,7 +420,7 @@ Customers(country\_code = phone\[:3\])
   - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
 
   - Example:
-  ```python
+  ``` 
   # Calculates, for each order, the number of days since January 1st 1992
   # that the order was placed:
   Orders.CALCULATE( 
