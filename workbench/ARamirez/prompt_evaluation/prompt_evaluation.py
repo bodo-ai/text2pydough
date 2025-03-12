@@ -243,8 +243,8 @@ def get_other_provider_response(client, prompt, data, question, database_content
     try:
         time.sleep(0.5)
         response=client.ask(question,formatted_prompt)
-        corrected_response= correct(client, question, response,formatted_prompt)
-        return corrected_response
+        #corrected_response= correct(client, question, response,formatted_prompt)
+        return response
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
