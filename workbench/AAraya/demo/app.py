@@ -123,8 +123,8 @@ if "result" in st.session_state:
     st.header("Improve or Refine Query")
     st.markdown(
         """
-        You can **refine your query** by adding follow-up information. Each time you run the discourse, it will update the query with new details.  
-        If you want a completely new query, change it in the first section above.
+        You can **refine your query** by adding more details. Each time you run it, the query will be updated with the new information.
+        If you want to start a completely new query, modify it in the first section above.
         """
     )
 
