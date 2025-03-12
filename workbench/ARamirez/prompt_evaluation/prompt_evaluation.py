@@ -12,11 +12,10 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-from azure.core.pipeline.transport import RequestsTransport
 import mlflow
 from test_data.eval import compare_output, execute_code_and_extract_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files
-from claude import ClaudeModel
+from claude import ClaudeModel, DeepseekModel
 import pydough
 from abc import ABC, abstractmethod
 
@@ -60,6 +59,18 @@ class AzureAIProvider(AIProvider):
         except Exception as e:
             print(f"Azure AI error: {e}")
             return None
+
+class DeepSeekAIProvider(AIProvider):
+    """Handles responses from Claude AI."""
+
+    def __init__(self, provider, model_id):
+        self.client = DeepseekModel()
+        self.provider = provider
+        self.model_id = model_id
+
+    def ask(self, question, prompt):
+        """Generates a response using Claude AI."""
+        return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
 
 
 # === Claude AI Provider ===
@@ -265,6 +276,9 @@ def process_question_wrapper(args):
         return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+    elif provider == "aws-deepseek":
+        client = DeepseekModel(provider, model_id)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
