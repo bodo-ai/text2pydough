@@ -1,0 +1,513 @@
+{
+    "title": "PyDough Cheat Sheet",
+    "description": "This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code.",
+    "sections": {
+      "general_rules": {
+        "description": "General rules to follow when using PyDough.",
+        "rules": [
+          "Always use TOP_K instead of ORDER_BY when you need to order but also select the high, low, or a specific 'k' number of records.",
+          "PARTITION function ALWAYS needs 3 parameters: Collection, name, and by. The 'by' parameter must never have collections, subcollections, or calculations. Any required variable or value must have been previously calculated because the parameter only accepts expressions.",
+          "Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order: first the 'name' column and then the 'phone_number' column.",
+          "In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.",
+          "PyDough does not support the use of different children in operations. For example, you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead, use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`."
+        ]
+      },
+      "collections_and_subcollections": {
+        "description": "How to access collections and sub-collections in PyDough.",
+        "syntax": "Access collections/sub-collections using dot notation.",
+        "examples": [
+          {
+            "code": "People",
+            "description": "Access all records in the 'People' collection."
+          },
+          {
+            "code": "People.current_address",
+            "description": "Access current addresses linked to people."
+          },
+          {
+            "code": "Packages.customer",
+            "description": "Access customers linked to packages."
+          }
+        ]
+      },
+      "calculate_expressions": {
+        "description": "Derive new fields, rename existing ones, or select specific fields.",
+        "purpose": "To define and transform data within a collection.",
+        "syntax": "Collection.CALCULATE(field=expression, ...)",
+        "examples": [
+        {
+            "description": "Select fields",
+            "code": "People.CALCULATE(first_name=first_name, last_name=last_name)"
+        },
+        {
+            "description": "Derived fields",
+            "code": "Packages.CALCULATE(\n    customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),\n    cost_per_unit=package_cost / quantity\n)"
+        }
+        ],
+        "rules": [
+        "Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.",
+        "Positional arguments must precede keyword arguments.",
+        "Terms defined in a CALCULATE do not take effect until after the CALCULATE completes.",
+        "Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.",
+        "A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE."
+        ]
+    },
+      "filtering_where": {
+        "description": "Filter data within a collection using WHERE.",
+        "syntax": ".WHERE(condition)",
+        "examples": [
+        {
+            "description": "Filter people with negative account balance",
+            "code": "People.WHERE(acctbal < 0)"
+        },
+        {
+            "description": "Filter packages ordered in 2023",
+            "code": "Packages.WHERE(YEAR(order_date) == 2023)"
+        },
+        {
+            "description": "Filter addresses with occupants",
+            "code": "Addresses.WHERE(HAS(current_occupants) == 1)"
+        }
+        ],
+        "rules": [
+        "Use & (AND), | (OR), ~ (NOT) instead of and, or, not.",
+        "Avoid chained comparisons (e.g., replace a < b < c with (a < b) & (b < c))."
+        ]
+    },
+    "sorting_order_by": {
+        "description": "Sort results using ORDER_BY.",
+        "syntax": ".ORDER_BY(field.ASC()/DESC(), ...)",
+        "parameters": [
+        ".ASC(na_pos='last') → Sort ascending, nulls last.",
+        ".DESC(na_pos='first') → Sort descending, nulls first."
+        ],
+        "examples": [
+        {
+            "description": "Alphabetical sort",
+            "code": "People.ORDER_BY(last_name.ASC(), first_name.ASC())"
+        },
+        {
+            "description": "Most expensive packages first",
+            "code": "Packages.ORDER_BY(package_cost.DESC())"
+        }
+        ]
+    },
+    "sorting_top_k": {
+        "description": "Select the top k records based on specified criteria.",
+        "purpose": "Efficiently retrieve the highest or lowest k elements in a collection.",
+        "syntax": ".TOP_K(k, by=field.DESC())",
+        "examples": [
+        {
+            "description": "Top 10 customers by orders count",
+            "code": "customers.TOP_K(10, by=COUNT(orders).DESC())"
+        },
+        {
+            "description": "Top 10 customers by orders count (selecting only the name)",
+            "code": "customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())"
+        }
+        ],
+        "rules": [
+        "The two parameters are obligatory: k and by."
+        ]
+    },
+    "aggregation_functions": {
+        "description": "Functions used to aggregate data in a collection.",
+        "functions": [
+        {
+            "name": "COUNT",
+            "description": "Count non-null records.",
+            "example": "COUNT(People.packages)"
+        },
+        {
+            "name": "SUM",
+            "description": "Sum values.",
+            "example": "SUM(Packages.package_cost)"
+        },
+        {
+            "name": "AVG",
+            "description": "Average values.",
+            "example": "AVG(Packages.quantity)"
+        },
+        {
+            "name": "MIN/MAX",
+            "description": "Minimum or maximum value.",
+            "example": "MIN(Packages.order_date)"
+        },
+        {
+            "name": "NDISTINCT",
+            "description": "Count distinct values.",
+            "example": "NDISTINCT(Addresses.state)"
+        },
+        {
+            "name": "HAS",
+            "description": "Returns True if ≥1 record exists.",
+            "example": "HAS(People.packages) == 1"
+        },
+        {
+            "name": "HASNOT",
+            "description": "Returns True if the collection is empty.",
+            "example": "HASNOT(orders)"
+        }
+        ],
+        "rules": [
+        "Aggregation functions do not support calling aggregations inside other aggregations."
+        ]
+    },
+    "partition": {
+        "description": "Group records by keys to create partitions for analysis.",
+        "purpose": "To group records and operate on them within their respective partitions.",
+        "syntax": "PARTITION(Collection, name='group_name', by=(key1, key2))",
+        "rules": [
+        "PARTITION does not work with dot '.' notation; it must be used in a variable with a new context.",
+        "The 'name' argument is a string indicating the name used when accessing the partitioned data.",
+        "All parameters in 'by=(key1, key2)' must be used in CALCULATE without using the 'name' of the GROUP_BY.",
+        "Partition keys must be scalar fields from the collection.",
+        "Aggregation functions must be used to call plural values inside PARTITION.",
+        "Within a partition, the 'name' argument must be used to access any property or subcollections."
+        ],
+        "examples": {
+        "good": [
+            {
+            "description": "Group addresses by state and count occupants.",
+            "code": "PARTITION(Addresses, name='addrs', by=state).CALCULATE(\n    state=state,\n    total_occupants=COUNT(addrs.current_occupants)\n)"
+            },
+            {
+            "description": "Group packages by year/month.",
+            "code": "PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))"
+            }
+        ],
+        "bad": [
+            {
+            "description": "Partition people by their birth year to find the number of people born in each year. Invalid because the email property is referenced, which is not accessible in the partition.",
+            "code": "PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(\n    birth_year,\n    email,\n    n_people=COUNT(ppl)\n)"
+            },
+            {
+            "description": "Count how many packages were ordered in each year. Invalid because YEAR(order_date) must be precalculated in a CALCULATE.",
+            "code": "PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(\n    n_packages=COUNT(packages)\n)"
+            },
+            {
+            "description": "Count how many people live in each state. Invalid because current_address.state must be precalculated in a CALCULATE.",
+            "code": "PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(\n    n_packages=COUNT(packages)\n)"
+            }
+        ]
+        }
+    },
+    "window_functions": {
+        "ranking": {
+        "description": "Generate rankings based on specified ordering criteria.",
+        "syntax": "RANKING(by=field.DESC(), levels=1, allow_ties=False)",
+        "parameters": [
+            { "name": "by", "description": "Ordering criteria (e.g., acctbal.DESC())." },
+            { "name": "levels", "description": "Hierarchy level (e.g., levels=1 for per-nation ranking). Must be a positive integer." },
+            { "name": "allow_ties", "description": "Allow tied ranks. Default is False." },
+            { "name": "dense", "description": "Use dense ranking. Default is False." }
+        ],
+        "examples": [
+            {
+            "description": "Rank customers by balance per nation.",
+            "code": "Nations.customers(r=RANKING(by=acctbal.DESC(), levels=1))"
+            },
+            {
+            "description": "Rank customers by balance within each hierarchy level.",
+            "code": "Customers(r=RANKING(by=acctbal.DESC(), levels=1))"
+            }
+        ]
+        },
+        "percentile": {
+        "description": "Calculate percentiles for data segmentation.",
+        "syntax": "PERCENTILE(by=field.ASC(), n_buckets=100)",
+        "parameters": [
+            { "name": "by", "description": "Ordering criteria." },
+            { "name": "n_buckets", "description": "Number of percentile buckets. Default is 100." }
+        ],
+        "examples": [
+            {
+            "description": "Filter top percentile customers based on balance.",
+            "code": "Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n_buckets=1000) == 1000)"
+            },
+            {
+            "description": "Filter top 5% by account balance.",
+            "code": "Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)"
+            }
+        ]
+        }
+    },
+    "contextless_expressions": {
+        "description": "Reusable code snippets for defining and reusing filters or logic.",
+        "examples": [
+        {
+            "description": "Define a filter for high-value packages.",
+            "code": "is_high_value = package_cost > 1000\nhigh_value_packages = Packages.WHERE(is_high_value)"
+        }
+        ]
+    },
+    "binary_operators": {
+        "arithmetic": {
+        "description": "Operators for arithmetic operations.",
+        "operators": ["+", "-", "*", "/", "**"],
+        "examples": [
+            "Lineitems(value = (extended_price * (1 - (discount ** 2)) + 1.0) / part.retail_price)"
+        ],
+        "warnings": [
+            "Division by 0 behavior depends on the database."
+        ]
+        },
+        "comparisons": {
+        "description": "Operators for comparing values.",
+        "operators": ["<=", "<", "==", "!=", ">", ">="],
+        "examples": [
+            "Customers(in_debt = acctbal < 0, is_european = nation.region.name == 'EUROPE')"
+        ],
+        "warnings": [
+            "Avoid chained inequalities (e.g., a <= b <= c). Use (a <= b) & (b <= c)."
+        ]
+        },
+        "logical": {
+        "description": "Logical operators for combining conditions.",
+        "operators": ["& (AND)", "| (OR)", "~ (NOT)"],
+        "examples": [
+            "Customers(is_eurasian = (nation.region.name == 'ASIA') | (nation.region.name == 'EUROPE'))"
+        ],
+        "warnings": [
+            "Use &, |, ~ instead of Python’s and, or, not."
+        ]
+        },
+        "unary": {
+        "description": "Operator for negation.",
+        "operator": "-",
+        "examples": [
+            "Lineitems(lost_value = extended_price * (-discount))"
+        ]
+        }
+    },
+    "other_operators": {
+        "slicing": {
+        "description": "Operators for slicing strings.",
+        "syntax": "string[start:stop:step]",
+        "examples": [
+            "Customers(country_code = phone[:3])"
+        ],
+        "rules": [
+            "Step must be 1 or omitted; start/stop must be non-negative or omitted."
+        ]
+        }
+    },
+    "string_functions": {
+        "description": "Functions for manipulating and analyzing strings.",
+        "functions": [
+        {
+            "name": "LOWER",
+            "description": "Converts string to lowercase.",
+            "example": "LOWER(name) → 'apple'"
+        },
+        {
+            "name": "UPPER",
+            "description": "Converts string to uppercase.",
+            "example": "UPPER(name) → 'APPLE'"
+        },
+        {
+            "name": "LENGTH",
+            "description": "Returns the character count.",
+            "example": "LENGTH(comment) → 42"
+        },
+        {
+            "name": "STARTSWITH",
+            "description": "Checks if the string starts with a prefix.",
+            "example": "STARTSWITH(name, 'yellow') → True/False"
+        },
+        {
+            "name": "ENDSWITH",
+            "description": "Checks if the string ends with a suffix.",
+            "example": "ENDSWITH(name, 'chocolate') → True/False"
+        },
+        {
+            "name": "CONTAINS",
+            "description": "Checks if the string contains a substring.",
+            "example": "CONTAINS(name, 'green') → True/False"
+        },
+        {
+            "name": "LIKE",
+            "description": "SQL-style pattern matching.",
+            "example": "LIKE(comment, '%special%') → True/False"
+        },
+        {
+            "name": "JOIN_STRINGS",
+            "description": "Joins strings with a delimiter.",
+            "example": "JOIN_STRINGS('-', 'A', 'B') → 'A-B'"
+        }
+        ]
+    },
+    "datetime_functions": {
+        "description": "Functions for working with dates and times.",
+        "functions": [
+        {
+            "name": "YEAR",
+            "description": "Extracts the year.",
+            "example": "YEAR(order_date) == 1995"
+        },
+        {
+            "name": "MONTH",
+            "description": "Extracts the month (1-12).",
+            "example": "MONTH(order_date) >= 6"
+        },
+        {
+            "name": "DAY",
+            "description": "Extracts the day (1-31).",
+            "example": "DAY(order_date) == 1"
+        },
+        {
+            "name": "HOUR",
+            "description": "Extracts the hour (0-23).",
+            "example": "HOUR(order_date) == 12"
+        },
+        {
+            "name": "MINUTE",
+            "description": "Extracts the minute (0-59).",
+            "example": "MINUTE(order_date) == 30"
+        },
+        {
+            "name": "SECOND",
+            "description": "Extracts the second (0-59).",
+            "example": "SECOND(order_date) < 30"
+        },
+        {
+            "name": "DATETIME",
+            "description": "Builds or augments a date/timestamp value with optional modifiers.",
+            "examples": [
+            "DATETIME('now')",
+            "DATETIME('now', 'start of month')",
+            "DATETIME('current_date', '12 hours')"
+            ]
+        },
+        {
+            "name": "DATEDIFF",
+            "description": "Returns the difference between two timestamps in years, months, days, etc.",
+            "example": "DATEDIFF('days', datetime.date(1992, 1, 1), order_date)"
+        }
+        ]
+    },
+    "conditional_functions": {
+        "description": "Functions for handling conditional logic.",
+        "functions": [
+        {
+            "name": "IFF",
+            "description": "Returns 'a' if condition is True, else 'b'.",
+            "example": "IFF(acctbal > 0, acctbal, 0)"
+        },
+        {
+            "name": "ISIN",
+            "description": "Checks membership in a list.",
+            "example": "ISIN(size, (10, 11)) → True/False"
+        },
+        {
+            "name": "DEFAULT_TO",
+            "description": "Returns the first non-null value.",
+            "example": "DEFAULT_TO(tax, 0)"
+        },
+        {
+            "name": "PRESENT",
+            "description": "Checks if a value is non-null.",
+            "example": "PRESENT(tax) → True/False"
+        },
+        {
+            "name": "ABSENT",
+            "description": "Checks if a value is null.",
+            "example": "ABSENT(tax) → True/False"
+        },
+        {
+            "name": "KEEP_IF",
+            "description": "Returns 'a' if condition is True, else null.",
+            "example": "KEEP_IF(acctbal, acctbal > 0)"
+        },
+        {
+            "name": "MONOTONIC",
+            "description": "Checks ascending order.",
+            "example": "MONOTONIC(5, part.size, 10) → True/False"
+        }
+        ]
+    },
+    "numerical_functions": {
+        "description": "Functions for numerical operations.",
+        "functions": [
+        {
+            "name": "ABS",
+            "description": "Returns the absolute value.",
+            "example": "ABS(-5) → 5"
+        },
+        {
+            "name": "ROUND",
+            "description": "Rounds to the specified number of decimal places.",
+            "example": "ROUND(3.1415, 2) → 3.14"
+        },
+        {
+            "name": "POWER",
+            "description": "Raises a number to a power.",
+            "example": "POWER(3, 2) → 9"
+        },
+        {
+            "name": "SQRT",
+            "description": "Calculates the square root.",
+            "example": "SQRT(16) → 4"
+        }
+        ]
+    },
+    "example_queries": [
+        {
+        "goal": "Top 5 States by Average Occupants",
+        "code": "addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))\naverage_occupants = PARTITION(addr_info, name='addrs', by=state).CALCULATE(\n    state=state,\n    avg_occupants=AVG(addrs.n_occupants)\n).TOP_K(5, by=avg_occupants.DESC())"
+        },
+        {
+        "goal": "Monthly Trans-Coastal Shipments",
+        "code": "west_coast = ('CA', 'OR', 'WA')\neast_coast = ('NY', 'NJ', 'MA')\nmonthly_shipments = Packages.WHERE(\n    ISIN(customer.current_address.state, west_coast) &\n    ISIN(shipping_address.state, east_coast)\n).CALCULATE(\n    month=MONTH(order_date),\n    year=YEAR(order_date)\n)"
+        },
+        {
+        "goal": "Calculate days since January 1st 1992 for each order",
+        "code": "Orders.CALCULATE(\n    days_since=DATEDIFF('days', datetime.date(1992, 1, 1), order_date)\n)"
+        },
+        {
+        "goal": "Filter Nations by Name",
+        "code": "nations_startwith = nations.CALCULATE(n_name=name, n_comment=comment).WHERE(STARTSWITH(name, 'A'))\nnations_like = nations.CALCULATE(n_name=name, n_comment=comment).WHERE(LIKE(name, 'A%'))"
+        },
+        {
+        "goal": "Customers in Debt from Specific Region",
+        "code": "customer_in_debt = customers.CALCULATE(customer_name=name).WHERE(\n    (acctbal < 0) &\n    (COUNT(orders) >= 5) &\n    (nation.region.name == 'AMERICA') &\n    (nation.name != 'BRAZIL')\n)"
+        },
+        {
+        "goal": "Truncate order date to the first day of the year",
+        "code": "Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))"
+        },
+        {
+        "goal": "Orders per Customer in 1998",
+        "code": "customer_order_counts = customers.CALCULATE(\n    key=key,\n    name=name,\n    num_orders=COUNT(orders.WHERE(YEAR(order_date) == 1998))\n).ORDER_BY(num_orders.DESC())"
+        },
+        {
+        "goal": "High-Value Customers in Asia",
+        "code": "high_value_customers_in_asia = customers.CALCULATE(\n    customer_key=key,\n    customer_name=name,\n    total_spent=SUM(orders.total_price)\n).WHERE((total_spent > 1000) & (nation.region.name == 'ASIA'))"
+        },
+        {
+        "goal": "Top 5 Most Profitable Regions",
+        "code": "selected_regions = nations.CALCULATE(\n    region_name=region.name,\n    Total_revenue=SUM(customers.orders.total_price)\n).TOP_K(5, Total_revenue.DESC())"
+        },
+        {
+        "goal": "Inactive Customers",
+        "code": "customers_without_orders = customers.WHERE(HASNOT(orders)).CALCULATE(\n    customer_key=key,\n    customer_name=name\n)"
+        },
+        {
+        "goal": "Customer Activity by Nation",
+        "code": "cust_info = customers.CALCULATE(is_active=HAS(orders) == 1)\nnation_summary = nations.CALCULATE(\n    nation_name=name,\n    total_customers=COUNT(cust_info),\n    active_customers=SUM(cust_info.is_active),\n    inactive_customers=COUNT(cust_info) - SUM(cust_info.is_active)\n).ORDER_BY(total_customers.DESC())"
+        },
+        {
+        "goal": "High Balance, Low Spending Customers",
+        "code": "customers_in_low_percentiles = customers.WHERE(\n    (PERCENTILE(by=acctbal.DESC()) <= 10) &\n    (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)\n)"
+        }
+    ],
+    "general_notes": {
+        "notes": [
+        "Use &, |, ~ for logical operations (not and, or, not).",
+        "For chained inequalities, use MONOTONIC or explicit comparisons.",
+        "Aggregation functions convert plural values (e.g., collections) to singular values."
+        ]
+    }
+  }
+}
+         
