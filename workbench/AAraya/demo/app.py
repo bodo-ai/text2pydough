@@ -105,9 +105,9 @@ if "result" in st.session_state:
     elif selected_output == "Full Explanation":
         st.write(result.full_explanation)
     elif selected_output == "DataFrame":
-        st.dataframe(result.df) if hasattr(result, "df") else st.write("No dataframe available.")
+        st.dataframe(result.df)
     elif selected_output == "SQL": 
-        st.code(result.sql, language="sql") if hasattr(result, "sql") else st.write("No SQL available.")
+        st.code(result.sql, language="sql")
     elif selected_output == "Exception":
         st.write(result.exception)
     elif selected_output == "Original Question":
