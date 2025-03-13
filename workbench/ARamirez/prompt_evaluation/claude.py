@@ -80,8 +80,7 @@ class DeepseekModel:
         modelId = model
         
 
-        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 25000,"temperature":0.0}, system=system_messages, messages= messages)
-        print(response)
+        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 25000,"temperature":0.001}, system=system_messages, messages= messages)
         response_text = response["output"]["message"]["content"][0]["text"]
 
 
