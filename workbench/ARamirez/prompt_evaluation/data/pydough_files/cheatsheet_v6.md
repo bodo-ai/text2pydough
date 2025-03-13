@@ -191,7 +191,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
         total_occupants=COUNT(addrs.current_occupants)  
     )
     ```  
-    **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
+    **IMPORTANT**: Notice that we only need to use "state" here, not "addrs.state", because it's in the "by" clause.
 
   - **Group packages by year/month**:  
     ```
