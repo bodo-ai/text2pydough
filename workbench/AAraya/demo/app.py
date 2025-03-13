@@ -73,9 +73,6 @@ with col2:
     if st.button("Examples"):
         show_examples()
 
-import streamlit as st
-from llm import LLMClient
-
 # ---------------------- CONVERSATIONAL INTERFACE ----------------------
 st.header("Query Interface")
 
