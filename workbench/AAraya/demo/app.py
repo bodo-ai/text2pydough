@@ -1,7 +1,7 @@
 import streamlit as st
 from llm import LLMClient
 
-# Set page config
+# Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide")
 
 # ---------------------- PAGE HEADER ----------------------
@@ -24,8 +24,40 @@ def show_db_diagram():
 if st.button("View TPCH Diagram 📊"):
     show_db_diagram()
 
+# ---------------------- EXAMPLES MODAL ----------------------
+@st.dialog("💡 Example Queries for TPCH", width="large") 
+def show_examples():
+    st.write("You can **copy** any of the examples by clicking the copy button. Then paste it into the query box!")
+    
+    examples = [
+        "Total customers & suppliers per nation, ordered by nation name.",
+        "Top 5 nations with most customer orders in 1995.",
+        "Region with highest total order value in 1996.\n\nSUM(extended_price * (1 - discount))",
+        "Top 3 regions with most distinct customers.",
+        "Customers & order count in 1995 (Europe) with balance > $700.",
+        "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
+        "Customers with more orders in 1995 than 1994.",
+        "Avg. order value per nation.\n\nSUM(extended_price * quantity)",
+        "Total revenue per customer in 1994.\n\nSUM(extended_price * (1 - discount))",
+        "Customer key, name & revenue in 1994.\n\nSUM(extended_price * (1 - discount))",
+        "Customers ending in zero with 30-lowest balances.",
+        "Customers with >10 orders, showing name & total order count.",
+        "Orders from 1998 with total price > $100, sorted by price.",
+        "Customers who ordered in 1996 but not in 1997, with email & total spent (> $200)."
+    ]
+
+    for example in examples:
+        st.code(example, language="")
+
+col1, col2 = st.columns([0.85, 1.28])  
+with col1:
+    st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
+with col2: 
+    if st.button("Examples"):
+        show_examples()
+
 # ---------------------- LAYOUT: TWO-PANE VIEW ----------------------
-col1, col2 = st.columns([0.5, 0.5])  # Left = Conversation, Right = Display Pane
+col1, col2 = st.columns([0.5, 0.5])  # Left = Chat, Right = Display Pane
 
 with col1:
     st.header("Conversation")
@@ -119,4 +151,3 @@ with col2:
             st.write(result.knowledge_graph or "No knowledge graph found.")
     else:
         st.info("Run a query to see results here.")
-
