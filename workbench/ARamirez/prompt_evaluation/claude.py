@@ -72,7 +72,7 @@ class DeepseekModel:
         messages= [
                 {
                     "role": "user",  # Wrap "string" in quotes to make it a valid string
-                    "content":[{"text":f"{prompt}\n Query\n{question}"}]
+                    "content":[{"text": question}]
                 }
             ]
         
@@ -80,7 +80,7 @@ class DeepseekModel:
         modelId = model
         
 
-        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 25000,"temperature":0.0000001}, messages= messages)
+        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 28000,"temperature":0.5}, system=system_messages, messages= messages)
         response_text = response["output"]["message"]["content"][0]["text"]
 
 
