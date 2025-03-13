@@ -1,8 +1,10 @@
 import streamlit as st
 from llm import LLMClient
 
+# Set the page title and icon
 st.set_page_config(page_title="PyDough LLM Demo", page_icon="bodo_icon.png")
 
+# Logo
 st.image("logo.png", width=150, use_container_width=False)
 
 # ---------------------- APP HEADER ----------------------
@@ -10,18 +12,19 @@ st.title("PyDough LLM Demo")
 
 st.markdown(
     """
-    This interactive demo allows you to generate **PyDough queries** from natural language instructions.  
-    Simply enter a query for the **TPCH database** , run it, and explore the results using the dropdown below. """,
+    This interactive demo allows you to generate **PyDough queries** from natural language instructions.
+    Simply enter a query and explore the results in a **conversational format**.
+    """,
     unsafe_allow_html=True,
 )
 
+# ---------------------- DATABASE DIAGRAM ----------------------
 @st.dialog("📊 TPCH Database Diagram", width="large")
 def show_db_diagram():
     st.image("db_diag.png", use_container_width=True)
     
 if st.button("View TPCH Diagram 📊"):
     show_db_diagram()
-    
 
 st.markdown(
     """
@@ -39,15 +42,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-
-# ---------------------- QUERY INPUT ----------------------
-st.header("Try it Out!")
-
-# ---------------------- EXAMPLES MODAL (WIDE & SUBTLE BUTTON) ----------------------
+# ---------------------- EXAMPLES MODAL ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
-    st.write("You can **copy** any of the examples by hovering on it and clicking at the copy button on the right side. Then paste it on the query text-field and try it out! ")
+    st.write("You can **copy** any of the examples by hovering on it and clicking at the copy button on the right side. Then paste it on the query text-field and try it out!")
+    
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
         "Top 5 nations with most customer orders in 1995.",
@@ -66,7 +65,7 @@ def show_examples():
     ]
 
     for example in examples:
-            st.code(example, language="")
+        st.code(example, language="")
 
 col1, col2 = st.columns([0.85, 1.28])  
 with col1:
@@ -75,92 +74,73 @@ with col2:
     if st.button("Examples"):
         show_examples()
 
+# ---------------------- CONVERSATIONAL INTERFACE ----------------------
+st.header("Query Interface")
 
-query = st.text_input("Enter your query:", "List all customers from United States")
 
-if st.button("Run Query"):
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# User input
+if query := st.chat_input("Ask a query about the TPCH database..."):
+
+    st.session_state.messages.append({"role": "user", "content": query})
+
+
+    with st.chat_message("user"):
+        st.markdown(query)
+
+
     try:
         client = LLMClient()
         result = client.ask(query)
-        st.session_state.result = result 
-        st.success("Query executed successfully! ✅")
+
+        # Dropdown for selecting output type
+        selected_output = st.selectbox(
+            "Select what to view:",
+            ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+             "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+            key=f"dropdown_{len(st.session_state.messages)}",
+        )
+
+        # Generate response content
+        response_content = ""
+        if selected_output == "Code":
+            response_content = f"```python\n{result.code}\n```"
+        elif selected_output == "Full Explanation":
+            response_content = result.full_explanation
+        elif selected_output == "DataFrame":
+            response_content = result.df 
+        elif selected_output == "SQL":
+            response_content = f"```sql\n{result.sql}\n```"
+        elif selected_output == "Exception":
+            response_content = result.exception
+        elif selected_output == "Original Question":
+            response_content = result.original_question
+        elif selected_output == "Base Prompt":
+            response_content = result.base_prompt
+        elif selected_output == "Cheat Sheet":
+            response_content = result.cheat_sheet
+        elif selected_output == "Knowledge Graph":
+            response_content = result.knowledge_graph
+
+        # Store response in chat history
+        st.session_state.messages.append({"role": "assistant", "content": response_content})
+
+        # Display response
+        with st.chat_message("assistant"):
+            st.markdown(response_content)
+
     except Exception as e:
         st.error(f"Error running query: {e}")
 
-# ---------------------- DISPLAY RESULTS ----------------------
-if "result" in st.session_state:
-    result = st.session_state.result
-    
-    st.subheader("Output:")
-    selected_output = st.selectbox(
-        "Select what to view:",
-        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
-         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],  
-        key="dropdown",
-    )
-    st.markdown("---")  
+# ---------------------- RESET BUTTON ----------------------
+if st.button("Reset Conversation"):
+    st.session_state.messages = []
+    st.rerun()
 
-    if selected_output == "Code":
-        st.code(result.code, language="python")
-    elif selected_output == "Full Explanation":
-        st.write(result.full_explanation)
-    elif selected_output == "DataFrame":
-        st.dataframe(result.df) if hasattr(result, "df") else st.write("No dataframe available.")
-    elif selected_output == "SQL": 
-        st.code(result.sql, language="sql") if hasattr(result, "sql") else st.write("No SQL available.")
-    elif selected_output == "Exception":
-        st.write(result.exception)
-    elif selected_output == "Original Question":
-        st.write(result.original_question)
-    elif selected_output == "Base Prompt":
-        st.write(result.base_prompt)
-    elif selected_output == "Cheat Sheet":
-        st.write(result.cheat_sheet)
-    elif selected_output == "Knowledge Graph":
-        st.write(result.knowledge_graph)
-
-    # ---------------------- DISCOURSE FUNCTIONALITY ----------------------------
-    st.header("Improve or Refine Query")
-    st.markdown(
-        """
-        You can **refine your query** by adding follow-up information. Each time you run the discourse, it will update the query with new details.  
-        If you want a completely new query, change it in the first section above.
-        """
-    )
-
-    follow_up = st.text_input("Add follow-up information to refine the query:")
-
-    if st.button("Refine Query"):
-        if follow_up:
-            try:
-                client = LLMClient()
-                improved_result = client.discourse(result, follow_up)
-                st.session_state.improved_result = improved_result
-                st.success("Query refined successfully! ✅")
-            except Exception as e:
-                st.error(f"Error running discourse: {e}")
-        else:
-            st.warning("Enter follow-up information.")
-
-    # ---------------------- DISPLAY IMPROVED RESULTS ----------------------
-    if "improved_result" in st.session_state:
-        improved_result = st.session_state.improved_result
-
-        st.subheader("Refined Query Output:")
-        selected_output_improved = st.selectbox(
-            "Select what to view (Refined Query):",
-            ["Code", "Full Explanation", "DataFrame", "SQL", "Exception"],  
-            key="dropdown_improved",
-        )
-        st.markdown("---")  
-
-        if selected_output_improved == "Code":
-            st.code(improved_result.code, language="python")
-        elif selected_output_improved == "Full Explanation":
-            st.write(improved_result.full_explanation)
-        elif selected_output_improved == "DataFrame":
-            st.dataframe(improved_result.df) if hasattr(improved_result, "df") else st.write("No dataframe available.")
-        elif selected_output_improved == "SQL": 
-            st.code(improved_result.sql, language="sql") if hasattr(improved_result, "sql") else st.write("No SQL available.")
-        elif selected_output_improved == "Exception":
-            st.write(improved_result.exception)
