@@ -17,7 +17,6 @@ Here are some examples of PyDough code snippets along with their corresponding n
 Your objective is to analyze the provided natural language description that outlines a database query or manipulation task and generate a corresponding PyDough code snippet that adheres to the syntax and structure in the PyDough Reference File.
 
 1. Extract the main components of the natural language description to identify the database query or manipulation required, before to create the pydough code extract the collections needed and pydough functions.
-
 2. Generate PyDough code that:
    - Uses clear and concise syntax using the correct functions, parameters, and structure.
    - Avoids the bad examples reference in the Pydough Reference File
@@ -30,14 +29,13 @@ Your objective is to analyze the provided natural language description that outl
    - When need HAS ALWAYS compare if is equal to 1.
    - Ensures the variables names are different than the fields of the Database Structure Reference File.
    - Returns only the exact data requested, without adding additional fields or information.
-
 3. Determine if PARTITION is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, then use it appropriately.
-
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
-
 5. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does, step by step
-
 6. Try different methods if your first approach doesn't work.
+7. Verify your work by checking for inconsistencies, logical errors, or missing details.
+8. Test simple cases to confirm the solution behaves as expected.
+9. Analyze your previous step to determine if the expected result was achieved.
 
 {recomendation}
 
