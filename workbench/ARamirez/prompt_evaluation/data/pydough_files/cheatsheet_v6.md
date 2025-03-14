@@ -67,6 +67,8 @@ Collection.CALCULATE(field=expression, ...)
 
   - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
 
+  - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions.
+
 ## **3. FILTERING (WHERE)**  
 
 ### **Syntax** 
