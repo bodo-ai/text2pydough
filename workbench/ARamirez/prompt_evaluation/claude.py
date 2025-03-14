@@ -16,7 +16,7 @@ class ClaudeModel:
             "max_tokens": 25000,
             "thinking": {
                 "type": "enabled",
-                "budget_tokens": 9000
+                "budget_tokens": 10000
             },
             "system": prompt,  # Wrap "string" in quotes to make it a valid string
             "messages": [
