@@ -2,7 +2,7 @@ import streamlit as st
 from llm import LLMClient
 
 # Set page config for wide layout
-st.set_page_config(page_title="PyDough LLM Demo", layout="wide")
+st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
 
 # Add custom CSS to style the dropdown
 st.markdown("""
@@ -33,6 +33,19 @@ st.markdown(
     """
     This interactive demo allows you to generate **PyDough queries** from natural language instructions.  
     Simply enter a query for the **TPCH database**, run it, and explore the results.
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    ### How It Works:
+    - Type a query in the chat.  
+    - The AI translates it into a PyDough query.  
+    - Select an option from the result dropdown to view specific details.  
+    - Refine the query by adding more details to get a more specific response.  
+    - **Each conversation is based on a single query and its refinements.** 
+        To start a completely new query, click **"Restart Conversation"**.  
     """,
     unsafe_allow_html=True,
 )
@@ -70,7 +83,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 3.00])  
+col1, col2 = st.columns([0.85, 2.80])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -92,6 +105,8 @@ with col1:
         st.session_state.query_results = {}
     if "active_query" not in st.session_state:
         st.session_state.active_query = None
+    if "last_query_id" not in st.session_state:
+        st.session_state.last_query_id = None
 
     # Function to handle dropdown changes
     def on_dropdown_change(query_id):
@@ -134,10 +149,18 @@ with col1:
         st.session_state.messages.append({"role": "user", "content": query})
 
         query_id = len(st.session_state.messages)  # Unique ID per query
+        client = LLMClient()
 
         try:
-            client = LLMClient()
-            result = client.ask(query)
+            # Determine if this is a follow-up query
+            if st.session_state.last_query_id is not None and len(st.session_state.messages) > 2:
+                # Get the last result for discourse
+                last_result = st.session_state.query_results[st.session_state.last_query_id]
+                # This is a follow-up query, use discourse
+                result = client.discourse(last_result, query)
+            else:
+                # This is a new query, use ask
+                result = client.ask(query)
 
             # Check if result is empty
             if not result or (not result.code and not result.full_explanation and not result.df):
@@ -153,6 +176,7 @@ with col1:
                 st.session_state.query_results[query_id] = result
                 st.session_state.selected_output[f"dropdown_{query_id}"] = "Code"
                 st.session_state.active_query = query_id
+                st.session_state.last_query_id = query_id  # Update the last query ID
 
                 # Refresh to update display pane
                 st.rerun()
@@ -166,6 +190,7 @@ with col1:
         st.session_state.selected_output = {}
         st.session_state.query_results = {}
         st.session_state.active_query = None
+        st.session_state.last_query_id = None  # Reset last query ID
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
