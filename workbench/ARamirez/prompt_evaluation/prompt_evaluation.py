@@ -225,6 +225,8 @@ def correct(client, question,  code, prompt):
         - Analyze the provided Pydough code for syntax errors, logical errors, and exceptions.
         - Identify the specific line or section where the exception occurs. 
         - Consider the context of the original question to ensure that the code aligns with the intended functionality.
+        - Do not assume if a method exists.
+        - Follow the rules provided in pydough.    
         - Return the same output but with the corrected code.
         An error occurred while processing this code: {extracted_code}. 
         The error is: '{exception}'. 
