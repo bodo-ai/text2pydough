@@ -180,7 +180,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
 - Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context.
 - Partition keys must be scalar fields from the collection. 
 - You must use Aggregation functions to call plural values inside PARTITION.
-- Within a partition, you must use the `name` argument to be able to access any property or subcollections, using the name makes the collection and subcollection plural. 
+- Within a partition, you must use the `name` argument to be able to access any property or subcollections. 
 
 ### **Good Examples**  
 
@@ -207,6 +207,19 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     )
     ```
 
+  - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage.**:  Notice how `addrs` can access `total_packages`, which was defined by its ancestor (at the `PARTITION` level) an notice we can defined more variables with CALCULATE.
+    ``` 
+      PARTITION(Addresses, name="addrs", by=(city, state)).CALCULATE(
+      total_packages=COUNT(addrs.current_occupants.packages)
+  ).addrs.CALCULATE(city, state).current_occupants.CALCULATE(
+      first_name,
+      last_name,
+      city=city,
+      state=state,
+      pct_of_packages=100.0 * COUNT(packages) / total_packages,
+  )
+    ```
+
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
     ```
@@ -217,18 +230,31 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     )
     ```
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALCULATE so it is accessible as a named reference).
     ```
     PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     )
     ```
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALCULATE so it is accessible as a named reference).
     ``` 
     PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     )
+    ```
+  - **Rank parts within each segment and filter top 20**: Invalid because segment_group.part_name is a plural expression you must use an aggregation function to use plural expression or subcollections.
+    ``` 
+  top_per_segment = PARTITION(
+      segment_part_sales,
+      name='segment_group',
+      by=segment
+  ).CALCULATE(
+      segment=segment,
+      part_name=segment_group.part_name,
+      total_sold=segment_group.total_sold,
+      rank=RANKING(by=segment_group.total_sold.DESC(), levels=1)
+  ).WHERE(rank <= 20).ORDER_BY(segment.ASC(), total_sold.DESC())
     ```
 
 ## **8. WINDOW FUNCTIONS**  
