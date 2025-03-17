@@ -103,7 +103,12 @@ with col1:
     if query := st.chat_input("Ask a query about the TPCH database..."):
 
         query_id = len(st.session_state.messages)  # Unique ID per query
-        st.session_state.messages.append({"role": "user", "content": query})
+        
+        # Store user query **FIRST** in session state
+        st.session_state.messages.insert(0, {"role": "user", "content": query})  # ✅ Insert at the beginning
+
+        # Refresh the UI to display messages in correct order
+        st.rerun()
 
         with st.chat_message("user"):
             st.markdown(query)
