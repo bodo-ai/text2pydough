@@ -29,7 +29,6 @@ Your objective is to analyze the provided natural language description that outl
    - When need HAS ALWAYS compare if is equal to 1.
    - Ensures the variables names are different than the fields of the Database Structure Reference File.
    - Returns only the exact data requested, without adding additional fields or information.
-   - Avoid using the keys fields of the collections as much as possible.
 3. Determine if PARTITION is necessary: If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, then use it appropriately.
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 5. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does, step by step
