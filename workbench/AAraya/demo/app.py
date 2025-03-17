@@ -28,7 +28,7 @@ if st.button("View TPCH Diagram 📊"):
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
     st.write("You can **copy** any of the examples by clicking the copy button. Then paste it into the query box!")
-    
+
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
         "Top 5 nations with most customer orders in 1995.",
@@ -49,7 +49,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 0.25])  
+col1, col2 = st.columns([0.85, 1.60])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -67,6 +67,8 @@ with col1:
         st.session_state.messages = []
     if "selected_output" not in st.session_state:
         st.session_state.selected_output = {}
+    if "query_results" not in st.session_state:
+        st.session_state.query_results = {}
 
     # Display chat history in left panel
     for idx, message in enumerate(st.session_state.messages):
@@ -74,11 +76,11 @@ with col1:
             st.markdown(message["content"])
 
         # If it's an assistant response, include the dropdown
-        if message["role"] == "assistant" and "query_result" in message:
-            result = message["query_result"]
-            dropdown_key = f"dropdown_{idx}"
+        if message["role"] == "assistant" and "query_id" in message:
+            query_id = message["query_id"]
+            result = st.session_state.query_results[query_id]
 
-            # Restore previous selection or default to "Code"
+            dropdown_key = f"dropdown_{query_id}"
             selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
             # Dropdown for selecting output type
@@ -94,12 +96,13 @@ with col1:
             # Store selection in session state
             st.session_state.selected_output[dropdown_key] = selected_output
 
-            # Store the result reference so the right panel can access it
-            st.session_state.last_result = {"query_result": result, "output_type": selected_output}
+            # Update the right panel with this query’s results
+            st.session_state.last_selected_query = query_id
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input("Ask a query about the TPCH database..."):
 
+        query_id = len(st.session_state.messages)  # Unique ID per query
         st.session_state.messages.append({"role": "user", "content": query})
 
         with st.chat_message("user"):
@@ -113,15 +116,16 @@ with col1:
             if not result or (not result.code and not result.full_explanation and not result.df):
                 st.error("⚠️ No valid response received. Please try again.")
             else:
-                # Store response in chat history
+                # Store response and result
                 st.session_state.messages.append({
                     "role": "assistant", 
                     "content": "Your answer is ready! Select the result format below:",
-                    "query_result": result  
+                    "query_id": query_id
                 })
 
-                # Default to last result
-                st.session_state.last_result = {"query_result": result, "output_type": "Code"}
+                st.session_state.query_results[query_id] = result
+                st.session_state.selected_output[f"dropdown_{query_id}"] = "Code"
+                st.session_state.last_selected_query = query_id
 
                 # Refresh to update display pane
                 st.rerun()
@@ -132,17 +136,19 @@ with col1:
     # Reset button
     if st.button("Reset Conversation"):
         st.session_state.messages = []
-        st.session_state.last_result = None
-        st.selected_output = {}
+        st.session_state.selected_output = {}
+        st.session_state.query_results = {}
+        st.session_state.last_selected_query = None
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
 with col2:
     st.header("Output")
 
-    if "last_result" in st.session_state and st.session_state.last_result:
-        result = st.session_state.last_result["query_result"]
-        selected_output = st.session_state.last_result["output_type"]
+    if "last_selected_query" in st.session_state and st.session_state.last_selected_query is not None:
+        query_id = st.session_state.last_selected_query
+        result = st.session_state.query_results[query_id]
+        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Code")
 
         st.markdown("---")
 
@@ -170,4 +176,5 @@ with col2:
             st.write(result.knowledge_graph or "No knowledge graph found.")
     else:
         st.info("Run a query to see results here.")
+
 
