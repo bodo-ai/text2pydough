@@ -4,6 +4,27 @@ from llm import LLMClient
 # Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide")
 
+# Add custom CSS to style the dropdown
+st.markdown("""
+<style>
+    /* Make the dropdown more compact */
+    div.stSelectbox {
+        max-width: 300px;  /* Adjust width as needed */
+        margin-left: 40px; /* Indent to align with chat message */
+    }
+    
+    /* Optional: Reduce the label text size */
+    div.stSelectbox > label {
+        font-size: 0.85rem !important;
+    }
+    
+    /* Optional: Style the chat container */
+    .stChatMessage {
+        padding-bottom: 5px !important;  /* Reduce spacing */
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
 st.title("PyDough LLM Demo")
@@ -49,7 +70,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 1.85])  
+col1, col2 = st.columns([0.85, 2.50])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -89,7 +110,7 @@ with col1:
             dropdown_key = f"dropdown_{query_id}"
             selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-            # Dropdown for selecting output type
+            # Dropdown for selecting output type - use container for styling
             selected_output = st.selectbox(
                 "Select result format:",
                 ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
@@ -183,4 +204,3 @@ with col2:
             st.write(result.knowledge_graph or "No knowledge graph found.")
     else:
         st.info("Run a query to see results here.")
-
