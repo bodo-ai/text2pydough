@@ -37,20 +37,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-    ### How It Works:
-    - Type a query in the chat.  
-    - The AI translates it into a PyDough query.  
-    - Select an option from the result dropdown to view specific details.  
-    - Refine the query by adding more details to get a more specific response.  
-    - **Each conversation is based on a single query and its refinements.** 
-        To start a completely new query, click **"Restart Conversation"**.  
-    """,
-    unsafe_allow_html=True,
-)
-
-# ---------------------- TPCH DATABASE DIAGRAM ----------------------
+#View TPCH diagram
 @st.dialog("📊 TPCH Database Diagram", width="large")
 def show_db_diagram():
     st.image("db_diag.png", use_container_width=True)
@@ -58,6 +45,18 @@ def show_db_diagram():
 if st.button("View TPCH Diagram 📊"):
     show_db_diagram()
 
+
+st.markdown(
+    """
+    ### How It Works:
+    - Type a query in the chat panel.    
+    - Select an option from the result dropdown to view specific details on the Output panel.  
+    - Refine the query by adding more details on the Input panel to get a more specific response.  
+    - **Each conversation is based on a single query and its refinements.** 
+        To start a completely new query, click **"Restart"**.  
+    """,
+    unsafe_allow_html=True,
+)
 # ---------------------- EXAMPLES MODAL ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
@@ -94,7 +93,7 @@ with col2:
 col1, col2 = st.columns([0.5, 0.5])  # Left = Query Panel, Right = Output Panel
 
 with col1:
-    st.header("Query")
+    st.header("Input")
 
     # Initialize session state for chat history
     if "messages" not in st.session_state:
@@ -185,7 +184,7 @@ with col1:
             st.error(f"❌ Error running query: {e}")
 
     # Reset button
-    if st.button("Reset Conversation"):
+    if st.button("Restart"):
         st.session_state.messages = []
         st.session_state.selected_output = {}
         st.session_state.query_results = {}
