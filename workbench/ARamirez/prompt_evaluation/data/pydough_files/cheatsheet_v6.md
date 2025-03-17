@@ -5,6 +5,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
+  - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions. Plural sub-collections refer to collections that have a one-to-many or many-to-many relationship.
+  
   - RANKING is used as a function instead of method.
   
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
@@ -65,7 +67,7 @@ Collection.CALCULATE(field=expression, ...)
 
   - Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
 
-  - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
+  - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE. 
 
 ## **3. FILTERING (WHERE)**  
 
