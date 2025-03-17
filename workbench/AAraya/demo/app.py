@@ -49,7 +49,7 @@ if st.button("View TPCH Diagram 📊"):
 st.markdown(
     """
     ### How It Works:
-    - Type a query in the chat panel.    
+    - Type a query in the Input panel and press enter.    
     - Select an option from the result dropdown to view specific details on the Output panel.  
     - Refine the query by adding more details on the Input panel to get a more specific response.  
     - **Each conversation is based on a single query and its refinements.** 
