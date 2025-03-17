@@ -49,7 +49,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 1.60])  
+col1, col2 = st.columns([0.85, 1.85])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -69,6 +69,12 @@ with col1:
         st.session_state.selected_output = {}
     if "query_results" not in st.session_state:
         st.session_state.query_results = {}
+    if "active_query" not in st.session_state:
+        st.session_state.active_query = None
+
+    # Function to handle dropdown changes
+    def on_dropdown_change(query_id):
+        st.session_state.active_query = query_id
 
     # Display chat history in left panel
     for idx, message in enumerate(st.session_state.messages):
@@ -90,22 +96,23 @@ with col1:
                 "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                 key=dropdown_key,
                 index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
-                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output)
+                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
+                on_change=on_dropdown_change,
+                args=(query_id,)
             )
 
             # Store selection in session state
             st.session_state.selected_output[dropdown_key] = selected_output
-
-            # Update the right panel with this query’s results
-            st.session_state.last_selected_query = query_id
+            
+            # Update active query when dropdown changes
+            if st.session_state.get('widget_triggered') == dropdown_key:
+                st.session_state.active_query = query_id
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input("Ask a query about the TPCH database..."):
+        st.session_state.messages.append({"role": "user", "content": query})
 
         query_id = len(st.session_state.messages)  # Unique ID per query
-        
-        # Store user query **FIRST** in session state
-        st.session_state.messages.insert(0, {"role": "user", "content": query})  # ✅ Insert at the beginning
 
         try:
             client = LLMClient()
@@ -124,7 +131,7 @@ with col1:
 
                 st.session_state.query_results[query_id] = result
                 st.session_state.selected_output[f"dropdown_{query_id}"] = "Code"
-                st.session_state.last_selected_query = query_id
+                st.session_state.active_query = query_id
 
                 # Refresh to update display pane
                 st.rerun()
@@ -137,15 +144,16 @@ with col1:
         st.session_state.messages = []
         st.session_state.selected_output = {}
         st.session_state.query_results = {}
-        st.session_state.last_selected_query = None
+        st.session_state.active_query = None
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
 with col2:
     st.header("Output")
 
-    if "last_selected_query" in st.session_state and st.session_state.last_selected_query is not None:
-        query_id = st.session_state.last_selected_query
+    # Use active_query instead of last_selected_query
+    if "active_query" in st.session_state and st.session_state.active_query is not None:
+        query_id = st.session_state.active_query
         result = st.session_state.query_results[query_id]
         selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Code")
 
@@ -158,7 +166,7 @@ with col2:
             st.write(result.full_explanation)
         elif selected_output == "DataFrame":
             if hasattr(result, "df") and result.df is not None:
-                st.dataframe(result.df)  # ✅ Correct DataFrame display
+                st.dataframe(result.df)  
             else:
                 st.warning("⚠️ No DataFrame available.")
         elif selected_output == "SQL":
@@ -175,5 +183,4 @@ with col2:
             st.write(result.knowledge_graph or "No knowledge graph found.")
     else:
         st.info("Run a query to see results here.")
-
 
