@@ -49,7 +49,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 1.28])  
+col1, col2 = st.columns([0.85, 0.25])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -57,19 +57,45 @@ with col2:
         show_examples()
 
 # ---------------------- LAYOUT: TWO-PANE VIEW ----------------------
-col1, col2 = st.columns([0.5, 0.5])  # Left = Chat, Right = Display Pane
+col1, col2 = st.columns([0.5, 0.5])  # Left = Query Panel, Right = Output Panel
 
 with col1:
-    st.header("Conversation")
+    st.header("Query")
 
     # Initialize session state for chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "selected_output" not in st.session_state:
+        st.session_state.selected_output = {}
 
-    # Display chat history in left pane
+    # Display chat history in left panel
     for idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+        # If it's an assistant response, include the dropdown
+        if message["role"] == "assistant" and "query_result" in message:
+            result = message["query_result"]
+            dropdown_key = f"dropdown_{idx}"
+
+            # Restore previous selection or default to "Code"
+            selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
+
+            # Dropdown for selecting output type
+            selected_output = st.selectbox(
+                "Select result format:",
+                ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+                "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                key=dropdown_key,
+                index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
+                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output)
+            )
+
+            # Store selection in session state
+            st.session_state.selected_output[dropdown_key] = selected_output
+
+            # Store the result reference so the right panel can access it
+            st.session_state.last_result = {"query_result": result, "output_type": selected_output}
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input("Ask a query about the TPCH database..."):
@@ -90,12 +116,12 @@ with col1:
                 # Store response in chat history
                 st.session_state.messages.append({
                     "role": "assistant", 
-                    "content": "Your answer is ready! Select the result info in the right panel.",
+                    "content": "Your answer is ready! Select the result format below:",
                     "query_result": result  
                 })
 
-                # Store result in session state for the display pane
-                st.session_state.last_result = result
+                # Default to last result
+                st.session_state.last_result = {"query_result": result, "output_type": "Code"}
 
                 # Refresh to update display pane
                 st.rerun()
@@ -107,27 +133,20 @@ with col1:
     if st.button("Reset Conversation"):
         st.session_state.messages = []
         st.session_state.last_result = None
+        st.selected_output = {}
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
 with col2:
-    st.header("Query Results")
+    st.header("Output")
 
     if "last_result" in st.session_state and st.session_state.last_result:
-        result = st.session_state.last_result
-
-        # Dropdown for selecting output type
-        selected_output = st.selectbox(
-            "Select what to view:",
-            ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
-             "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
-            key="output_dropdown",
-        )
+        result = st.session_state.last_result["query_result"]
+        selected_output = st.session_state.last_result["output_type"]
 
         st.markdown("---")
 
         # Display selected output
-        response_content = ""
         if selected_output == "Code":
             st.code(result.code, language="python")
         elif selected_output == "Full Explanation":
@@ -151,3 +170,4 @@ with col2:
             st.write(result.knowledge_graph or "No knowledge graph found.")
     else:
         st.info("Run a query to see results here.")
+
