@@ -13,9 +13,9 @@ st.markdown("""
         margin-left: 40px; /* Indent to align with chat message */
     }
     
-    /* Optional: Reduce the label text size */
+    /* Hide the label completely */
     div.stSelectbox > label {
-        font-size: 0.85rem !important;
+        display: none !important;
     }
     
     /* Optional: Style the chat container */
@@ -70,7 +70,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 2.50])  
+col1, col2 = st.columns([0.85, 3.00])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -110,9 +110,9 @@ with col1:
             dropdown_key = f"dropdown_{query_id}"
             selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-            # Dropdown for selecting output type - use container for styling
+            # Dropdown without label
             selected_output = st.selectbox(
-                "Select result format:",
+                " ", 
                 ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
                 "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                 key=dropdown_key,
