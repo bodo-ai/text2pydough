@@ -40,3 +40,4 @@ Your objective is to analyze the provided natural language description that outl
 {recomendation}
 
 Use this structure to ensure clarity, consistency, and adherence to PyDough syntax in your outputs.
+Always greet.
