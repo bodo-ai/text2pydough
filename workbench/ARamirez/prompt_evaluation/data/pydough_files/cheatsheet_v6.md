@@ -180,7 +180,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
 - Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context.
 - Partition keys must be scalar fields from the collection. 
 - You must use Aggregation functions to call plural values inside PARTITION.
-- Within a partition, you must use the `name` argument to be able to access any property or subcollections. 
+- Within a partition, you must use the `name` argument to be able to access any property or subcollections, using the name makes the collection and subcollection plural. 
 
 ### **Good Examples**  
 
