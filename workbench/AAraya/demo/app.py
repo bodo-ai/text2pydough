@@ -122,15 +122,12 @@ with col1:
     def on_dropdown_change(query_id):
         st.session_state.active_query = query_id
 
-# ---------------------- SCROLLABLE CHAT AREA ----------------------
-with st.container():
-    st.markdown('<div class="scrollable-chat">', unsafe_allow_html=True)
-
+    # Display chat history in left panel
     for idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-            # Assistant response includes the dropdown
+        # Assistant response include the dropdown
         if message["role"] == "assistant" and "query_id" in message:
             query_id = message["query_id"]
             result = st.session_state.query_results[query_id]
@@ -138,24 +135,24 @@ with st.container():
             dropdown_key = f"dropdown_{query_id}"
             selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
+            # Dropdown without label
             selected_output = st.selectbox(
                 " ", 
                 ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
-                 "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                 key=dropdown_key,
                 index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
-                        "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
+                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
                 on_change=on_dropdown_change,
                 args=(query_id,)
             )
 
+            # Store selection in session state
             st.session_state.selected_output[dropdown_key] = selected_output
             
             # Update active query when dropdown changes
             if st.session_state.get('widget_triggered') == dropdown_key:
                 st.session_state.active_query = query_id
-            
-            st.markdown('</div>', unsafe_allow_html=True)
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input("Ask a query about the TPCH database..."):
