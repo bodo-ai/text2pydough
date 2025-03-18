@@ -82,7 +82,7 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 3.15])  
+col1, col2 = st.columns([0.85, 2.90])  
 with col1:
     st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
 with col2: 
@@ -116,7 +116,7 @@ with col1:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-        # If it's an assistant response, include the dropdown
+        # Assistant response include the dropdown
         if message["role"] == "assistant" and "query_id" in message:
             query_id = message["query_id"]
             result = st.session_state.query_results[query_id]
