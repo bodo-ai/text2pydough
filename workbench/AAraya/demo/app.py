@@ -4,34 +4,34 @@ from llm import LLMClient
 # Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
 
-# Add custom CSS to style the dropdown and create scrollable chat container
+# Add custom CSS to style the dropdown
 st.markdown("""
 <style>
     /* Make the dropdown more compact */
     div.stSelectbox {
-        max-width: 300px;  /* Adjust width as needed */
-        margin-left: 40px; /* Indent to align with chat message */
+        max-width: 300px;  
+        margin-left: 40px; 
     }
     
     /* Hide the label completely */
     div.stSelectbox > label {
         display: none !important;
     }
-    
-    /* Style the chat container */
     .stChatMessage {
-        padding-bottom: 5px !important;  /* Reduce spacing */
+        padding-bottom: 5px 
     }
-    
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
     /* Scrollable chat container */
-    .chat-container {
-        height: 65vh;
+    .scrollable-chat {
+        height: 500px;
         overflow-y: auto;
-        padding-right: 10px;
-        margin-bottom: 20px;
-        border: 1px solid #f0f0f0;
+        border: 1px solid #ccc;
+        padding: 10px;
         border-radius: 5px;
-        background-color: #fcfcfc;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -122,14 +122,10 @@ with col1:
     def on_dropdown_change(query_id):
         st.session_state.active_query = query_id
 
-    # Create a container for the chat history with CSS class for scrolling
-    chat_container = st.container()
-    
-    # Use custom HTML to create scrollable container
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    
-    # Display chat history in scrollable container
-    with chat_container:
+    # ---------------------- SCROLLABLE CHAT AREA ----------------------
+    with st.container():
+        st.markdown('<div class="scrollable-chat">', unsafe_allow_html=True)
+
         for idx, message in enumerate(st.session_state.messages):
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
@@ -142,36 +138,24 @@ with col1:
                 dropdown_key = f"dropdown_{query_id}"
                 selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-                # Dropdown without label
                 selected_output = st.selectbox(
                     " ", 
                     ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
-                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                     "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                     key=dropdown_key,
                     index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
-                        "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
+                           "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
                     on_change=on_dropdown_change,
                     args=(query_id,)
                 )
 
-                # Store selection in session state
                 st.session_state.selected_output[dropdown_key] = selected_output
+            
+            # Update active query when dropdown changes
+            if st.session_state.get('widget_triggered') == dropdown_key:
+                st.session_state.active_query = query_id
                 
-                # Update active query when dropdown changes
-                if st.session_state.get('widget_triggered') == dropdown_key:
-                    st.session_state.active_query = query_id
-    
-    # Close the scrollable container div
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Reset button - outside the scrollable area
-    if st.button("Restart", key="restart_button"):
-        st.session_state.messages = []
-        st.session_state.selected_output = {}
-        st.session_state.query_results = {}
-        st.session_state.active_query = None
-        st.session_state.last_query_id = None  # Reset last query ID
-        st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input("Ask a query about the TPCH database..."):
@@ -212,6 +196,15 @@ with col1:
 
         except Exception as e:
             st.error(f"❌ Error running query: {e}")
+
+    # Reset button
+    if st.button("Restart"):
+        st.session_state.messages = []
+        st.session_state.selected_output = {}
+        st.session_state.query_results = {}
+        st.session_state.active_query = None
+        st.session_state.last_query_id = None  # Reset last query ID
+        st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
 with col2:
