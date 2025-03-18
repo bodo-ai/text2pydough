@@ -15,7 +15,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
 
-  - PARTITION must always be used as a function. It should only be used as a method when performing calculations with the high-level graph. ALWAYS AVOID partitioning by the foreign key and key of the collections.
+  - PARTITION must always be used as a function. It should only be used as a method when performing calculations with the high-level graph. Never partition by the foreign key or the collection key.
   
   - CALCULATE function ALWAYS needs an expression, not a collection. For example, you cannot do: `nations.CALCULATE(nation_name=name, top_suppliers=suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection. 
 
@@ -275,11 +275,13 @@ RANKING(by=field.DESC(), levels=1, allow_ties=False)
         
 #### **Examples**
 ``` 
-Nations.customers(r = RANKING(by=acctbal.DESC(), levels=1))
-```
-Rank customers by balance per nation:  
-``` 
-Customers(r=RANKING(by=acctbal.DESC(), levels=1))
+# Rank customers per-nation by their account balance
+# (highest = rank #1, no ties)
+Nations.customers.CALCULATE(r = RANKING(by=acctbal.DESC(), levels=1))
+
+# For every customer, finds their most recent order
+# (ties allowed)
+Customers.orders.WHERE(RANKING(by=order_date.DESC(), levels=1, allow_ties=True) == 1)
 ```
 
 ### **PERCENTILE:**  
