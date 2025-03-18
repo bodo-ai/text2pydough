@@ -202,7 +202,7 @@ def format_prompt(prompt, data, question, database_content, script_content):
     if question in data:
         recomendation = data[question].get("context_id", "")
         similar_code= data[question].get("similar_queries", "similar code not found")
-      
+        question = data[question].get("redefined_question", question)
     #contexts = (
     #    open(f"./data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
     #    for id in ids
@@ -211,7 +211,7 @@ def format_prompt(prompt, data, question, database_content, script_content):
         recomendation=""
         similar_code= "similar pydough code not found"
     #prompt_string = ' '.join(contexts)
-    return prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
+    return question, prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
 def correct(client, question,  code, prompt):
     extracted_code= extract_python_code(code)
@@ -265,9 +265,9 @@ def get_other_provider_response(client, prompt, data, question, database_content
 
 def get_claude_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using aisuite."""
-    formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-    response= client.ask(question, formatted_prompt)
-    corrected_response = correct(client, question, response,formatted_prompt)
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+    response= client.ask(updated_question, formatted_prompt)
+    corrected_response = correct(client, updated_question, response,formatted_prompt)
     return corrected_response
 
 def process_question_wrapper(args):
