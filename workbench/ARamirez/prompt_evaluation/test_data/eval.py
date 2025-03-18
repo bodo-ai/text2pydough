@@ -230,11 +230,9 @@ def compare_output(folder_path, csv_file_path, db_path):
     # Read the CSV file into a Pandas DataFrame
     df = pd.read_csv(csv_file_path)
 
-    # Create a function to handle the parallel processing of rows
     def process_and_return(row):
         return process_row(row, db_path)
 
-    # Parallelize the row processing using ThreadPoolExecutor
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
