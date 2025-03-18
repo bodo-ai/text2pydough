@@ -62,8 +62,9 @@ import pandas as pd
 from botocore.config import Config
 
 class DeepseekModel:
-    def __init__(self ):
+    def __init__(self, temperature ):
         # Initialize AWS SDK and load necessary files
+        self.temperature= temperature
         config = Config(read_timeout=500)
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
 
@@ -80,7 +81,7 @@ class DeepseekModel:
         modelId = model
         
 
-        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":0.001}, system=system_messages, messages= messages)
+        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":self.temperature}, system=system_messages, messages= messages)
         response_text = response["output"]["message"]["content"][0]["text"]
 
 

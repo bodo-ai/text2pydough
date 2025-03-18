@@ -63,8 +63,8 @@ class AzureAIProvider(AIProvider):
 class DeepSeekAIProvider(AIProvider):
     """Handles responses from Claude AI."""
 
-    def __init__(self, provider, model_id):
-        self.client = DeepseekModel()
+    def __init__(self, provider, model_id, temperature):
+        self.client = DeepseekModel(temperature)
         self.provider = provider
         self.model_id = model_id
 
@@ -281,7 +281,7 @@ def process_question_wrapper(args):
         client = ClaudeAIProvider(provider, model_id)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-deepseek":
-        client = DeepSeekAIProvider(provider, model_id)
+        client = DeepSeekAIProvider(provider, model_id, temperature)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
@@ -289,7 +289,7 @@ def process_question_wrapper(args):
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=10) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
