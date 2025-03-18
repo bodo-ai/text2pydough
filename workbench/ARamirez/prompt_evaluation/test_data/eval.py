@@ -7,9 +7,10 @@ import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db")
+pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db",  check_same_thread=False)
 
 
 
@@ -230,7 +231,11 @@ def compare_output(folder_path, csv_file_path, db_path):
     # Read the CSV file into a Pandas DataFrame
     df = pd.read_csv(csv_file_path)
 
-    results = df.apply(lambda row: process_row(row, db_path), axis=1)
+    def process_and_return(row):
+        return process_row(row, db_path)
+
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
     # Extract the results into the appropriate columns
     df['comparison_result'] = [result[0] for result in results]
