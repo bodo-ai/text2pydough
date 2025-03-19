@@ -23,19 +23,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-    /* Scrollable chat container */
-    .scrollable-chat {
-        height: 500px;
-        overflow-y: auto;
-        border: 1px solid #ccc;
-        padding: 10px;
-        border-radius: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
 st.title("PyDough LLM Demo")
@@ -71,7 +58,7 @@ st.markdown(
 # ---------------------- EXAMPLES MODAL ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
-    st.write("You can **copy** any of the examples by clicking the copy button. Then paste it into the query box!")
+    st.write("You can **copy** any of the examples by govering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
 
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
@@ -93,12 +80,10 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 2.90])  
-with col1:
-    st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
-with col2: 
-    if st.button("Examples"):
-        show_examples()
+
+st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
+if st.button("📋 Examples"):
+    show_examples()
 
 # ---------------------- LAYOUT: TWO-PANE VIEW ----------------------
 col1, col2 = st.columns([0.5, 0.5])  # Left = Query Panel, Right = Output Panel
@@ -117,45 +102,52 @@ with col1:
         st.session_state.active_query = None
     if "last_query_id" not in st.session_state:
         st.session_state.last_query_id = None
+    if "show_chat" not in st.session_state:
+        st.session_state.show_chat = False
+    if "query_placeholder" not in st.session_state:
+        st.session_state.query_placeholder = "Ask a query about the TPCH database..."
 
     # Function to handle dropdown changes
     def on_dropdown_change(query_id):
         st.session_state.active_query = query_id
+        
 
-    # Display chat history in left panel
-    for idx, message in enumerate(st.session_state.messages):
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Display chat history in left panel after first query.
+    if st.session_state.show_chat:
+        with st.container(height=350, border=False):
+            for idx, message in enumerate(st.session_state.messages):
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
-        # Assistant response include the dropdown
-        if message["role"] == "assistant" and "query_id" in message:
-            query_id = message["query_id"]
-            result = st.session_state.query_results[query_id]
+                # Assistant response include the dropdown
+                if message["role"] == "assistant" and "query_id" in message:
+                    query_id = message["query_id"]
+                    result = st.session_state.query_results[query_id]
 
-            dropdown_key = f"dropdown_{query_id}"
-            selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
+                    dropdown_key = f"dropdown_{query_id}"
+                    selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-            # Dropdown without label
-            selected_output = st.selectbox(
-                " ", 
-                ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
-                "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
-                key=dropdown_key,
-                index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
-                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
-                on_change=on_dropdown_change,
-                args=(query_id,)
-            )
+                    # Dropdown without label
+                    selected_output = st.selectbox(
+                        " ", 
+                        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+                        "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                        key=dropdown_key,
+                        index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
+                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
+                        on_change=on_dropdown_change,
+                        args=(query_id,)
+                    )
 
-            # Store selection in session state
-            st.session_state.selected_output[dropdown_key] = selected_output
-            
-            # Update active query when dropdown changes
-            if st.session_state.get('widget_triggered') == dropdown_key:
-                st.session_state.active_query = query_id
+                    # Store selection in session state
+                    st.session_state.selected_output[dropdown_key] = selected_output
+                    
+                    # Update active query when dropdown changes
+                    if st.session_state.get('widget_triggered') == dropdown_key:
+                        st.session_state.active_query = query_id
 
     # ---------------------- USER INPUT ----------------------
-    if query := st.chat_input("Ask a query about the TPCH database..."):
+    if query := st.chat_input(st.session_state.query_placeholder):
         st.session_state.messages.append({"role": "user", "content": query})
 
         query_id = len(st.session_state.messages)  # Unique ID per query
@@ -164,9 +156,7 @@ with col1:
         try:
             # Determine if this is a follow-up query
             if st.session_state.last_query_id is not None and len(st.session_state.messages) > 2:
-                # Get the last result for discourse
                 last_result = st.session_state.query_results[st.session_state.last_query_id]
-                # This is a follow-up query, use discourse
                 result = client.discourse(last_result, query)
             else:
                 # This is a new query, use ask
@@ -176,6 +166,9 @@ with col1:
             if not result or (not result.code and not result.full_explanation and not result.df):
                 st.error("⚠️ No valid response received. Please try again.")
             else:
+                st.session_state.show_chat = True
+                st.session_state.query_placeholder = "Refine your query for more details..."
+
                 # Store response and result
                 st.session_state.messages.append({
                     "role": "assistant", 
@@ -195,12 +188,14 @@ with col1:
             st.error(f"❌ Error running query: {e}")
 
     # Reset button
-    if st.button("Restart"):
+    if st.button("🔄 Restart"):
         st.session_state.messages = []
         st.session_state.selected_output = {}
         st.session_state.query_results = {}
         st.session_state.active_query = None
-        st.session_state.last_query_id = None  # Reset last query ID
+        st.session_state.last_query_id = None
+        st.session_state.show_chat = False  # Hide chat again
+        st.session_state.query_placeholder = "Ask a query about the TPCH database..."  
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
