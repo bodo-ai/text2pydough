@@ -16,12 +16,36 @@ import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
+import boto3
+from botocore.config import Config
 
 pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"./test_data/tpch.db",  check_same_thread=False)
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
+
+class DeepseekModel:
+    def __init__(self, temperature ):
+        # Initialize AWS SDK and load necessary files
+        self.temperature= temperature
+        config = Config(read_timeout=500)
+        self.brt = boto3.client(service_name='bedrock-runtime', config= config)
+
+    def ask(self, question, prompt, model):
+        system_messages= [{"text": prompt}]
+        messages= [
+                {
+                    "role": "user",  # Wrap "string" in quotes to make it a valid string
+                    "content":[{"text": question}]
+                }
+            ]
+        modelId = model
+        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":self.temperature}, system=system_messages, messages= messages)
+        response_text = response["output"]["message"]["content"][0]["text"]
+
+
+        return response_text
 
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -88,7 +112,7 @@ def format_prompt(script_content,prompt, data, question, database_content):
     #)
     
     prompt_string = ' '.join(ids)
-    return prompt.format(script_content=script_content, database_content=database_content, recomendation=prompt_string )
+    return prompt.format(script_content=script_content, database_content=database_content, similar_queries="", recomendation=prompt_string )
 
 def extract_python_code(text):
     """Extracts all Python code from triple backticks in the given text and combines them."""
@@ -139,7 +163,7 @@ class LLMClient:
     
         self.provider = default_provider
         self.model = default_model
-        self.client = ai.Client()
+        self.client = DeepseekModel(temperature=1.0)
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
         self.database = read_file(database_file)
@@ -195,20 +219,12 @@ class LLMClient:
                 )
             else:
                 # If not in dict, use the standard prompt.
-                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,recomendation= "")
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,similar_queries="", recomendation= "")
             
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
                 
-            messages = [{"role": "system", "content": formatted_prompt}, {"role": "user", "content": question}]
-            completion = self.client.chat.completions.create(
-                model=f"{self.provider}:{self.model}",
-                messages=messages,
-                temperature=self.temperature
-            )
-            
-            # Extract and process the response
-            response = completion.choices[0].message.content
+            response = self.client.ask(question, formatted_prompt, self.model)
             extracted_code = extract_python_code(response)
             extracted_code = replace_with_upper(extracted_code)
             
