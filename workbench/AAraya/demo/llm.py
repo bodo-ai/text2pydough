@@ -234,7 +234,6 @@ class LLMClient:
             result.base_prompt = self.prompt
             result.cheat_sheet = self.script
             result.knowledge_graph = self.database
-            print(extracted_code)
             pydough_sql = self.get_pydough_sql(extracted_code)
             pydough_df = self.get_pydough_code(extracted_code)
             
@@ -262,13 +261,12 @@ class LLMClient:
         """Try to correct a Result object if an exception exists."""
         if result.exception:
             try:
-                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,recomendation="")
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database, similar_queries="", recomendation="")
                 # create base prompt to request error fix
                 corrective_question = (f"An error occurred while processing this code: {result.code}. "
                                        f"The error is: '{result.exception}'. "
                                        f"The original question was: '{result.original_question}'. "
                                        f"Can you help me fix the issue? Take in account the context: '{formatted_prompt}'. ")
-
                 # Generate and return a new result
                 corrected_result = self.ask(corrective_question)
                 return corrected_result
@@ -278,6 +276,7 @@ class LLMClient:
                 return Result(original_question=result.original_question, exception=e)
 
         else:
+            print("not what i expexted")
             # If no exception, return the original result
             return result
 
