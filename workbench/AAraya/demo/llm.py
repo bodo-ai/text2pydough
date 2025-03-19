@@ -125,14 +125,17 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.00001):
+    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', script_file="./cheatsheet_v6.md", temperature= 1.0):
         """
         Initializes the LLMClient with the provider and model.
         """
-        default_provider = "aws"
-        default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+        #default_provider = "aws"
+        #default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         #default_provider = "google"
         #default_model = "gemini-2.0-flash-thinking-exp-01-21"
+        
+        default_provider = "aws-deepseek"
+        default_model = "us.deepseek.r1-v1:0"
     
         self.provider = default_provider
         self.model = default_model

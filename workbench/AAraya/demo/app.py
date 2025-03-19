@@ -23,19 +23,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-    /* Scrollable chat container */
-    .scrollable-chat {
-        height: 500px;
-        overflow-y: auto;
-        border: 1px solid #ccc;
-        padding: 10px;
-        border-radius: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
 st.title("PyDough LLM Demo")
@@ -123,36 +110,37 @@ with col1:
         st.session_state.active_query = query_id
 
     # Display chat history in left panel
-    for idx, message in enumerate(st.session_state.messages):
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    with st.container(height=300):
+        for idx, message in enumerate(st.session_state.messages):
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-        # Assistant response include the dropdown
-        if message["role"] == "assistant" and "query_id" in message:
-            query_id = message["query_id"]
-            result = st.session_state.query_results[query_id]
+            # Assistant response include the dropdown
+            if message["role"] == "assistant" and "query_id" in message:
+                query_id = message["query_id"]
+                result = st.session_state.query_results[query_id]
 
-            dropdown_key = f"dropdown_{query_id}"
-            selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
+                dropdown_key = f"dropdown_{query_id}"
+                selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-            # Dropdown without label
-            selected_output = st.selectbox(
-                " ", 
-                ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
-                "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
-                key=dropdown_key,
-                index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
-                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
-                on_change=on_dropdown_change,
-                args=(query_id,)
-            )
+                # Dropdown without label
+                selected_output = st.selectbox(
+                    " ", 
+                    ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+                    "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                    key=dropdown_key,
+                    index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
+                        "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
+                    on_change=on_dropdown_change,
+                    args=(query_id,)
+                )
 
-            # Store selection in session state
-            st.session_state.selected_output[dropdown_key] = selected_output
-            
-            # Update active query when dropdown changes
-            if st.session_state.get('widget_triggered') == dropdown_key:
-                st.session_state.active_query = query_id
+                # Store selection in session state
+                st.session_state.selected_output[dropdown_key] = selected_output
+                
+                # Update active query when dropdown changes
+                if st.session_state.get('widget_triggered') == dropdown_key:
+                    st.session_state.active_query = query_id
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input("Ask a query about the TPCH database..."):
