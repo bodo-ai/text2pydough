@@ -107,11 +107,13 @@ class OtherAIProvider(AIProvider):
 
         try:
             time.sleep(0.5)  # Simulate slight delay
+            print("inside ask")
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
                 temperature=self.temperature
             )
+            print("response")
             return response.choices[0].message.content
         except Exception as e:
             print(f"AI Suite error: {e}")
