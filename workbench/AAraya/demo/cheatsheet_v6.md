@@ -1,6 +1,7 @@
-**PYDOUGH CHEAT SHEET**  
+# **PYDOUGH CHEAT SHEET**  
+This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code. 
 
-**VERY IMPORTANT NOTES**: 
+## **GENERAL RULES**: 
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
@@ -12,38 +13,40 @@
 
   - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
 
-**1. COLLECTIONS & SUB-COLLECTIONS**  
+## **1. COLLECTIONS & SUB-COLLECTIONS**  
 
-- **Syntax**: Access collections/sub-collections using dot notation.  
+### **Syntax** 
+Access collections/sub-collections using dot notation.  
 
-- **Examples**:  
+### **Examples**:  
   - `People` → Access all records in the 'People' collection.  
   - `People.current_address` → Access current addresses linked to people.  
   - `Packages.customer` → Access customers linked to packages.  
 
-- **Warnings**:  
-  - Sub-collections must exist in the metadata graph (e.g., `People.packages` is valid; undefined sub-collections like `People.orders` are invalid).  
-  - Avoid reassigning collection names to variables (e.g., `Addresses = 42` breaks subsequent access).
+## **2. CALCULATE EXPRESSIONS**  
 
-**2. CALCULATE EXPRESSIONS**  
+### **Purpose**
+Derive new fields, rename existing ones or select specific fields.  
 
-- **Purpose**: Derive new fields, rename existing ones or select specific fields.  
+### **Syntax**
+Collection.CALCULATE(field=expression, ...)  
 
-- **Syntax**:  
-  Collection.CALCULATE(field=expression, ...)  
-
-- **Examples**:  
+### **Examples**:  
 
   - **Select fields**:  
-    People.CALCULATE(first_name=first_name, last_name=last_name)  
+    ```python
+    People.CALCULATE(first_name=first_name, last_name=last_name)
+    ```
 
-  - **Derived fields**:  
+  - **Derived fields**:
+    ```python  
     Packages.CALCULATE(  
         customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),  
         cost_per_unit=package_cost / quantity  
-    )  
+    )
+    ```
 
-- **Rules**:  
+### **Rules**  
   - Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
 
   - Positional arguments must precede keyword arguments.
@@ -54,61 +57,80 @@
 
   - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
 
-**3. FILTERING (WHERE)**  
+## **3. FILTERING (WHERE)**  
 
-- **Syntax**: .WHERE(condition)  
+### **Syntax** 
+.WHERE(condition)  
 
-- **Examples**:  
+### **Examples** 
 
   - **Filter people with negative account balance**:  
-    People.WHERE(acctbal < 0)  
+    ```python
+    People.WHERE(acctbal < 0)
+    ```  
 
-  - **Filter packages ordered in 2023**:  
-    Packages.WHERE(YEAR(order_date) == 2023)  
+  - **Filter packages ordered in 2023**  
+    ```python
+    Packages.WHERE(YEAR(order_date) == 2023)
+    ``` 
 
-  - **Filter addresses with occupants**:  
-    Addresses.WHERE(HAS(current_occupants)==1)  
+  - **Filter addresses with occupants** 
+    ```python
+    Addresses.WHERE(HAS(current_occupants))
+    ```  
 
-- **Warnings**:  
+### **Rules**  
   - Use & (AND), | (OR), ~ (NOT) instead of and, or, not.  
   - Avoid chained comparisons (e.g., replace a < b < c with (a < b) & (b < c)).
 
-**4. SORTING (ORDER_BY)**  
+## **4. SORTING (ORDER_BY)**  
 
-- **Syntax**: .ORDER_BY(field.ASC()/DESC(), ...)  
+### **Syntax** 
+  .ORDER_BY(field.ASC()/DESC(), ...)  
 
-- **Examples**:  
-
-  - **Alphabetical sort**:  
-    People.ORDER_BY(last_name.ASC(), first_name.ASC())  
-
-  - **Most expensive packages first**:  
-    Packages.ORDER_BY(package_cost.DESC())  
-
-- **Parameters**:  
+### **Parameters**  
 
   .ASC(na_pos='last') → Sort ascending, nulls last.  
 
   .DESC(na_pos='first') → Sort descending, nulls first.
 
-**5. SORTING TOP_K(k, by=field.DESC())**  
+### **Examples** 
 
-  **IMPORTANT NOTE**: Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records. 
+  - **Alphabetical sort**:
+    ```python
+    People.ORDER_BY(last_name.ASC(), first_name.ASC())
+    ```
 
-- **Select top k records.**
+  - **Most expensive packages first**:  
+    ```python
+    Packages.ORDER_BY(package_cost.DESC())
+    ```  
 
-- **Syntax:**  
+## **5. SORTING TOP_K(k, by=field.DESC())**  
+
+### **Purpose**
+Select top k records.
+
+### **Syntax**  
   .TOP_K(k, by=field.DESC())
 
-- **Example:**  
-  Top 10 customers by orders count:  
+### **Example** 
+  Top 10 customers by orders count:
+  ```python
   customers.TOP_K(10, by=COUNT(orders).DESC())
+  ```
 
-  Top 10 customers by orders count (but also selecting only the name):  
+  Top 10 customers by orders count (but also selecting only the name):
+  ```python  
   customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())
+  ```
 
-**6. AGGREGATION FUNCTIONS**  
+### **Rules**
+- The two parameters are obligatory.
 
+## **6. AGGREGATION FUNCTIONS**  
+
+### **Functions**
 - **COUNT(collection)**: Count non-null records.  
   Example: COUNT(People.packages)  
 
@@ -125,105 +147,132 @@
   Example: NDISTINCT(Addresses.state)  
 
 - **HAS(collection)**: True if ≥1 record exists.  
-  Example: HAS(People.packages)==1
+  Example: HAS(People.packages)
 
 - **HASNOT(collection)**: True if collection is empty.
-  Example: HASNOT(orders)==1
+  Example: HASNOT(orders)
 
-**Rules**: Aggregations Function does not support calling aggregations inside of aggregations
+### **Rules** 
+Aggregations Function does not support calling aggregations inside of aggregations
 
-**7. Grouping (GROUP_BY)**  
+## **7. PARTITION**
 
-- **Purpose**: Group records by keys.  
+### **Purpose**
+Group records by keys.  
 
-- **Syntax**: GROUP_BY(Collection, name='group_name', by=(key1, key2))  
+### **Syntax**
+PARTITION(Collection, name='group_name', by=(key1, key2))  
 
-  - **IMPORTANT**: The `name` argument is a string indicating the name that is to be used when accessing the partitioned data. 
+### **Rules**: 
+- The `name` argument is a string indicating the name that is to be used when accessing the partitioned data.
+- Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context.
+- Partition keys must be scalar fields from the collection. 
+- You must use Aggregation functions to call plural values inside PARTITION.
+- Within a partition, you must use the `name` argument to be able to access any property or subcollections. 
 
-  - **IMPORTANT**: All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context. 
+### **Good Examples**  
 
-- **Good Examples**:  
-
-  - **Group addresses by state and count occupants**:  
-    GROUP_BY(Addresses, name='addrs', by=state).CALCULATE(  
+  - **Group addresses by state and count occupants**: 
+    ```python 
+    PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
         state=state,  
         total_occupants=COUNT(addrs.current_occupants)  
-    )  
+    )
+    ```  
     **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
 
   - **Group packages by year/month**:  
-    GROUP_BY(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))  
+    ```python
+    PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))
+    ```  
 
-**AVOID TO DO**:
-- **Bad Examples**:
-  - **group by people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the group_by.
-    GROUP_BY(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
+### **Bad Examples**
+  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
+    ```python
+    PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
         email,
         n_people=COUNT(ppl)
     )
+    ```
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a group_by term (it must be placed in a CALC so it is accessible as a named reference).
-    GROUP_BY(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    ```python
+    PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     )
+    ```
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a group_by term (it must be placed in a CALC so it is accessible as a named reference).
-    GROUP_BY(People, name=\"ppl\", by=current_address.state).CALCULATE(
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
+    ```python
+    PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     )
+    ```
 
+## **8. WINDOW FUNCTIONS**  
 
-- **Rules**: 
-GROUP_BY keys must be scalar fields from the collection. 
-You must use Aggregation functions to call plural values inside GROUP_BY.
-Within a group_by, you must use the `name` argument to be able to access any property or subcollections. 
+### **RANKING:**  
+#### **Syntax**
+RANKING(by=field.DESC(), levels=1, allow_ties=False)  
 
-**8. WINDOW FUNCTIONS**  
-
-- **RANKING:**  
-  - **Syntax**: RANKING(by=field.DESC(), levels=1, allow_ties=False)  
-  - *   Parameters:
+#### **Parameters**
     
-    *   by: Ordering criteria (e.g., acctbal.DESC()).
+- by: Ordering criteria (e.g., acctbal.DESC()).
         
-    *   levels: Hierarchy level (e.g., levels=1 for per-nation ranking).
+- levels: Hierarchy level (e.g., levels=1 for per-nation ranking). Must be a positive integer.
         
-    *   allow\_ties (default False): Allow tied ranks.
+- allow\_ties (default False): Allow tied ranks.
         
-    *   dense (default False): Use dense ranking.
+- dense (default False): Use dense ranking.
         
-  - *   Example:Nations.customers(r = RANKING(by=acctbal.DESC(), levels=1))
+#### **Examples**
+```python
+Nations.customers(r = RANKING(by=acctbal.DESC(), levels=1))
+```
+Rank customers by balance per nation:  
+```python
+Customers(r=RANKING(by=acctbal.DESC(), levels=1))
+```
 
-  - **Example**: Rank customers by balance per nation:  
-    Customers(r=RANKING(by=acctbal.DESC(), levels=1))  
+### **PERCENTILE:**  
 
-- **PERCENTILE:**  
+#### **Syntax**
+PERCENTILE(by=field.ASC(), n_buckets=100)  
 
-  - **Syntax**: PERCENTILE(by=field.ASC(), n_buckets=100)  
-  - *   Parameters:
+#### **Parameters**
     
-    *   by: Ordering criteria.
+- by: Ordering criteria.
         
-    *   levels: Hierarchy level.
+- levels: Hierarchy level.
         
-    *   n\_buckets (default 100): Number of percentile buckets.
+- n\_buckets (default 100): Number of percentile buckets.
         
-  - *   Example:Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n\_buckets=1000) == 1000).
+#### **Example**
+```python
+Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n\_buckets=1000) == 1000).
+```
   
-  - **Example**: Filter top 5% by account balance:  
-    Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
+Filter top 5% by account balance:  
+```python
+Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
+```
 
-**9. CONTEXTLESS EXPRESSIONS**   
+## **9. CONTEXTLESS EXPRESSIONS**   
 
-- **Purpose**: Reusable code snippets.  
+### **Purpose**
+Reusable code snippets.  
 
-- **Example**: Define and reuse filters:  
-
+### **Example**
+Define and reuse filters:  
+  ```python
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
+  ```
 
-**BINARY OPERATORS****Arithmetic**
+## **BINARY OPERATORS**
+
+### **Arithmetic**
 
 *   Operators: +, -, \*, /, \*\* (addition, subtraction, multiplication, division, exponentiation).
     
@@ -232,7 +281,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   Warning: Division by 0 behavior depends on the database.
     
 
-**Comparisons**
+### **Comparisons**
 
 *   Operators: <=, <, ==, !=, >, >=.
     
@@ -241,7 +290,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   Warning: Avoid chained inequalities (e.g., a <= b <= c). Use (a <= b) & (b <= c) or MONOTONIC.
     
 
-**Logical**
+### **Logical**
 
 *   Operators: & (AND), | (OR), ~ (NOT).
     
@@ -250,23 +299,28 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   Warning: Use &, |, ~ instead of Python’s and, or, not.
     
 
-**UNARY OPERATORS****Negation**
+## **UNARY OPERATORS****Negation**
 
 *   Operator: - (flips sign).
     
 *   Example:Lineitems(lost\_value = extended\_price \* (-discount))
     
 
-**OTHER OPERATORS****Slicing**
+## **OTHER OPERATORS**
 
-*   Syntax: string\[start:stop:step\].
+### **Slicing**
+
+#### Syntax
+string\[start:stop:step\].
     
-*   Example:Customers(country\_code = phone\[:3\])
+#### Example
+Customers(country\_code = phone\[:3\])
     
-*   Restrictions: step must be 1 or omitted; start/stop non-negative or omitted.
+#### Rules
+- Step must be 1 or omitted; start/stop non-negative or omitted.
     
 
-**STRING FUNCTIONS**
+## **STRING FUNCTIONS**
 
 *   LOWER(s): Converts string to lowercase.Example: LOWER(name) → "apple".
     
@@ -285,7 +339,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   JOIN\_STRINGS(delim, s1, s2, ...): Joins strings with a delimiter.Example: JOIN\_STRINGS("-", "A", "B") → "A-B".
     
 
-**DATETIME FUNCTIONS**
+## **DATETIME FUNCTIONS**
 
 *   YEAR(dt): Extracts year.Example: YEAR(order\_date) == 1995.
     
@@ -355,7 +409,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
   )
   ```
 
-**CONDITIONAL FUNCTIONS**
+## **CONDITIONAL FUNCTIONS**
 
 *   IFF(cond, a, b): Returns a if cond is True, else b.Example: IFF(acctbal > 0, acctbal, 0).
     
@@ -372,7 +426,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   MONOTONIC(a, b, c): Checks ascending order.Example: MONOTONIC(5, part.size, 10) → True/False.
     
 
-**NUMERICAL FUNCTIONS**
+## **NUMERICAL FUNCTIONS**
 
 *   ABS(x): Absolute value.Example: ABS(-5) → 5.
     
@@ -383,7 +437,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 *   SQRT(x): Square root of x.Example: SQRT(16) → 4.
     
 
-**GENERAL NOTES**
+## **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
     
@@ -391,12 +445,12 @@ Within a group_by, you must use the `name` argument to be able to access any pro
     
 *   Aggregation functions convert plural values (e.g., collections) to singular values.
     
-**12. EXAMPLE QUERIES**  
+## **12. EXAMPLE QUERIES**  
 
 * **Top 5 States by Average Occupants:**  
 
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
-  average_occupants=GROUP_BY(addr_info, name="addrs", by=state).CALCULATE(  
+  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
       state=state,  
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
@@ -468,7 +522,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 * **Inactive Customers**  
   *Goal: Find customers who never placed orders.*  
   *Code:*  
-  customers_without_orders = customers.WHERE(HASNOT(orders)==1).CALCULATE(  
+  customers_without_orders = customers.WHERE(HASNOT(orders)).CALCULATE(  
       customer_key=key,  
       customer_name=name  
   )  
@@ -476,7 +530,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
 * **Customer Activity by Nation**  
   *Goal: Track active/inactive customers per nation.*  
   *Code:*  
-  cust_info = customers.CALCULATE(is_active=HAS(orders)==1)  
+  cust_info = customers.CALCULATE(is_active=HAS(orders))  
   nation_summary = nations.CALCULATE(  
       nation_name=name,  
       total_customers=COUNT(cust_info),  
@@ -492,7 +546,7 @@ Within a group_by, you must use the `name` argument to be able to access any pro
       (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)  
   )
 
-**GENERAL NOTES**
+## **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
     
