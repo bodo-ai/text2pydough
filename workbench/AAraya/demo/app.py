@@ -80,12 +80,10 @@ def show_examples():
     for example in examples:
         st.code(example, language="")
 
-col1, col2 = st.columns([0.85, 3.00])  
-with col1:
-    st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out our</p>', unsafe_allow_html=True)
-with col2: 
-    if st.button("Examples"):
-        show_examples()
+
+st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
+if st.button("📋 Examples"):
+    show_examples()
 
 # ---------------------- LAYOUT: TWO-PANE VIEW ----------------------
 col1, col2 = st.columns([0.5, 0.5])  # Left = Query Panel, Right = Output Panel
@@ -190,7 +188,7 @@ with col1:
             st.error(f"❌ Error running query: {e}")
 
     # Reset button
-    if st.button("Restart"):
+    if st.button("🔄 Restart"):
         st.session_state.messages = []
         st.session_state.selected_output = {}
         st.session_state.query_results = {}
