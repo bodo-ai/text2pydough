@@ -58,7 +58,7 @@ st.markdown(
 # ---------------------- EXAMPLES MODAL ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
-    st.write("You can **copy** any of the examples by clicking the copy button. Then paste it into the query box!")
+    st.write("You can **copy** any of the examples by govering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
 
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
