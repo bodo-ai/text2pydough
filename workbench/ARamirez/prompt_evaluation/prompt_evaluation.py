@@ -105,18 +105,15 @@ class OtherAIProvider(AIProvider):
             {"role": "user", "content": question},
         ]
 
-        try:
-            time.sleep(0.5)  # Simulate slight delay
-            response = self.client.chat.completions.create(
+        
+        time.sleep(0.5)  # Simulate slight delay
+        response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
                 temperature=self.temperature
             )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"AI Suite error: {e}")
-            return None
-        
+        return response.choices[0].message.content
+      
 WORDS_MAP = {
     "partition": "PARTITION",
     "group_by": "PARTITION",
