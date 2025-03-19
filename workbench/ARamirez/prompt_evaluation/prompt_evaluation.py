@@ -202,6 +202,7 @@ def format_prompt(prompt, data, question, database_content, script_content):
     if question in data:
         recomendation = data[question].get("context_id", "")
         similar_code= data[question].get("similar_queries", "similar code not found")
+        print(similar_code)
         question = data[question].get("redefined_question", question)
     #contexts = (
     #    open(f"./data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
