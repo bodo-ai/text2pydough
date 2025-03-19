@@ -254,10 +254,10 @@ def get_azure_response(client, prompt, data, question, database_content, script_
 
 def get_other_provider_response(client, prompt, data, question, database_content,script_content):
     """Generates a response using aisuite."""
-    formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
-        response=client.ask(question,formatted_prompt)
+        response=client.ask(updated_question,formatted_prompt)
         corrected_response= correct(client, question, response,formatted_prompt)
         return corrected_response
     except Exception as e:
