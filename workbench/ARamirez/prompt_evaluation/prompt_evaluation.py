@@ -105,14 +105,17 @@ class OtherAIProvider(AIProvider):
             {"role": "user", "content": question},
         ]
 
-        time.sleep(0.5)  # Simulate slight delay
-        response = self.client.chat.completions.create(
+        try:
+            time.sleep(0.5)  # Simulate slight delay
+            response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
                 temperature=self.temperature
             )
-        return response.choices[0].message.content
-      
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"AI Suite error: {e}")
+            return None
         
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -252,12 +255,13 @@ def get_other_provider_response(client, prompt, data, question, database_content
     """Generates a response using aisuite."""
     formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
-    
-    response=client.ask(question,formatted_prompt)
-    corrected_response= correct(client, question, response,formatted_prompt)
-    return corrected_response
-   
-       
+    try:
+        response=client.ask(question,formatted_prompt)
+        corrected_response= correct(client, question, response,formatted_prompt)
+        return corrected_response
+    except Exception as e:
+        print(f"AI Suite error: {e}")
+        return None
 
 def get_claude_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using aisuite."""
