@@ -28,12 +28,12 @@ Your objective is to analyze the provided natural language description that outl
    - Ensures the variables names are different than the fields of the Database Structure Reference File.
    - Returns only the exact data requested, without adding additional fields or information.
 3. Analyze and explain which functions you need to use before creating the PyDough code.
-4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
-5. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does, step by step
-6. Try different methods if your first approach doesn't work.
-7. Verify your work by checking for inconsistencies, logical errors, or missing details.
-8. Test simple cases to confirm the solution behaves as expected.
-9. Analyze your previous step to determine if the expected result was achieved.
+4. **Determine if PARTITION is necessary**: If it is not required, consider alternative methods such as **CALCULATE** or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately and partition by the most suitable field, avoiding partitioning by a foreign key or the key of a collection
+5. When using RANKING, analyze which level you need to access.
+6. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+7. The generated code should be enclosed in a Python code block, and an explanation should be provided for what the code does, step by step
+8. Try different methods if your first approach doesn't work.
+9. Verify your work by checking for inconsistencies, logical errors, or missing details.
 
 {recomendation}
 
