@@ -206,7 +206,7 @@ with col2:
     if "active_query" in st.session_state and st.session_state.active_query is not None:
         query_id = st.session_state.active_query
         result = st.session_state.query_results[query_id]
-        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Code")
+        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Full Explanation")
 
         st.markdown("---")
 
@@ -215,13 +215,17 @@ with col2:
             st.code(result.code, language="python")
         elif selected_output == "Full Explanation":
             st.write(result.full_explanation)
+            if result.exception:
+                st.warning("⚠️ Unable to execute this query at this point, try rephrasing the question.")
         elif selected_output == "DataFrame":
             if hasattr(result, "df") and result.df is not None:
                 st.dataframe(result.df)  
             else:
                 st.warning("⚠️ No DataFrame available.")
         elif selected_output == "SQL":
-            st.code(result.sql, language="sql") if hasattr(result, "sql") else st.write("No SQL available.")
+            st.code(result.sql, language="sql")
+            if hasattr(result, "sql") and result.sql is not None:
+                st.warning("⚠️ No SQL available.")
         elif selected_output == "Exception":
             st.write(result.exception or "No exception found.")
         elif selected_output == "Original Question":
