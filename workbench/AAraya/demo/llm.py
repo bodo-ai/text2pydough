@@ -157,13 +157,12 @@ class LLMClient:
         #default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         #default_provider = "google"
         #default_model = "gemini-2.0-flash-thinking-exp-01-21"
-        
-        default_provider = "aws-deepseek"
-        default_model = "us.deepseek.r1-v1:0"
+        #default_provider = "aws-deepseek"
+        #default_model = "us.deepseek.r1-v1:0"
     
         self.provider = default_provider
         self.model = default_model
-        self.client = DeepseekModel(temperature=1.0)
+        self.client = DeepseekModel(temperature=0.0001)
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
         self.database = read_file(database_file)
