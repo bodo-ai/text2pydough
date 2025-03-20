@@ -94,5 +94,3 @@ class DeepseekModel:
 
     def extract_usage(self, response_body):
         return response_body.get('usage', {})
-# %%
-
