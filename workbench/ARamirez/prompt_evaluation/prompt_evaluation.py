@@ -237,7 +237,7 @@ def correct(client, question,  code, prompt):
 
         response, reasoning=client.ask(q, prompt)
 
-    return response, reasoning
+    return response
    
 def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
