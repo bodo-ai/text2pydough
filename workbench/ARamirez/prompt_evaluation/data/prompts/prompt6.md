@@ -7,8 +7,6 @@ You are an AI assistant tasked with converting natural language descriptions int
 
 ### Database Structure Reference  
 {database_content}  
-
-### Examples for Context  
 {similar_queries}  
 
 ## Guidelines  
