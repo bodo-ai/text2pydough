@@ -177,7 +177,7 @@ with col1:
                 })
 
                 st.session_state.query_results[query_id] = result
-                st.session_state.selected_output[f"dropdown_{query_id}"] = "Code"
+                st.session_state.selected_output[f"dropdown_{query_id}"] = "Full Explanation"
                 st.session_state.active_query = query_id
                 st.session_state.last_query_id = query_id  # Update the last query ID
 
@@ -211,12 +211,12 @@ with col2:
         st.markdown("---")
 
         # Display selected output
-        if selected_output == "Code":
-            st.code(result.code, language="python")
-        elif selected_output == "Full Explanation":
+        if selected_output == "Full Explanation":
             st.write(result.full_explanation)
             if result.exception:
                 st.warning("⚠️ Unable to execute this query at this point, try rephrasing the question.")
+        elif selected_output == "Code":
+            st.code(result.code, language="python")
         elif selected_output == "DataFrame":
             if hasattr(result, "df") and result.df is not None:
                 st.dataframe(result.df)  
