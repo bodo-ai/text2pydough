@@ -7,7 +7,7 @@ from botocore.config import Config
 class ClaudeModel:
     def __init__(self):
         # Initialize AWS SDK and load necessary files
-        config = Config(read_timeout=500)
+        config = Config(read_timeout=800)
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
 
     def ask_claude_with_stream(self, question, prompt, model, provider):
