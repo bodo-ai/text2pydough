@@ -70,7 +70,8 @@ class DeepSeekAIProvider(AIProvider):
 
     def ask(self, question, prompt):
         """Generates a response using Claude AI."""
-        return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
+        response, reasoning= self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
+        return response, reasoning
 
 
 # === Claude AI Provider ===
