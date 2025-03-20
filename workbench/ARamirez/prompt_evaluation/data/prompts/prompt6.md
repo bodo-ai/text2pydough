@@ -23,9 +23,7 @@ You are an AI assistant tasked with converting natural language descriptions int
    - Before generating the PyDough code, explain which functions you need to use and why.  
 
 3. **Partitioning Strategy**  
-   - Determine if `PARTITION` is necessary:  
-     - If not required, consider alternatives like `CALCULATE` or aggregations.  
-     - If required, partition by the most suitable field, avoiding partitioning by a foreign key or the key of a collection.  
+   - Use PARTITION only when strictly necessary.
 
 4. **Ranking Considerations**  
    - When using `RANKING`, determine the appropriate level of access.  
