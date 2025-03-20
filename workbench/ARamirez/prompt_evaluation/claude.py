@@ -83,9 +83,9 @@ class DeepseekModel:
 
         response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":self.temperature}, system=system_messages, messages= messages)
         response_text = response["output"]["message"]["content"][0]["text"]
-        reasoning_text= response["output"]["message"]["content"][1]["reasoningContent"]["reasoningText"]["text"]
+       # reasoning_text= response["output"]["message"]["content"][1]["reasoningContent"]["reasoningText"]["text"]
         print(response.get('usage', {}))
-        return response_text, reasoning_text
+        return response_text
 
     def extract_thinking_and_text(self, response_body):
         thinking_content = response_body['content'][0].get('thinking', '')
@@ -94,3 +94,4 @@ class DeepseekModel:
 
     def extract_usage(self, response_body):
         return response_body.get('usage', {})
+
