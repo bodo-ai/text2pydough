@@ -63,14 +63,14 @@ def show_examples():
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
         "Top 5 nations with most customer orders in 1995.",
-        "Region with highest total order value in 1996.\n\nSUM(extended_price * (1 - discount))",
+        "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
         "Top 3 regions with most distinct customers.",
         "Customers & order count in 1995 (Europe) with balance > $700.",
         "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
         "Customers with more orders in 1995 than 1994.",
-        "Avg. order value per nation.\n\nSUM(extended_price * quantity)",
-        "Total revenue per customer in 1994.\n\nSUM(extended_price * (1 - discount))",
-        "Customer key, name & revenue in 1994.\n\nSUM(extended_price * (1 - discount))",
+        "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
+        "Total revenue per customer in 1994.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
+        "Customer key, name & revenue in 1994.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
         "Customers ending in zero with 30-lowest balances.",
         "Customers with >10 orders, showing name & total order count.",
         "Orders from 1998 with total price > $100, sorted by price.",
@@ -216,15 +216,19 @@ with col2:
             if result.exception:
                 st.warning("⚠️ Unable to execute this query at this point, try rephrasing the question.")
         elif selected_output == "Code":
-            st.code(result.code, language="python")
+            if hasattr(result, "code") and result.code is not None:
+                st.code(result.code, language="python")
+            else:
+                st.warning("⚠️ No code available.")
         elif selected_output == "DataFrame":
             if hasattr(result, "df") and result.df is not None:
                 st.dataframe(result.df)  
             else:
                 st.warning("⚠️ No DataFrame available.")
         elif selected_output == "SQL":
-            st.code(result.sql, language="sql")
             if hasattr(result, "sql") and result.sql is not None:
+                st.code(result.sql, language="sql") 
+            else:
                 st.warning("⚠️ No SQL available.")
         elif selected_output == "Exception":
             st.write(result.exception or "No exception found.")
