@@ -296,7 +296,7 @@ def process_questions(data, provider, model_id, formatted_prompt, questions, tem
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
         )
     
-    responses, reasonings = zip(*original_responses)
+    responses, reasonings = zip(*original_responses) if original_responses else ([], [])
     
     return responses, reasonings
 
