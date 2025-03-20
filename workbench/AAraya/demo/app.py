@@ -206,7 +206,7 @@ with col2:
     if "active_query" in st.session_state and st.session_state.active_query is not None:
         query_id = st.session_state.active_query
         result = st.session_state.query_results[query_id]
-        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Full Explanation")
+        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "SQL")
 
         st.markdown("---")
 
