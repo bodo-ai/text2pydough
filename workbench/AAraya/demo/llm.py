@@ -157,8 +157,8 @@ class LLMClient:
         #default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         #default_provider = "google"
         #default_model = "gemini-2.0-flash-thinking-exp-01-21"
-        #default_provider = "aws-deepseek"
-        #default_model = "us.deepseek.r1-v1:0"
+        default_provider = "aws-deepseek"
+        default_model = "us.deepseek.r1-v1:0"
     
         self.provider = default_provider
         self.model = default_model
