@@ -1,4 +1,5 @@
 import streamlit as st
+import traceback
 from llm import LLMClient
 
 # Set page config for wide layout
@@ -63,18 +64,14 @@ def show_examples():
     examples = [
         "Total customers & suppliers per nation, ordered by nation name.",
         "Top 5 nations with most customer orders in 1995.",
-        "Region with highest total order value in 1996.\n\nSUM(extended_price * (1 - discount))",
+        "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
         "Top 3 regions with most distinct customers.",
         "Customers & order count in 1995 (Europe) with balance > $700.",
         "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
         "Customers with more orders in 1995 than 1994.",
-        "Avg. order value per nation.\n\nSUM(extended_price * quantity)",
-        "Total revenue per customer in 1994.\n\nSUM(extended_price * (1 - discount))",
-        "Customer key, name & revenue in 1994.\n\nSUM(extended_price * (1 - discount))",
-        "Customers ending in zero with 30-lowest balances.",
-        "Customers with >10 orders, showing name & total order count.",
+        "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
+        "Customers with >30 orders, showing name & total order count.",
         "Orders from 1998 with total price > $100, sorted by price.",
-        "Customers who ordered in 1996 but not in 1997, with email & total spent (> $200)."
     ]
 
     for example in examples:
@@ -130,10 +127,10 @@ with col1:
                     # Dropdown without label
                     selected_output = st.selectbox(
                         " ", 
-                        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+                        ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
                         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                         key=dropdown_key,
-                        index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
+                        index=["Full Explanation", "Code", "DataFrame", "SQL", "Exception",
                             "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
                         on_change=on_dropdown_change,
                         args=(query_id,)
@@ -177,15 +174,17 @@ with col1:
                 })
 
                 st.session_state.query_results[query_id] = result
-                st.session_state.selected_output[f"dropdown_{query_id}"] = "Code"
+                st.session_state.selected_output[f"dropdown_{query_id}"] = "Full Explanation"
                 st.session_state.active_query = query_id
-                st.session_state.last_query_id = query_id  # Update the last query ID
+                st.session_state.last_query_id = query_id 
 
                 # Refresh to update display pane
                 st.rerun()
 
         except Exception as e:
-            st.error(f"❌ Error running query: {e}")
+            full_traceback = traceback.format_exc()  
+            st.error("❌ Error running query. See full traceback below:")
+            st.code(full_traceback, language="python")  
 
     # Reset button
     if st.button("🔄 Restart"):
@@ -206,22 +205,30 @@ with col2:
     if "active_query" in st.session_state and st.session_state.active_query is not None:
         query_id = st.session_state.active_query
         result = st.session_state.query_results[query_id]
-        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Code")
+        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Full Explanation")
 
         st.markdown("---")
 
         # Display selected output
-        if selected_output == "Code":
-            st.code(result.code, language="python")
-        elif selected_output == "Full Explanation":
+        if selected_output == "Full Explanation":
             st.write(result.full_explanation)
+            if result.exception:
+                st.warning("⚠️ Unable to execute this query at this point, try rephrasing the question.")
+        elif selected_output == "Code":
+            if hasattr(result, "code") and result.code is not None:
+                st.code(result.code, language="python")
+            else:
+                st.warning("⚠️ No code available.")
         elif selected_output == "DataFrame":
             if hasattr(result, "df") and result.df is not None:
                 st.dataframe(result.df)  
             else:
                 st.warning("⚠️ No DataFrame available.")
         elif selected_output == "SQL":
-            st.code(result.sql, language="sql") if hasattr(result, "sql") else st.write("No SQL available.")
+            if hasattr(result, "sql") and result.sql is not None:
+                st.code(result.sql, language="sql") 
+            else:
+                st.warning("⚠️ No SQL available.")
         elif selected_output == "Exception":
             st.write(result.exception or "No exception found.")
         elif selected_output == "Original Question":
