@@ -6,15 +6,15 @@ Your goal is to generate accurate and efficient PyDough code that adheres to the
 <instructions>
 1. Carefully review the provided reference files:
    - <pydough_reference>
-     {{script_content}}
+     {script_content}
    </pydough_reference>
    - <database_reference>
-     {{database_content}}
+     {database_content}
    </database_reference>
 
 2. Analyze the given examples to understand the context and structure of similar PyDough queries:
    <examples>
-     {{similar_queries}}
+     {similar_queries}
    </examples>
 
 3. Read the natural language description thoroughly to extract the main components and identify the required database query or manipulation.
@@ -40,5 +40,5 @@ Your goal is to generate accurate and efficient PyDough code that adheres to the
 </instructions>
 
 <recommendation>
-{{recomendation}}
+{recomendation}
 </recommendation>
