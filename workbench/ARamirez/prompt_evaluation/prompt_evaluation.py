@@ -235,7 +235,7 @@ def correct(client, question,  code, prompt):
         The original question was: '{question}'. 
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
-        response, reasoning=client.ask(q, prompt)
+        response=client.ask(q, prompt)
 
     return response
    
@@ -267,9 +267,9 @@ def get_other_provider_response(client, prompt, data, question, database_content
 def get_claude_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-    response, reasoning= client.ask(updated_question, formatted_prompt)
-    corrected_response, new_reasoning = correct(client, updated_question, response,formatted_prompt)
-    return corrected_response, reasoning
+    response= client.ask(updated_question, formatted_prompt)
+    corrected_response = correct(client, updated_question, response,formatted_prompt)
+    return corrected_response
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
@@ -359,8 +359,7 @@ def main(git_hash):
         responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
 
         # Save responses
-        questions_df["response"] = [resp[0] for resp in responses]  # Extracting only corrected responses
-        questions_df["reasoning"] = [resp[1] for resp in responses]  # Ext
+        questions_df["response"] = responses
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 

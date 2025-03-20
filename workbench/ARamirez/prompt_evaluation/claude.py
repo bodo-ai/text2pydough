@@ -83,9 +83,9 @@ class DeepseekModel:
 
         response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":self.temperature}, system=system_messages, messages= messages)
         response_text = response["output"]["message"]["content"][0]["text"]
-        reasoning_text= response["output"]["message"]["content"][1]["reasoningContent"]["reasoningText"]["text"]
-        print(response.get('usage', {}))
-        return response_text, reasoning_text
+
+
+        return response_text
 
     def extract_thinking_and_text(self, response_body):
         thinking_content = response_body['content'][0].get('thinking', '')
@@ -96,48 +96,3 @@ class DeepseekModel:
         return response_body.get('usage', {})
 # %%
 
-import boto3
-with open("/home/ara/tekdatum/ara-text2pydough/text2pydough/workbench/ARamirez/prompt_evaluation/data/prompts/prompt3.md", "r", encoding="utf-8") as f:
-            prompt = f.read()
-
-# Set values here
-TARGET_MODEL_ID = "deepseek.r1-v1:0" # Model to optimize for. For model IDs, see https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
-PROMPT = prompt # Prompt to optimize
-
-def get_input(prompt):
-    return {
-        "textPrompt": {
-            "text": prompt
-        }
-    }
- 
-def handle_response_stream(response):
-    try:
-        event_stream = response['optimizedPrompt']
-        for event in event_stream:
-            if 'optimizedPromptEvent' in event:
-                print("========================== OPTIMIZED PROMPT ======================\n")
-                optimized_prompt = event['optimizedPromptEvent']
-                print(optimized_prompt)
-            else:
-                print("========================= ANALYZE PROMPT =======================\n")
-                analyze_prompt = event['analyzePromptEvent']
-                print(analyze_prompt)
-    except Exception as e:
-        raise e
- 
- 
-if __name__ == '__main__':
-    client = boto3.client('bedrock-agent-runtime')
-    try:
-        response = client.optimize_prompt(
-            input=get_input(PROMPT),
-            targetModelId=TARGET_MODEL_ID
-        )
-        print("Request ID:", response.get("ResponseMetadata").get("RequestId"))
-        print("========================== INPUT PROMPT ======================\n")
-        print(PROMPT)
-        handle_response_stream(response)
-    except Exception as e:
-        raise e
-# %%
