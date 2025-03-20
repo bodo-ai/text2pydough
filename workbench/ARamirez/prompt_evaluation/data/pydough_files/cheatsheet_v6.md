@@ -275,6 +275,18 @@ RANKING(by=field.DESC(), levels=1, allow_ties=False)
         
 #### **Examples**
 ``` 
+# (no levels) rank every customer relative to all other customers
+Regions.nations.customers.CALCULATE(r=RANKING(...))
+
+# (levels=1) rank every customer relative to other customers in the same nation
+Regions.nations.customers.CALCULATE(r=RANKING(..., levels=1))
+
+# (levels=2) rank every customer relative to other customers in the same region
+Regions.nations.customers.CALCULATE(r=RANKING(..., levels=2))
+
+# (levels=3) rank every customer relative to all other customers
+Regions.nations.customers.CALCULATE(r=RANKING(..., levels=3))
+
 # Rank customers per-nation by their account balance
 # (highest = rank #1, no ties)
 Nations.customers.CALCULATE(r = RANKING(by=acctbal.DESC(), levels=1))
