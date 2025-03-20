@@ -130,10 +130,10 @@ with col1:
                     # Dropdown without label
                     selected_output = st.selectbox(
                         " ", 
-                        ["Code", "Full Explanation", "DataFrame", "SQL", "Exception", 
+                        ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
                         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                         key=dropdown_key,
-                        index=["Code", "Full Explanation", "DataFrame", "SQL", "Exception",
+                        index=["Full Explanation", "Code", "DataFrame", "SQL", "Exception",
                             "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
                         on_change=on_dropdown_change,
                         args=(query_id,)
@@ -206,7 +206,7 @@ with col2:
     if "active_query" in st.session_state and st.session_state.active_query is not None:
         query_id = st.session_state.active_query
         result = st.session_state.query_results[query_id]
-        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "SQL")
+        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Full Explanation")
 
         st.markdown("---")
 
