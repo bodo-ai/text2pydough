@@ -1,4 +1,5 @@
 import streamlit as st
+import traceback
 from llm import LLMClient
 
 # Set page config for wide layout
@@ -69,12 +70,7 @@ def show_examples():
         "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
         "Customers with more orders in 1995 than 1994.",
         "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
-        "Total revenue per customer in 1994.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
-        "Customer key, name & revenue in 1994.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
-        "Customers ending in zero with 30-lowest balances.",
-        "Customers with >10 orders, showing name & total order count.",
-        "Orders from 1998 with total price > $100, sorted by price.",
-        "Customers who ordered in 1996 but not in 1997, with email & total spent (> $200)."
+        "Customers with >30 orders, showing name & total order count.",
     ]
 
     for example in examples:
@@ -179,13 +175,15 @@ with col1:
                 st.session_state.query_results[query_id] = result
                 st.session_state.selected_output[f"dropdown_{query_id}"] = "Full Explanation"
                 st.session_state.active_query = query_id
-                st.session_state.last_query_id = query_id  # Update the last query ID
+                st.session_state.last_query_id = query_id 
 
                 # Refresh to update display pane
                 st.rerun()
 
         except Exception as e:
-            st.error(f"❌ Error running query: {e}")
+            full_traceback = traceback.format_exc()  
+            st.error("❌ Error running query. See full traceback below:")
+            st.code(full_traceback, language="python")  
 
     # Reset button
     if st.button("🔄 Restart"):
