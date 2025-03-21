@@ -27,7 +27,6 @@ st.markdown("""
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
 st.title("PyDough LLM Demo")
-st.markdown("Este es el app.py normal")
 st.markdown(
     """
     This interactive demo allows you to generate **PyDough queries** from natural language instructions.  
