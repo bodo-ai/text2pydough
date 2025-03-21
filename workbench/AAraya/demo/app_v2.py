@@ -1,6 +1,6 @@
 import streamlit as st
 import traceback
-from llm import LLMClient
+from llm_v2 import LLMClient
 
 # Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
@@ -27,6 +27,7 @@ st.markdown("""
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
 st.title("PyDough LLM Demo")
+
 st.markdown(
     """
     This interactive demo allows you to generate **PyDough queries** from natural language instructions.  
