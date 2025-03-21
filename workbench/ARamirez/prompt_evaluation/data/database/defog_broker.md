@@ -107,5 +107,5 @@ ticker_customers = Tickers.transactions_of.customer.CALCULATE(_id, name, email, 
 ### Retrieving Transactions for a Specific Date Range
 To filter transactions for a specific date range:
 ```python
-transactions_in_date_range = Transactions.CALCULATE(transaction_id, customer_id, ticker_id, date_time, transaction_type, shares, price, amount, currency, status, WHERE=(date_time >= start_date AND date_time <= end_date))
+transactions_in_date_range = Transactions.CALCULATE(transaction_id, customer_id, ticker_id, date_time, transaction_type, shares, price, amount, currency, status, WHERE=((date_time >= start_date) & (date_time <= end_date)))
 ```
