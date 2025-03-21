@@ -177,7 +177,7 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', script_file="./cheatsheet_v6.md", temperature= 0.001):
+    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', script_file="./cheatsheet_v6.md", temperature= 1.0):
         """
         Initializes the LLMClient with the provider and model.
         """
@@ -190,11 +190,10 @@ class LLMClient:
     
         self.provider = default_provider
         self.model = default_model
-        self.client = OtherAIProvider(default_provider,default_model,temperature=0.0001,config=None)
+        self.client = DeepseekModel(temperature=0.0001)
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
         self.database = read_file(database_file)
-        self.temperature = temperature
         
 
     def get_pydough_sql(self,text):
