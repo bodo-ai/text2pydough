@@ -70,7 +70,6 @@ def show_examples():
         "Customers with more orders in 1995 than 1994.",
         "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
         "Customers with >30 orders, showing name & total order count.",
-        "Orders from 1998 with total price > $100, sorted by price.",
     ]
 
     for example in examples:
