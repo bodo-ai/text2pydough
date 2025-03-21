@@ -127,6 +127,34 @@ def extract_python_code(text):
 
     return combined_code
 
+class OtherAIProvider():
+    """Handles responses from other AI providers like AI Suite."""
+
+    def __init__(self, provider, model_id, temperature, config= None):
+        self.client = ai.Client(config) if config else ai.Client()
+        self.provider = provider
+        self.model_id = model_id
+        self.temperature= temperature
+
+
+    def ask(self, question, prompt):
+        """Generates a response using AI Suite."""
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": question},
+        ]
+
+        try:
+            response = self.client.chat.completions.create(
+                model=f"{self.provider}:{self.model_id}",
+                messages=messages,
+                temperature=self.temperature
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"AI Suite error: {e}")
+            return None
+
 class Result:
     def __init__(self, pydough_code=None, full_explanation=None, df=None, exception=None, original_question=None,
                  sql_output=None, base_prompt=None, cheat_sheet=None, knowledge_graph=None):
@@ -149,20 +177,20 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', script_file="./cheatsheet_v6.md", temperature= 1.0):
+    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', script_file="./cheatsheet_v6.md", temperature= 0.001):
         """
         Initializes the LLMClient with the provider and model.
         """
         #default_provider = "aws"
         #default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
-        #default_provider = "google"
-        #default_model = "gemini-2.0-flash-thinking-exp-01-21"
-        default_provider = "aws-deepseek"
-        default_model = "us.deepseek.r1-v1:0"
+        default_provider = "google"
+        default_model = "gemini-2.0-flash-001"
+        #default_provider = "aws-deepseek"
+        #default_model = "us.deepseek.r1-v1:0"
     
         self.provider = default_provider
         self.model = default_model
-        self.client = DeepseekModel(temperature=0.0001)
+        self.client = OtherAIProvider(default_provider,default_model,temperature=0.0001,config=None)
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
         self.database = read_file(database_file)
@@ -223,7 +251,7 @@ class LLMClient:
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
                 
-            response = self.client.ask(question, formatted_prompt, self.model)
+            response = self.client.ask(question, formatted_prompt)
             extracted_code = extract_python_code(response)
             extracted_code = replace_with_upper(extracted_code)
             

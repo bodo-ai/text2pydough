@@ -7,7 +7,7 @@ from botocore.config import Config
 class ClaudeModel:
     def __init__(self):
         # Initialize AWS SDK and load necessary files
-        config = Config(read_timeout=500)
+        config = Config(read_timeout=800)
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
 
     def ask_claude_with_stream(self, question, prompt, model, provider):
@@ -83,8 +83,8 @@ class DeepseekModel:
 
         response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":self.temperature}, system=system_messages, messages= messages)
         response_text = response["output"]["message"]["content"][0]["text"]
-
-
+       # reasoning_text= response["output"]["message"]["content"][1]["reasoningContent"]["reasoningText"]["text"]
+        print(response.get('usage', {}))
         return response_text
 
     def extract_thinking_and_text(self, response_body):
@@ -94,5 +94,4 @@ class DeepseekModel:
 
     def extract_usage(self, response_body):
         return response_body.get('usage', {})
-# %%
 
