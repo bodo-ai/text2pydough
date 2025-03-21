@@ -110,7 +110,9 @@ class OtherAIProvider(AIProvider):
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
-                temperature=self.temperature
+                temperature=self.temperature,
+                topP=0,
+                topK=0
             )
             return response.choices[0].message.content
         except Exception as e:
