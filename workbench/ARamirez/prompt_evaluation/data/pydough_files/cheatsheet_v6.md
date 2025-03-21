@@ -7,6 +7,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions. Plural sub-collections refer to collections that have a one-to-many or many-to-many relationship.
   
+  - PyDough does yet support aggregations whose arguments mix between subcollection data of the current context and fields of the context itself
+
   - RANKING is used as a function instead of method.
   
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
