@@ -161,6 +161,7 @@ with col1:
 
             # Check if result is empty
             if not result or (not result.code and not result.full_explanation and not result.df):
+                st.code(str(result.exception))
                 st.error("⚠️ No valid response received. Please try again.")
             else:
                 st.session_state.show_chat = True
