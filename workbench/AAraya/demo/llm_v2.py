@@ -129,7 +129,7 @@ def read_file(file_path):
 
 class LLMClient:
     def __init__(
-        self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', 
+        self, database_file='./tcph_graph.md', prompt_file='./prompt.md', 
         script_file="./cheatsheet_v6.md", temperature=0.0
     ):
         """
