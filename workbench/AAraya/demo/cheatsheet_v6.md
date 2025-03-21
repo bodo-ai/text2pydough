@@ -1,17 +1,29 @@
-# **PYDOUGH CHEAT SHEET**  
+## **PYDOUGH CHEAT SHEET**  
 This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code. 
 
-## **GENERAL RULES**: 
+### **GENERAL RULES**: 
 
+  - This is NOT SQL, so don't make assumptions about its syntax or behavior.
+
+  - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions. Plural sub-collections refer to collections that have a one-to-many or many-to-many relationship.
+  
+  - RANKING is used as a function instead of method.
+  
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. 
+  - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales)` is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
-  - Always keep in mind the order of the query. For example, if I tell you to give me the name and the phone_number, give them to me in this order, first the “name” column and then the “phone_number” column. 
+  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
+
+  - PARTITION must always be used as a function. It should only be used as a method when performing calculations with the high-level graph. Never partition by the foreign key or the collection key.
+  
+  - CALCULATE function ALWAYS needs an expression, not a collection. For example, you cannot do: `nations.CALCULATE(nation_name=name, top_suppliers=suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection. 
 
   - In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level. Instead of breaking problems into multiple intermediate steps, leverage CALCULATE to directly aggregate values, use WHERE to filter data at the correct scope, and apply functions like SUM or TOP_K at the highest relevant level of analysis. Avoid unnecessary partitioning or intermediate variables unless absolutely required, and focus on composing operations hierarchically to streamline solutions while maintaining clarity and efficiency.
 
   - PyDough does not support use different childs in operations, for example you cannot do: `total = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls. Instead use CALCULATE with a variable, for example: `total = SUM(orders.lines.CALCULATE(total = extended_price * (1 - discount)).total)`.
+
+  - If you need to get the best rankings within a CALCULATE method, you can use the RANKING method instead of TOP_K, and then filter them by the ranking number.
 
 ## **1. COLLECTIONS & SUB-COLLECTIONS**  
 
@@ -34,12 +46,12 @@ Collection.CALCULATE(field=expression, ...)
 ### **Examples**:  
 
   - **Select fields**:  
-    ```python
+    ``` 
     People.CALCULATE(first_name=first_name, last_name=last_name)
     ```
 
   - **Derived fields**:
-    ```python  
+    ```   
     Packages.CALCULATE(  
         customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),  
         cost_per_unit=package_cost / quantity  
@@ -51,11 +63,11 @@ Collection.CALCULATE(field=expression, ...)
 
   - Positional arguments must precede keyword arguments.
 
-  - Terms defined in a CALCULATE do not take effect until after the CALCULATE completes.
+  - New fields defined in a CALCULATE do not take effect until after the CALCULATE completes.
 
-  - Existing terms not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
+  - Existing new fields not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
 
-  - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
+  - A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE. 
 
 ## **3. FILTERING (WHERE)**  
 
@@ -65,18 +77,18 @@ Collection.CALCULATE(field=expression, ...)
 ### **Examples** 
 
   - **Filter people with negative account balance**:  
-    ```python
+    ``` 
     People.WHERE(acctbal < 0)
     ```  
 
   - **Filter packages ordered in 2023**  
-    ```python
+    ``` 
     Packages.WHERE(YEAR(order_date) == 2023)
     ``` 
 
   - **Filter addresses with occupants** 
-    ```python
-    Addresses.WHERE(HAS(current_occupants))
+    ``` 
+    Addresses.WHERE(HAS(current_occupants)==1)
     ```  
 
 ### **Rules**  
@@ -97,12 +109,12 @@ Collection.CALCULATE(field=expression, ...)
 ### **Examples** 
 
   - **Alphabetical sort**:
-    ```python
+    ``` 
     People.ORDER_BY(last_name.ASC(), first_name.ASC())
     ```
 
   - **Most expensive packages first**:  
-    ```python
+    ``` 
     Packages.ORDER_BY(package_cost.DESC())
     ```  
 
@@ -116,12 +128,12 @@ Select top k records.
 
 ### **Example** 
   Top 10 customers by orders count:
-  ```python
+  ``` 
   customers.TOP_K(10, by=COUNT(orders).DESC())
   ```
 
   Top 10 customers by orders count (but also selecting only the name):
-  ```python  
+  ```   
   customers.CALCULATE(cust_name=name).TOP_K(10, by=COUNT(orders).DESC())
   ```
 
@@ -147,10 +159,10 @@ Select top k records.
   Example: NDISTINCT(Addresses.state)  
 
 - **HAS(collection)**: True if ≥1 record exists.  
-  Example: HAS(People.packages)
+  Example: HAS(People.packages)==1
 
 - **HASNOT(collection)**: True if collection is empty.
-  Example: HASNOT(orders)
+  Example: HASNOT(orders)==1
 
 ### **Rules** 
 Aggregations Function does not support calling aggregations inside of aggregations
@@ -173,7 +185,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
 ### **Good Examples**  
 
   - **Group addresses by state and count occupants**: 
-    ```python 
+    ```  
     PARTITION(Addresses, name='addrs', by=state).CALCULATE(  
         state=state,  
         total_occupants=COUNT(addrs.current_occupants)  
@@ -182,13 +194,35 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     **IMPORTANT**: Look here, where we do not need to use  "addrs.state", we only use "state", because this is in the "by" sentence. 
 
   - **Group packages by year/month**:  
-    ```python
+    ```
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))
     ```  
+  - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how `packs` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level).
+    ``` 
+    package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
+    PARTITION(package_info, name="packs", by=(order_year, order_month)).CALCULATE(
+        avg_package_cost=AVG(packs.package_cost)
+    ).packs.WHERE(
+        package_cost < avg_package_cost
+    )
+    ```
+
+  - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage.**:  Notice how `addrs` can access `total_packages`, which was defined by its ancestor (at the `PARTITION` level) an notice we can defined more variables with CALCULATE.
+    ``` 
+      PARTITION(Addresses, name="addrs", by=(city, state)).CALCULATE(
+      total_packages=COUNT(addrs.current_occupants.packages)
+  ).addrs.CALCULATE(city, state).current_occupants.CALCULATE(
+      first_name,
+      last_name,
+      city=city,
+      state=state,
+      pct_of_packages=100.0 * COUNT(packages) / total_packages,
+  )
+    ```
 
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
-    ```python
+    ```
     PARTITION(People(birth_year=YEAR(birth_date)), name=\"ppl\", by=birth_year)(
         birth_year,
         email,
@@ -196,18 +230,31 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     )
     ```
 
-  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    ```python
+  - **Count how many packages were ordered in each year**: Invalid because YEAR(order_date) is not allowed to be used as a partition term (it must be placed in a CALCULATE so it is accessible as a named reference).
+    ```
     PARTITION(Packages, name=\"packs\", by=YEAR(order_date)).CALCULATE(
         n_packages=COUNT(packages)
     )
     ```
 
-  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALC so it is accessible as a named reference).
-    ```python
+  - **Count how many people live in each state**: Invalid because current_address.state is not allowed to be used as a partition term (it must be placed in a CALCULATE so it is accessible as a named reference).
+    ``` 
     PARTITION(People, name=\"ppl\", by=current_address.state).CALCULATE(
         n_packages=COUNT(packages)
     )
+    ```
+  - **Rank parts within each segment and filter top 20**: Invalid because segment_group.part_name is a plural expression you must use an aggregation function to use plural expression or subcollections.
+    ``` 
+  top_per_segment = PARTITION(
+      segment_part_sales,
+      name='segment_group',
+      by=segment
+  ).CALCULATE(
+      segment=segment,
+      part_name=segment_group.part_name,
+      total_sold=segment_group.total_sold,
+      rank=RANKING(by=segment_group.total_sold.DESC(), levels=1)
+  ).WHERE(rank <= 20).ORDER_BY(segment.ASC(), total_sold.DESC())
     ```
 
 ## **8. WINDOW FUNCTIONS**  
@@ -227,12 +274,26 @@ RANKING(by=field.DESC(), levels=1, allow_ties=False)
 - dense (default False): Use dense ranking.
         
 #### **Examples**
-```python
-Nations.customers(r = RANKING(by=acctbal.DESC(), levels=1))
-```
-Rank customers by balance per nation:  
-```python
-Customers(r=RANKING(by=acctbal.DESC(), levels=1))
+``` 
+# (no levels) rank every customer relative to all other customers
+Regions.nations.customers.CALCULATE(r=RANKING(...))
+
+# (levels=1) rank every customer relative to other customers in the same nation
+Regions.nations.customers.CALCULATE(r=RANKING(..., levels=1))
+
+# (levels=2) rank every customer relative to other customers in the same region
+Regions.nations.customers.CALCULATE(r=RANKING(..., levels=2))
+
+# (levels=3) rank every customer relative to all other customers
+Regions.nations.customers.CALCULATE(r=RANKING(..., levels=3))
+
+# Rank customers per-nation by their account balance
+# (highest = rank #1, no ties)
+Nations.customers.CALCULATE(r = RANKING(by=acctbal.DESC(), levels=1))
+
+# For every customer, finds their most recent order
+# (ties allowed)
+Customers.orders.WHERE(RANKING(by=order_date.DESC(), levels=1, allow_ties=True) == 1)
 ```
 
 ### **PERCENTILE:**  
@@ -249,12 +310,12 @@ PERCENTILE(by=field.ASC(), n_buckets=100)
 - n\_buckets (default 100): Number of percentile buckets.
         
 #### **Example**
-```python
+``` 
 Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n\_buckets=1000) == 1000).
 ```
   
 Filter top 5% by account balance:  
-```python
+``` 
 Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
 ```
 
@@ -265,7 +326,7 @@ Reusable code snippets.
 
 ### **Example**
 Define and reuse filters:  
-  ```python
+  ``` 
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
   ```
@@ -372,7 +433,7 @@ Customers(country\_code = phone\[:3\])
 
   If there are multiple modifiers, they operate left-to-right.
   Usage examples:
-  ```python
+  ``` 
   # Returns the following datetime moments:
   # 1. The current timestamp
   # 2. The start of the current month
@@ -401,7 +462,7 @@ Customers(country\_code = phone\[:3\])
   - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
 
   - Example:
-  ```python
+  ``` 
   # Calculates, for each order, the number of days since January 1st 1992
   # that the order was placed:
   Orders.CALCULATE( 
@@ -511,18 +572,18 @@ Customers(country\_code = phone\[:3\])
       total_spent=SUM(orders.total_price)  
   ).WHERE((total_spent > 1000) & (nation.region.name == "ASIA"))  
 
-* **Top 5 Most Profitable Regions**  
+* **Top 5 Most Profitable Nations**  
   *Goal: Identify regions with highest revenue.*  
   *Code:*  
   selected_regions = nations.CALCULATE(  
-      region_name=region.name,  
+      region_name=name,  
       Total_revenue=SUM(customers.orders.total_price)  
   ).TOP_K(5, Total_revenue.DESC())  
 
 * **Inactive Customers**  
   *Goal: Find customers who never placed orders.*  
   *Code:*  
-  customers_without_orders = customers.WHERE(HASNOT(orders)).CALCULATE(  
+  customers_without_orders = customers.WHERE(HASNOT(orders)==1).CALCULATE(  
       customer_key=key,  
       customer_name=name  
   )  
@@ -530,7 +591,7 @@ Customers(country\_code = phone\[:3\])
 * **Customer Activity by Nation**  
   *Goal: Track active/inactive customers per nation.*  
   *Code:*  
-  cust_info = customers.CALCULATE(is_active=HAS(orders))  
+  cust_info = customers.CALCULATE(is_active=HAS(orders)==1)  
   nation_summary = nations.CALCULATE(  
       nation_name=name,  
       total_customers=COUNT(cust_info),  
