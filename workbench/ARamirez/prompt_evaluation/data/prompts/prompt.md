@@ -45,11 +45,65 @@ To generate the PyDough code snippet, follow these steps:
 
 5. Enclose the generated PyDough code in a Python code block.
 
-8. Provide a clear explanation of what the code does.  
+6. Provide a clear explanation of what the code does.  
 
-9. Try different methods if the first approach doesn't work.  
+7. Try different methods if the first approach doesn't work.  
 
-10. Check for inconsistencies, logical errors, or missing details.  
+8. Check for inconsistencies, logical errors, or missing details.  
 
 {recomendation}
 </instructions>
+
+Question: 1. Top 5 States by Average Occupants:
+Let's break down the task:
+
+1. For each address, we need to identify how many current occupants it has
+2. We need to partition the addresses by the state, and for each state calculate the average occupants
+3. We need to select the top 5 states by this average
+
+First, let me think about the relationships in the database:
+- `Addresses` contains all addreses.
+
+So to count occupants per all addresses, we need to:
+1. Access the `Addresses` collection and count the number of occupants per address
+2. Partition the addresses by region and calculate the average of occupants per state
+3. Select the top 5
+
+Answer: Now let's implement this:
+  ```python
+  addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
+  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
+      state=state,  
+      avg_occupants=AVG(addrs.n_occupants)  
+  ).TOP_K(5, by=avg_occupants.DESC())
+  ```
+
+Question: 2. Find the customers name who never placed orders.
+Let's analyze this request:
+
+We need to find the customers who have never placed orders. This means we need to:
+1. Access the `customers` collection
+2. Filter for customers who don't have any orders 
+3. Return their names
+
+From the database structure reference, we can see that:
+- Each customer has an `orders` property which is a list of orders placed by that customer
+- We need to check if this list is empty
+
+To do this:
+1. We can use the `HASNOT` function to check if a customer has no orders
+2. We'll filter the customers using `WHERE(HASNOT(orders)==1)`
+3. Then select just their names using `CALCULATE`
+
+Answer: Here's the PyDough code I'll generate:
+
+```python
+customers_without_orders = customers.WHERE(HASNOT(orders)==1).CALCULATE(
+    customer_name=name
+)
+```
+This code:
+1. Starts with the `customers` collection
+2. Filters to only include customers where `HASNOT(orders)==1`, meaning they have no orders
+3. Uses `CALCULATE` to return only the customer names
+</examples>
