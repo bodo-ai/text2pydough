@@ -3,21 +3,28 @@ import traceback
 from llm_v2 import LLMClient
 
 
-# --- Simple password gate ---
-CORRECT_PASSWORD = "pydoughdemo" 
+# --- Simple(hardcoded) Password gate ---
+CORRECT_PASSWORD = "pydoughdemo"
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
     st.title("🔒 Pydough LLM Demo Login")
-    password = st.text_input("Enter password to access the demo:", type="password")
-    if password == CORRECT_PASSWORD:
-        st.session_state.authenticated = True
-        st.experimental_rerun()
-    elif password:
-        st.error("❌ Incorrect password. Please try again.")
+
+    with st.form("login_form", clear_on_submit=False):
+        password = st.text_input("Enter password to access the demo:", type="password")
+        submitted = st.form_submit_button("Enter")
+
+    if submitted:
+        if password == CORRECT_PASSWORD:
+            st.session_state.authenticated = True
+            st.rerun()  # ✅ aquí es donde cambias
+        else:
+            st.error("❌ Incorrect password. Please try again.")
+
     st.stop()
+
 
 # Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
