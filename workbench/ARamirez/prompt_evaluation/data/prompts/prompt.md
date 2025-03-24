@@ -50,4 +50,31 @@ To generate the PyDough code snippet, follow these steps:
 
 <examples>
 
+1. Top 5 States by Average Occupants:
+<thinking>
+Let's break down the task:
+
+1. For each address, we need to identify how many current occupants it has
+2. We need to partition the addresses by the state, and for each state calculate the average occupants
+3. We need to select the top 5 states by this average
+
+First, let me think about the relationships in the database:
+- `Addresses` contains all addreses.
+
+So to count occupants per all addresses, we need to:
+1. Access the `Addresses` collection and count the number of occupants per address
+2. Partition the addresses by region and calculate the average of occupants per state
+3. Select the top 5
+</thinking>
+
+<answer>
+Now let's implement this:
+  ```python
+  addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
+  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
+      state=state,  
+      avg_occupants=AVG(addrs.n_occupants)  
+  ).TOP_K(5, by=avg_occupants.DESC())
+  ```
+</answer>
 </examples>
