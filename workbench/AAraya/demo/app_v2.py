@@ -122,6 +122,8 @@ def update_dropdown_selection(query_id):
 
     # Set active query
     st.session_state.active_query = query_id
+    
+    st.rerun()
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
 if st.button("📋 Examples"):
