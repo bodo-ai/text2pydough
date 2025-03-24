@@ -160,17 +160,28 @@ with col1:
                 if message["role"] == "assistant" and "query_id" in message:
                     query_id = message["query_id"]
                     result = st.session_state.query_results[query_id]
-                    
                     dropdown_key = f"dropdown_{query_id}"
 
-                    # Set default if it doesn't exist
+                    # Define dropdown options
+                    full_dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
+                                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
+                    safe_dropdown_options = ["Full Explanation", "Exception", "Original Question", "Base Prompt"]
+
+                    # Determine which options to show based on result content
+                    has_error = result.exception or not (result.code or result.df or result.sql)
+                    dropdown_options = safe_dropdown_options if has_error else full_dropdown_options
+
+                    # Set default value if it doesn't exist
                     if dropdown_key not in st.session_state:
                         st.session_state[dropdown_key] = "Full Explanation"
 
-                    # Draw dropdown with stable options and callback
+                    
+                    if st.session_state[dropdown_key] not in dropdown_options:
+                        st.session_state[dropdown_key] = "Full Explanation"
+
                     st.selectbox(
                         label=" ",
-                        options=st.session_state.dropdown_options,
+                        options=dropdown_options,
                         key=dropdown_key,
                         on_change=update_dropdown_selection,
                         args=(query_id,)
