@@ -2,16 +2,6 @@ import streamlit as st
 import traceback
 from llm_v2 import LLMClient
 
-st.markdown("""
-<style>
-    /* Remove hint text inside input fields */
-    .stTextInput > div > div > input::placeholder {
-        color: transparent !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
 # --- Simple(hardcoded) Password gate ---
 CORRECT_PASSWORD = "pydoughdemo"
 
@@ -33,8 +23,7 @@ if not st.session_state.authenticated:
             st.error("❌ Incorrect password. Please try again.")
 
     st.stop()
-
-
+    
 # Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
 
