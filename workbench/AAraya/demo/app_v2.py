@@ -105,7 +105,7 @@ def show_examples():
     ]
 
     for original, follow_up in query_pairs:
-        st.markdown("➡️ **Query:**")
+        st.markdown("**Query:**")
         st.code(original, language="")
         st.markdown("➡️ **Follow-up option:**")
         st.code(f"# {follow_up}", language="")
