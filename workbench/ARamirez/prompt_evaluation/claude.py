@@ -18,10 +18,10 @@ class ClaudeModel:
                 "type": "enabled",
                 "budget_tokens": 5000
             },
-            "system": prompt,  
+            "system": prompt,  # Wrap "string" in quotes to make it a valid string
             "messages": [
                 {
-                    "role": "user", 
+                    "role": "user",  # Wrap "string" in quotes to make it a valid string
                     "content": question
                 }
             ],
@@ -96,3 +96,5 @@ class DeepseekModel:
 
     def extract_usage(self, response_body):
         return response_body.get('usage', {})
+
+# %%
