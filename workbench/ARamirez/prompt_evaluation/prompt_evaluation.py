@@ -101,8 +101,8 @@ class OtherAIProvider(AIProvider):
     def ask(self, question, prompt):
         """Generates a response using AI Suite."""
         messages = [
-            #{"role": "system", "content": prompt},
-            {"role": "user", "content": f"{prompt} \n Question: {question}\nLet's solve this step by step:"},
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Question: {question}\nLet's think about this logically:"},
         ]
 
         try:
