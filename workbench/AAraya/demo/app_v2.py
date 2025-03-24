@@ -160,23 +160,24 @@ with col1:
                     selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
                     # Dropdown without label
+
                     selected_output = st.selectbox(
-                        " ", 
+                        " ",
                         ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
                         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
                         key=dropdown_key,
-                        index=["Full Explanation", "Code", "DataFrame", "SQL", "Exception",
-                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
-                        on_change=on_dropdown_change,
-                        args=(query_id,)
+                        index=["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
+                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
+                            .index(st.session_state.selected_output.get(dropdown_key, "Full Explanation"))
                     )
 
                     # Store selection in session state
                     st.session_state.selected_output[dropdown_key] = selected_output
-                    
-                    # Update active query when dropdown changes
-                    if st.session_state.get('widget_triggered') == dropdown_key:
+
+                    # Only update active query if needed
+                    if st.session_state.active_query != query_id:
                         st.session_state.active_query = query_id
+
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input(st.session_state.query_placeholder):
