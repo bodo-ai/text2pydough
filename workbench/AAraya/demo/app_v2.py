@@ -240,7 +240,7 @@ with col1:
         st.session_state.query_results = {}
         st.session_state.active_query = None
         st.session_state.last_query_id = None
-        st.session_state.show_chat = False  # Hide chat again
+        st.session_state.show_chat = False 
         st.session_state.query_placeholder = "Ask a query about the TPCH database..."  
         st.rerun()
 
@@ -263,6 +263,8 @@ with col2:
             st.write(result.full_explanation)
             if result.exception:
                 st.warning("⚠️ Unable to execute this query at this point, try rephrasing the question.")
+                with st.expander("See error details"):
+                    st.code(result.exception, language="python")
         elif selected_output == "Code":
             if hasattr(result, "code") and result.code is not None:
                 st.code(result.code, language="python")
