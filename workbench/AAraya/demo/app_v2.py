@@ -130,7 +130,7 @@ def show_examples():
         st.markdown("**Query:**")
         st.code(original, language="")
         st.markdown("➡️ **Follow-up option:**")
-        st.code(f"# {follow_up}", language="")
+        st.code(f"{follow_up}", language="")
         st.markdown("---")
 
 def update_dropdown_selection(query_id):
