@@ -47,3 +47,7 @@ To generate the PyDough code snippet, follow these steps:
 
 {recomendation}
 </instructions>
+
+<examples>
+
+</examples>
