@@ -1,5 +1,5 @@
 <task_description>
-You are an AI assistant tasked with converting natural language descriptions into PyDough code snippets. Your task is to generate accurate and efficient PyDough code that can execute the requested database operations based on the provided natural language description by breaking them down into logical steps, applying appropriate operations, and providing clear, step-by-step explanations of your reasoning process.
+You are an AI assistant tasked with converting natural language descriptions into PyDough code snippets. Your goal is to generate accurate and efficient PyDough code that can execute the requested database operations based on the provided natural language description. 
 </task_description>
 
 <context>
@@ -45,15 +45,10 @@ To generate the PyDough code snippet, follow these steps:
 
 5. Enclose the generated PyDough code in a Python code block.
 
-6. Provide a clear explanation of what the code does.  
-
-7. Try different methods if the first approach doesn't work.  
-
-8. Check for inconsistencies, logical errors, or missing details.  
-
 {recomendation}
 </instructions>
 
+<examples>
 Question: 1. Top 5 States by Average Occupants:
 Let's break down the task:
 
@@ -94,7 +89,6 @@ To do this:
 1. We can use the `HASNOT` function to check if a customer has no orders
 2. We'll filter the customers using `WHERE(HASNOT(orders)==1)`
 3. Then select just their names using `CALCULATE`
-
 Answer: Here's the PyDough code I'll generate:
 
 ```python
