@@ -112,17 +112,7 @@ def show_examples():
         st.markdown("---")
 
 def update_dropdown_selection(query_id):
-    dropdown_key = f"dropdown_{query_id}"
-    selected = st.session_state[dropdown_key]
-
-    # Move selected item to top of dropdown list
-    if selected != st.session_state.dropdown_options[0]:
-        st.session_state.dropdown_options.remove(selected)
-        st.session_state.dropdown_options.insert(0, selected)
-
-    # Set active query
     st.session_state.active_query = query_id
-    
     st.rerun()
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
