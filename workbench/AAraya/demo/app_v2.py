@@ -2,6 +2,15 @@ import streamlit as st
 import traceback
 from llm_v2 import LLMClient
 
+st.markdown("""
+<style>
+    /* Remove hint text inside input fields */
+    .stTextInput > div > div > input::placeholder {
+        color: transparent !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 
 # --- Simple(hardcoded) Password gate ---
 CORRECT_PASSWORD = "pydoughdemo"
