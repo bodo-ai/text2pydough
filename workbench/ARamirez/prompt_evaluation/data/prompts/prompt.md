@@ -21,5 +21,29 @@ Here are some examples of PyDough code snippets along with their corresponding n
 {similar_queries}
 </context>
 
-{recomendation}
+<instructions>
+To generate the PyDough code snippet, follow these steps:
 
+1. Carefully analyze the provided natural language description to identify the database query or manipulation required. Extract the main components, such as collections, fields, and operations.
+
+2. Generate PyDough code that:
+   - Uses clear and concise syntax, adhering to the correct functions, parameters, and structure outlined in the PyDough Reference File.
+   - Avoids the bad examples referenced in the PyDough Reference File.
+   - Properly references fields and tables as defined in the Database Structure Reference File.
+   - Includes comments for any complex operations, where necessary.
+   - Assigns the final query to a variable.
+   - Ensures proper indentation.
+   - Follows the rules for using contextless expressions properly.
+   - Adheres to the syntax and structure outlined in the PyDough Reference File.
+   - Compares values using the equality operator (==) when necessary.
+   - Ensures variable names are different from the field names in the Database Structure Reference File.
+   - Returns only the exact data requested, without adding additional fields or information.
+
+3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
+
+4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+
+5. Enclose the generated PyDough code in a Python code block, and provide an explanation for what the code does, step by step.
+
+{recomendation}
+</instructions>
