@@ -59,23 +59,57 @@ st.markdown(
 # ---------------------- EXAMPLES MODAL ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
-    st.write("You can **copy** any of the examples by govering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
+    st.write("You can **copy** any of the examples by hovering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
 
-    examples = [
-        "Total customers & suppliers per nation, ordered by nation name.",
-        "Top 5 nations with most customer orders in 1995.",
-        "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
-        "Top 3 regions with most distinct customers.",
-        "Customers & order count in 1995 (Europe) with balance > $700.",
-        "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
-        "Customers with more orders in 1995 than 1994.",
-        "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
-        "Customers with >30 orders, showing name & total order count.",
-        "Orders from 1998 with total price > $100, sorted by price.",
+    query_pairs = [
+        (
+            "Total customers & suppliers per nation, ordered by nation name.",
+            "Which nation has the most customers?"
+        ),
+        (
+            "Top 5 nations with most customer orders in 1995.",
+            "What was the total revenue from each of these nations in 1995?"
+        ),
+        (
+            "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
+            "What was the average order value in that region?"
+        ),
+        (
+            "Top 3 regions with most distinct customers.",
+            "What’s the total order count per region?"
+        ),
+        (
+            "Customers & order count in 1995 (Europe) with balance > $700.",
+            "How many of them placed follow-up orders in 1996?"
+        ),
+        (
+            "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
+            "What was their total spend on green products?"
+        ),
+        (
+            "Customers with more orders in 1995 than 1994.",
+            "What was the percentage increase in orders per customer?"
+        ),
+        (
+            "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
+            "Order nations by average order value, lowest first."
+        ),
+        (
+            "Customers with >30 orders, showing name & total order count.",
+            "Also include their account balance."
+        ),
+        (
+            "Orders from 1998 with total price > $100, sorted by price.",
+            "Which customers placed these high-value orders?"
+        ),
     ]
 
-    for example in examples:
-        st.code(example, language="")
+    for original, follow_up in query_pairs:
+        st.code(original, language="")
+        st.markdown("➡️ **Follow-up option:**")
+        st.code(f"# {follow_up}", language="")
+        st.markdown("---")
+
 
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
