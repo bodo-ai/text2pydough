@@ -281,7 +281,7 @@ with col2:
             else:
                 st.warning("⚠️ No SQL available.")
         elif selected_output == "Exception":
-            st.write(result.exception or "No exception found.")
+            st.code(result.exception, language="python")
         elif selected_output == "Original Question":
             st.write(result.original_question or "No original question found.")
         elif selected_output == "Base Prompt":
