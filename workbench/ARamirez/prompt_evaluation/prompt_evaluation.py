@@ -102,7 +102,7 @@ class OtherAIProvider(AIProvider):
         """Generates a response using AI Suite."""
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Evaluate the following question and explain your reasoning step-by-step: {question}"},
+            {"role": "user", "content": f"Question: {question} \n Let's think step by step:"},
         ]
 
         try:
@@ -111,7 +111,8 @@ class OtherAIProvider(AIProvider):
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
                 temperature=self.temperature,
-              
+                topP=0,
+                topK=0
             )
             return response.choices[0].message.content
         except Exception as e:
