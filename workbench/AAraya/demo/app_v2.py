@@ -111,7 +111,17 @@ def show_examples():
         st.code(f"# {follow_up}", language="")
         st.markdown("---")
 
+def update_dropdown_selection(query_id):
+    dropdown_key = f"dropdown_{query_id}"
+    selected = st.session_state[dropdown_key]
 
+    # Move selected item to top of dropdown list
+    if selected != st.session_state.dropdown_options[0]:
+        st.session_state.dropdown_options.remove(selected)
+        st.session_state.dropdown_options.insert(0, selected)
+
+    # Set active query
+    st.session_state.active_query = query_id
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
 if st.button("📋 Examples"):
@@ -138,10 +148,9 @@ with col1:
         st.session_state.show_chat = False
     if "query_placeholder" not in st.session_state:
         st.session_state.query_placeholder = "Ask a query about the TPCH database..."
-
-    # Function to handle dropdown changes
-    def on_dropdown_change(query_id):
-        st.session_state.active_query = query_id
+    if "dropdown_options" not in st.session_state:
+        st.session_state.dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
+                                         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
         
 
     # Display chat history in left panel after first query.
@@ -155,28 +164,21 @@ with col1:
                 if message["role"] == "assistant" and "query_id" in message:
                     query_id = message["query_id"]
                     result = st.session_state.query_results[query_id]
-
+                    
                     dropdown_key = f"dropdown_{query_id}"
-                    selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-                    # Dropdown without label
+                    # Set default if it doesn't exist
+                    if dropdown_key not in st.session_state:
+                        st.session_state[dropdown_key] = "Full Explanation"
 
-                    selected_output = st.selectbox(
-                        " ",
-                        ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
-                        "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                    # Draw dropdown with stable options and callback
+                    st.selectbox(
+                        label=" ",
+                        options=st.session_state.dropdown_options,
                         key=dropdown_key,
-                        index=["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
-                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
-                            .index(st.session_state.selected_output.get(dropdown_key, "Full Explanation"))
+                        on_change=update_dropdown_selection,
+                        args=(query_id,)
                     )
-
-                    # Store selection in session state
-                    st.session_state.selected_output[dropdown_key] = selected_output
-
-                    # Only update active query if needed
-                    if st.session_state.active_query != query_id:
-                        st.session_state.active_query = query_id
 
 
     # ---------------------- USER INPUT ----------------------
