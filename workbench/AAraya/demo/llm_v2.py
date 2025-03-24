@@ -16,7 +16,7 @@ import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
-
+from rapidfuzz import fuzz, process
 pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"./test_data/tpch.db", check_same_thread=False)
 
@@ -129,7 +129,7 @@ def read_file(file_path):
 
 class LLMClient:
     def __init__(
-        self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', 
+        self, database_file='./tcph_graph.md', prompt_file='./prompt.md', 
         script_file="./cheatsheet_v6.md", temperature=0.0
     ):
         """
@@ -188,15 +188,33 @@ class LLMClient:
         # Initialize the result object to ensure it is always created
         result = Result(original_question=question)
         try:
-            if question in demo_dict:
-                database_content = self.database
-                formatted_prompt = format_prompt(
-                    self.script,
-                    self.prompt,
-                    demo_dict,
-                    question,
-                    database_content
-                )
+            # Look up the most similar question in the dictionary with a threshold of 60%.
+            match = process.extractOne(
+                query=question,
+                choices=demo_dict.keys(),
+                scorer=fuzz.token_sort_ratio  
+            )
+            
+            if match:
+                best_match, score, *_ = match  # Unpack answer
+                if score >= 60:  # If similarity score is 60% or more
+                    # Use the most similar question found
+                    database_content = self.database
+                    formatted_prompt = format_prompt(
+                        self.script,
+                        self.prompt,
+                        demo_dict,
+                        best_match,  # Most similar key found
+                        database_content
+                    )
+                else:
+                    # If no adequate match is found, use the standard prompt
+                    formatted_prompt = self.prompt.format(
+                        script_content=self.script,
+                        database_content=self.database,
+                        similar_queries="", 
+                        recomendation=""
+                    )
             else:
                 # If not in dict, use the standard prompt.
                 formatted_prompt = self.prompt.format(
