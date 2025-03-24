@@ -50,7 +50,6 @@ To generate the PyDough code snippet, follow these steps:
 
 <examples>
 1. Top 5 States by Average Occupants:
-<thinking>
 Let's break down the task:
 
 1. For each address, we need to identify how many current occupants it has
@@ -64,8 +63,7 @@ So to count occupants per all addresses, we need to:
 1. Access the `Addresses` collection and count the number of occupants per address
 2. Partition the addresses by region and calculate the average of occupants per state
 3. Select the top 5
-</thinking>
-<answer>
+
 Now let's implement this:
   ```python
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
@@ -74,10 +72,8 @@ Now let's implement this:
       avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())
   ```
-</answer>
 
 2. Find the customers name who never placed orders.
-</thinking>
 Let's analyze this request:
 
 We need to find the customers who have never placed orders. This means we need to:
@@ -93,8 +89,6 @@ To do this:
 1. We can use the `HASNOT` function to check if a customer has no orders
 2. We'll filter the customers using `WHERE(HASNOT(orders)==1)`
 3. Then select just their names using `CALCULATE`
-</thinking>
-<answer>
 Here's the PyDough code I'll generate:
 
 ```python
@@ -106,5 +100,4 @@ This code:
 1. Starts with the `customers` collection
 2. Filters to only include customers where `HASNOT(orders)==1`, meaning they have no orders
 3. Uses `CALCULATE` to return only the customer names
-</answer>
 </examples>
