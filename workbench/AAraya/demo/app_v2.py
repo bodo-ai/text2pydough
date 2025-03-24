@@ -113,7 +113,7 @@ def show_examples():
 
 def update_dropdown_selection(query_id):
     st.session_state.active_query = query_id
-    st.rerun()
+    st.session_state.should_rerun = True
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
 if st.button("📋 Examples"):
@@ -121,6 +121,11 @@ if st.button("📋 Examples"):
 
 # ---------------------- LAYOUT: TWO-PANE VIEW ----------------------
 col1, col2 = st.columns([0.5, 0.5])  # Left = Query Panel, Right = Output Panel
+
+if st.session_state.get("should_rerun", False):
+    st.session_state.should_rerun = False  # reset
+    st.rerun()
+
 
 with col1:
     st.header("Input")
