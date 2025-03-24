@@ -41,7 +41,6 @@ class ClaudeModel:
                 chunk = event.get('chunk')
                 if chunk:
                     bytes_data = json.loads(chunk.get('bytes').decode())
-                    print(bytes_data)
                     if 'delta' in bytes_data:
                         delta = bytes_data['delta']
                         text_delta.append(delta.get('text', ''))
