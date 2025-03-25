@@ -231,7 +231,7 @@ def correct(client, question,  code, prompt):
         - Do not assume if a method exists.
         - Follow the rules provided in pydough.    
         - Return the same output but with the corrected code.
-        An error occurred while processing this code: {extracted_code}. 
+        An error occurred while processing this code: {code}. 
         The error is: '{exception}'. 
         The original question was: '{question}'. 
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
