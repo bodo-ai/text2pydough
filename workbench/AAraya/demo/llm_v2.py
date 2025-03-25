@@ -1,6 +1,7 @@
 # %%
 import argparse
 import os
+import traceback
 import re
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -260,8 +261,7 @@ class LLMClient:
                 return corrected_result
             return result
         except Exception as e:
-            # If any exception occurs, capture it in the result object
-            result.exception = e
+            result.exception = traceback.format_exc()
             return result
         
     def correct(self, result):
