@@ -208,7 +208,6 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
         package_cost < avg_package_cost
     )
     ```
-    
 
   - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage.**:  Notice how `addrs` can access `total_packages`, which was defined by its ancestor (at the `PARTITION` level) an notice we can defined more variables with CALCULATE.
     ``` 
