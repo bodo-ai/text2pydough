@@ -2,7 +2,7 @@ import streamlit as st
 import traceback
 from llm_v2 import LLMClient
 
-# --- Simple(hardcoded) Password gate ---
+# --- Simple Password gate ---
 CORRECT_PASSWORD = "pydoughdemo"
 
 if "authenticated" not in st.session_state:
@@ -25,7 +25,7 @@ if not st.session_state.authenticated:
     st.stop()
     
 # Set page config for wide layout
-st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
+st.set_page_config(page_title="PyDough LLM Demo v2", layout="wide", page_icon="bodo_icon.png")
 
 # Add custom CSS to style the dropdown
 st.markdown("""
@@ -48,7 +48,7 @@ st.markdown("""
 
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
-st.title("PyDough LLM Demo")
+st.title("PyDough LLM Demo v2")
 
 st.markdown(
     """
