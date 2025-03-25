@@ -5,6 +5,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
+  - If you need to use an attribute of a previous collection, you must have calculated the attribute using CALCULATE.
+
   - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions. Plural sub-collections refer to collections that have a one-to-many or many-to-many relationship.
   
   - RANKING is used as a function instead of method.
