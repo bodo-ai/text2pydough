@@ -369,7 +369,7 @@ def main(git_hash):
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/broker.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
