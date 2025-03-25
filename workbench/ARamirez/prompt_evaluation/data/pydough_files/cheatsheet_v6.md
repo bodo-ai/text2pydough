@@ -5,11 +5,13 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
+  - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
+
+  - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995, 1998 and 1999. You need to use SINGULAR function to call every year in the final result. 
+
   - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions. Plural sub-collections refer to collections that have a one-to-many or many-to-many relationship.
   
   - RANKING is used as a function instead of method.
-  
-  - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
   - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales)` is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
@@ -330,6 +332,30 @@ Define and reuse filters:
   is_high_value = package_cost > 1000  
   high_value_packages = Packages.WHERE(is_high_value)
   ```
+
+## **10. SINGULAR**
+### **Purpose**
+SINGULAR in PyDough ensures data is explicitly treated as singular in sub-collection contexts, preventing undefined behavior if used correctly.
+
+### **Examples**
+```
+result = TPCH.CALCULATE(
+    year_1995=region_order_values_1995.SINGULAR().total_order_value,
+)
+```
+
+```
+most_recent_package = packages.WHERE(
+    RANKING(by=order_date.DESC(), levels=1) == 1
+).SINGULAR()
+People.CALCULATE(
+    ssn,
+    first_name,
+    middle_name,
+    last_name,
+    most_recent_package_cost=most_recent_package.package_cost
+)
+```
 
 ## **BINARY OPERATORS**
 
