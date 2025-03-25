@@ -37,10 +37,11 @@ To generate the PyDough code snippet, follow these steps:
    - Adheres to the syntax and structure outlined in the PyDough Reference File.
    - Compares values using the equality operator (==) when necessary.
    - Ensures variable names are different from the field names in the Database Structure Reference File.
+   Here’s the corrected version:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
 
-3. Determine if the use of PARTITION is necessary. If it’s not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately and assess if you need to work with the partitioned data.
+3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
