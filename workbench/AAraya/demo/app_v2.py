@@ -2,6 +2,28 @@ import streamlit as st
 import traceback
 from llm_v2 import LLMClient
 
+# --- Simple(hardcoded) Password gate ---
+CORRECT_PASSWORD = "pydoughdemo"
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.title("🔒 Pydough LLM Demo Login")
+
+    with st.form("login_form", clear_on_submit=False):
+        password = st.text_input("Enter password to access the demo:", type="password")
+        submitted = st.form_submit_button("Enter")
+
+    if submitted:
+        if password == CORRECT_PASSWORD:
+            st.session_state.authenticated = True
+            st.rerun()  # ✅ aquí es donde cambias
+        else:
+            st.error("❌ Incorrect password. Please try again.")
+
+    st.stop()
+    
 # Set page config for wide layout
 st.set_page_config(page_title="PyDough LLM Demo", layout="wide", page_icon="bodo_icon.png")
 
@@ -59,24 +81,65 @@ st.markdown(
 # ---------------------- EXAMPLES MODAL ----------------------
 @st.dialog("💡 Example Queries for TPCH", width="large") 
 def show_examples():
-    st.write("You can **copy** any of the examples by govering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
+    st.write("You can **copy** any of the examples by hovering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
 
-    examples = [
-        "Total customers & suppliers per nation, ordered by nation name.",
-        "Top 5 nations with most customer orders in 1995.",
-        "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
-        "Top 3 regions with most distinct customers.",
-        "Customers & order count in 1995 (Europe) with balance > $700.",
-        "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
-        "Customers with more orders in 1995 than 1994.",
-        "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
-        "Customers with >30 orders, showing name & total order count.",
-        "Orders from 1998 with total price > $100, sorted by price.",
+    query_pairs = [
+        (
+            "Total customers & suppliers per nation, ordered by nation name.",
+            "Which nation has the most customers?"
+        ),
+        (
+            "Top 5 nations with most customer orders in 1995.",
+            "What was the total revenue from each of these nations in 1995?"
+        ),
+        (
+            "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
+            "What was the average order value in that region?"
+        ),
+        (
+            "Top 3 regions with most distinct customers.",
+            "What’s the total order count per region?"
+        ),
+        (
+            "Customers & order count in 1995 (Europe) with balance > $700.",
+            "How many of them placed follow-up orders in 1996?"
+        ),
+        (
+            "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
+            "What was their total spend on green products?"
+        ),
+        (
+            "Customers with more orders in 1995 than 1994.",
+            "What was the percentage increase in orders per customer?"
+        ),
+        (
+            "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
+            "Order nations by average order value, lowest first."
+        ),
+        (
+            "Customers with >30 orders, showing name & total order count.",
+            "Also include their account balance."
+        ),
+        (
+            "Orders from 1998 with total price > $100, sorted by price.",
+            "Which customers placed these high-value orders?"
+        ),
     ]
 
-    for example in examples:
-        st.code(example, language="")
+    for original, follow_up in query_pairs:
+        st.markdown("**Query:**")
+        st.code(original, language="")
+        st.markdown("➡️ **Follow-up option:**")
+        st.code(f"{follow_up}", language="")
+        st.markdown("---")
 
+def update_dropdown_selection(query_id):
+    dropdown_key = f"dropdown_{query_id}"
+    st.session_state.active_query = query_id
+    st.session_state.selected_output[dropdown_key] = st.session_state[dropdown_key]
+    st.session_state.should_rerun = True
+
+    
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
 if st.button("📋 Examples"):
@@ -103,10 +166,9 @@ with col1:
         st.session_state.show_chat = False
     if "query_placeholder" not in st.session_state:
         st.session_state.query_placeholder = "Ask a query about the TPCH database..."
-
-    # Function to handle dropdown changes
-    def on_dropdown_change(query_id):
-        st.session_state.active_query = query_id
+    if "dropdown_options" not in st.session_state:
+        st.session_state.dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
+                                         "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
         
 
     # Display chat history in left panel after first query.
@@ -120,28 +182,34 @@ with col1:
                 if message["role"] == "assistant" and "query_id" in message:
                     query_id = message["query_id"]
                     result = st.session_state.query_results[query_id]
-
                     dropdown_key = f"dropdown_{query_id}"
-                    selected_output = st.session_state.selected_output.get(dropdown_key, "Code")
 
-                    # Dropdown without label
-                    selected_output = st.selectbox(
-                        " ", 
-                        ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
-                        "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"],
+                    # Define dropdown options
+                    full_dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
+                                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
+                    safe_dropdown_options = ["Full Explanation", "Code", "Exception", 
+                                             "Original Question", "Base Prompt","Cheat Sheet", "Knowledge Graph"]
+
+                    # Determine which options to show based on result content
+                    has_error = result.exception or not (result.code or result.df or result.sql)
+                    dropdown_options = safe_dropdown_options if has_error else full_dropdown_options
+
+                    # Set default value if it doesn't exist
+                    if dropdown_key not in st.session_state:
+                        st.session_state[dropdown_key] = "Full Explanation"
+
+                    
+                    if st.session_state[dropdown_key] not in dropdown_options:
+                        st.session_state[dropdown_key] = "Full Explanation"
+
+                    st.selectbox(
+                        label=" ",
+                        options=dropdown_options,
                         key=dropdown_key,
-                        index=["Full Explanation", "Code", "DataFrame", "SQL", "Exception",
-                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"].index(selected_output),
-                        on_change=on_dropdown_change,
+                        on_change=update_dropdown_selection,
                         args=(query_id,)
                     )
 
-                    # Store selection in session state
-                    st.session_state.selected_output[dropdown_key] = selected_output
-                    
-                    # Update active query when dropdown changes
-                    if st.session_state.get('widget_triggered') == dropdown_key:
-                        st.session_state.active_query = query_id
 
     # ---------------------- USER INPUT ----------------------
     if query := st.chat_input(st.session_state.query_placeholder):
@@ -194,7 +262,7 @@ with col1:
         st.session_state.query_results = {}
         st.session_state.active_query = None
         st.session_state.last_query_id = None
-        st.session_state.show_chat = False  # Hide chat again
+        st.session_state.show_chat = False 
         st.session_state.query_placeholder = "Ask a query about the TPCH database..."  
         st.rerun()
 
@@ -206,7 +274,9 @@ with col2:
     if "active_query" in st.session_state and st.session_state.active_query is not None:
         query_id = st.session_state.active_query
         result = st.session_state.query_results[query_id]
-        selected_output = st.session_state.selected_output.get(f"dropdown_{query_id}", "Full Explanation")
+        dropdown_key = f"dropdown_{query_id}"
+        selected_output = st.session_state.get(dropdown_key, "Full Explanation")
+
 
         st.markdown("---")
 
@@ -215,6 +285,8 @@ with col2:
             st.write(result.full_explanation)
             if result.exception:
                 st.warning("⚠️ Unable to execute this query at this point, try rephrasing the question.")
+                with st.expander("See error details"):
+                    st.code(result.exception, language="python")
         elif selected_output == "Code":
             if hasattr(result, "code") and result.code is not None:
                 st.code(result.code, language="python")
@@ -231,7 +303,7 @@ with col2:
             else:
                 st.warning("⚠️ No SQL available.")
         elif selected_output == "Exception":
-            st.write(result.exception or "No exception found.")
+            st.code(result.exception, language="python")
         elif selected_output == "Original Question":
             st.write(result.original_question or "No original question found.")
         elif selected_output == "Base Prompt":
