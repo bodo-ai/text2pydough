@@ -124,7 +124,6 @@ WORDS_MAP = {
     "partition": "PARTITION",
     "group_by": "PARTITION",
     "where": "WHERE",
-    "count": "COUNT",
     "sum": "SUM",
     "avg": "AVG",
     "min": "MIN",
