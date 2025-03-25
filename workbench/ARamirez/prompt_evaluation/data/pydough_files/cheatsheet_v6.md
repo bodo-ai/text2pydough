@@ -7,6 +7,10 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - If you need to use an attribute of a previous collection, you must have calculated the attribute using CALCULATE.
 
+  - New fields defined in a CALCULATE do not take effect until after the CALCULATE completes. If you want to access the new field defined, you must use CALCULATE again to reference it.
+
+  - We can access the partitioned collection using the partition name `PARTITION(parts, name="parts_group", by=(size)).parts_group.CALCULATE(part_name=name)`. This is useful when you need to access a previously defined field in the partition or when you need the data to be partitioned.
+
   - CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions. Plural sub-collections refer to collections that have a one-to-many or many-to-many relationship.
   
   - RANKING is used as a function instead of method.
