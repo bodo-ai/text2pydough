@@ -199,7 +199,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
     ```
     PARTITION(Packages, name='packs', by=(YEAR(order_date), MONTH(order_date)))
     ```  
-  - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how `packs` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level).
+  - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how `packs` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level). Look here, we can access the collection after the partition using the partition name. This is useful when you need to access a previously defined field or when you need the data to be partitioned.
     ``` 
     package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
     PARTITION(package_info, name="packs", by=(order_year, order_month)).CALCULATE(
@@ -208,7 +208,6 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
         package_cost < avg_package_cost
     )
     ```
-    **IMPORTANT**: Look here, we can access the collection after the partition using the partition name. This is useful when you need to access a previously defined field or when you need the data to be partitioned.
 
   - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage.**:  Notice how `addrs` can access `total_packages`, which was defined by its ancestor (at the `PARTITION` level) an notice we can defined more variables with CALCULATE.
     ``` 
