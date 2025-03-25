@@ -102,7 +102,7 @@ class OtherAIProvider(AIProvider):
         """Generates a response using AI Suite."""
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": question},
+            {"role": "user", "content": f"Question: {question}\nLet's solve this step by step:"},
         ]
 
         try:
@@ -113,6 +113,7 @@ class OtherAIProvider(AIProvider):
                 temperature=self.temperature,
                 topP=0,
                 topK=0
+            
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -143,7 +144,6 @@ WORDS_MAP = {
     "contains": "CONTAINS",
     "like": "LIKE",
     "join_strings": "JOIN_STRINGS",
-    "year": "YEAR",
     "month": "MONTH",
     "day": "DAY",
     "hour": "HOUR",
@@ -204,7 +204,6 @@ def format_prompt(prompt, data, question, database_content, script_content):
     if question in data:
         recomendation = data[question].get("context_id", "")
         similar_code= data[question].get("similar_queries", "similar code not found")
-        print(similar_code)
         question = data[question].get("redefined_question", question)
     #contexts = (
     #    open(f"./data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
@@ -232,7 +231,7 @@ def correct(client, question,  code, prompt):
         - Do not assume if a method exists.
         - Follow the rules provided in pydough.    
         - Return the same output but with the corrected code.
-        An error occurred while processing this code: {extracted_code}. 
+        An error occurred while processing this code: {code}. 
         The error is: '{exception}'. 
         The original question was: '{question}'. 
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")

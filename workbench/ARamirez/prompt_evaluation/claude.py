@@ -11,6 +11,7 @@ class ClaudeModel:
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
 
     def ask_claude_with_stream(self, question, prompt, model, provider):
+        print(question)
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 20000,
@@ -34,6 +35,7 @@ class ClaudeModel:
 
         response = self.brt.invoke_model_with_response_stream(body=body, modelId=modelId, accept=accept, contentType=contentType)
         text_delta = []
+        thinking_delta= []
         stream = response.get('body')
         if stream:
             for event in stream:
@@ -43,7 +45,8 @@ class ClaudeModel:
                     if 'delta' in bytes_data:
                         delta = bytes_data['delta']
                         text_delta.append(delta.get('text', ''))
-
+                        thinking_delta.append(delta.get('thinking', ''))
+        print(f"New sentence {''.join(thinking_delta)}")
         return ''.join(text_delta)
 
     def extract_thinking_and_text(self, response_body):
