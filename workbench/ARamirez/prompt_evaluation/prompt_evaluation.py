@@ -144,7 +144,6 @@ WORDS_MAP = {
     "contains": "CONTAINS",
     "like": "LIKE",
     "join_strings": "JOIN_STRINGS",
-    "year": "YEAR",
     "month": "MONTH",
     "day": "DAY",
     "hour": "HOUR",
