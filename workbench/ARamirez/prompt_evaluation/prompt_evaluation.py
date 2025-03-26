@@ -356,12 +356,12 @@ def main(git_hash):
         #formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
-        questions_df['combined'] = questions_df['question'] + " " + questions_df['instruction']
+        questions_df['combined'] = questions_df['question'] + " " + questions_df['instructions']
 
         # Convert the 'combined' column into a list
         combined_list = questions_df['combined'].tolist()
 
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["combined_list"].tolist(), args.temperature,database_content,script_content)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content)
 
         # Save responses
         questions_df["response"] = responses
