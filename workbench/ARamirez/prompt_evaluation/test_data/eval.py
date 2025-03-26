@@ -196,13 +196,13 @@ def query_sqlite_db(
         # round floats to decimal_points
         if decimal_points:
             df = df.round(decimal_points)
-        return df
+        return df, None
     except Exception as e:
         if cur:
             cur.close()
         if conn:
             conn.close()
-        raise e
+        return None, str(e)
     
 def process_row(row, db_path):
     extracted_code = row.get('extracted_python_code')
@@ -214,7 +214,10 @@ def process_row(row, db_path):
         result, exception = execute_code_and_extract_result(extracted_code, local_env)
         
         if result is not None:
-            extracted_sql = query_sqlite_db(row["sql"], db_path)
+            extracted_sql, db_exception = query_sqlite_db(row["sql"], db_path)
+            if extracted_sql is None:
+                return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
+
             comparison_result = compare_df(result, extracted_sql,query_category="a", question="a")
             
             return 'Match' if comparison_result else 'No Match', None

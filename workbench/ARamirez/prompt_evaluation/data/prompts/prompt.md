@@ -107,43 +107,27 @@ This code:
 
 Question: 3. Find the top 3 shipping modes with highest shipping volume for each year. Return year, shipping mode and shipping volume, order by year and shipping volume
 Let me analyze this request:
-
-We need to identify the top 3 shipping modes for each year based on shipping volume.
-
-Shipping volume likely refers to the sum of quantities.
-
-The year refers to the year in the order_date.
-
-We need to use the lines collection, as it contains both shipping mode and quantity.
+1. We need to identify the top 3 shipping modes for each year based on shipping volume.
+2. Shipping volume likely refers to the sum of quantities.
+3. The year refers to the year in the order_date.
+4. We need to use the lines collection, as it contains both shipping mode and quantity.
 
 My approach:
-
-First, I'll calculate the shipping volume for each year.
-
-Then, I'll use PARTITION to group by year.
-
-Within each year, I'll identify the top 3 shipping modes by volume using ranking.
-
-I'll extract the ship_mode from the lines collection and the year from order_date in the orders collection.
+1. First, I'll calculate the shipping volume for each year.
+2. Then, I'll use PARTITION to group by year.
+3. Within each year, I'll identify the top 3 shipping modes by volume 4.using ranking.
+4. I'll extract the ship_mode from the lines collection and the year from order_date in the orders collection.
 
 Here’s the step-by-step approach:
 
-Calculate the shipping volume for each shipping mode per year:
-
-Extract the year from the order_date in the orders collection linked to each line item.
-
-Group the data by year.
-
-Sum up the quantities for each group.
-
-Identify the top 3 shipping modes for each year:
-
-Use the partitioned collection (grouped by year).
-
-Within each partition (year), rank the shipping modes by total quantity.
-
-Select the top 3 shipping modes for each year.
-
+1. Calculate the shipping volume for each shipping mode per year:
+2. Extract the year from the order_date in the orders collection linked to each line item.
+3. Group the data by year.
+4. Sum up the quantities for each group.
+5. Identify the top 3 shipping modes for each year:
+6. Use the partitioned collection (grouped by year).
+7. Within each partition (year), rank the shipping modes by total quantity.
+8. Select the top 3 shipping modes for each year.
 Let's implement this:
 
 ```python
@@ -151,7 +135,6 @@ Let's implement this:
 shipping_data = lines.CALCULATE(
     order_year= YEAR(order.order_date)
 )
-
 # Group by year, calculate the sum of quantities
 shipping_volume = PARTITION(
     shipping_data,
@@ -161,7 +144,6 @@ shipping_volume = PARTITION(
     order_year=order_year,
     total_quantity=SUM(ship_group.quantity)
 )
-
 # For each year, find the top 3 shipping modes
 top_modes_by_year = shipping_volume.year_group.CALCULATE(
     year= YEAR(order.order_date),
