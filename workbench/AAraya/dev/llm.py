@@ -180,14 +180,14 @@ class LLMClient:
             return follow_up
         new_query = (
             f"You solved this question: {result.original_question}. using this code: {result.code}. "
-            f"Now that you have solved the first part, follow up the question by adding: '{follow_up}'. "
+            f"This is the result:  {result.df}. "
+            f"Now that you have solved the first part, now solve this question: '{follow_up}'. "
         )
         return self.ask(new_query)
     
-    def ask(self, question):
+    def ask(self, question, is_corrected = False):
         """Generates a response using aisuite and returns a Result object."""
-        # Initialize the result object to ensure it is always created
-        result = Result(original_question=question)
+        result = Result(original_question=question)  # Initialize the result object
         try:
             # Look up the most similar question in the dictionary with a threshold of 60%.
             match = process.extractOne(
@@ -228,7 +228,7 @@ class LLMClient:
                 question = self.discourse(*question)
             messages = [
                 {"role": "system", "content": formatted_prompt}, 
-                {"role": "user", "content": question}
+                {"role": "user", "content": f"{question}. Let´s solve the query step by step"}
             ]
             completion = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model}",
@@ -252,18 +252,14 @@ class LLMClient:
             pydough_df = self.get_pydough_code(extracted_code)
             result.df = pydough_df
             result.sql = pydough_sql
-            if result.exception is not None:
-                print("Solving an issue in the code, please wait.")
-                corrected_result = self.correct(result)
-                if corrected_result.exception is not None:
-                    print("Unable to resolve the issue. Returning the failed result.")
-                    return corrected_result
-                return corrected_result
             return result
         except Exception as e:
             result.exception = traceback.format_exc()
-            return result
-        
+            if not is_corrected:
+                print("Solvin an issue in the code...")
+                return self.correct(result)
+            return result  
+
     def correct(self, result):
         """Try to correct a Result object if an exception exists."""
         if result.exception:
@@ -274,20 +270,15 @@ class LLMClient:
                     database_content=self.database, 
                     recomendation=""
                 )
-                # create base prompt to request error fix
                 corrective_question = (
                     f"An error occurred while processing this code: {result.code}. "
                     f"The error is: '{result.exception}'. "
                     f"The original question was: '{result.original_question}'. "
-                    f"Can you help me fix the issue? Take in account the context: '{formatted_prompt}'. "
+                    f"Can you help me fix the issue? Take into account the context: '{formatted_prompt}'. "
                 )
-                # Generate and return a new result
-                corrected_result = self.ask(corrective_question)
+                corrected_result = self.ask(corrective_question, is_corrected=True)
                 return corrected_result
             except Exception as e:
-                # Return a new Result object with the new exception
                 return Result(original_question=result.original_question, exception=e)
-        else:
-            # If no exception, return the original result
-            return result
+        return result
 # %%
