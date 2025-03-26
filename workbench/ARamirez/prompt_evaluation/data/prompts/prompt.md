@@ -104,4 +104,69 @@ This code:
 1. Starts with the `customers` collection
 2. Filters to only include customers where `HASNOT(orders)==1`, meaning they have no orders
 3. Uses `CALCULATE` to return only the customer names
+
+Question: 3. Find the top 3 shipping modes with highest shipping volume for each year. Return year, shipping mode and shipping volume, order by year and shipping volume
+Let me analyze this request:
+
+We need to identify the top 3 shipping modes for each year based on shipping volume.
+
+Shipping volume likely refers to the sum of quantities.
+
+The year refers to the year in the order_date.
+
+We need to use the lines collection, as it contains both shipping mode and quantity.
+
+My approach:
+
+First, I'll calculate the shipping volume for each year.
+
+Then, I'll use PARTITION to group by year.
+
+Within each year, I'll identify the top 3 shipping modes by volume using ranking.
+
+I'll extract the ship_mode from the lines collection and the year from order_date in the orders collection.
+
+Here’s the step-by-step approach:
+
+Calculate the shipping volume for each shipping mode per year:
+
+Extract the year from the order_date in the orders collection linked to each line item.
+
+Group the data by year.
+
+Sum up the quantities for each group.
+
+Identify the top 3 shipping modes for each year:
+
+Use the partitioned collection (grouped by year).
+
+Within each partition (year), rank the shipping modes by total quantity.
+
+Select the top 3 shipping modes for each year.
+
+Let's implement this:
+
+```python
+# Calculate year
+shipping_data = lines.CALCULATE(
+    order_year= YEAR(order.order_date)
+)
+
+# Group by year, calculate the sum of quantities
+shipping_volume = PARTITION(
+    shipping_data,
+    name="year_group",
+    by=order_year
+).CALCULATE(
+    order_year=order_year,
+    total_quantity=SUM(ship_group.quantity)
+)
+
+# For each year, find the top 3 shipping modes
+top_modes_by_year = shipping_volume.year_group.CALCULATE(
+    year= YEAR(order.order_date),
+    ship_mode= ship_mode,
+    total_quantity= total_quantity
+).WHERE(RANKING(by=total_quantity.DESC(), allow_ties=False, levels=1) <= 3).ORDER_BY(year.ASC(), total_quantity.DES())
+```
 </examples>
