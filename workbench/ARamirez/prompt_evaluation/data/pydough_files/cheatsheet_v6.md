@@ -432,6 +432,8 @@ result = TPCH.CALCULATE(
 )
 ```
 
+**Good Example #1**: Access the package cost of the most recent package ordered by each person. This is valid because even though `.packages` is plural with regards to `People`, the filter done will ensure that there is only one record for each record of `People`, so `.SINGULAR()` is valid. 
+
 ```
 most_recent_package = packages.WHERE(
     RANKING(by=order_date.DESC(), levels=1) == 1
@@ -445,6 +447,30 @@ People.CALCULATE(
 )
 ```
 
+**Good Example #2**: Access the email of the current occupant of each address that has the name `"John Smith"` (no middle name). This is valid if it is safe to assume that each address only has one current occupant named `"John Smith"` without a middle name.
+
+```
+js = current_occupants.WHERE(
+    (first_name == "John") &  
+    (last_name == "Smith") & 
+    ABSENT(middle_name)
+).SINGULAR()
+Addresses.CALCULATE(
+    address_id,
+    john_smith_email=DEFAULT_TO(js.email, "NO JOHN SMITH LIVING HERE")
+)
+```
+
+**Bad Example #1**: This is invalid primarily because of two reasons:
+1. Each `Addresses` might have multiple `current_occupants` named `John`, therefore the use of `.SINGULAR()`, though it would not raise an exception, is invalid.
+2. Even if, `current_occupants` were non-plural after using `SINGULAR`, `packages` is a plural sub-collection of `current_occupants`, therefore, the data being accessed would be plural with regards to `Addresses`.
+```
+Addresses.CALCULATE(
+    package_id=current_occupants.WHERE(
+        first_name == "John"
+    ).SINGULAR().packages.package_id
+)
+```
 ## **BINARY OPERATORS**
 
 ### **Arithmetic**
