@@ -180,6 +180,7 @@ class LLMClient:
             return follow_up
         new_query = (
             f"You solved this question: {result.original_question}. using this code: {result.code}. "
+            f"This is the result:  {result.df}. "
             f"Now that you have solved the first part, follow up the question by adding: '{follow_up}'. "
         )
         return self.ask(new_query)
@@ -228,7 +229,7 @@ class LLMClient:
                 question = self.discourse(*question)
             messages = [
                 {"role": "system", "content": formatted_prompt}, 
-                {"role": "user", "content": question}
+                {"role": "user", "content": f"{question}. Let´s solve the query step by step"}
             ]
             completion = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model}",
@@ -252,13 +253,6 @@ class LLMClient:
             pydough_df = self.get_pydough_code(extracted_code)
             result.df = pydough_df
             result.sql = pydough_sql
-            if result.exception is not None:
-                print("Solving an issue in the code, please wait.")
-                corrected_result = self.correct(result)
-                if corrected_result.exception is not None:
-                    print("Unable to resolve the issue. Returning the failed result.")
-                    return corrected_result
-                return corrected_result
             return result
         except Exception as e:
             result.exception = traceback.format_exc()
