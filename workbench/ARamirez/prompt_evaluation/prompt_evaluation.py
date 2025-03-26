@@ -162,8 +162,6 @@ WORDS_MAP = {
     "calculate": "CALCULATE",
     "asc": "ASC",
     "desc": "DESC",
-    "datetime": "DATETIME",
-    "datediff": "DATEDIFF"
 }
 
 def replace_with_upper(text):
