@@ -522,7 +522,7 @@ Customers(country\_code = phone\[:3\])
     
 
 ## **STRING FUNCTIONS**
-
+**Important**: These are functions not methos so make sure to call it right
 *   LOWER(s): Converts string to lowercase.Example: LOWER(name) → "apple".
     
 *   UPPER(s): Converts string to uppercase.Example: UPPER(name) → "APPLE".
