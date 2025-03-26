@@ -356,7 +356,12 @@ def main(git_hash):
         #formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
+        questions_df['combined'] = questions_df['question'] + " " + questions_df['instruction']
+
+        # Convert the 'combined' column into a list
+        combined_list = questions_df['combined'].tolist()
+
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["combined_list"].tolist(), args.temperature,database_content,script_content)
 
         # Save responses
         questions_df["response"] = responses
@@ -369,7 +374,7 @@ def main(git_hash):
             folder_path = f"./results/{args.provider}/{args.model_id}/test"
             os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+            output_file, responses= compare_output(folder_path,output_file, "./test_data/broker.db")
             total_rows = len(responses)
 
             counts = responses['comparison_result'].dropna().value_counts()
