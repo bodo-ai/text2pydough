@@ -106,7 +106,7 @@ class OtherAIProvider(AIProvider):
         ]
 
         try:
-            time.sleep(0.9)  # Simulate slight delay
+            time.sleep(0.5)  # Simulate slight delay
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
@@ -290,7 +290,7 @@ def process_question_wrapper(args):
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=2) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=10) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
