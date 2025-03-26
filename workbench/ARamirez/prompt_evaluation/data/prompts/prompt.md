@@ -27,7 +27,6 @@ To generate the PyDough code snippet, follow these steps:
 1. Carefully analyze the provided natural language description to identify the database query or manipulation required. Extract the main components, such as collections, fields, and operations.
 
 2. Generate PyDough code that:
-   - Uses only the provided pydough methods in the Pydough Reference File.
    - Uses clear and concise syntax, adhering to the correct functions, parameters, and structure outlined in the PyDough Reference File.
    - Avoids the bad examples referenced in the PyDough Reference File.
    - Properly references fields and tables as defined in the Database Structure Reference File.
