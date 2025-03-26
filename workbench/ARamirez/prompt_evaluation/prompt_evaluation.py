@@ -386,7 +386,7 @@ def main(git_hash):
             questions_df = pd.read_csv("./TPCH Queries - All Queries.csv", encoding="utf-8")
             
             # Process questions
-            responses = process_questions(args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature)
+            responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
             questions_df["response"] = responses
             output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
