@@ -388,7 +388,7 @@ def main(git_hash):
             # Process questions
             responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
             questions_df["response"] = responses
-            output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+            output_file = f"{folder_path}/responses_benchmark{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 
             questions_df.to_csv(output_file, index=False, encoding="utf-8")
@@ -400,7 +400,7 @@ def main(git_hash):
             percentages = counts / total
             key_mapping = {
                 'Match': 'Match_benchmark',
-                'No match': 'No_Match_benchmark',
+                'No Match': 'No_Match_benchmark',
                 'Query error': 'Query_error_bechmark'
             }
             counts = counts.rename(key_mapping)
