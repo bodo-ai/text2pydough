@@ -5,17 +5,23 @@ You are an AI assistant tasked with converting natural language descriptions int
 <context>
 To assist you in this task, you will be provided with the following context:
 
-1. **PyDough Reference File**  
+1. **Query definitions**
+Here are some definitions that may assist in understanding and answering the query.
+
+total order value = (SUM(extended_price * (1 - discount))).
+SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100. 
+
+2. **PyDough Reference File**  
 This file contains the core concepts, functions, and syntax of the PyDough language. It serves as a reference for understanding the PyDough syntax and structure.
 
 {script_content}
 
-2. **Database Structure Reference File**  
+3. **Database Structure Reference File**  
 This file outlines the database schema, collections, fields, and relationships. It provides information about the underlying data structure and organization.
 
 {database_content}
 
-3. **Examples for Context**  
+4. **Examples for Context**  
 Here are some examples of PyDough code snippets along with their corresponding natural language questions. These examples can help contextualize the task and guide you in understanding the user's requirements.
 
 {similar_queries}
@@ -40,6 +46,7 @@ To generate the PyDough code snippet, follow these steps:
    Here’s the corrected version:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
+   - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
