@@ -7,7 +7,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995, 1998 and 1999. You need to use SINGULAR function to call every year in the final result. 
+  - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result. 
 
   - If you need to use an attribute of a previous collection, you must have calculated the attribute using CALCULATE.
 
@@ -345,8 +345,19 @@ SINGULAR in PyDough ensures data is explicitly treated as singular in sub-collec
 
 ### **Examples**
 ```
+region_order_values_1996 = regions.CALCULATE(
+    region_name=name,
+    total_order_value=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1996).total_price)
+).TOP_K(1, by=total_order_value.DESC())
+
+region_order_values_1997 = regions.CALCULATE(
+    region_name=name,
+    total_order_value=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1997).total_price)
+).TOP_K(1, by=total_order_value.DESC())
+
 result = TPCH.CALCULATE(
-    year_1995=region_order_values_1995.SINGULAR().total_order_value,
+    year_1996=region_order_values_1996.SINGULAR().total_order_value,
+    year_1997=region_order_values_1997.SINGULAR().total_order_value
 )
 ```
 
