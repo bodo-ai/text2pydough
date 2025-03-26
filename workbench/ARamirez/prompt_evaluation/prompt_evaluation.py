@@ -356,7 +356,7 @@ def main(git_hash):
         #formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
 
         # Process questions
-        questions_df['instructions'] = questions_df['instruction'].fillna('')
+        questions_df['instructions'] = questions_df['instructions'].fillna('')
 
         questions_df['combined'] = questions_df['question'] + " " + questions_df['instructions']
 
