@@ -46,15 +46,13 @@ To generate the PyDough code snippet, follow these steps:
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 5. Enclose the generated PyDough code in a Python code block.
-
-6. ALWAYS provide an explanation of the code, as shown in the examples.
 {recomendation}
 </instructions>
 
 <examples>
 Here's how we analyse and create Pydough queries:
 
-Question: 1. Top 5 States by Average Occupants:
+Question: Top 5 States by Average Occupants:
 Let's break down the task:
 
 1. For each address, we need to identify how many current occupants it has
@@ -78,7 +76,7 @@ Answer: Now let's implement this:
   ).TOP_K(5, by=avg_occupants.DESC())
   ```
 
-Question: 2. Find the customers name who never placed orders.
+Question: Find the customers name who never placed orders.
 Let's analyze this request:
 
 We need to find the customers who have never placed orders. This means we need to:
