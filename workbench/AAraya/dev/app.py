@@ -53,7 +53,7 @@ client = st.session_state.client
         
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
-st.title("PyDough LLM Demo v2")
+st.title("PyDough LLM Demo vDev")
 
 st.markdown(
     """
