@@ -217,7 +217,9 @@ with col1:
         st.session_state.messages.append({"role": "user", "content": query})
 
         query_id = len(st.session_state.messages)  # Unique ID per query
-        client = LLMClient()
+        if "client" not in st.session_state:
+            st.session_state.client = LLMClient()
+        client = st.session_state.client
 
         try:
             # Determine if this is a follow-up query
@@ -259,7 +261,6 @@ with col1:
     new_definition = st.text_input("Add a variable definition (e.g., revenue = price * quantity):", key="var_def_input")
 
     if new_definition:
-        client = LLMClient()  # Or reuse the instance if already available
         client.add_definition(new_definition)
         st.success("✅ Definition successfully added to the client.")
 
@@ -271,7 +272,10 @@ with col1:
         st.session_state.active_query = None
         st.session_state.last_query_id = None
         st.session_state.show_chat = False 
-        st.session_state.query_placeholder = "Ask a query about the TPCH database..."  
+        st.session_state.query_placeholder = "Ask a query about the TPCH database..."
+        print("📦 Current definitions:", client.definitions)
+        st.session_state.client.definitions = []
+        print("📦 Current definitions:", client.definitions)
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
