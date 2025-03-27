@@ -9,8 +9,8 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/broker_graph.json", "Broker")
-pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/broker.db",  check_same_thread=False)
+pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/tpch_demo_graph.json", "TPCH")
+pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db",  check_same_thread=False)
 
 
 
