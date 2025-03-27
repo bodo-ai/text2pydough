@@ -253,7 +253,16 @@ with col1:
         except Exception as e:
             full_traceback = traceback.format_exc()  
             st.error("❌ Error running query. See full traceback below:")
-            st.code(full_traceback, language="python")  
+            st.code(full_traceback, language="python")
+        
+        with st.form("definition_form", clear_on_submit=True):
+            new_definition = st.text_input("Add a variable definition (e.g., revenue = price * quantity):")
+            define_submitted = st.form_submit_button("➕ Add Definition")
+
+        if define_submitted:
+            client = LLMClient()  # Or reuse if already instantiated
+            client.add_definition(new_definition)
+            st.success("✅ Definition successfully added to the client.")  
 
     # Reset button
     if st.button("🔄 Restart"):
