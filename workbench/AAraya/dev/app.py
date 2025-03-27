@@ -1,6 +1,6 @@
 import streamlit as st
 import traceback
-from llm import LLMClient
+from llm_v2 import LLMClient
 
 # --- Simple Password gate ---
 CORRECT_PASSWORD = "pydoughdemo"
