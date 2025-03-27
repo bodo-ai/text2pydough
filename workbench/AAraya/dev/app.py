@@ -25,7 +25,7 @@ if not st.session_state.authenticated:
     st.stop()
     
 # Set page config for wide layout
-st.set_page_config(page_title="PyDough LLM Demo v2", layout="wide", page_icon="bodo_icon.png")
+st.set_page_config(page_title="PyDough LLM Demo vDev", layout="wide", page_icon="bodo_icon.png")
 
 # Add custom CSS to style the dropdown
 st.markdown("""
@@ -258,12 +258,16 @@ with col1:
             full_traceback = traceback.format_exc()  
             st.error("❌ Error running query. See full traceback below:")
             st.code(full_traceback, language="python")
+            
+    if st.session_state.get("clear_var_def_input", False):
+        st.session_state["var_def_input"] = ""
+        st.session_state["clear_var_def_input"] = False
         
     new_definition = st.text_input("Add a variable definition...", key="var_def_input")
 
     if new_definition:
         client.add_definition(new_definition)
-        st.success("✅ Definition successfully added to the client.")
+        st.toast("✅ Definition successfully added.")
 
     # Reset button
     if st.button("🔄 Restart"):
@@ -275,6 +279,7 @@ with col1:
         st.session_state.show_chat = False 
         st.session_state.query_placeholder = "Ask a query about the TPCH database..."
         st.session_state.client.definitions = []
+        st.session_state["clear_var_def_input"] = True
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
