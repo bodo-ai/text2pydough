@@ -80,7 +80,7 @@ def replace_with_upper(text):
     # Replace the matched words using the replacer function
     return re.sub(r'\b\w+\b', replacer, text)
 
-def format_prompt(script_content, prompt, data, question, database_content):
+def format_prompt(script_content, prompt, data, question, database_content, definitions):
     ids = data[question]["context_id"]
     # contexts = (
     #     open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}") else ''
@@ -91,6 +91,7 @@ def format_prompt(script_content, prompt, data, question, database_content):
         script_content=script_content,
         database_content=database_content,
         similar_queries="",
+        definitions=definitions,
         recomendation=prompt_string
     )
 
@@ -130,9 +131,12 @@ def read_file(file_path):
 
 class LLMClient:
     def __init__(
-        self, database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
-        prompt_file='../../ARamirez/prompt_evaluation/data/prompts/prompt.md', 
-        script_file="../../ARamirez/prompt_evaluation/data/pydough_files/cheatsheet_v6.md", temperature=0.0
+        self, 
+        database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
+        prompt_file='./prompt.md', 
+        script_file="../../ARamirez/prompt_evaluation/data/pydough_files/cheatsheet_v6.md", 
+        temperature=0.0,
+        definitions=""
     ):
         """
         Initializes the LLMClient with the provider and model.
@@ -153,6 +157,7 @@ class LLMClient:
         self.script = read_file(script_file)
         self.database = read_file(database_file)
         self.temperature = temperature
+        self.definitions = definitions
         
     def get_pydough_sql(self, text):
         try:
@@ -201,20 +206,21 @@ class LLMClient:
                 best_match, score, *_ = match  # Unpack answer
                 if score >= 60:  # If similarity score is 60% or more
                     # Use the most similar question found
-                    database_content = self.database
                     formatted_prompt = format_prompt(
                         self.script,
                         self.prompt,
                         demo_dict,
                         best_match,  # Most similar key found
-                        database_content
+                        self.database,
+                        self.definitions
                     )
                 else:
                     # If no adequate match is found, use the standard prompt
                     formatted_prompt = self.prompt.format(
                         script_content=self.script,
                         database_content=self.database,
-                        similar_queries="", 
+                        similar_queries="",
+                        definitions=self.definitions,
                         recomendation=""
                     )
             else:
@@ -222,7 +228,8 @@ class LLMClient:
                 formatted_prompt = self.prompt.format(
                     script_content=self.script, 
                     database_content=self.database,
-                    similar_queries="", 
+                    similar_queries="",
+                    definitions=self.definitions,
                     recomendation=""
                 )
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
