@@ -26,7 +26,6 @@ Here are some definitions that may assist in understanding and answering the que
 total order value = sum of extended_price * (1 - discount).
 SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100. 
 Revenue = (Quantity) * (Extended Price) * (1 - Discount) * (1 + Tax)
-
 </context>
 
 <instructions>
@@ -49,7 +48,6 @@ To generate the PyDough code snippet, follow these steps:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided
-   - Analyze whether the definition is necessary to use.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
