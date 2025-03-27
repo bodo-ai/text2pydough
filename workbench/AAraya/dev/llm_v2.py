@@ -133,7 +133,7 @@ class LLMClient:
     def __init__(
         self, 
         database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
-        prompt_file='./prompt.md', 
+        prompt_file='./prompt_v2.md', 
         script_file="../../ARamirez/prompt_evaluation/data/pydough_files/cheatsheet_v6.md", 
         temperature=0.0,
         definitions=""
@@ -276,6 +276,7 @@ class LLMClient:
                     script_content=self.script, 
                     similar_queries="", 
                     database_content=self.database, 
+                    definitions=self.definitions,
                     recomendation=""
                 )
                 corrective_question = (
