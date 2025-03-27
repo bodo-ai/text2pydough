@@ -45,7 +45,7 @@ To generate the PyDough code snippet, follow these steps:
 
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
-5. Enclose the generated PyDough code in a Python code block.
+5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
 {recomendation}
 </instructions>
 
@@ -103,4 +103,40 @@ This code:
 1. Starts with the `customers` collection
 2. Filters to only include customers where `HASNOT(orders)==1`, meaning they have no orders
 3. Uses `CALCULATE` to return only the customer names
+
+Question: What is the total order value in Brazil in 1992? Total order value is defined as the sum of extended_price * (1 - discount) Return the name and the total order value.
+Let's analyze this request:
+
+1. Find the total order value in Brazil in 1992
+2. Return the nation name and the total order value
+
+First, I need to understand what "total order value" means. From the provided definitions:
+> total order value = sum of extended_price * (1 - discount)
+
+Now, let's think about how to build this query:
+
+1. Start with `nations` and filter for "BRAZIL"
+2. From Brazil, access `customers`
+3. From customers, access `orders`
+4. Filter orders to only include those from 1992
+5. From filtered orders, access `lines`
+6. Calculate line_value as extended_price * (1 - discount)
+7. Sum up these line_values to get the total order value for Brazil in 1992
+
+From the database structure:
+- Nations have a name field, so I can filter for "BRAZIL"
+- Nations have customers, and customers have orders
+- Orders have line items (lines) that have extended_price and discount
+
+Let's create the PyDough code:
+```python
+brazil_total_order_value = nations.WHERE(name == "BRAZIL").CALCULATE(
+    nation_name=name,
+    total_order_value=SUM(
+        customers.orders.WHERE(YEAR(order_date) == 1992).lines.CALCULATE(
+            line_value=extended_price * (1 - discount)
+        ).line_value
+    )
+)
+```
 </examples>
