@@ -269,7 +269,7 @@ with col1:
         st.toast("✅ Definition added!")
         st.write("Definitions:", client.definitions)
         st.session_state.definition_added_at = time.time()
-        st.session_state.var_def_input = ""
+        st.session_state["var_def_input"] = ""
         st.rerun()
     
     if "definition_added_at" in st.session_state:
