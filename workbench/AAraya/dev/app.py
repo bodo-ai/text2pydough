@@ -1,6 +1,5 @@
 import streamlit as st
 import traceback
-import time
 from llm_v2 import LLMClient
 
 # --- Simple Password gate ---
@@ -262,21 +261,12 @@ with col1:
             st.code(full_traceback, language="python")
         
     st.text_input("Add a variable definition (e.g., revenue = price * quantity):", key="var_def_input")
+    new_definition = st.session_state.get("var_def_input", "")
 
-    if st.session_state.get("var_def_input"):
-        client.add_definition(st.session_state.var_def_input)
-        st.toast("✅ Definition added!")
+    if new_definition:
+        client.add_definition(new_definition)
+        st.toast("✅ Definition successfully added to the client.")
         st.write("Definitions:", client.definitions)
-        st.session_state.definition_added_at = time.time()
-        st.session_state.clear_definition_input = True
-        st.rerun()
-    
-    if "definition_added_at" in st.session_state:
-        elapsed = time.time() - st.session_state.definition_added_at
-        if elapsed < 3:
-            st.success("✅ Definition successfully added to the client.")
-        else:
-            del st.session_state.definition_added_at
 
     # Reset button
     if st.button("🔄 Restart"):
@@ -288,9 +278,6 @@ with col1:
         st.session_state.show_chat = False 
         st.session_state.query_placeholder = "Ask a query about the TPCH database..."
         st.session_state.client.definitions = []
-        st.session_state["clear_definition_input"] = True
-        if "definition_added_at" in st.session_state:
-            del st.session_state.definition_added_at
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
