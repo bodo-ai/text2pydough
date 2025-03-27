@@ -1,6 +1,6 @@
 import streamlit as st
 import traceback
-from llm import LLMClient
+from llm_v2 import LLMClient
 
 # --- Simple Password gate ---
 CORRECT_PASSWORD = "pydoughdemo"
@@ -18,7 +18,7 @@ if not st.session_state.authenticated:
     if submitted:
         if password == CORRECT_PASSWORD:
             st.session_state.authenticated = True
-            st.rerun()  # ✅ aquí es donde cambias
+            st.rerun() 
         else:
             st.error("❌ Incorrect password. Please try again.")
 
