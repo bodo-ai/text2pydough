@@ -5,26 +5,28 @@ You are an AI assistant tasked with converting natural language descriptions int
 <context>
 To assist you in this task, you will be provided with the following context:
 
-1. **Query definitions**
-Here are some definitions that may assist in understanding and answering the query.
-
-total order value = (SUM(extended_price * (1 - discount))).
-SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100. 
-
-2. **PyDough Reference File**  
+1. **PyDough Reference File**  
 This file contains the core concepts, functions, and syntax of the PyDough language. It serves as a reference for understanding the PyDough syntax and structure.
 
 {script_content}
 
-3. **Database Structure Reference File**  
+2. **Database Structure Reference File**  
 This file outlines the database schema, collections, fields, and relationships. It provides information about the underlying data structure and organization.
 
 {database_content}
 
-4. **Examples for Context**  
+3. **Examples for Context**  
 Here are some examples of PyDough code snippets along with their corresponding natural language questions. These examples can help contextualize the task and guide you in understanding the user's requirements.
 
 {similar_queries}
+
+4. **Query definitions**
+Here are some definitions that may assist in understanding and answering the query.
+
+total order value = sum of extended_price * (1 - discount).
+SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100. 
+Revenue = (Quantity) * (Extended Price) * (1 - Discount) * (1 + Tax)
+
 </context>
 
 <instructions>
@@ -47,6 +49,7 @@ To generate the PyDough code snippet, follow these steps:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided
+   - Analyze whether the definition is necessary to use.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
@@ -54,13 +57,14 @@ To generate the PyDough code snippet, follow these steps:
 
 5. Enclose the generated PyDough code in a Python code block.
 
+6. ALWAYS give an explanation of the code step by step.
 {recomendation}
 </instructions>
 
 <examples>
 Here's how we analyse and Pydough queries:
 
-Question: 1. Top 5 States by Average Occupants:
+Question: Top 5 States by Average Occupants:
 Let's break down the task:
 
 1. For each address, we need to identify how many current occupants it has
@@ -84,7 +88,7 @@ Answer: Now let's implement this:
   ).TOP_K(5, by=avg_occupants.DESC())
   ```
 
-Question: 2. Find the customers name who never placed orders.
+Question: Find the customers name who never placed orders.
 Let's analyze this request:
 
 We need to find the customers who have never placed orders. This means we need to:
@@ -111,4 +115,40 @@ This code:
 1. Starts with the `customers` collection
 2. Filters to only include customers where `HASNOT(orders)==1`, meaning they have no orders
 3. Uses `CALCULATE` to return only the customer names
+
+Question: What is the total order value in Brazil in 1992? Return the name and the total order value.
+Let's analyze this request:
+
+1. Find the total order value in Brazil in 1992
+2. Return the nation name and the total order value
+
+First, I need to understand what "total order value" means. From the provided definitions:
+> total order value = sum of extended_price * (1 - discount)
+
+Now, let's think about how to build this query:
+
+1. Start with `nations` and filter for "BRAZIL"
+2. From Brazil, access `customers`
+3. From customers, access `orders`
+4. Filter orders to only include those from 1992
+5. From filtered orders, access `lines`
+6. Calculate line_value as extended_price * (1 - discount)
+7. Sum up these line_values to get the total order value for Brazil in 1992
+
+From the database structure:
+- Nations have a name field, so I can filter for "BRAZIL"
+- Nations have customers, and customers have orders
+- Orders have line items (lines) that have extended_price and discount
+
+Let's create the PyDough code:
+```python
+brazil_total_order_value = nations.WHERE(name == "BRAZIL").CALCULATE(
+    nation_name=name,
+    total_order_value=SUM(
+        customers.orders.WHERE(YEAR(order_date) == 1992).lines.CALCULATE(
+            line_value=extended_price * (1 - discount)
+        ).line_value
+    )
+)
+```
 </examples>
