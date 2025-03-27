@@ -46,6 +46,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+if "client" not in st.session_state:
+    st.session_state.client = LLMClient()
+
+client = st.session_state.client
+        
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
 st.title("PyDough LLM Demo v2")
@@ -217,9 +222,6 @@ with col1:
         st.session_state.messages.append({"role": "user", "content": query})
 
         query_id = len(st.session_state.messages)  # Unique ID per query
-        if "client" not in st.session_state:
-            st.session_state.client = LLMClient()
-        client = st.session_state.client
 
         try:
             # Determine if this is a follow-up query
