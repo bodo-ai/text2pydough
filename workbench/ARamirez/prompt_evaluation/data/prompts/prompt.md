@@ -60,7 +60,7 @@ To generate the PyDough code snippet, follow these steps:
 </instructions>
 
 <examples>
-Here's how we analyse and Pydough queries:
+Here's how we analyse and create Pydough queries:
 
 Question: Top 5 States by Average Occupants:
 Let's break down the task:
