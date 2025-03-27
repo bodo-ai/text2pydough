@@ -19,7 +19,7 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from rapidfuzz import fuzz, process
 pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"./test_data/tpch.db", check_same_thread=False)
+pydough.active_session.connect_database("sqlite", database=f"../demo/test_data/tpch.db", check_same_thread=False)
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
@@ -136,7 +136,7 @@ class LLMClient:
         prompt_file='./prompt_v2.md', 
         script_file="../../ARamirez/prompt_evaluation/data/pydough_files/cheatsheet_v6.md", 
         temperature=0.0,
-        definitions=""
+        definitions=[]
     ):
         """
         Initializes the LLMClient with the provider and model.
@@ -158,6 +158,13 @@ class LLMClient:
         self.database = read_file(database_file)
         self.temperature = temperature
         self.definitions = definitions
+
+    def add_definition(self, new_definition):
+        """Add a new definition to definitions list."""
+        if not new_definition:
+            return "You need to provide a new definition."
+        self.definitions.append(new_definition)
+        print(f"The new definition has been added to the definition list.")
         
     def get_pydough_sql(self, text):
         try:
@@ -191,9 +198,10 @@ class LLMClient:
         )
         return self.ask(new_query)
     
-    def ask(self, question, is_corrected = False):
+    def ask(self, question, is_corrected = True):
         """Generates a response using aisuite and returns a Result object."""
         result = Result(original_question=question)  # Initialize the result object
+
         try:
             # Look up the most similar question in the dictionary with a threshold of 60%.
             match = process.extractOne(
