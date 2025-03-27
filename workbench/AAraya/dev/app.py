@@ -145,7 +145,6 @@ def update_dropdown_selection(query_id):
     st.session_state.selected_output[dropdown_key] = st.session_state[dropdown_key]
     st.session_state.should_rerun = True
 
-    
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
 if st.button("📋 Examples"):
@@ -260,13 +259,11 @@ with col1:
             st.error("❌ Error running query. See full traceback below:")
             st.code(full_traceback, language="python")
         
-    st.text_input("Add a variable definition (e.g., revenue = price * quantity):", key="var_def_input")
-    new_definition = st.session_state.get("var_def_input", "")
+    new_definition = st.text_input("Add a variable definition...", key="var_def_input")
 
     if new_definition:
         client.add_definition(new_definition)
-        st.toast("✅ Definition successfully added to the client.")
-        st.write("Definitions:", client.definitions)
+        st.success("✅ Definition successfully added to the client.")
 
     # Reset button
     if st.button("🔄 Restart"):
