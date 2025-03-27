@@ -178,7 +178,7 @@ with col1:
 
     # Display chat history in left panel after first query.
     if st.session_state.show_chat:
-        with st.container(height=350, border=False):
+        with st.container(height=420, border=False):
             for idx, message in enumerate(st.session_state.messages):
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
