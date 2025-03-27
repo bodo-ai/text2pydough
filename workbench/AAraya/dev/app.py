@@ -18,7 +18,7 @@ if not st.session_state.authenticated:
     if submitted:
         if password == CORRECT_PASSWORD:
             st.session_state.authenticated = True
-            st.rerun()  # ✅ aquí es donde cambias
+            st.rerun() 
         else:
             st.error("❌ Incorrect password. Please try again.")
 
