@@ -1,6 +1,6 @@
 import streamlit as st
 import traceback
-from llm import LLMClient
+from llm_v2 import LLMClient
 
 # --- Simple Password gate ---
 CORRECT_PASSWORD = "pydoughdemo"
@@ -18,7 +18,7 @@ if not st.session_state.authenticated:
     if submitted:
         if password == CORRECT_PASSWORD:
             st.session_state.authenticated = True
-            st.rerun()  # ✅ aquí es donde cambias
+            st.rerun() 
         else:
             st.error("❌ Incorrect password. Please try again.")
 
@@ -84,47 +84,48 @@ def show_examples():
     st.write("You can **copy** any of the examples by hovering on top of the query and clicking the copy button on the right side. Then paste it into the query box!")
 
     query_pairs = [
-        (
-            "Total customers & suppliers per nation, ordered by nation name.",
-            "Which nation has the most customers?"
-        ),
-        (
-            "Top 5 nations with most customer orders in 1995.",
-            "What was the total revenue from each of these nations in 1995?"
-        ),
-        (
-            "Region with highest total order value in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
-            "What was the average order value in that region?"
-        ),
-        (
-            "Top 3 regions with most distinct customers.",
-            "What’s the total order count per region?"
-        ),
-        (
-            "Customers & order count in 1995 (Europe) with balance > $700.",
-            "How many of them placed follow-up orders in 1996?"
-        ),
-        (
-            "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
-            "What was their total spend on green products?"
-        ),
-        (
-            "Customers with more orders in 1995 than 1994.",
-            "What was the percentage increase in orders per customer?"
-        ),
-        (
-            "Avg. order value per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
-            "Order nations by average order value, lowest first."
-        ),
-        (
-            "Customers with >30 orders, showing name & total order count.",
-            "Also include their account balance."
-        ),
-        (
-            "Orders from 1998 with total price > $100, sorted by price.",
-            "Which customers placed these high-value orders?"
-        ),
-    ]
+    (
+        "Total customers & suppliers per nation, ordered by nation name.",
+        "Which nation has the most customers?"
+    ),
+    (
+        "Top 5 nations with most customer orders in 1995.",
+        "What was the total revenue from each of these nations in 1995?"
+    ),
+    (
+        "Region with highest total revenue in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
+        "What was the average revenue per order in that region?"
+    ),
+    (
+        "Top 3 regions with most distinct customers.",
+        "What’s the total order count per region?"
+    ),
+    (
+        "Customers & order count in 1995 (Europe) with balance > $700.",
+        "How many of them placed follow-up orders in 1996?"
+    ),
+    (
+        "Top 10 customers who bought 'green' products in 1998 (with quantity & address).",
+        "What was their total spend on green products?"
+    ),
+    (
+        "Customers with more orders in 1995 than 1994.",
+        "What was the percentage increase in orders per customer?"
+    ),
+    (
+        "Avg. revenue per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
+        "Order nations by average revenue, lowest first."
+    ),
+    (
+        "Customers with >30 orders, showing name & total order count.",
+        "Also include their account balance."
+    ),
+    (
+        "Orders from 1998 with total price > $100, sorted by price.",
+        "Which customers placed these high-value orders?"
+    ),
+]
+
 
     for original, follow_up in query_pairs:
         st.markdown("**Query:**")
@@ -253,7 +254,14 @@ with col1:
         except Exception as e:
             full_traceback = traceback.format_exc()  
             st.error("❌ Error running query. See full traceback below:")
-            st.code(full_traceback, language="python")  
+            st.code(full_traceback, language="python")
+        
+    new_definition = st.text_input("Add a variable definition (e.g., revenue = price * quantity):", key="var_def_input")
+
+    if new_definition:
+        client = LLMClient()  # Or reuse the instance if already available
+        client.add_definition(new_definition)
+        st.success("✅ Definition successfully added to the client.")
 
     # Reset button
     if st.button("🔄 Restart"):
