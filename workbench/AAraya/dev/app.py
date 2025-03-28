@@ -25,7 +25,7 @@ if not st.session_state.authenticated:
     st.stop()
     
 # Set page config for wide layout
-st.set_page_config(page_title="PyDough LLM Demo v2", layout="wide", page_icon="bodo_icon.png")
+st.set_page_config(page_title="PyDough LLM Demo vDev", layout="wide", page_icon="bodo_icon.png")
 
 # Add custom CSS to style the dropdown
 st.markdown("""
@@ -46,9 +46,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+if "client" not in st.session_state:
+    st.session_state.client = LLMClient()
+
+client = st.session_state.client
+        
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
-st.title("PyDough LLM Demo v2")
+st.title("PyDough LLM Demo vDev")
 
 st.markdown(
     """
@@ -140,7 +145,6 @@ def update_dropdown_selection(query_id):
     st.session_state.selected_output[dropdown_key] = st.session_state[dropdown_key]
     st.session_state.should_rerun = True
 
-    
 
 st.markdown('<p style="margin-top:10px;">Don\'t know what to write? Check out some examples</p>', unsafe_allow_html=True)
 if st.button("📋 Examples"):
@@ -174,7 +178,7 @@ with col1:
 
     # Display chat history in left panel after first query.
     if st.session_state.show_chat:
-        with st.container(height=350, border=False):
+        with st.container(height=500, border=False):
             for idx, message in enumerate(st.session_state.messages):
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
@@ -217,7 +221,6 @@ with col1:
         st.session_state.messages.append({"role": "user", "content": query})
 
         query_id = len(st.session_state.messages)  # Unique ID per query
-        client = LLMClient()
 
         try:
             # Determine if this is a follow-up query
@@ -255,13 +258,16 @@ with col1:
             full_traceback = traceback.format_exc()  
             st.error("❌ Error running query. See full traceback below:")
             st.code(full_traceback, language="python")
+            
+    if st.session_state.get("clear_var_def_input", False):
+        st.session_state["var_def_input"] = ""
+        st.session_state["clear_var_def_input"] = False
         
-    new_definition = st.text_input("Add a variable definition (e.g., revenue = price * quantity):", key="var_def_input")
+    new_definition = st.text_input("Add a variable definition...", key="var_def_input")
 
     if new_definition:
-        client = LLMClient()  # Or reuse the instance if already available
         client.add_definition(new_definition)
-        st.success("✅ Definition successfully added to the client.")
+        st.toast("✅ Definition successfully added.")
 
     # Reset button
     if st.button("🔄 Restart"):
@@ -271,7 +277,9 @@ with col1:
         st.session_state.active_query = None
         st.session_state.last_query_id = None
         st.session_state.show_chat = False 
-        st.session_state.query_placeholder = "Ask a query about the TPCH database..."  
+        st.session_state.query_placeholder = "Ask a query about the TPCH database..."
+        st.session_state.client.definitions = []
+        st.session_state["clear_var_def_input"] = True
         st.rerun()
 
 # ---------------------- RIGHT PANE: DISPLAY OUTPUT ----------------------
