@@ -46,7 +46,7 @@ class ClaudeModel:
                         delta = bytes_data['delta']
                         text_delta.append(delta.get('text', ''))
                         thinking_delta.append(delta.get('thinking', ''))
-        #print(f"New sentence {''.join(thinking_delta)}")
+        print(f"New sentence {''.join(thinking_delta)}")
         return ''.join(text_delta)
 
     def extract_thinking_and_text(self, response_body):
