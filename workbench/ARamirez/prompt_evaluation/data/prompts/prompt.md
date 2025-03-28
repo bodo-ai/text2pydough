@@ -19,17 +19,6 @@ This file outlines the database schema, collections, fields, and relationships. 
 Here are some examples of PyDough code snippets along with their corresponding natural language questions. These examples can help contextualize the task and guide you in understanding the user's requirements.
 
 {similar_queries}
-
-4. **Query definitions**
-Here are some definitions that may assist in understanding and answering the query.
-
-[
-    "Total Order Value is defined as the sum of extended_price * (1 - discount).",
-    "Aggregate Revenue is defined as the sum of LineItem_ExtendedPrice minus the sum of LineItem_Discount.",
-    "Average Revenue per Ship Date is defined as the sum of revenue divided by the count of distinct ship dates.",
-    "Partial Revenue is defined as quantity * extended_price * (1 - discount).",
-    "Profit is defined as revenue minus cost."
-]
 </context>
 
 <instructions>
@@ -51,7 +40,6 @@ To generate the PyDough code snippet, follow these steps:
    Here’s the corrected version:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
-   - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
