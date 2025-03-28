@@ -224,6 +224,123 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
       pct_of_packages=100.0 * COUNT(packages) / total_packages,
   )
     ```
+**Good Example #1**: Find every unique state.
+
+```
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(state)
+```
+
+**Good Example #2**: For every state, count how many addresses are in that state.
+```
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(
+    state,
+    n_addr=COUNT(addrs)
+)
+```
+
+**Good Example #3**: For every city/state, count how many people live in that city/state.
+```
+PARTITION(Addresses, name="addrs", by=(city, state)).CALCULATE(
+    state,
+    city,
+    n_people=COUNT(addrs.current_occupants)
+)
+```
+
+**Good Example #4**: Find the top 5 years with the most people born in that year who have yahoo email accounts, listing the year and the number of people.
+```
+yahoo_people = People.CALCULATE(
+    birth_year=YEAR(birth_date)
+).WHERE(ENDSWITH(email, "@yahoo.com"))
+PARTITION(yahoo_people, name="yah_ppl", by=birth_year).CALCULATE(
+    birth_year,
+    n_people=COUNT(yah_ppl)
+).TOP_K(5, by=n_people.DESC())
+```
+
+**Good Example #5**: Identify the states whose current occupants account for at least 1% of all packages purchased. List the state and the percentage. Notice how `total_packages` is down-streamed from the graph-level `CALCULATE`.
+```
+GRAPH.CALCULATE(
+    total_packages=COUNT(Packages)
+).PARTITION(Addresses, name="addrs", by=state).CALCULATE(
+    state,
+    pct_of_packages=100.0 * COUNT(addrs.current_occupants.package) / total_packages
+).WHERE(pct_of_packages >= 1.0)
+```
+
+**Good Example #6**: Identify which months of the year have numbers of packages shipped in that month that are above the average for all months.
+```
+pack_info = Packages.CALCULATE(order_month=MONTH(order_date))
+month_info = PARTITION(pack_info, name="packs", by=order_month).CALCULATE(
+    n_packages=COUNT(packs)
+)
+GRAPH.CALCULATE(
+    avg_packages_per_month=AVG(month_info.n_packages)
+).PARTITION(pack_info, name="packs", by=order_month).CALCULATE(
+    month,
+).WHERE(COUNT(packs) > avg_packages_per_month)
+```
+
+**Good Example #7**: Find the 10 most frequent combinations of the state that the person lives in and the first letter of that person's name. Notice how `state` can be used as a partition key of `people_info` since it was made available via down-streaming.
+```
+people_info = Addresses.CALCULATE(state).current_occupants.CALCULATE(
+    first_letter=first_name[:1],
+)
+PARTITION(people_info, name="ppl", by=(state, first_letter)).CALCULATE(
+    state,
+    first_letter,
+    n_people=COUNT(ppl),
+).TOP_K(10, by=n_people.DESC())
+```
+
+**Good Example #8**: Same as good example #8, but written differently so it will include people without a current address (their state is listed as `"N/A"`).
+```
+people_info = People.CALCULATE(
+    state=DEFALT_TO(current_address.state, "N/A"),
+    first_letter=first_name[:1],
+)
+PARTITION(people_info, name="ppl", by=(state, first_letter)).CALCULATE(
+    state,
+    first_letter,
+    n_people=COUNT(ppl),
+).TOP_K(10, by=n_people.DESC())
+```
+
+**Good Example #9**: Partition the current occupants of each address by their birth year and filter to include individuals born in years with at least 10,000 births. For each such person, list their first/last name and the state they live in. This is valid because `state` was down-streamed to `people_info` before it was partitioned, so when `ppl` is accessed, it still has access to `state`.
+```
+people_info = Addresses.CALCULATE(state).current_occupants.CALCULATE(birth_year=YEAR(birth_date))
+GRAPH.PARTITION(people_info, name="ppl", by=birth_year).WHERE(
+    COUNT(p) >= 10000
+).ppl.CALCULATE(
+    first_name,
+    last_name,
+    state
+)
+```
+
+**Good Example #10**: Find all packages that meet the following criteria: they were ordered in the last year that any package in the database was ordered, their cost was below the average of all packages ever ordered, and the state it was shipped to received at least 10,000 packages that year.
+```
+package_info = Packages.CALCULATE(
+    order_year=YEAR(order_date),
+    shipping_state=shipping_address.state
+)
+GRAPH.CALCULATE(
+    avg_cost=AVG(package_info.package_cost),
+    final_year=MAX(package_info.order_year),
+).PARTITION(
+    package_info.WHERE(order_year == final_year),
+    name="packs",
+    by=shipping_state
+).WHERE(
+    COUNT(packs) > 10000
+).packs.WHERE(
+    package_cost < avg_cost
+).CALCULATE(
+    shipping_state,
+    package_id,
+    order_date,
+)
+```
 
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the email property is referenced, which is not one of the properties accessible by the partition.
