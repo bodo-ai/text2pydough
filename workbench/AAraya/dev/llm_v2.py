@@ -9,6 +9,7 @@ import aisuite as ai
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+import time
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
@@ -145,7 +146,7 @@ class LLMClient:
         # default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         
         default_provider = "google"
-        default_model = "gemini-2.0-flash-001"
+        default_model = "gemini-2.5-pro-exp-03-25"
         
         # default_provider = "aws-deepseek"
         # default_model = "us.deepseek.r1-v1:0"
@@ -246,6 +247,7 @@ class LLMClient:
                 {"role": "system", "content": formatted_prompt}, 
                 {"role": "user", "content": f"{question}. Let´s solve the query step by step"}
             ]
+            start = time.time()
             completion = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model}",
                 messages=messages,
@@ -253,10 +255,13 @@ class LLMClient:
                 topK=0,
                 topP=0
             )
+            end = time.time()
+            print(f"model time: {end-start}")
             # Extract and process the response
             response = completion.choices[0].message.content
             extracted_code = extract_python_code(response)
             extracted_code = replace_with_upper(extracted_code)
+         
             # Fill the result object
             result.code = extracted_code
             result.full_explanation = response
@@ -264,8 +269,11 @@ class LLMClient:
             result.cheat_sheet = self.script
             result.knowledge_graph = self.database
             print(extracted_code)
+            start = time.time()
             pydough_sql = self.get_pydough_sql(extracted_code)
             pydough_df = self.get_pydough_code(extracted_code)
+            end = time.time()
+            print(f"pydough time: {end-start}")
             result.df = pydough_df
             result.sql = pydough_sql
             return result
