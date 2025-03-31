@@ -194,7 +194,7 @@ class LLMClient:
         new_query = (
             f"You solved this question: {result.original_question}. using this code: {result.code}. "
             f"This is the result:  {result.df}. "
-            f"Now that you have solved the first part, now solve this question: '{follow_up}'. "
+            f"Now that you have solved the first part, now solve this question: '{follow_up}'. IMPORTANT: If you need any of the above code, you have to declare it again because it does not exist in memory. "
         )
         return self.ask(new_query)
     
