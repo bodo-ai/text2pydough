@@ -134,7 +134,7 @@ class LLMClient:
         self, 
         database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
         prompt_file='./prompt_v2.md', 
-        script_file="../../ARamirez/prompt_evaluation/data/pydough_files/cheatsheet_v6.md", 
+        script_file="./cheatsheet_v6.md", 
         temperature=0.0,
         definitions=[]
     ):
@@ -145,7 +145,7 @@ class LLMClient:
         # default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         
         default_provider = "google"
-        default_model = "gemini-2.0-flash-001"
+        default_model = "gemini-2.5-pro-exp-03-25"
         
         # default_provider = "aws-deepseek"
         # default_model = "us.deepseek.r1-v1:0"
