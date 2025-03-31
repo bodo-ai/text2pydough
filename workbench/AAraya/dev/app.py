@@ -103,7 +103,7 @@ def show_examples():
     ),
     (
         "Top 3 regions with most distinct customers.",
-        "What’s the total order count per region?"
+        "What’s the total order count for these regions?"
     ),
     (
         "Customers & order count in 1995 (Europe) with balance > $700.",
