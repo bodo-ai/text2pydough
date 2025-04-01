@@ -75,8 +75,8 @@ First, let me think about the relationships in the database:
 - `Addresses` contains all addreses.
 
 So to count occupants per all addresses, we need to:
-1. Access the `Addresses` collection and count the number of occupants per address
-2. Partition the addresses by region and calculate the average of occupants per state
+1. Partition the addresses by region and calculate the average of occupants per state
+2. Access the `Addresses` collection and count the number of occupants per address
 3. Select the top 5
 
 Answer: Now let's implement this:
