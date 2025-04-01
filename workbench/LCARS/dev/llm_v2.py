@@ -18,8 +18,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from rapidfuzz import fuzz, process
-pydough.active_session.load_metadata_graph(f"../../AAraya/demo/test_data/tpch.db", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f, check_same_thread=False)
+pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
+pydough.active_session.connect_database("sqlite", database=f"../../AAraya/demo/test_data/tpch.db", check_same_thread=False)
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
