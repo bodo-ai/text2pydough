@@ -1,6 +1,6 @@
 ### The high-level graph `TPCH` collection contains the following columns:
 **WARNING**:
-TPCH is used ONLY for performing calculations, such as average, sum, count, etc. Do not use it for anything else.
+TPCH should be used only for operations like computing averages, totals, frequencies, sum, etc. Do not use it for any other purposes. Also, avoid starting with TPCH unless you need to perform an operation.
 - **customers**: A list of all customer.
 - **lines**: A list of all lines items.
 - **nations**: A list of all nations.
