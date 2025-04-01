@@ -17,7 +17,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales)` is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
-  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
+  - PARTITION function ALWAYS need 2 parameters `name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `nations.PARTTION(name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
 
   - PARTITION must always be used as a method. Never do PARTITION by the key or the collection key.
   
@@ -177,14 +177,12 @@ Aggregations Function does not support calling aggregations inside of aggregatio
 Group records by keys.  
 
 ### **Syntax**
-PARTITION(Collection, name='group_name', by=(key1, key2))  
+PARTITION(name='group_name', by=(key1, key2))  
 
 ### **Rules**: 
-- The `name` argument is a string indicating the name that is to be used when accessing the partitioned data.
-- Al the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the GROUP_BY. As opposed to any other term, which needs the name because that is the context.
+- All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the PARTITION.
 - Partition keys must be scalar fields from the collection. 
 - You must use Aggregation functions to call plural values inside PARTITION.
-- Within a partition, you must use the `name` argument to be able to access any property or subcollections. 
 
 ### **Good Examples**  
 
