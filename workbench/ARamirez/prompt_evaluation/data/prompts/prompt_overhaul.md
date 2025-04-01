@@ -80,11 +80,10 @@ So to count occupants per all addresses, we need to:
 3. Select the top 5
 
 Answer: Now let's implement this:
-  ```python
-  addr_info = Addresses.CALCULATE(state=state)  
-  result= addr_info.PARTITION(name="addrs", by=state).CALCULATE(  
+  ```python 
+  result= Addresses.PARTITION(name="addrs", by=state).CALCULATE(  
       state=state,  
-      avg_occupants=AVG(COUNT(Addresses.current_occupants))  
+      avg_occupants=AVG(Addresses.CALCULATE(n_occupants=COUNT(current_occupants)).current_occupants )  
   ).TOP_K(5, by=avg_occupants.DESC())
   ```
 
