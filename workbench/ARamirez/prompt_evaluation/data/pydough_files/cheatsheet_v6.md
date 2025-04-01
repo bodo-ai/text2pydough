@@ -224,6 +224,27 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
       pct_of_packages=100.0 * COUNT(packages) / total_packages,
   )
     ```
+  - **For every part of the market segment find the total quantity sold**: 
+  ```
+  # Step 1: Filter lines for 1998 and gather necessary info (segment, part name, quantity)
+  # Navigate from lines -> order -> customer -> mktsegment and lines -> part -> name
+  lines_1998_info = lines.WHERE(YEAR(order.order_date) == 1998).CALCULATE(
+      mktsegment = order.customer.mktsegment,
+      part_name = part.name,
+      line_quantity = quantity 
+  )
+
+  # Step 2: Group by market segment and part name, summing the quantity
+  # PARTITION the filtered lines info by segment and part name
+  part_totals_per_segment = lines_1998_info.PARTITION(
+      name="part_segment_groups", by=(mktsegment, part_name)
+  ).CALCULATE(
+      mktsegment = mktsegment,
+      part_name = part_name,
+      # SUM the quantity from the original collection context within the PARTITION group
+      total_quantity = SUM(lines.quantity)
+  )
+  ```
 
   - **Good Example #1**: Find every unique state.
   ```
