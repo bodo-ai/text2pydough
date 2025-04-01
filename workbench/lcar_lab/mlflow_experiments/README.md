@@ -65,7 +65,17 @@ export DEEPSEEK_API_KEY="your-deepseek-api-key"
 Run the script with the following command:
 
 ```bash
-python prompt_evaluation.py <script_file> <database_structure> <prompt_file> <questions_csv> <provider> <model_id>
+python prompt_evaluation.py \
+  --script_file path/to/your/script.py \
+  --database_structure path/to/database_structure.md \
+  --prompt_file path/to/prompt_file.md \
+  --questions_csv path/to/questions.csv \
+  --provider provider \
+  --model_id your_model_id \
+  --temperature 0.0 \
+  --eval_results \
+  --no-eval_benchmark \
+  --num_threads 4
 ```
 **Arguments:**
 
