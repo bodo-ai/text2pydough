@@ -225,7 +225,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
         pct_of_packages=100.0 * COUNT(packages) / total_packages,
     )
     ```
-  - **For every part of the market segment find the total quantity sold**: 
+  - **For every part of the market segment find the total quantity sold**: Notice that you need to access the lines collection again after performing the PARTITION in part_totals_per_segment. After applying PARTITION, it’s necessary to re-access the collection is you a data from the collection.
     ```
     # Step 1: Filter lines for 1998 and gather necessary info (segment, part name)
     # Navigate from lines -> order -> customer -> mktsegment and lines -> part -> name
