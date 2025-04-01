@@ -10,6 +10,18 @@ TPCH should be used only for operations like computing averages, totals, frequen
 - **suppliers**: A list of all suppliers
 - **supply_records**: A list of all supply records for suppliers and parts.
 
+#### Examples:
+##### Getting the total count of orders:
+To get the total orders:
+```
+total_orders = TPCH.CALCULATE(total_orders= COUNT(orders))
+```
+
+##### Getting the Total Average for Customers with a Positive Balance
+To calculate the average balance for customers with a positive balance
+```
+TPCH.CALCULATE(global_avg_balance=AVG(selected_customers.WHERE(acctbal > 0.0).acctbal))
+```
 ### The `customers` collection contains the following columns:
 - **acctbal**: The account balance of the customer.
 - **address**: The address of the customer.
@@ -107,78 +119,72 @@ TPCH should be used only for operations like computing averages, totals, frequen
 - **part**: The corresponding part for this supply record (reverse of `parts.supply_records`).
 - **supplier**: The corresponding supplier for this supply record (reverse of `suppliers.supply_records`).
 
-### Getting the total count of orders:
-To get the total orders:
-```python
-total_orders = TPCH.CALCULATE(total_orders= COUNT(orders))
-```
-
 ### Retrieving Customers for a Nation
 To get all customers from a specific nation:
-```python
+```
 nation_customers = nations.customers.CALCULATE(acctbal, address, comment, key, mktsegment, name, nation_key, phone)
 ```
 
 ### Retrieving the Region for a Nation
 For each nation, the corresponding region can be accessed as follows:
-```python
+```
 nation_region = nations.region.CALCULATE(commnet, key, name)
 ```
 
 ### Retrieving Nations for a Region
 To get all nations within a specific region:
-```python
+```
 region_nations = regions.nations.CALCULATE(comment, key, name, region_key)
 ```
 
 ### Retrieving the Customer for an Order
 For each order, the corresponding customer can be accessed as follows:
-```python
+```
 customer_for_order = orders.customer.CALCULATE(acctbal, address, comment, key, mktsegment, name, nation_key, phone)
 ```
 This allows you to navigate from an order to the customer who placed it.
 
 ### Retrieving Orders per Customer
 To join all the orders for each customer:
-```python
+```
 orders_per_customer = customers.orders.CALCULATE(order_key, customer_key, order_status, total_price, order_date, order_priority, clerk, ship_priority, comment)
 ```
 
 ### Retrieving Orders in each nation
 To join all the orders you have to join first each customer in each nation like this:
-```python
+```
 orders_per_customer_in_each_nation = nations.customers.orders.CALCULATE(order_key, customer_key, order_status,total_price, order_date, order_priority, clerk, ship_priority, comment)
 ```
 
 ### Retrieving Suppliers for a Nation
 To retrieve all suppliers located in a given nation:
-```python
+```
 suppliers_in_nation = nations.suppliers.CALCULATE(account_balance, address, comment, key, name, nation_key, phone)
 ```
 ### Retrieving Lines for an Order
 To retrieve all line items for a given order:
-```python
+```
 lines_for_order = orders.lines.CALCULATE(comment, commit_date, discount, extended_price, line_number, order_key, part_key, quantity, receipt_date, return_flag, ship_date, ship_instruct, ship_mode, status, supplier_key, tax)
 ```
 ### Retrieving the Order for a Line
 To retrieve the order associated with a line item, you can query the lines object with the necessary fields:
-```python
+```
 order_for_line = lines.order.CALCULATE(order_key, customer_key, order_status, total_price, order_date, order_priority, clerk, ship_priority, comment)
 ```
 ### Retrieving Parts for a Supplier
 To retrieve all parts supplied by a specific supplier:
-```python
+```
 parts_for_supplier = suppliers.supply_records.part.CALCULATE(brand, comment, container, key, manufacturer, name, part_type, retail_price, size)
 ```
 
 ### Retrieving Suppliers for a Part
 To retrieve all suppliers that supply a specific part
-```python
+```
 suppliers_for_part = parts.supply_records.supplier.CALCULATE(account_balance, address, comment, key, name, nation_key, phone)
 ```
 
 ### Retrieving Suppliers for a Nation
 To retrieve all suppliers located in a given nation:
-```python
+```
 suppliers_in_nation = nations.suppliers.CALCULATE(account_balance, address, comment, key, name, nation_key, phone)
 ```
