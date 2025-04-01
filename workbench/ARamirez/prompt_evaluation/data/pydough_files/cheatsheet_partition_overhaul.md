@@ -19,7 +19,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
 
-  - PARTITION must always be used as a method. Never partition by the foreign key or the collection key.
+  - PARTITION must always be used as a method. Never do PARTITION by the key or the collection key.
   
   - CALCULATE function ALWAYS needs an expression, not a collection. For example, you cannot do: `nations.CALCULATE(nation_name=name, top_suppliers=suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection. 
 
@@ -379,15 +379,37 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
 
 ## **8. WINDOW FUNCTIONS**  
 
+Window functions in PyDough have an optional `per` argument. If this argument is omitted, it means that the window function applies to all records of the current collection (e.g. rank all customers). If it is provided, it should be a string that describes which ancestor of the current context the window function should be calculated with regards to, and in that case it means that the set of values used by the window function should be per-record of the correspond ancestor (e.g. rank all customers per-nation).
+
+If there are multiple ancestors of the current context with the same name, the `per` string should include a suffix `:idx` where `idx` specifies which ancestor with that name to use (`1` = the most recent, `2` = the 2nd most recent, etc.) For example, consider the following:
+
+```
+order_info = Orders.CALCULATE(y=YEAR(order_date), m=MONTH(order_date))
+p1 = order_info.PARTITION(name="groups", by=(y, m))
+p2 = p1.(name="groups", by=(y))
+data = p2.groups.Orders
+
+# Ranks each order per year/month by its total price.
+# The full ancestry is p2 [name=groups] -> p1 [name=groups] -> order_info [name=Orders],
+# So "groups:1" means the window function should be computed with regards to p1
+# since it is the most recent ancestor with the name "groups".
+data.CALCULATE(r=RANKING(by=total_price.DESC(), per="groups:1"))
+
+# Ranks each order per year by its total price.
+# The full ancestry is p2 [name=groups] -> p1 [name=groups] -> order_info [name=Orders],
+# So "groups:2" means the window function should be computed with regards to p2
+# since it is the 2nd most recent ancestor with the name "groups".
+data.CALCULATE(r=RANKING(by=total_price.DESC(), per="groups:2"))
+```
 ### **RANKING:**  
 #### **Syntax**
-RANKING(by=field.DESC(), levels=1, allow_ties=False)  
+RANKING(by=field.DESC(), per='collection', allow_ties=False)  
 
 #### **Parameters**
     
 - by: Ordering criteria (e.g., acctbal.DESC()).
         
-- levels: Hierarchy level (e.g., levels=1 for per-nation ranking). Must be a positive integer.
+- per: Hierarchy level (e.g.,per="nation" for per-nation ranking). Must be an ancestor of the current context.
         
 - allow\_ties (default False): Allow tied ranks.
         
@@ -395,48 +417,44 @@ RANKING(by=field.DESC(), levels=1, allow_ties=False)
         
 #### **Examples**
 ``` 
-# (no levels) rank every customer relative to all other customers
-Regions.nations.customers.CALCULATE(r=RANKING(...))
+# Rank every customer relative to all other customers byacctbal
+Regions.nations.customers.CALCULATE(r=RANKING(by=acctbal.DESC()))
 
-# (levels=1) rank every customer relative to other customers in the same nation
-Regions.nations.customers.CALCULATE(r=RANKING(..., levels=1))
+# Rank every customer relative to other customers in the same nation, by acctbal
+Regions.nations.customers.CALCULATE(r=RANKING(by=acctbal.DESC(), per="nations"))
 
-# (levels=2) rank every customer relative to other customers in the same region
-Regions.nations.customers.CALCULATE(r=RANKING(..., levels=2))
-
-# (levels=3) rank every customer relative to all other customers
-Regions.nations.customers.CALCULATE(r=RANKING(..., levels=3))
+# Rank every customer relative to other customers in the same region, by acctbal
+Regions.nations.customers.CALCULATE(r=RANKING(by=acctbal.DESC(), per="Regions"))
 
 # Rank customers per-nation by their account balance
 # (highest = rank #1, no ties)
-Nations.customers.CALCULATE(r = RANKING(by=acctbal.DESC(), levels=1))
+Nations.customers.CALCULATE(r = RANKING(by=acctbal.DESC(), per="Nations"))
 
 # For every customer, finds their most recent order
 # (ties allowed)
-Customers.orders.WHERE(RANKING(by=order_date.DESC(), levels=1, allow_ties=True) == 1)
+Customers.orders.WHERE(RANKING(by=order_date.DESC(), per="Customers", allow_ties=True) == 1)
 ```
 
 ### **PERCENTILE:**  
 
 #### **Syntax**
-PERCENTILE(by=field.ASC(), n_buckets=100)  
+PERCENTILE(by=field.ASC(), n_buckets=100, per="name_antecesor")  
 
 #### **Parameters**
     
 - by: Ordering criteria.
         
-- levels: Hierarchy level.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
         
 - n\_buckets (default 100): Number of percentile buckets.
         
 #### **Example**
 ``` 
-Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n\_buckets=1000) == 1000).
-```
-  
-Filter top 5% by account balance:  
-``` 
-Customers.WHERE(PERCENTILE(by=acctbal.ASC()) > 95)
+# Keep the top 0.1% of customers with the highest account balances.
+Customers.WHERE(PERCENTILE(by=acctbal.ASC(), n_buckets=1000) == 1000)
+
+# For every region, find the top 5% of customers with the highest account balances.
+Regions.nations.customers.WHERE(PERCENTILE(by=acctbal.ASC(), per="Regions") > 95)
 ```
 
 ### **RELSUM:**
@@ -445,7 +463,7 @@ The `RELSUM` function returns the sum of multiple rows of a singular expression 
 
 #### **Parameters:**
 - `expression`: the singular expression to take the sum of across multiple rows.
-- `levels` (optional): optional argument (default `None`) for the same `levels` argument as all other window functions.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
 
 #### **Examples**
 ```
@@ -455,7 +473,7 @@ Customers.CALCULATE(ratio=acctbal / RELSUM(acctbal))
 
 # Finds the ratio between each customer's account balance and the sum of all
 # all customers' account balances within that nation.
-Nations.customers.CALCULATE(ratio=acctbal / RELSUM(acctbal, levels=1))
+Nations.customers.CALCULATE(ratio=acctbal / RELSUM(acctbal, per="Nations"))
 ```
 
 ### **RELAVG:**
@@ -464,7 +482,7 @@ The `RELAVG` function returns the average of multiple rows of a singular express
 
 #### **Parameters:**
 - `expression`: the singular expression to take the average of across multiple rows.
-- `levels` (optional): optional argument (default `None`) for the same `levels` argument as all other window functions.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
 
 #### **Examples**
 ```
@@ -473,8 +491,8 @@ The `RELAVG` function returns the average of multiple rows of a singular express
 Customers.WHERE(acctbal > RELAVG(acctbal))
 
 # Finds all customers whose account balance is above the average of all
-# ustomers' account balances within that nation.
-Nations.customers.WHERE(acctbal > RELAVG(acctbal, levels=1))
+# customers' account balances within that nation.
+Nations.customers.WHERE(acctbal > RELAVG(acctbal, per="Nations"))
 ```
 
 ### **RELCOUNT:**
@@ -483,7 +501,7 @@ The `RELCOUNT` function returns the number of non-null records in multiple rows 
 
 #### **Parameters:**
 - `expression`: the singular expression to count the number of non-null entries across multiple rows.
-- `levels` (optional): optional argument (default `None`) for the same `levels` argument as all other window functions.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
 
 #### **Examples**
 ```
@@ -493,7 +511,7 @@ Customers.CALCULATE(ratio = acctbal / RELCOUNT(KEEP_IF(acctbal, acctbal > 0.0)))
 
 # Divides each customer's account balance by the total number of positive
 # account balances in the same nation.
-Nations.customers.CALCULATE(ratio = acctbal / RELCOUNT(KEEP_IF(acctbal, acctbal > 0.0), levels=1))
+Nations.customers.CALCULATE(ratio = acctbal / RELCOUNT(KEEP_IF(acctbal, acctbal > 0.0), per="Nations"))
 ```
 
 ### **RELSIZE:**
@@ -501,7 +519,7 @@ Nations.customers.CALCULATE(ratio = acctbal / RELCOUNT(KEEP_IF(acctbal, acctbal 
 The `RELSIZE` function returns the number of total records, either globally or the number of sub-collection rows per some ancestor collection. The arguments:
 
 #### **Parameters:**
-- `levels` (optional): optional argument (default `None`) for the same `levels` argument as all other window functions.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
 
 #### **Examples**
 ```
@@ -510,7 +528,7 @@ Customers.CALCULATE(ratio = acctbal / RELSIZE())
 
 # Divides each customer's account balance by the number of total customers in
 # that nation.
-Nations.customers.CALCULATE(ratio = acctbal / RELSIZE(levels=1))
+Nations.customers.CALCULATE(ratio = acctbal / RELSIZE(per="Nations"))
 ```
 
 ## **9. CONTEXTLESS EXPRESSIONS**   
