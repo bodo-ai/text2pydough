@@ -286,9 +286,9 @@ def process_question_wrapper(args):
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
 
-def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
+def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content,num_threads):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=num_threads) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
@@ -320,6 +320,8 @@ def main(git_hash):
     parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
     parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not evaluate the TPCH Benchmark")
     parser.add_argument("--config", type=parse_dict, help="Path to the database file.", default=None)
+    parser.add_argument("--num_threads", type=int, help="Set the numbers of threads to the model")
+
 
     # Default value for eval_results and eval_benchmark is False
     parser.set_defaults(eval_results=False, eval_benchmark=False)
@@ -361,7 +363,7 @@ def main(git_hash):
         # Convert the 'combined' column into a list
         combined_list = questions_df['question'].tolist()
 
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads)
 
         # Save responses
         questions_df["response"] = responses
@@ -391,7 +393,7 @@ def main(git_hash):
             questions_df = pd.read_csv("./TPCH Queries - All Queries.csv", encoding="utf-8")
             
             # Process questions
-            responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
+            responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content, args.num_threads)
             questions_df["response"] = responses
             output_file = f"{folder_path}/responses_benchmark{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
