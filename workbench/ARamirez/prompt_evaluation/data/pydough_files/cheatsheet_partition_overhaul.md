@@ -970,30 +970,6 @@ Customers(country\_code = phone\[:3\])
         n_sizes=COUNT(size_groups.WHERE(n_combos > avg_n_combo)),
   )
   ```
-
-* **Identify transactions that are below the average number of shares for transactions of the same combinations of (customer, stock, type), or the same combination of (customer, stock), or the same customer.**
-  ```
-  cust_tick_typ_groups = Transactions.PARTITION(name="ctt_groups", by=(customer_id, ticker_id, transaction_type)).CALCULATE(cus_tick_typ_avg_shares=AVG(Transactions.shares))
-  cust_tick_groups = cust_tick_typ_groups.PARTITION(name="ct_groups", by=(customer_id, ticker_id)
-  ).CALCULATE(cust_tick_avg_shares=AVG(ctt_groups.Transactions.shares))
-  cus_groups = cust_tick_groups.PARTITION(name="c_groups", by=customer_id).CALCULATE(
-      cust_avg_shares=AVG(ct_groups.ctt_groups.Transactions.shares)
-  )
-  cus_groups.ct_groups.ctt_groups.Transactions.WHERE(
-            (shares < cus_tick_typ_avg_shares)
-            & (shares < cust_tick_avg_shares)
-            & (shares < cust_avg_shares)
-        ).CALCULATE(
-            transaction_id,
-            customer.name,
-            ticker.symbol,
-            transaction_type,
-            cus_tick_typ_avg_shares,
-            cust_tick_avg_shares,
-            cust_avg_shares,
-        ).ORDER_BY(transaction_id.ASC())
-  ```
-
 ## **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
