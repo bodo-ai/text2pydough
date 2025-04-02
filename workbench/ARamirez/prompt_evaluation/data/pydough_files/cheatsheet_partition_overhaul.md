@@ -950,7 +950,7 @@ Customers(country\_code = phone\[:3\])
           ).WHERE(RANKING(by=priority_pct.DESC(), per="year_group") == 1).ORDER_BY(year.ASC())
   ```
 *  **What is the ticker symbol, month, average closing price, highest price, lowest price**
-
+  ```
   price_info = DailyPrices.CALCULATE(month=JOIN_STRINGS("-", YEAR(date), LPAD(MONTH(date), 2, "0"))symbol=ticker.symbol,)
   ticker_months = price_info.PARTITION(name="months", by=(symbol, month))
   months = ticker_months.PARTITION(name="symbol", by=symbol).months
@@ -960,6 +960,16 @@ Customers(country\_code = phone\[:3\])
         min_low=MIN(DailyPrices.low),
   )
   result= month_stats.CALCULATE(symbol,month,avg_close,max_high)
+  ```
+
+* **Counts how many part sizes have an above-average number of combinations of part types/containers.**
+  ```
+  combo_groups = Parts.PARTITION(name="groups", by=(size, part_type, container))
+  size_groups = combo_groups.PARTITION(name="sizes", by=size).CALCULATE(n_combos=COUNT(groups))
+  TPCH.CALCULATE(avg_n_combo=AVG(size_groups.n_combos)).CALCULATE(
+        n_sizes=COUNT(size_groups.WHERE(n_combos > avg_n_combo)),
+  )
+  ```
 
 ## **GENERAL NOTES**
 
