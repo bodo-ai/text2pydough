@@ -288,7 +288,7 @@ def process_question_wrapper(args):
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=2) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
@@ -384,11 +384,12 @@ def main(git_hash):
                     percentages,
                 )
             mlflow.log_metric("total_script_queries", total_rows)
+            mlflow.log_artifact(output_file)
 
         if args.eval_benchmark:
             folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
             os.makedirs(folder_path, exist_ok=True)
-            questions_df = pd.read_csv("./TPCH Queries - All Queries.csv", encoding="utf-8")
+            questions_df = pd.read_csv("./benchmark.csv", encoding="utf-8")
             
             # Process questions
             responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
