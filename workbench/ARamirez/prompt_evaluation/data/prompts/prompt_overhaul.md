@@ -80,8 +80,8 @@ So to count occupants per all addresses, we need to:
 2. Access the `Addresses` collection and count the number of occupants per address
 3. Select the top 5
 
-Now let's implement this:
-  ``` 
+Answer: Now let's implement this:
+  ```python 
   result= Addresses.PARTITION(name="addrs", by=state).CALCULATE(  
       state=state,  
       avg_occupants=AVG(Addresses.CALCULATE(n_occupants=COUNT(current_occupants)).current_occupants )  
@@ -104,9 +104,9 @@ To do this:
 1. We can use the `HASNOT` function to check if a customer has no orders
 2. We'll filter the customers using `WHERE(HASNOT(orders)==1)`
 3. Then select just their names using `CALCULATE`
-Here's the PyDough code I'll generate:
+Answer: Here's the PyDough code I'll generate:
 
-```
+```python
 customers_without_orders = customers.WHERE(HASNOT(orders)==1).CALCULATE(
     customer_name=name
 )
@@ -141,7 +141,7 @@ From the database structure:
 - Orders have line items (lines) that have extended_price and discount
 
 Let's create the PyDough code:
-```
+```python
 brazil_total_order_value = nations.WHERE(name == "BRAZIL").CALCULATE(
     nation_name=name,
     total_order_value=SUM(
@@ -150,42 +150,5 @@ brazil_total_order_value = nations.WHERE(name == "BRAZIL").CALCULATE(
         ).line_value
     )
 )
-```
-
-Question: For each year, identify the priority with the highest percentage of made in that year with that priority, listing the year, priority, and percentage. Sort the results by year.
-Let's break down this request:
-
-1. For each year, we need to find the priority with the highest percentage of orders made with that priority in that year.
-2. The output should include the year, the priority, and the percentage.
-3. We need to sort the results by year.
-
-Here are the detailed steps to solve this:
-
-1. First, we'll group orders by year and priority to get counts.
-2. Then, we'll calculate percentages based on yearly totals.
-3. For each year, we'll find the priority with the highest percentage.
-
-Let's create the PyDough code:
-
-```
-# Step 1: Extract year and priority from orders
-order_info = orders.CALCULATE(
-    year = YEAR(order_date),
-    priority = order_priority
-)
-
-# Step 2: Group by year and priority to get counts
-year_priority_counts = order_info.PARTITION(name="year_priority", by=(year, priority)).CALCULATE(
-    year = year,
-    priority = priority,
-    n_orders = COUNT(orders)
-)
-
-# Step 3: Group by year and calculate percentages for each priority within that year
-year_priority_percentages = year_priority_counts.PARTITION(name="year_group", by=year).year_priority.CALCULATE(
-            year,
-            highest_priority=priority,
-            priority_pct=100.0 * n_orders / RELSUM(n_orders, per="year_group"),
-        ).WHERE(RANKING(by=priority_pct.DESC(), per="year_group") == 1).ORDER_BY(year.ASC())
 ```
 </examples>
