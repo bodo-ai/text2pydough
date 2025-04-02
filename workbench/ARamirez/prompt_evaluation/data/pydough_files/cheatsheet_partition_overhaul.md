@@ -927,6 +927,28 @@ Customers(country\_code = phone\[:3\])
       (PERCENTILE(by=COUNT(orders.key).ASC()) <= 25)  
   )
 
+* **For each year, identify the priority with the highest percentage of made in that year with that priority, listing the year, priority, and percentage. Sort the results by year.**
+  ```
+  # Step 1: Extract year and priority from orders
+  order_info = orders.CALCULATE(
+      year = YEAR(order_date),
+      priority = order_priority
+  )
+
+  # Step 2: Group by year and priority to get counts
+  year_priority_counts = order_info.PARTITION(name="year_priority", by=(year, priority)).CALCULATE(
+      year = year,
+      priority = priority,
+      n_orders = COUNT(orders)
+  )
+
+  # Step 3: Group by year and calculate percentages for each priority within that year
+  year_priority_percentages = year_priority_counts.PARTITION(name="year_group", by=year).year_priority.CALCULATE(
+              year,
+              highest_priority=priority,
+              priority_pct=100.0 * n_orders / RELSUM(n_orders, per="year_group"),
+          ).WHERE(RANKING(by=priority_pct.DESC(), per="year_group") == 1).ORDER_BY(year.ASC())
+  ```
 ## **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
