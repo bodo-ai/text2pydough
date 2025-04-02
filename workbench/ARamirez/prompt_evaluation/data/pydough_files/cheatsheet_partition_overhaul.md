@@ -949,7 +949,18 @@ Customers(country\_code = phone\[:3\])
               priority_pct=100.0 * n_orders / RELSUM(n_orders, per="year_group"),
           ).WHERE(RANKING(by=priority_pct.DESC(), per="year_group") == 1).ORDER_BY(year.ASC())
   ```
-  
+*  **What is the ticker symbol, month, average closing price, highest price, lowest price**
+
+  price_info = DailyPrices.CALCULATE(month=JOIN_STRINGS("-", YEAR(date), LPAD(MONTH(date), 2, "0"))symbol=ticker.symbol,)
+  ticker_months = price_info.PARTITION(name="months", by=(symbol, month))
+  months = ticker_months.PARTITION(name="symbol", by=symbol).months
+  month_stats = months.CALCULATE(
+        avg_close=AVG(DailyPrices.close),
+        max_high=MAX(DailyPrices.high),
+        min_low=MIN(DailyPrices.low),
+  )
+  result= month_stats.CALCULATE(symbol,month,avg_close,max_high)
+
 ## **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
