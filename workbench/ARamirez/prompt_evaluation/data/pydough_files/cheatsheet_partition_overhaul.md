@@ -949,6 +949,7 @@ Customers(country\_code = phone\[:3\])
               priority_pct=100.0 * n_orders / RELSUM(n_orders, per="year_group"),
           ).WHERE(RANKING(by=priority_pct.DESC(), per="year_group") == 1).ORDER_BY(year.ASC())
   ```
+  
 ## **GENERAL NOTES**
 
 *   Use &, |, ~ for logical operations (not and, or, not).
