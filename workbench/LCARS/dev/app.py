@@ -115,7 +115,7 @@ def show_examples():
     ),
     (
         "Customers with more orders in 1995 than 1994.",
-        "What was the percentage increase in orders per customer?"
+        "What was the percentage increase in orders for those customers?"
     ),
     (
         "Avg. revenue per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
