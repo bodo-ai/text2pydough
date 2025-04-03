@@ -25,7 +25,7 @@ if not st.session_state.authenticated:
     st.stop()
     
 # Set page config for wide layout
-st.set_page_config(page_title="PyDough LLM Demo vDev", layout="wide", page_icon="bodo_icon.png")
+st.set_page_config(page_title="PyDough LLM Demo v3", layout="wide", page_icon="bodo_icon.png")
 
 # Add custom CSS to style the dropdown
 st.markdown("""
@@ -52,7 +52,7 @@ client = st.session_state.client
         
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
-st.title("PyDough LLM Demo vDev")
+st.title("PyDough LLM Demo v3 (Gemini 2.5)")
 
 st.markdown(
     """
