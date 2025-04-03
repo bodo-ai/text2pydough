@@ -174,13 +174,13 @@ Let's build this step by step:
 
 To do this, I need the high-level graph TPCH as defined in the Database Structure Reference File to obtain the overall average price:
 ```
-TPCH.CALCULATE(
+global_info= TPCH.CALCULATE(
     overall_avg_price=AVG(parts.retail_price)
 )
 ```
 2. Calculate the average retail price per brand:
 ```
-brand_avg_prices = parts.PARTITION(name="brands", by=brand).CALCULATE(
+brand_avg_prices = global_info.parts.PARTITION(name="brands", by=brand).CALCULATE(
     brand_avg_price=AVG(parts.retail_price)
 )
 ```
@@ -188,15 +188,30 @@ brand_avg_prices = parts.PARTITION(name="brands", by=brand).CALCULATE(
 ```
 selected_parts = parts.WHERE(
         (retail_price > brand_avg_price)
-        & (retail_price < global_avg_price)
+        & (retail_price < overall_avg_price)
         & (size < 3)
 )
 selected_brands = brands.WHERE(HAS(selected_parts)==1)
 ```
 4. Now, filter the results to include only the brand and order them by brand. 
 ```
-selected_brands.CALCULATE(brand).ORDER_BY(brand.ASC()) 
+result= selected_brands.CALCULATE(brand).ORDER_BY(brand.ASC()) 
 ```
+
+Let's put it all together:
+global_info= TPCH.CALCULATE(
+    overall_avg_price=AVG(parts.retail_price)
+)
+brand_avg_prices = global_info.parts.PARTITION(name="brands", by=brand).CALCULATE(
+    brand_avg_price=AVG(parts.retail_price)
+)
+selected_parts = parts.WHERE(
+        (retail_price > brand_avg_price)
+        & (retail_price < overall_avg_price)
+        & (size < 3)
+)
+selected_brands = brand_avg_prices.WHERE(HAS(selected_parts)==1)
+result= selected_brands.CALCULATE(brand).ORDER_BY(brand.ASC()) 
 
 This code works as follows:
 1. First, I calculate the `overall_avg_price` across all parts in the database
