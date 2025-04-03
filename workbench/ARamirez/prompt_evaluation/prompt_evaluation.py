@@ -106,7 +106,7 @@ class OtherAIProvider(AIProvider):
         ]
 
         try:
-            time.sleep(0.5)  # Simulate slight delay
+            time.sleep(0.9)  # Simulate slight delay
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
