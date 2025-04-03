@@ -151,4 +151,63 @@ brazil_total_order_value = nations.WHERE(name == "BRAZIL").CALCULATE(
     )
 )
 ```
+Question: Which part brands have at least 1 part that is above the average retail price for parts of that brand, below the average retail price for all parts, and has a size below 3.
+
+Let's break down this request:
+
+1. For each part brand, find parts that are:
+   a. Above the average retail price for that specific brand
+   b. Below the average retail price for ALL parts
+   c. Have a size below 3
+
+2. Return the brands that have at least 1 part meeting all these criteria
+
+First, I need to calculate:
+- The average retail price for each brand
+- The overall average retail price for all parts
+
+Then I need to filter parts that meet all three criteria, and finally return the brands that have at least one such part.
+
+Let's build this step by step:
+
+1. Calculate the average retail price for all parts:
+
+To do this, I need the high-level graph TPCH as defined in the Database Structure Reference File to obtain the overall average price:
+```
+TPCH.CALCULATE(
+    overall_avg_price=AVG(parts.retail_price)
+)
+```
+2. Calculate the average retail price per brand:
+```
+brand_avg_prices = parts.PARTITION(name="brands", by=brand).CALCULATE(
+    brand_avg_price=AVG(parts.retail_price)
+)
+```
+3. Now I need to combine these to find the parts that meet all criteria:
+```
+selected_parts = parts.WHERE(
+        (retail_price > brand_avg_price)
+        & (retail_price < global_avg_price)
+        & (size < 3)
+)
+selected_brands = brands.WHERE(HAS(selected_parts))
+```
+4. Now, filter the results to include only the brand and order them by brand. 
+```
+selected_brands.CALCULATE(brand).ORDER_BY(brand.ASC()) 
+```
+
+This code works as follows:
+1. First, I calculate the `overall_avg_price` across all parts in the database
+2. Then I partition the parts by `brand` to group them
+3. For each brand, I calculate:
+   - The brand name
+   - The average retail price for parts of that brand
+   - A boolean flag indicating if the brand has at least one qualifying part
+4. I use `HAS()` with a `WHERE` clause to check if any parts meet all three conditions:
+   - Price greater than the brand's average
+   - Price less than the overall average
+   - Size less than 3
+5. Finally, I filter to include only brands and order the results in ascending order.
 </examples>
