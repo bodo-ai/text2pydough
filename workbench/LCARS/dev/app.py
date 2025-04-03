@@ -38,13 +38,12 @@ st.markdown("""
     
     /* Hide the label completely */
     div.stSelectbox > label {
-        display: none !important;
     }
     .stChatMessage {
         padding-bottom: 5px 
     }
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) 
 
 if "client" not in st.session_state:
     st.session_state.client = LLMClient()
@@ -77,7 +76,8 @@ st.markdown(
     ### How It Works:
     - Type a query in the Input panel and press enter.    
     - Select an option from the result dropdown to view specific details on the Output panel.  
-    - Refine the query by adding more details on the Input panel to get a more specific response.  
+    - Refine the query by adding more details on the Input panel to get a more specific response.
+    - Add context-free variables to reuse them across all queries in the current chat session.
     - **Each conversation is based on a single query and its refinements.** 
         To start a completely new query, click **"Restart"**.  
     """,
@@ -99,7 +99,7 @@ def show_examples():
     ),
     (
         "Region with highest total revenue in 1996.\n\nRevenue is defined as the sum of extended_price * (1 - discount).",
-        "What was the average revenue per order in that region?"
+        "Can you compare it now year over year in that region?"
     ),
     (
         "Top 3 regions with most distinct customers.",
@@ -115,7 +115,7 @@ def show_examples():
     ),
     (
         "Customers with more orders in 1995 than 1994.",
-        "What was the percentage increase in orders per customer?"
+        "What was the percentage increase in orders for those customers?"
     ),
     (
         "Avg. revenue per nation.\n\nRevenue is defined as the sum of extended_price * quantity.",
@@ -170,7 +170,7 @@ with col1:
     if "show_chat" not in st.session_state:
         st.session_state.show_chat = False
     if "query_placeholder" not in st.session_state:
-        st.session_state.query_placeholder = "Ask a query about the TPCH database..."
+        st.session_state.query_placeholder = "Type a query about the TPCH database..."
     if "dropdown_options" not in st.session_state:
         st.session_state.dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
                                          "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
@@ -188,12 +188,18 @@ with col1:
                     query_id = message["query_id"]
                     result = st.session_state.query_results[query_id]
                     dropdown_key = f"dropdown_{query_id}"
+                    
+                    with st.container():
+                        if hasattr(result, "code") and result.code:
+                            st.markdown('<div style="margin-left: 20px;">', unsafe_allow_html=True)
+                            st.code(result.code, language="")
+                            st.markdown('</div>', unsafe_allow_html=True)
 
                     # Define dropdown options
                     full_dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
-                                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
+                                             "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
                     safe_dropdown_options = ["Full Explanation", "Code", "Exception", 
-                                             "Original Question", "Base Prompt","Cheat Sheet", "Knowledge Graph"]
+                                            "Base Prompt","Cheat Sheet", "Knowledge Graph"]
 
                     # Determine which options to show based on result content
                     has_error = result.exception or not (result.code or result.df or result.sql)
@@ -208,7 +214,7 @@ with col1:
                         st.session_state[dropdown_key] = "Full Explanation"
 
                     st.selectbox(
-                        label=" ",
+                        label="Result options:",
                         options=dropdown_options,
                         key=dropdown_key,
                         on_change=update_dropdown_selection,
@@ -242,7 +248,7 @@ with col1:
                 # Store response and result
                 st.session_state.messages.append({
                     "role": "assistant", 
-                    "content": "Your answer is ready! Select the result format below:",
+                    "content": "Done! Here's the PyDough code generated:",
                     "query_id": query_id
                 })
 
@@ -277,7 +283,7 @@ with col1:
         st.session_state.active_query = None
         st.session_state.last_query_id = None
         st.session_state.show_chat = False 
-        st.session_state.query_placeholder = "Ask a query about the TPCH database..."
+        st.session_state.query_placeholder = "Type a query about the TPCH database..."
         st.session_state.client.definitions = []
         st.session_state["clear_var_def_input"] = True
         st.rerun()
