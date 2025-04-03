@@ -211,7 +211,7 @@ with col1:
                         st.session_state[dropdown_key] = "Full Explanation"
 
                     st.selectbox(
-                        label=" ",
+                        label="Select another result format below to view more details in the right panel.",
                         options=dropdown_options,
                         key=dropdown_key,
                         on_change=update_dropdown_selection,
@@ -245,7 +245,7 @@ with col1:
                 # Store response and result
                 st.session_state.messages.append({
                     "role": "assistant", 
-                    "content": "Your answer is ready! Select the result format below:",
+                    "content": "All done! Here's the PyDough code generated:",
                     "query_id": query_id
                 })
 
