@@ -53,6 +53,7 @@ To generate the PyDough code snippet, follow these steps:
    - Returns only the exact data requested, without adding additional fields or information.
    - If you need to use the high-level top collection, use the appropriate name as defined in the Database Structure Reference File.
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
+   - HAS and HASNOT should be equal to 1 like HAS() == 1.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
@@ -191,7 +192,7 @@ selected_parts = parts.WHERE(
         & (retail_price < global_avg_price)
         & (size < 3)
 )
-selected_brands = brands.WHERE(HAS(selected_parts))
+selected_brands = brands.WHERE(HAS(selected_parts)==1)
 ```
 4. Now, filter the results to include only the brand and order them by brand. 
 ```
