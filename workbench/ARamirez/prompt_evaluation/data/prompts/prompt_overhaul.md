@@ -198,7 +198,7 @@ selected_brands = brands.WHERE(HAS(selected_parts)==1)
 result= selected_brands.CALCULATE(brand).ORDER_BY(brand.ASC()) 
 ```
 
-Let's put it all together:
+Answer: Let's put it all together:
 global_info= TPCH.CALCULATE(
     overall_avg_price=AVG(parts.retail_price)
 )
