@@ -53,6 +53,7 @@ To generate the PyDough code snippet, follow these steps:
    - Returns only the exact data requested, without adding additional fields or information.
    - If you need to use the high-level top collection, use the appropriate name as defined in the Database Structure Reference File.
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
+   - HAS and HASNOT should both return 1, similar to how HAS() == 1 is evaluated.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
