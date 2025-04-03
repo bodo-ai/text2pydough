@@ -133,7 +133,7 @@ class LLMClient:
     def __init__(
         self, 
         database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
-        prompt_file='./prompt_v2.md', 
+        prompt_file='./prompt.md', 
         script_file="./cheatsheet_v6.md", 
         temperature=0.0,
         definitions=[]
