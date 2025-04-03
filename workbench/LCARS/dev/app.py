@@ -197,9 +197,9 @@ with col1:
 
                     # Define dropdown options
                     full_dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
-                                            "Original Question", "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
+                                             "Base Prompt", "Cheat Sheet", "Knowledge Graph"]
                     safe_dropdown_options = ["Full Explanation", "Code", "Exception", 
-                                             "Original Question", "Base Prompt","Cheat Sheet", "Knowledge Graph"]
+                                            "Base Prompt","Cheat Sheet", "Knowledge Graph"]
 
                     # Determine which options to show based on result content
                     has_error = result.exception or not (result.code or result.df or result.sql)
