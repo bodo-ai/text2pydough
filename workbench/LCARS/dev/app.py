@@ -188,6 +188,9 @@ with col1:
                     query_id = message["query_id"]
                     result = st.session_state.query_results[query_id]
                     dropdown_key = f"dropdown_{query_id}"
+                    
+                    if hasattr(result, "code") and result.code:
+                        st.code(result.code, language="")
 
                     # Define dropdown options
                     full_dropdown_options = ["Full Explanation", "Code", "DataFrame", "SQL", "Exception", 
