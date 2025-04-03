@@ -38,13 +38,12 @@ st.markdown("""
     
     /* Hide the label completely */
     div.stSelectbox > label {
-        display: none !important;
     }
     .stChatMessage {
         padding-bottom: 5px 
     }
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) 
 
 if "client" not in st.session_state:
     st.session_state.client = LLMClient()
@@ -211,7 +210,7 @@ with col1:
                         st.session_state[dropdown_key] = "Full Explanation"
 
                     st.selectbox(
-                        label="Select another result format below to view more details in the right panel.",
+                        label="Select another result format below to view more details in the output panel.",
                         options=dropdown_options,
                         key=dropdown_key,
                         on_change=update_dropdown_selection,
