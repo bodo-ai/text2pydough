@@ -217,9 +217,7 @@ This code works as follows:
 1. First, I calculate the `overall_avg_price` across all parts in the database
 2. Then I partition the parts by `brand` to group them
 3. For each brand, I calculate:
-   - The brand name
    - The average retail price for parts of that brand
-   - A boolean flag indicating if the brand has at least one qualifying part
 4. I use `HAS()` with a `WHERE` clause to check if any parts meet all three conditions:
    - Price greater than the brand's average
    - Price less than the overall average
