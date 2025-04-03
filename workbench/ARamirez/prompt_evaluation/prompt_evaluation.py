@@ -256,7 +256,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
    
     try:
         response=client.ask(updated_question,formatted_prompt)
-        corrected_response= correct(client, question, response,formatted_prompt)
+        corrected_response= correct(client, updated_question, response,formatted_prompt)
         return corrected_response
     except Exception as e:
         print(f"AI Suite error: {e}")
