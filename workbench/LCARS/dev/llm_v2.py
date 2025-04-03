@@ -175,7 +175,8 @@ class LLMClient:
             result_sql = pydough.to_sql(last_variable)
             return result_sql
         except Exception as e:
-            raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
+            tb_str = traceback.format_exc()
+            raise PydoughCodeError(f"An error occurred while processing the code:\n\n{tb_str}")
             
     def get_pydough_code(self, text):
         try:
@@ -186,7 +187,8 @@ class LLMClient:
             result_df = pydough.to_df(last_variable)
             return result_df
         except Exception as e:
-           raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
+            tb_str = traceback.format_exc()
+            raise PydoughCodeError(f"An error occurred while processing the code:\n\n{tb_str}")
         
     def discourse(self, result, follow_up):
         if not result or not result.original_question:
