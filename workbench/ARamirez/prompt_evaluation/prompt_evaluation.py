@@ -102,12 +102,11 @@ class OtherAIProvider(AIProvider):
         """Generates a response using AI Suite."""
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Question: {question}\nLet's solve this step by step:"},
+            {"role": "user", "content": f"{question}"},
         ]
 
         try:
             time.sleep(0.5)  # Simulate slight delay
-            start_time = time.time()
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
@@ -116,9 +115,7 @@ class OtherAIProvider(AIProvider):
                 topK=0
             
             )
-            end_time = time.time()
-            execution_time = end_time - start_time
-            return response.choices[0].message.content, execution_time
+            return response.choices[0].message.content
         except Exception as e:
             print(f"AI Suite error: {e}")
             return None, None 
@@ -236,9 +233,9 @@ def correct(client, question,  code, prompt):
         The original question was: '{question}'. 
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
-        response, execution_time=client.ask(q, prompt)
+        response=client.ask(q, prompt)
 
-    return response, execution_time
+    return response
    
 def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
@@ -258,9 +255,12 @@ def get_other_provider_response(client, prompt, data, question, database_content
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
-        response, execution_time=client.ask(updated_question,formatted_prompt)
-        corrected_response= correct(client, updated_question, response,formatted_prompt)
-        return corrected_response, execution_time
+        start_time = time.time()
+        response=client.ask(updated_question,formatted_prompt)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        #corrected_response= correct(client, updated_question, response,formatted_prompt)
+        return response, execution_time
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
