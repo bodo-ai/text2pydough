@@ -259,8 +259,8 @@ def get_other_provider_response(client, prompt, data, question, database_content
         response=client.ask(updated_question,formatted_prompt)
         end_time = time.time()
         execution_time = end_time - start_time
-        #corrected_response= correct(client, updated_question, response,formatted_prompt)
-        return response, execution_time
+        corrected_response= correct(client, updated_question, response,formatted_prompt)
+        return corrected_response, execution_time
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
