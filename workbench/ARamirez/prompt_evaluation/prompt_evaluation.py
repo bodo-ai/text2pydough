@@ -115,7 +115,7 @@ class OtherAIProvider(AIProvider):
                 topK=0
             
             )
-            print(response.choices[0])
+            print(response.choices[0].keys())
             return response.choices[0].message.content
         except Exception as e:
             print(f"AI Suite error: {e}")
