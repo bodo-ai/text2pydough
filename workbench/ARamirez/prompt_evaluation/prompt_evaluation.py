@@ -107,6 +107,7 @@ class OtherAIProvider(AIProvider):
 
         try:
             time.sleep(0.5)  # Simulate slight delay
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
@@ -115,11 +116,12 @@ class OtherAIProvider(AIProvider):
                 topK=0
             
             )
-            print(response.choices[0])
-            return response.choices[0].message.content
+            end_time = time.time()
+            execution_time = end_time - start_time
+            return response.choices[0].message.content, execution_time
         except Exception as e:
             print(f"AI Suite error: {e}")
-            return None
+            return None, None 
         
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -234,9 +236,9 @@ def correct(client, question,  code, prompt):
         The original question was: '{question}'. 
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
-        response=client.ask(q, prompt)
+        response, execution_time=client.ask(q, prompt)
 
-    return response
+    return response, execution_time
    
 def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
@@ -246,7 +248,7 @@ def get_azure_response(client, prompt, data, question, database_content, script_
     try:
         response= client.ask(question, formatted_prompt)
         corrected_response= correct(client,question,response, formatted_prompt)
-        return corrected_response
+        return corrected_response, None
     except Exception as e:
         print(f"Azure AI error: {e}")
         return None
@@ -256,9 +258,9 @@ def get_other_provider_response(client, prompt, data, question, database_content
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
-        response=client.ask(updated_question,formatted_prompt)
+        response, execution_time=client.ask(updated_question,formatted_prompt)
         corrected_response= correct(client, updated_question, response,formatted_prompt)
-        return corrected_response
+        return corrected_response, execution_time
     except Exception as e:
         print(f"AI Suite error: {e}")
         return None
@@ -268,7 +270,7 @@ def get_claude_response(client, prompt, data, question, database_content, script
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
     response= client.ask(updated_question, formatted_prompt)
     corrected_response = correct(client, updated_question, response,formatted_prompt)
-    return corrected_response
+    return corrected_response, None
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
@@ -365,7 +367,14 @@ def main(git_hash):
         responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content)
 
         # Save responses
-        questions_df["response"] = responses
+        # Convert the responses into separate columns for 'response' and 'execution_time'
+        response_column = [response[0] for response in responses]  # Extract corrected responses
+        execution_time_column = [response[1] for response in responses]  # Extract execution times
+
+        # Save responses and execution times into the DataFrame
+        questions_df["response"] = response_column
+        questions_df["execution_time"] = execution_time_column
+
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
 
