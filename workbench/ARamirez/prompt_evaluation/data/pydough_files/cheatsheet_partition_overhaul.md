@@ -361,6 +361,7 @@ PARTITION(name='group_name', by=(key1, key2))
       name="states", by=state
   ).CALCULATE(state, max_packs=MAX(cities.n_packages))
   ```
+  - **Good Example # 11**:
 
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the `email` property is referenced, which is not one of the partition keys, even though the data being partitioned does have an `email` property.
@@ -831,9 +832,9 @@ Customers(country\_code = phone\[:3\])
 * **Top 5 States by Average Occupants:**  
 
   addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
-  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
+  average_occupants=addr_info.PARTITION(name="addrs", by=state).CALCULATE(  
       state=state,  
-      avg_occupants=AVG(addrs.n_occupants)  
+      avg_occupants=AVG(Addresses.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
 
 * **Monthly Trans-Coastal Shipments:**  
