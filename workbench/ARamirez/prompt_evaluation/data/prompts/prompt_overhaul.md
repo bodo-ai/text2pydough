@@ -56,9 +56,18 @@ To generate the PyDough code snippet, follow these steps:
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
-4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+4. Try to use has and hasnot as much as posible before acces a subcollection. The goal is to filter only the records that HAS that subcollection before realized calculations or functions. For example here: "Find customers in Asia with total spending > $1000." you can check if there is orders before make the calculation, using HAS, look the code solution:
+high_value_customers_in_asia = customers.WHERE(
+    HAS(orders) == 1
+  ).CALCULATE(  
+      customer_key=key, 
+      customer_name=name,  
+      total_spent=SUM(orders.total_price)  
+  ).WHERE((total_spent > 1000) & (nation.region.name == "ASIA"))
 
-5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
+5. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+
+6. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
 
 {recomendation}
 
