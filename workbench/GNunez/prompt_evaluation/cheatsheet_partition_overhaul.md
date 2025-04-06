@@ -7,7 +7,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - The HAS and HASNOT functions generate more efficient PyDough code to compile. For this reason, use them as much as possible.
+  - Always use `HAS` function to verify the 1 to N relationship beetwen tables.
 
   - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result. 
 
