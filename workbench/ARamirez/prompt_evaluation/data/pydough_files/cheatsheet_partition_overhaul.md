@@ -6,6 +6,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
+  
+  - You should use `HAS` function to verify the 1 to N relationship beetwen tables, and you can identify them because the related subcollection has a plural name. For example, for the query "Give the number of orders for every nation", you solve like this: `nations.WHERE(HAS(customers.orders)==1).CALCULATE(nation_name=name, num_of_orders=COUNT(customers.orders.key))`.
 
   - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result. 
 
