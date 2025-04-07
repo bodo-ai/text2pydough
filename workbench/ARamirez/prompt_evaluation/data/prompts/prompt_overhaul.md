@@ -55,10 +55,13 @@ To generate the PyDough code snippet, follow these steps:
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
+   
+4. Always use the HAS function before performing any calculations or operations to ensure that only collections with results from multiple items are included. For example, to calculate the number of orders per customer by nation, use this approach:
+nations.WHERE(HAS(customers.orders) == 1).CALCULATE(remaining logic).
 
-4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
+5. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
-5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
+6. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
 
 {recomendation}
 
