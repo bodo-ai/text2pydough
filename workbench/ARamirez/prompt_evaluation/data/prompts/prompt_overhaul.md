@@ -226,3 +226,5 @@ This code works as follows:
    - Size less than 3
 5. Finally, I filter to include only brands and order the results in ascending order.
 </examples>
+
+Let's do it step by step:
