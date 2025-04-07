@@ -5,6 +5,9 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
+  - Always use HAS in your queries when it helps. If you have a situation like this:
+parent.CALCULATE(y=child.z) (or parent.CALCULATE(y=COUNT(child)) or any other aggregate function), you should usually change it to: parent.WHERE(HAS(child)).CALCULATE(y=child.z) — but only if the query involves multiple items (plural collections).
+
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
   - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result. 
