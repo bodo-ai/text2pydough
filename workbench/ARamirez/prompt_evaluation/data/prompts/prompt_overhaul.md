@@ -56,7 +56,7 @@ To generate the PyDough code snippet, follow these steps:
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
    
-4. Always use HAS in your queries when it helps. If you have a situation like this: parent.CALCULATE(y=child.z) (or parent.CALCULATE(y=COUNT(child)) or any other aggregate function), you should usually change it to: `parent.WHERE(HAS(child)).CALCULATE(y=child.z) == 1` — but only if the query involves multiple items (plural collections).
+4. Always use HAS in your queries when it helps. If you have a situation like this: parent.CALCULATE(y=child.z) (or parent.CALCULATE(y=COUNT(child)) or any other aggregated function), you should usually change it to: `parent.WHERE(HAS(child)== 1).CALCULATE(y=child.z)` — but only if the query involves multiple items (plural collections).
 
 5. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
