@@ -56,8 +56,7 @@ To generate the PyDough code snippet, follow these steps:
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
    
-4. Always use the HAS function before performing any calculations or operations to ensure that only collections with results from multiple items are included. For example, to calculate the number of orders per customer by nation, use this approach:
-nations.WHERE(HAS(customers.orders) == 1).CALCULATE(remaining logic).
+4. Determine if HAS is necessary to use before perform any operation. You should be putting HAS in as many queries as possible when it helps out. If you ever have a situation like this: parent.CALCULATE(y=child.z) (or parent.CALCULATE(y=COUNT(child)) or any other aggregate function), you should almost always do parent.WHERE(HAS(child)).CALCULATE(y=child.z) if it makes sense for the query to do so (e.g. we don't want to keep records of parent where z doesn't exist because child doesn't exist). 
 
 5. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
