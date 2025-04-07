@@ -56,7 +56,7 @@ To generate the PyDough code snippet, follow these steps:
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
    
-4. Always use the `HAS` function before any calculation or operation to filter only tables 1 to N with results. For example, if you want to know the number of orders for each customer by nation, then you check `nations.WHERE(HAS(customers.orders)==1).CALCULATE(rest of code)`.
+4. Always apply the HAS function before performing any calculations or operations to ensure that only tables 1 to N with results are included. For instance, if you want to calculate the number of orders for each customer by nation, use the following approach: nations.WHERE(HAS(customers.orders) == 1).CALCULATE(rest of code).
 
 5. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
