@@ -231,7 +231,7 @@ PARTITION(name='group_name', by=(key1, key2))
     ```
     # Step 1: Filter lines for 1998 and gather necessary info (segment, part name)
     # Navigate from lines -> order -> customer -> mktsegment and lines -> part -> name
-    lines_1998_info = lines.WHERE((HAS(orders) == 1) & (YEAR(order.order_date) == 1998)).CALCULATE(
+    lines_1998_info = lines.WHERE(YEAR(order.order_date) == 1998).CALCULATE(
         mktsegment = order.customer.mktsegment,
         part_name = part.name
     )
