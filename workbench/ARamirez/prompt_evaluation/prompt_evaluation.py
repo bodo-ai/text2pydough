@@ -176,9 +176,7 @@ def correct(client, question,  code, prompt):
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
         response=client.ask(q, prompt)
-        print(response)
         return "".join([code, response])
-    print(response)
     return response
 
     
