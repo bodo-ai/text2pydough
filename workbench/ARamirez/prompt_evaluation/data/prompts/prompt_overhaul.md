@@ -55,7 +55,7 @@ To generate the PyDough code snippet, follow these steps:
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
-   
+
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
@@ -225,42 +225,6 @@ This code works as follows:
    - Price less than the overall average
    - Size less than 3
 5. Finally, I filter to include only brands and order the results in ascending order.
-
-Question: How many customers placed an order in 1995?
-Let's break down this problem:
-
-1. We need to count how many customers placed an order in 1995.
-2. This means we need to:
-   - Access the customers who have orders
-   - Filter for orders placed in 1995
-   - Count the distinct customers
-
-Let's look at the data model:
-- `customers` have `orders`
-- Each `order` has an `order_date` field
-
-To solve this, I need to:
-1. Find all customers who have at least one order in 1995
-2. Count these customers
-
-The query should:
-1. Start with the `customers` collection
-2. Filter customers to include only those who have at least one order with order_date in 1995
-3. Count these customers
-
-The rule in the PyDough reference says:
-
-"You should use `HAS` function to verify the 1 to N relationship between tables, and you can identify them because the related subcollection has a plural name."
-
-In our case, we have a 1 to N relationship between customers and orders. Let's use the HAS function as recommended:
-```
-result = TPCH.CALCULATE(
-    num_customers_with_orders_in_1995=COUNT(customers.WHERE(
-        HAS(orders.WHERE(YEAR(order_date) == 1995)) == 1
-    ))
-)
-```
 </examples>
 
 Let's do it step by step:
-
