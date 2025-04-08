@@ -261,3 +261,4 @@ result = TPCH.CALCULATE(
 )
 ```
 </examples>
+Let's do it step by step:
