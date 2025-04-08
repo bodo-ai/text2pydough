@@ -19,7 +19,7 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from rapidfuzz import fuzz, process
 pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"../demo/test_data/tpch.db", check_same_thread=False)
+pydough.active_session.connect_database("sqlite", database=f"../../AAraya/demo/test_data/tpch.db", check_same_thread=False)
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
@@ -133,7 +133,7 @@ class LLMClient:
     def __init__(
         self, 
         database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
-        prompt_file='./prompt_v2.md', 
+        prompt_file='./prompt.md', 
         script_file="./cheatsheet_v6.md", 
         temperature=0.0,
         definitions=[]
@@ -145,7 +145,7 @@ class LLMClient:
         # default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         
         default_provider = "google"
-        default_model = "gemini-2.0-flash-001"
+        default_model = "gemini-2.5-pro-exp-03-25"
         
         # default_provider = "aws-deepseek"
         # default_model = "us.deepseek.r1-v1:0"
@@ -175,7 +175,8 @@ class LLMClient:
             result_sql = pydough.to_sql(last_variable)
             return result_sql
         except Exception as e:
-            raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
+            tb_str = traceback.format_exc()
+            raise PydoughCodeError(f"An error occurred while processing the code:\n\n{tb_str}")
             
     def get_pydough_code(self, text):
         try:
@@ -186,7 +187,8 @@ class LLMClient:
             result_df = pydough.to_df(last_variable)
             return result_df
         except Exception as e:
-           raise PydoughCodeError(f"An error occurred while processing the code: {str(e)}")
+            tb_str = traceback.format_exc()
+            raise PydoughCodeError(f"An error occurred while processing the code:\n\n{tb_str}")
         
     def discourse(self, result, follow_up):
         if not result or not result.original_question:
@@ -194,7 +196,7 @@ class LLMClient:
         new_query = (
             f"You solved this question: {result.original_question}. using this code: {result.code}. "
             f"This is the result:  {result.df}. "
-            f"Now that you have solved the first part, now solve this question: '{follow_up}'. "
+            f"Now that you have solved the first part, now solve this question: '{follow_up}'. IMPORTANT: If you need any of the above code, you have to declare it again because it does not exist in memory. "
         )
         return self.ask(new_query)
     

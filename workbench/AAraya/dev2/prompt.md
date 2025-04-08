@@ -23,8 +23,13 @@ Here are some examples of PyDough code snippets along with their corresponding n
 4. **Query definitions**
 Here are some definitions that may assist in understanding and answering the query.
 
-{definitions}
-
+[
+    "Total Order Value is defined as the sum of extended_price * (1 - discount).",
+    "Aggregate Revenue is defined as the sum of LineItem_ExtendedPrice minus the sum of LineItem_Discount.",
+    "Average Revenue per Ship Date is defined as the sum of revenue divided by the count of distinct ship dates.",
+    "Partial Revenue is defined as quantity * extended_price * (1 - discount).",
+    "Profit is defined as revenue minus cost."
+]
 </context>
 
 <instructions>
@@ -46,21 +51,18 @@ To generate the PyDough code snippet, follow these steps:
    Here’s the corrected version:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
-   - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided
-   - Analyze whether the definition is necessary to use.
+   - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
 
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
-5. Enclose the generated PyDough code in a Python code block.
-
-6. ALWAYS give an explanation of the code step by step.
+5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
 {recomendation}
 </instructions>
 
 <examples>
-Here's how we analyse and Pydough queries:
+Here's how we analyse and create Pydough queries:
 
 Question: Top 5 States by Average Occupants:
 Let's break down the task:
@@ -114,7 +116,7 @@ This code:
 2. Filters to only include customers where `HASNOT(orders)==1`, meaning they have no orders
 3. Uses `CALCULATE` to return only the customer names
 
-Question: What is the total order value in Brazil in 1992? Return the name and the total order value.
+Question: What is the total order value in Brazil in 1992? Total order value is defined as the sum of extended_price * (1 - discount) Return the name and the total order value.
 Let's analyze this request:
 
 1. Find the total order value in Brazil in 1992
