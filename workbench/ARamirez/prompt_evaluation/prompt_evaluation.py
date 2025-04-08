@@ -102,7 +102,7 @@ class OtherAIProvider(AIProvider):
         """Generates a response using AI Suite."""
         messages = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"{question}\nLet's do it step by step:"},
+            {"role": "user", "content": f"{question}"},
         ]
 
         try:
