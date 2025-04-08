@@ -235,7 +235,7 @@ def process_question_wrapper(args):
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=10) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
@@ -349,7 +349,7 @@ def main(git_hash):
             responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
             questions_df["response"] = responses
             output_file = f"{folder_path}/responses_benchmark{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
+            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
             questions_df.to_csv(output_file, index=False, encoding="utf-8")
             output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
