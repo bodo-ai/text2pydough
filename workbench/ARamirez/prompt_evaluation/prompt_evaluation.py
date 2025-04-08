@@ -347,7 +347,13 @@ def main(git_hash):
             
             # Process questions
             responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
-            questions_df["response"] = responses
+                    # Convert the responses into separate columns for 'response' and 'execution_time'
+            response_column = [response[0] for response in responses]  # Extract corrected responses
+            execution_time_column = [response[1] for response in responses]  # Extract execution times
+
+            # Save responses and execution times into the DataFrame
+            questions_df["response"] = response_column
+            questions_df["execution_time"] = execution_time_column
             output_file = f"{folder_path}/responses_benchmark{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
             questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
