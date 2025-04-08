@@ -131,7 +131,7 @@ def extract_python_code(text):
 
     match = re.search(r"```(\w+)\n(.*?)\n```", text, re.DOTALL)
     if match:
-        python_code = match.group(2).strip()
+        python_code = match.group(1).strip()
         # Convert the extracted code to uppercase
         return python_code
     else:
