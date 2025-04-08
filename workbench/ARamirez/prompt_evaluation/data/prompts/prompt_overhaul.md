@@ -56,7 +56,6 @@ To generate the PyDough code snippet, follow these steps:
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
    
-
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
