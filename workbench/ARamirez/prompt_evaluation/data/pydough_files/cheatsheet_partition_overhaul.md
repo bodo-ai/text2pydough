@@ -3,6 +3,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
 ### **GENERAL RULES**: 
 
+  - You should use `HAS` function to verify the 1 to N relationship beetwen tables, and you can identify them because the related subcollection has a plural name. For example, for the query "Give the number of orders for every nation", you solve like this: `nations.WHERE(HAS(customers.orders)==1).CALCULATE(nation_name=name, num_of_orders=COUNT(customers.orders.key))`.
+
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
@@ -147,6 +149,12 @@ Select top k records.
 ## **6. AGGREGATION FUNCTIONS**  
 
 ### **Functions**
+- **HAS(collection)**: True if ≥1 record exists.  
+  Example: HAS(People.packages)==1
+
+- **HASNOT(collection)**: True if collection is empty.
+  Example: HASNOT(orders)==1
+  
 - **COUNT(collection)**: Count non-null records.  
   Example: COUNT(People.packages)  
 
@@ -161,12 +169,6 @@ Select top k records.
 
 - **NDISTINCT(collection)**: Distinct count.  
   Example: NDISTINCT(Addresses.state)  
-
-- **HAS(collection)**: True if ≥1 record exists.  
-  Example: HAS(People.packages)==1
-
-- **HASNOT(collection)**: True if collection is empty.
-  Example: HASNOT(orders)==1
 
 ### **Rules** 
 Aggregations Function does not support calling aggregations inside of aggregations
@@ -198,7 +200,7 @@ PARTITION(name='group_name', by=(key1, key2))
   - **Group packages by year/month**:  
     ```
     package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
-    package_info.PARTITION(Packages, name='packs', by=(order_year, order_month))
+    package_info.PARTITION(name='packs', by=(order_year, order_month))
     ```  
   - **For every year/month, find all packages that were below the average cost of all packages ordered in that year/month.**:  Notice how the version of `Packages` that is the sub-collection of the `months` can access `avg_package_cost`, which was defined by its ancestor (at the `PARTITION` level).
     ``` 
@@ -213,7 +215,9 @@ PARTITION(name='group_name', by=(key1, key2))
 
   - **For every customer, find the percentage of all orders made by current occupants of that city/state made by that specific customer. Includes the first/last name of the person, the city/state they live in, and the percentage.**:  Notice how the version of `Addresses` that is the sub-collection of the `cities` can access `total_packages`, which was defined by its ancestor (at the `PARTITION` level). and notice we can defined more variables with CALCULATE.
     ``` 
-    Addresses.PARTITION(name="cities", by=(city, state)).CALCULATE(
+    Addresses.WHERE(
+      HAS(current_ocupants)==1
+    ).PARTITION(name="cities", by=(city, state)).CALCULATE(
         total_packages=COUNT(Addresses.current_occupants.packages)
     ).Addresses.CALCULATE(city, state).current_occupants.CALCULATE(
         first_name,
@@ -272,7 +276,9 @@ PARTITION(name='group_name', by=(key1, key2))
   ```
   GRAPH.CALCULATE(
       total_packages=COUNT(Packages)
-  ).Addresses.PARTITION(name="states", by=state).CALCULATE(
+  ).Addresses.WHERE(
+    HAS(current_occupants.package) == 1
+  ).PARTITION(name="states", by=state).CALCULATE(
       state,
       pct_of_packages=100.0 * COUNT(Addresses.current_occupants.package) / total_packages
   ).WHERE(pct_of_packages >= 1.0)
@@ -293,7 +299,9 @@ PARTITION(name='group_name', by=(key1, key2))
 
   - **Good Example #6**: Find the 10 most frequent combinations of the state that the person lives in and the first letter of that person's name. Notice how `state` can be used as a partition key of `people_info` since it was made available via down-streaming.
   ```
-  people_info = Addresses.CALCULATE(state).current_occupants.CALCULATE(
+  people_info = Addresses.WHERE(
+    HAS(current_occupants) == 1
+  ).CALCULATE(state).current_occupants.CALCULATE(
       first_letter=first_name[:1],
   )
   people_info.PARTITION(name="combinations", by=(state, first_letter)).CALCULATE(
@@ -318,7 +326,9 @@ PARTITION(name='group_name', by=(key1, key2))
 
   - **Good Example #8**: Partition the current occupants of each address by their birth year and filter to include individuals born in years with at least 10,000 births. For each such person, list their first/last name and the state they live in. This is valid because `state` was down-streamed to `people_info` before it was partitioned, so when `current_occupants` is accessed as a sub-collection of the `years`, it still has access to `state`.
   ```
-  people_info = Addresses.CALCULATE(state).current_occupants.CALCULATE(birth_year=YEAR(birth_date))
+  people_info = Addresses.WHERE(
+    HAS(current_occupants)==1
+  ).CALCULATE(state).current_occupants.CALCULATE(birth_year=YEAR(birth_date))
   people_info.PARTITION(name="years", by=birth_year).WHERE(
       COUNT(current_occupants) >= 10000
   ).current_occupants.CALCULATE(
@@ -361,7 +371,6 @@ PARTITION(name='group_name', by=(key1, key2))
       name="states", by=state
   ).CALCULATE(state, max_packs=MAX(cities.n_packages))
   ```
-  - **Good Example # 11**:
 
 ### **Bad Examples**
   - **Partition people by their birth year to find the number of people born in each year**: Invalid because the `email` property is referenced, which is not one of the partition keys, even though the data being partitioned does have an `email` property.
@@ -597,12 +606,16 @@ SINGULAR in PyDough ensures data is explicitly treated as singular in sub-collec
 
 ### **Examples**
 ```
-region_order_values_1996 = regions.CALCULATE(
+region_order_values_1996 = regions.WHERE(
+  HAS(nations.customers.orders) == 1
+).CALCULATE(
     region_name=name,
     total_order_value=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1996).total_price)
 ).TOP_K(1, by=total_order_value.DESC())
 
-region_order_values_1997 = regions.CALCULATE(
+region_order_values_1997 = regions.WHERE(
+  HAS(nations.customers.orders) == 1
+).CALCULATE(
     region_name=name,
     total_order_value=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1997).total_price)
 ).TOP_K(1, by=total_order_value.DESC())
@@ -634,7 +647,7 @@ People.CALCULATE(
 js = current_occupants.WHERE(
     (first_name == "John") &  
     (last_name == "Smith") & 
-    ABSENT(middle_name)
+    (HASNOT(middle_name) == 1)
 ).SINGULAR()
 Addresses.CALCULATE(
     address_id,
@@ -799,9 +812,6 @@ Customers(country\_code = phone\[:3\])
     
 *   DEFAULT\_TO(a, b): Returns first non-null value.Example: DEFAULT\_TO(tax, 0).
     
-*   PRESENT(x): Checks if non-null.Example: PRESENT(tax) → True/False.
-    
-*   ABSENT(x): Checks if null.Example: ABSENT(tax) → True/False.
     
 *   KEEP\_IF(a, cond): Returns a if cond is True, else null.Example: KEEP\_IF(acctbal, acctbal > 0).
     
@@ -831,10 +841,12 @@ Customers(country\_code = phone\[:3\])
 
 * **Top 5 States by Average Occupants:**  
 
-  addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))  
-  average_occupants=addr_info.PARTITION(name="addrs", by=state).CALCULATE(  
+  addr_info = Addresses.WHERE(
+    HAS(current_occupants) == 1
+  ).CALCULATE(n_occupants=COUNT(current_occupants))  
+  average_occupants=PARTITION(addr_info, name="addrs", by=state).CALCULATE(  
       state=state,  
-      avg_occupants=AVG(Addresses.n_occupants)  
+      avg_occupants=AVG(addrs.n_occupants)  
   ).TOP_K(5, by=avg_occupants.DESC())  
 
 * **Monthly Trans-Coastal Shipments:**  
@@ -878,7 +890,9 @@ Customers(country\_code = phone\[:3\])
 * **Orders per Customer in 1998**  
   *Goal: Count orders per customer in 1998 and sort by activity.*  
   *Code:*  
-  customer_order_counts = customers.CALCULATE(  
+  customer_order_counts = customers.WHERE(
+    HAS(orders) == 1
+  ).CALCULATE(  
       key=key, 
       name=name,  
       num_orders=COUNT(orders.WHERE(YEAR(order_date) == 1998))  
@@ -887,7 +901,9 @@ Customers(country\_code = phone\[:3\])
 * **High-Value Customers in Asia**  
   *Goal: Find customers in Asia with total spending > $1000.*  
   *Code:*  
-  high_value_customers_in_asia = customers.CALCULATE(  
+  high_value_customers_in_asia = customers.WHERE(
+    HAS(orders) == 1
+  ).CALCULATE(  
       customer_key=key, 
       customer_name=name,  
       total_spent=SUM(orders.total_price)  
@@ -896,7 +912,9 @@ Customers(country\_code = phone\[:3\])
 * **Top 5 Most Profitable Nations**  
   *Goal: Identify regions with highest revenue.*  
   *Code:*  
-  selected_regions = nations.CALCULATE(  
+  selected_regions = nations.WHERE(
+    HAS(customers.orders) == 1
+  ).CALCULATE(  
       region_name=name,  
       Total_revenue=SUM(customers.orders.total_price)  
   ).TOP_K(5, Total_revenue.DESC())  
