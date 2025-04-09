@@ -211,9 +211,12 @@ def get_other_provider_response(client, prompt, data, question, database_content
 def get_claude_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-    response= client.ask(updated_question, formatted_prompt)
+    start_time = time.time()
+    response=client.ask(updated_question,formatted_prompt)
+    end_time = time.time()
+    execution_time = end_time - start_time
     corrected_response = correct(client, updated_question, response,formatted_prompt)
-    return corrected_response, None
+    return corrected_response, execution_time
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
