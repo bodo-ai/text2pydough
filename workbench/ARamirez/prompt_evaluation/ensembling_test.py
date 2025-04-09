@@ -264,6 +264,7 @@ def ensembling_process(client, updated_question, formatted_prompt):
         for i in range(3):
             response = client.ask(updated_question,formatted_prompt)
             extracted_code = extract_python_code(response)
+            print(extracted_code)
             local_env = {"pydough": pydough, "datetime": datetime}
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
 
