@@ -14,9 +14,10 @@ from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
 import mlflow
-from test_data.eval import compare_output, execute_code_and_extract_result
+from test_data.eval import compare_df, compare_output, execute_code_and_extract_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files
 from claude import ClaudeModel, DeepseekModel
+from collections import defaultdict
 import pydough
 from abc import ABC, abstractmethod
 
@@ -256,34 +257,41 @@ def generate_hash(df):
 
 
 def ensembling_process(client, updated_question, formatted_prompt):
-    """Performs an ensembling process to generate multiple responses from an AI client.
-    The most common response is selected based on a hash generated from the obtained results."""
+    """
+    Performs an ensembling process to generate multiple responses from an AI client.
+    Uses a direct comparison approach to identify matching results.
+    """
 
-    hash_dict = {}
+    dfs_and_responses = []
+    counts = defaultdict(list)
 
     try:
-        for i in range(3):
-            response = client.ask(updated_question,formatted_prompt)
-            print("RESPONSE:")
-            print(response)
+        for i in range(5):
+            response = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
 
             if result is not None:
-                df_hash = generate_hash(result)
-                print("HASH")
-                print(df_hash)
-                if df_hash in hash_dict:
-                    hash_dict[df_hash]["count"] += 1
-                else:
-                    hash_dict[df_hash] = {"response": response, "count": 1}
+                dfs_and_responses.append((response, result))
             else:
                 print(f"The PyDough code has the exception: {exception}")
 
-        most_common_hash = max(hash_dict, key=lambda k: hash_dict[k]["count"])
+        for i in range(len(dfs_and_responses)):
+            for j in range(i + 1, len(dfs_and_responses)):
+                if compare_df(df_gold=dfs_and_responses[i], df_gen=dfs_and_responses[j], query_category="", question=""):
+                    counts[i].append(j)
+                    counts[i].append(j)
 
-        return hash_dict[most_common_hash]["response"]
+        print("///////////////////////////")
+        print(counts)
+        most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
+
+        if most_common_index is not None:
+            return dfs_and_responses[most_common_index]
+        else:
+            print("No common result found, returning the first response as fallback.")
+            return dfs_and_responses[0][0]
 
     except Exception as e:
         print(f"AI Suite error: {e}")
