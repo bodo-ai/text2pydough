@@ -184,6 +184,132 @@
           )
         </Code>
       </Example>
+         <Example>
+      <Name>Good Example #3: Find the top 5 years with the most people born in that year who have yahoo email accounts</Name>
+      <Code>
+        yahoo_people = People.CALCULATE(
+            birth_year=YEAR(birth_date)
+        ).WHERE(ENDSWITH(email, "@yahoo.com"))
+        yahoo_people.PARTITION(name="years", by=birth_year).CALCULATE(
+            birth_year,
+            n_people=COUNT(People)
+        ).TOP_K(5, by=n_people.DESC())
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #4: Identify the states whose current occupants account for at least 1% of all packages purchased</Name>
+      <Code>
+        GRAPH.CALCULATE(
+            total_packages=COUNT(Packages)
+        ).Addresses.WHERE(
+          HAS(current_occupants.package) == 1
+        ).PARTITION(name="states", by=state).CALCULATE(
+            state,
+            pct_of_packages=100.0 * COUNT(Addresses.current_occupants.package) / total_packages
+        ).WHERE(pct_of_packages >= 1.0)
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #5: Identify which months of the year have numbers of packages shipped in that month that are above the average for all months</Name>
+      <Code>
+        pack_info = Packages.CALCULATE(order_month=MONTH(order_date))
+        month_info = pack_info.PARTITION(name="months", by=order_month).CALCULATE(
+            n_packages=COUNT(Packages)
+        )
+        GRAPH.CALCULATE(
+            avg_packages_per_month=AVG(month_info.n_packages)
+        ).PARTITION(pack_info, name="months", by=order_month).CALCULATE(
+            month,
+        ).WHERE(COUNT(Packages) > avg_packages_per_month)
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #6: Find the 10 most frequent combinations of the state that the person lives in and the first letter of that person's name</Name>
+      <Code>
+        people_info = Addresses.WHERE(
+          HAS(current_occupants) == 1
+        ).CALCULATE(state).current_occupants.CALCULATE(
+            first_letter=first_name[:1],
+        )
+        people_info.PARTITION(name="combinations", by=(state, first_letter)).CALCULATE(
+            state,
+            first_letter,
+            n_people=COUNT(current_occupants),
+        ).TOP_K(10, by=n_people.DESC())
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #7: Same as good example #6, but written differently so it will include people without a current address</Name>
+      <Code>
+        people_info = People.CALCULATE(
+            state=DEFAULT_TO(current_address.state, "N/A"),
+            first_letter=first_name[:1],
+        )
+        people_info.PARTITION(name="state_letter_combos", by=(state, first_letter)).CALCULATE(
+            state,
+            first_letter,
+            n_people=COUNT(People),
+        ).TOP_K(10, by=n_people.DESC())
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #8: Partition the current occupants of each address by their birth year and filter to include individuals born in years with at least 10,000 births</Name>
+      <Code>
+        people_info = Addresses.WHERE(
+          HAS(current_occupants)==1
+        ).CALCULATE(state).current_occupants.CALCULATE(birth_year=YEAR(birth_date))
+        people_info.PARTITION(name="years", by=birth_year).WHERE(
+            COUNT(current_occupants) >= 10000
+        ).current_occupants.CALCULATE(
+            first_name,
+            last_name,
+            state
+        )
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #9: Find all packages that meet the following criteria: they were ordered in the last year that any package in the database was ordered, their cost was below the average of all packages ever ordered, and the state it was shipped to received at least 10,000 packages that year</Name>
+      <Code>
+        GRAPH.CALCULATE(
+            avg_cost=AVG(Packages.package_cost),
+            final_year=MAX(Packages.order_year),
+        ).Packages.CALCULATE(
+            order_year=YEAR(order_date),
+            shipping_state=shipping_address.state
+        ).WHERE(order_year == final_year
+        ).PARTITION(
+            name="states",
+            by=shipping_state
+        ).WHERE(
+            COUNT(Packages) > 10000
+        ).Packages.WHERE(
+            package_cost < avg_cost
+        ).CALCULATE(
+            shipping_state,
+            package_id,
+            order_date,
+        )
+      </Code>
+    </Example>
+
+    <Example>
+      <Name>Good Example #10: For each state, finds the largest number of packages shipped to a single city in that state</Name>
+      <Code>
+        pack_info = Addresses.CALCULATE(city, state).packages_shipped_to
+        city_groups = pack_info.PARTITION(
+            name="cities", by=(city, state)
+        ).CALCULATE(n_packages=COUNT(packages_shipped_to))
+        city_groups.PARTITION(
+            name="states", by=state
+        ).CALCULATE(state, max_packs=MAX(cities.n_packages))
+      </Code>
+    </Example>
     </GoodExamples>
   </Partition>
 
