@@ -274,6 +274,8 @@ def ensembling_process(client, updated_question, formatted_prompt):
                     hash_dict[df_hash]["count"] += 1
                 else:
                     hash_dict[df_hash] = {"response": response, "count": 1}
+            else:
+                print("////////////EXCEPTION/////////////")
 
         most_common_hash = max(hash_dict, key=lambda k: hash_dict[k]["count"])
 
