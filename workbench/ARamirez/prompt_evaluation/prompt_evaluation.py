@@ -152,7 +152,7 @@ def format_prompt(prompt, data, question, database_content, script_content):
         recomendation=""
         similar_code= "similar pydough code not found"
     #prompt_string = ' '.join(contexts)
-    return question, prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
+    return question, prompt
 
 def correct(client, question,  code, prompt):
     extracted_code= extract_python_code(code)
