@@ -255,9 +255,8 @@ def generate_hash(df):
     return hashlib.md5(pd.util.hash_pandas_object(df).values.tobytes()).hexdigest()
 
 
-def ensembling_process(client, prompt, data, question, database_content,script_content):
+def ensembling_process(client, updated_question, formatted_prompt):
     """Description"""
-    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
 
     hash_dict = {}
 
@@ -292,7 +291,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
    
     try:
         start_time = time.time()
-        response = ensembling_process(updated_question,formatted_prompt)
+        response = ensembling_process(client, updated_question,formatted_prompt)
         end_time = time.time()
         execution_time = end_time - start_time
         return response, execution_time
