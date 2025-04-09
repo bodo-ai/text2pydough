@@ -270,7 +270,6 @@ def ensembling_process(client, updated_question, formatted_prompt):
 
             if result is not None:
                 df_hash = generate_hash(result)
-                print(df_hash)
                 if df_hash in hash_dict:
                     hash_dict[df_hash]["count"] += 1
                 else:
