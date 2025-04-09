@@ -292,7 +292,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
    
     try:
         start_time = time.time()
-        response = client.ensembling_process(updated_question,formatted_prompt)
+        response = ensembling_process(updated_question,formatted_prompt)
         end_time = time.time()
         execution_time = end_time - start_time
         return response, execution_time
