@@ -256,7 +256,8 @@ def generate_hash(df):
 
 
 def ensembling_process(client, updated_question, formatted_prompt):
-    """Description"""
+    """Performs an ensembling process to generate multiple responses from an AI client.
+    The most common response is selected based on a hash generated from the obtained results."""
 
     hash_dict = {}
 
@@ -264,7 +265,6 @@ def ensembling_process(client, updated_question, formatted_prompt):
         for i in range(3):
             response = client.ask(updated_question,formatted_prompt)
             extracted_code = extract_python_code(response)
-            print(extracted_code)
             local_env = {"pydough": pydough, "datetime": datetime}
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
 
@@ -276,7 +276,7 @@ def ensembling_process(client, updated_question, formatted_prompt):
                 else:
                     hash_dict[df_hash] = {"response": response, "count": 1}
             else:
-                print("////////////EXCEPTION/////////////")
+                print(f"The PyDough code has the exception: {exception}")
 
         most_common_hash = max(hash_dict, key=lambda k: hash_dict[k]["count"])
 
