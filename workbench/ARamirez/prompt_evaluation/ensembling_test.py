@@ -264,12 +264,16 @@ def ensembling_process(client, updated_question, formatted_prompt):
     try:
         for i in range(3):
             response = client.ask(updated_question,formatted_prompt)
+            print("RESPONSE:")
+            print(response)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
 
             if result is not None:
                 df_hash = generate_hash(result)
+                print("HASH")
+                print(df_hash)
                 if df_hash in hash_dict:
                     hash_dict[df_hash]["count"] += 1
                 else:
