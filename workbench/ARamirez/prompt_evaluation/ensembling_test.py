@@ -275,29 +275,30 @@ def ensembling_process(client, updated_question, formatted_prompt):
                 dfs_and_responses.append((result, response))
             else:
                 print(f"The PyDough code has the exception: {exception}")
+        
+        if dfs_and_responses == []:
+            return response
+        else: 
+            for i in range(len(dfs_and_responses)):
+                for j in range(i + 1, len(dfs_and_responses)):
+                    df_gold = dfs_and_responses[i][0]
+                    df_gen = dfs_and_responses[j][0]
 
-        for i in range(len(dfs_and_responses)):
-            for j in range(i + 1, len(dfs_and_responses)):
-                df_gold = dfs_and_responses[i][0]
-                df_gen = dfs_and_responses[j][0]
+                    if compare_df(
+                        df_gold=df_gold,
+                        df_gen=df_gen,
+                        query_category="",
+                        question=""
+                    ):
+                        counts[i].append(j)
 
-                if compare_df(
-                    df_gold=df_gold,
-                    df_gen=df_gen,
-                    query_category="",
-                    question=""
-                ):
-                    counts[i].append(j)
+            most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
 
-        print("///////////////////////////")
-        print(counts)
-        most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
-
-        if most_common_index is not None:
-            return dfs_and_responses[most_common_index][1]
-        else:
-            print("No common result found, returning the first response as fallback.")
-            return dfs_and_responses[0][1] if dfs_and_responses else None
+            if most_common_index is not None:
+                return dfs_and_responses[most_common_index][1]
+            else:
+                print("No common result found, returning the first response as fallback.")
+                return dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
         print(f"AI Suite error: {e}")
