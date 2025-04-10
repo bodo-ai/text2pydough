@@ -111,7 +111,8 @@ class OtherAIProvider(AIProvider):
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
                 temperature=self.temperature,
-        
+                topP=0,
+                topK=0
             
             )
             return response.choices[0].message.content
@@ -237,7 +238,7 @@ def process_question_wrapper(args):
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=10) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
