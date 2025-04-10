@@ -86,14 +86,14 @@ export DEEPSEEK_API_KEY="your-deepseek-api-key"
 ```bash
 python prompt_evaluation.py \
   --description "testing an experiment" \
-  --name "Gemini"
-  --pydough_file ./data/pydough_functions/cheatsheet_v6.md \
+  --name "Gemini" \
+  --pydough_file ./data/pydough_files/cheatsheet_v6.md \
   --database_structure ./data/database/tpch_graph.md \
   --prompt_file ./data/prompts/prompt.md \
-  --questions_csv ./data/queries/benchmark.csv \
-  --provider gemini \
+  --questions ./benchmark.csv \
+  --provider google \
   --model_id gemini-2.0-flash-001 \
-  --temperature 0.7 \
+  --temperature 0.0 \
   --num_threads 4
 ```
 
