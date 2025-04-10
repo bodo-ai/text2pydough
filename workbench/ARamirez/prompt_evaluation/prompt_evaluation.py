@@ -281,7 +281,7 @@ def main(git_hash):
             data = json.load(json_data)
 
         # Read Questions
-        questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
+        questions_df = pd.read_csv(args.questions, encoding="utf-8")
 
         combined_list = questions_df['question'].tolist()
 
@@ -320,7 +320,7 @@ def main(git_hash):
                 "database_structure": args.database_structure,
                 "prompt_file": args.prompt_file,
                 "prompt": prompt,
-                "questions_file": args.questions_csv,
+                "questions_file": args.questions,
                 "provider": args.provider,
                 "model_id": args.model_id,
                 "temperature": args.temperature
