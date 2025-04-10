@@ -119,64 +119,6 @@ class OtherAIProvider(AIProvider):
         except Exception as e:
             print(f"AI Suite error: {e}")
             return None, None 
-        
-WORDS_MAP = {
-    "partition": "PARTITION",
-    "group_by": "PARTITION",
-    "where": "WHERE",
-    "sum": "SUM",
-    "avg": "AVG",
-    "min": "MIN",
-    "max": "MAX",
-    "ndistinct": "NDISTINCT",
-    "has": "HAS",
-    "hasnot": "HASNOT",
-    "order_by": "ORDER_BY",
-    "top_k": "TOP_K",
-    "ranking": "RANKING",
-    "percentile": "PERCENTILE",
-    "lower": "LOWER",
-    "upper": "UPPER",
-    "length": "LENGTH",
-    "startswith": "STARTSWITH",
-    "endswith": "ENDSWITH",
-    "contains": "CONTAINS",
-    "like": "LIKE",
-    "join_strings": "JOIN_STRINGS",
-    "month": "MONTH",
-    "day": "DAY",
-    "hour": "HOUR",
-    "minute": "MINUTE",
-    "second": "SECOND",
-    "iff": "IFF",
-    "isin": "ISIN",
-    "default_to": "DEFAULT_TO",
-    "present": "PRESENT",
-    "absent": "ABSENT",
-    "keep_if": "KEEP_IF",
-    "monotonic": "MONOTONIC",
-    "abs": "ABS",
-    "round": "ROUND",
-    "power": "POWER",
-    "sqrt": "SQRT",
-    "calculate": "CALCULATE",
-    "asc": "ASC",
-    "desc": "DESC",
-}
-
-def replace_with_upper(text):
-    # Use regex to match words that appear in the words_map (case-insensitive)
-    def replacer(match):
-        word = match.group(0)
-        # Check if the lowercase version of the word is in the map
-        lower_word = word.lower()
-        if lower_word in WORDS_MAP:
-            return WORDS_MAP[lower_word]
-        else:
-            return word
-    
-    # Replace the matched words using the replacer function
-    return re.sub(r'\b\w+\b', replacer, text)
 
 def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
@@ -187,7 +129,7 @@ def extract_python_code(text):
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
-    match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
+    match = re.search(r"```(?:\w+\n)?(.*?)\n```", text, re.DOTALL)
     if match:
         python_code = match.group(1).strip()
         # Convert the extracted code to uppercase
@@ -210,7 +152,7 @@ def format_prompt(prompt, data, question, database_content, script_content):
         recomendation=""
         similar_code= "similar pydough code not found"
     #prompt_string = ' '.join(contexts)
-    return question, prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
+    return question, prompt
 
 def correct(client, question,  code, prompt):
     extracted_code= extract_python_code(code)
@@ -234,8 +176,10 @@ def correct(client, question,  code, prompt):
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
         response=client.ask(q, prompt)
-
+        return "".join([code, response])
     return response
+
+    
    
 def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
@@ -376,7 +320,7 @@ def main(git_hash):
         questions_df["execution_time"] = execution_time_column
 
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
+        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
@@ -403,9 +347,15 @@ def main(git_hash):
             
             # Process questions
             responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
-            questions_df["response"] = responses
+                    # Convert the responses into separate columns for 'response' and 'execution_time'
+            response_column = [response[0] for response in responses]  # Extract corrected responses
+            execution_time_column = [response[1] for response in responses]  # Extract execution times
+
+            # Save responses and execution times into the DataFrame
+            questions_df["response"] = response_column
+            questions_df["execution_time"] = execution_time_column
             output_file = f"{folder_path}/responses_benchmark{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code).apply(replace_with_upper)
+            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
             questions_df.to_csv(output_file, index=False, encoding="utf-8")
             output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
