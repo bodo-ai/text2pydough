@@ -271,7 +271,7 @@ def main(git_hash):
         with open(args.prompt_file, "r", encoding="utf-8") as f:
             prompt = f.read()
 
-        with open(args.script_file, "r", encoding="utf-8") as f:
+        with open(args.pydough_file, "r", encoding="utf-8") as f:
             script_content = f.read()
 
         with open(args.database_structure, "r", encoding="utf-8") as f:
