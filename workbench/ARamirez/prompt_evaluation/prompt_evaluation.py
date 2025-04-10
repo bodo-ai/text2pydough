@@ -247,10 +247,10 @@ def main(git_hash):
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
-    parser.add_argument("--script_file", type=str, help="Path to the script file.")
+    parser.add_argument("--pydough_file", type=str, help="Path to the script file.")
     parser.add_argument("--database_structure", type=str, help="Path to the database file.")
     parser.add_argument("--prompt_file", type=str, help="Path to the prompt file.")
-    parser.add_argument("--questions_csv", type=str, help="Path to the questions CSV file.")
+    parser.add_argument("--questions", type=str, help="Path to the questions CSV file.")
     parser.add_argument("--provider", type=str, help="Model provider (either 'azure' or another provider).")
     parser.add_argument("--model_id", type=str, help="Model ID.")
     parser.add_argument("--temperature", type=float, help="Set the temperature to the model")
@@ -316,7 +316,7 @@ def main(git_hash):
 
         mlflow.log_params(
             {
-                "script_file": args.script_file,
+                "pydough_file": args.script_file,
                 "database_structure": args.database_structure,
                 "prompt_file": args.prompt_file,
                 "prompt": prompt,
