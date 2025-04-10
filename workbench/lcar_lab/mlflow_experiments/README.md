@@ -2,17 +2,36 @@
 
 This script processes a set of questions against a script and database, generating responses using a specified AI model. The AI model can be from either Azure or another provider, and responses are saved to a CSV file.
 
+## 📁 Project Structure
 
-## Installation
+```
+.
+├── prompt_evaluation.py          # Entry point for executing the generation/evaluation
+├── queries_context.json         # JSON with contextual metadata per question
+├── test_data/
+│   ├── eval.py                  # Evaluation functions
+│   └── tpch.db                  # SQLite DB for validation 
+├── utils.py                     # Git helpers
+├── claude.py                    # Claude client wrapper
+├── results/                     # Output folder for generated CSV results
+├── data/                        # Folder containing all resources
+│   ├── pydough_files/           # Folder containing all available Pydough files in plain English
+│   ├── queries/                 # Folder with all available question files and benchmark
+│   ├── database/                # Folder with all database structure files
+│   └── prompts/                 # Folder with all prompt files
+
+```
+---
+
+## 🛠️ Installation
 
 1. Clone or download the repository.
 2. Install the environment using conda
 
 ## Conda install
 
-under workbench/ARamirez/prompt_evaluation
-conda env create -f environment.yml
-pip install pydough 
+under workbench/lcar_lab/mlflow_experiments
+conda env create -f environment.yml 
 
 ## For AWS
 
@@ -22,8 +41,6 @@ unzip awscliv2.zip
 sudo ./aws/install
 
 Once installed, configure it using "aws configure" and add your AWS Access Key and AWS Secret Key
-
-To get Access Key ID ... 
 
 ## For Google
 Create a service account in Google Cloud Console, generate a JSON key and then move this file to a location on your file system like your home directory. 
@@ -60,28 +77,62 @@ For deepseek models:
 ```bash
 export DEEPSEEK_API_KEY="your-deepseek-api-key"
 ```
+---
 
-## Usage
-Run the script with the following command:
+## 🧲 Usage
+
+### Run the script
 
 ```bash
 python prompt_evaluation.py \
-  --script_file path/to/your/script.py \
-  --database_structure path/to/database_structure.md \
-  --prompt_file path/to/prompt_file.md \
-  --questions_csv path/to/questions.csv \
-  --provider provider \
-  --model_id your_model_id \
+  --description "testing an experiment" \
+  --name "Gemini" \
+  --pydough_file ./data/pydough_files/cheatsheet_v6.md \
+  --database_structure ./data/database/tpch_graph.md \
+  --prompt_file ./data/prompts/prompt.md \
+  --questions ./benchmark.csv \
+  --provider google \
+  --model_id gemini-2.0-flash-001 \
   --temperature 0.0 \
-  --eval_results \
-  --no-eval_benchmark \
   --num_threads 4
 ```
-**Arguments:**
 
-- `<script_file>`: "Path to the script file."
-- `<database_structure>`: "Path to the database file."
-- `<prompt_file>`: "Path to the prompt file."
-- `<questions_csv>`: "Path to the questions CSV file."
-- `<provider>`: "Model provider (either 'azure' or another provider)."
-- `<model_id>`: "Model ID to use."
+### Arguments
+
+| Argument               | Description |
+|------------------------|-------------|
+| `--description`        | Description of the experiment. |
+| `--name`               | Name of the the experiment. |
+| `--pydough_file`       | Path to pydough that include description and functions in plain english. |
+| `--database_structure` | File containing DB schema or structure in plain english. |
+| `--prompt_file`        | File containing the prompt template. |
+| `--questions`          | CSV with natural language questions. |
+| `--provider`           | AI provider (`azure`, `aws-thinking`, `aws-deepseek`, or others). |
+| `--model_id`           | LLM model ID (e.g., `gpt-4`, `gemini-2.0-flash-001`). |
+| `--temperature`        | Sampling temperature for response creativity. |
+| `--num_threads`        | Number of threads to use during execution. |
+
+---
+
+## 🧆 Git Integration
+
+If the script detects untracked or modified files, it will automatically commit changes to capture the current Git hash for reproducibility.
+
+---
+
+## 📅 Example Prompt Format
+
+```txt
+### Instructions:
+You are a Pydough translator. Convert the following question into valid Pydough code using the given schema and similar examples.
+
+### Script:
+{script_content}
+
+### Database:
+{database_content}
+
+### Contextual Guidance:
+{recomendation}
+```
+
