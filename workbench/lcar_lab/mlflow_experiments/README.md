@@ -90,7 +90,7 @@ python prompt_evaluation.py \
   --pydough_file ./data/pydough_files/cheatsheet_v6.md \
   --database_structure ./data/database/tpch_graph.md \
   --prompt_file ./data/prompts/prompt.md \
-  --questions ./benchmark.csv \
+  --questions ./data/queries/benchmark.csv \
   --provider google \
   --model_id gemini-2.0-flash-001 \
   --temperature 0.0 \
