@@ -261,7 +261,6 @@ def ensembling_process(client, updated_question, formatted_prompt):
     Performs an ensembling process to generate multiple responses from an AI client.
     Uses a direct comparison approach to identify matching results.
     """
-
     dfs_and_responses = []
     counts = defaultdict(list)
 
@@ -273,14 +272,21 @@ def ensembling_process(client, updated_question, formatted_prompt):
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
 
             if result is not None:
-                dfs_and_responses.append((response, result))
+                dfs_and_responses.append((result, response))
             else:
                 print(f"The PyDough code has the exception: {exception}")
 
         for i in range(len(dfs_and_responses)):
             for j in range(i + 1, len(dfs_and_responses)):
-                if compare_df(df_gold=dfs_and_responses[i], df_gen=dfs_and_responses[j], query_category="", question=""):
-                    counts[i].append(j)
+                df_gold = dfs_and_responses[i][0]
+                df_gen = dfs_and_responses[j][0]
+
+                if compare_df(
+                    df_gold=df_gold,
+                    df_gen=df_gen,
+                    query_category="",
+                    question=""
+                ):
                     counts[i].append(j)
 
         print("///////////////////////////")
@@ -288,10 +294,10 @@ def ensembling_process(client, updated_question, formatted_prompt):
         most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
 
         if most_common_index is not None:
-            return dfs_and_responses[most_common_index]
+            return dfs_and_responses[most_common_index][1]
         else:
             print("No common result found, returning the first response as fallback.")
-            return dfs_and_responses[0][0]
+            return dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
         print(f"AI Suite error: {e}")
