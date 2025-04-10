@@ -144,14 +144,11 @@ def format_prompt(prompt, data, question, database_content, script_content):
         recomendation = data[question].get("context_id", "")
         similar_code= data[question].get("similar_queries", "similar code not found")
         question = data[question].get("redefined_question", question)
-    #contexts = (
-    #    open(f"./data/pydough_files/{id}", 'r').read() if os.path.exists(f"./data/pydough_files/{id}") else ''
-    #    for id in ids
-    #)
+ 
     else:
         recomendation=""
         similar_code= "similar pydough code not found"
-    #prompt_string = ' '.join(contexts)
+    
     return question, prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
 def correct(client, question,  code, prompt):
@@ -184,7 +181,6 @@ def correct(client, question,  code, prompt):
 def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
     formatted_prompt = format_prompt(prompt,data,question,database_content, script_content)
-    
     
     try:
         response= client.ask(question, formatted_prompt)
@@ -236,9 +232,9 @@ def process_question_wrapper(args):
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
 
-def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content):
+def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=1) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=num_threads) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
             [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
@@ -246,15 +242,8 @@ def process_questions(data, provider, model_id, formatted_prompt, questions, tem
     
     return original_responses
 
-def parse_dict(value):
-    try:
-        return ast.literal_eval(value) 
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"Invalid dictionary: {value}")
-    
 def main(git_hash):
     # Argument Parser
-    # this is an example: python prompt_evaluation.py  "Experiment for testing azure" "Azure test" cheatsheet_v4_examples.md tcph_graph.md prompt2.txt questions.csv google gemini-1.5-pro-001 --eval_results
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
@@ -265,14 +254,9 @@ def main(git_hash):
     parser.add_argument("--provider", type=str, help="Model provider (either 'azure' or another provider).")
     parser.add_argument("--model_id", type=str, help="Model ID.")
     parser.add_argument("--temperature", type=float, help="Set the temperature to the model")
-    parser.add_argument("--eval_results", action="store_true", help="Evaluate the LLM output against the ground truth data.")
-    parser.add_argument("--eval_benchmark", action="store_true", help="Evaluate the TPCH Benchmark")
-    parser.add_argument("--no-eval_results", action="store_false", dest="eval_results", help="Do not evaluate the LLM output.")
-    parser.add_argument("--no-eval_benchmark", action="store_false", dest="eval_benchmark", help="Do not evaluate the TPCH Benchmark")
-    parser.add_argument("--config", type=parse_dict, help="Path to the database file.", default=None)
+    parser.add_argument("--num_threads", type=int, help="Set the numbers of threads to the model")
 
-    # Default value for eval_results and eval_benchmark is False
-    parser.set_defaults(eval_results=False, eval_benchmark=False)
+    parser.set_defaults(eval_results=False)
     args = parser.parse_args()
     
     # Create result directory if not exists
@@ -281,7 +265,6 @@ def main(git_hash):
     
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
     expr_name = "text2pydough"  # create a new experiment (do not replace)
-    #mlflow.create_experiment(expr_name, s3_bucket)
     experiment= mlflow.set_experiment(expr_name)
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash},experiment_id=experiment.experiment_id):
         # Read Files Efficiently
@@ -300,21 +283,10 @@ def main(git_hash):
         # Read Questions
         questions_df = pd.read_csv(args.questions_csv, encoding="utf-8")
 
-        # Format prompt once
-        #formatted_prompt = prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code)
-
-        # Process questions
-        #questions_df['instructions'] = questions_df['instructions'].fillna('')
-
-        #questions_df['combined'] = questions_df['question'] + " " + questions_df['instructions']
-
-        # Convert the 'combined' column into a list
         combined_list = questions_df['question'].tolist()
 
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads)
 
-        # Save responses
-        # Convert the responses into separate columns for 'response' and 'execution_time'
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
 
@@ -327,58 +299,20 @@ def main(git_hash):
 
         questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
-        if args.eval_results:
-            folder_path = f"./results/{args.provider}/{args.model_id}/test"
-            os.makedirs(folder_path, exist_ok=True)
+        folder_path = f"./results/{args.provider}/{args.model_id}/test"
+        os.makedirs(folder_path, exist_ok=True)
 
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
-            total_rows = len(responses)
+        output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+        total_rows = len(responses)
 
-            counts = responses['comparison_result'].dropna().value_counts()
-            percentages = counts / total_rows
+        counts = responses['comparison_result'].dropna().value_counts()
+        percentages = counts / total_rows
 
-            mlflow.log_metrics(
-                    percentages,
-                )
-            mlflow.log_metric("total_script_queries", total_rows)
-            mlflow.log_artifact(output_file)
-
-        if args.eval_benchmark:
-            folder_path = f"./results/{args.provider}/{args.model_id}/benchmark"
-            os.makedirs(folder_path, exist_ok=True)
-            questions_df = pd.read_csv("./benchmark.csv", encoding="utf-8")
-            
-            # Process questions
-            responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df["question"].tolist(), args.temperature,database_content,script_content)
-                    # Convert the responses into separate columns for 'response' and 'execution_time'
-            response_column = [response[0] for response in responses]  # Extract corrected responses
-            execution_time_column = [response[1] for response in responses]  # Extract execution times
-
-            # Save responses and execution times into the DataFrame
-            questions_df["response"] = response_column
-            questions_df["execution_time"] = execution_time_column
-            output_file = f"{folder_path}/responses_benchmark{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-            questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
-
-            questions_df.to_csv(output_file, index=False, encoding="utf-8")
-            output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
-            total_rows = len(responses)
-
-            counts = responses['comparison_result'].dropna().value_counts()
-            total = counts.sum()
-            percentages = counts / total
-            key_mapping = {
-                'Match': 'Match_benchmark',
-                'No Match': 'No_Match_benchmark',
-                'Query error': 'Query_error_bechmark'
-            }
-            counts = counts.rename(key_mapping)
-            percentages = percentages.rename(key_mapping)
-
-            mlflow.log_metrics(
-                    percentages
-                )
-            mlflow.log_metric("total_benchmark_queries", total_rows)
+        mlflow.log_metrics(
+            percentages,
+        )
+        mlflow.log_metric("total_script_queries", total_rows)
+        mlflow.log_artifact(output_file)
 
         mlflow.log_params(
             {
