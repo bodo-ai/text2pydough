@@ -316,7 +316,7 @@ def main(git_hash):
 
         mlflow.log_params(
             {
-                "pydough_file": args.script_file,
+                "pydough_file": args.pydough_file,
                 "database_structure": args.database_structure,
                 "prompt_file": args.prompt_file,
                 "prompt": prompt,
