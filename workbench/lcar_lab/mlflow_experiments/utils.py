@@ -9,6 +9,23 @@ import sys
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
+import os
+import subprocess
+
+def download_database(db_path):
+    """Checks if the TPC-H database exists; if not, downloads it."""
+    if os.path.exists(db_path):
+        print("Database found, skipping download.")
+    else:
+        print("Database not found, downloading...")
+        url = "https://github.com/lovasoa/TPCH-sqlite/releases/download/v1.0/TPC-H.db"
+        try:
+            subprocess.run(["wget", url, "-O", db_path], check=True)
+            print("Database downloaded successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error downloading the database: {e}")
+            raise
+
 
 def execute_command_str(command: List[str], cwd=None, env=None) -> str:
     """
