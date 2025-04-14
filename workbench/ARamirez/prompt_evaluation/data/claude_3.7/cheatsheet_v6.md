@@ -3,8 +3,6 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
 ### **GENERAL RULES**: 
 
-  - You should use `HAS` function to verify the 1 to N relationship beetwen tables, and you can identify them because the related subcollection has a plural name. For example, for the query "Give the number of orders for every nation", you solve like this: `nations.WHERE(HAS(customers.orders)==1).CALCULATE(nation_name=name, num_of_orders=COUNT(customers.orders.key))`.
-
   - This is NOT SQL, so don't make assumptions about its syntax or behavior.
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
