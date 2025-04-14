@@ -1,20 +1,20 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <PyDoughCheatSheet>
   <GeneralRules>
-    <Rule>Use `HAS` function to verify the 1 to N relationship between tables, and you can identify them because the related subcollection has a plural name.</Rule>
-    <Rule>This is NOT SQL, so don't make assumptions about its syntax or behavior.</Rule>
-    <Rule>Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.</Rule>
-    <Rule>If a query does not specify an specific year, and want that you calculate for all the year, for example "compare year over year", then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result.</Rule>
-    <Rule>If you need to use an attribute of a previous collection, you must have calculated the attribute using CALCULATE.</Rule>
-    <Rule>CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions.</Rule>
-    <Rule>RANKING is used as a function instead of method.</Rule>
-    <Rule>When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection.</Rule>
-    <Rule>PARTITION function ALWAYS need 2 parameters `name and by`. The "by" parameter must never have collections, subcollections or calculations.</Rule>
-    <Rule>PARTITION must always be used as a method. Never do PARTITION by the key or the collection key.</Rule>
-    <Rule>CALCULATE function ALWAYS needs an expression, not a collection.</Rule>
-    <Rule>In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level.</Rule>
-    <Rule>PyDough does not support use different childs in operations, for example you cannot do: `total_order_value = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls.</Rule>
-    <Rule>If you need to get the best rankings within a CALCULATE method, you can use the RANKING method instead of TOP_K, and then filter them by the ranking number.</Rule>
+    <Rules>
+    Use `HAS` function to verify the 1 to N relationship between tables, and you can identify them because the related subcollection has a plural name.
+    This is NOT SQL, so don't make assumptions about its syntax or behavior.
+    Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
+    If a query does not specify an specific year, and want that you calculate for all the year, for example "compare year over year", then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result.
+    If you need to use an attribute of a previous collection, you must have calculated the attribute using CALCULATE.
+    CALCULATE ONLY supports singular expressions. If you need to use plural sub-collections, you MUST use aggregation functions.
+    RANKING is used as a function instead of method.
+    When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection.
+    PARTITION function ALWAYS need 2 parameters `name and by`. The "by" parameter must never have collections, subcollections or calculations.
+    PARTITION must always be used as a method. Never do PARTITION by the key or the collection key.
+    CALCULATE function ALWAYS needs an expression, not a collection.
+    In PyDough, complex calculations can often be expressed concisely by combining filters, transformations, and aggregations at the appropriate hierarchical level.
+    PyDough does not support use different childs in operations, for example you cannot do: `total_order_value = SUM(orders.lines.extended_price * (1 - orders.lines.discount))` because you have two different calls.
+    If you need to get the best rankings within a CALCULATE method, you can use the RANKING method instead of TOP_K, and then filter them by the ranking number.</Rules>
   </GeneralRules>
 
   <CollectionsSubCollections>
@@ -45,11 +45,11 @@
       </Example>
     </Examples>
     <Rules>
-      <Rule>Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.</Rule>
-      <Rule>Positional arguments must precede keyword arguments.</Rule>
-      <Rule>New fields defined in a CALCULATE do not take effect until after the CALCULATE completes.</Rule>
-      <Rule>Existing new fields not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.</Rule>
-      <Rule>A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.</Rule>
+      Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
+      Positional arguments must precede keyword arguments.
+      New fields defined in a CALCULATE do not take effect until after the CALCULATE completes.
+      Existing new fields not included in a CALCULATE can still be referenced but are not part of the final result unless included in the last CALCULATE clause.
+      A CALCULATE on the graph itself creates a collection with one row and columns corresponding to the properties inside the CALCULATE.
     </Rules>
   </CalculateExpressions>
 
@@ -70,16 +70,16 @@
       </Example>
     </Examples>
     <Rules>
-      <Rule>Use &amp; (AND), | (OR), ~ (NOT) instead of and, or, not.</Rule>
-      <Rule>Avoid chained comparisons (e.g., replace a &lt; b &lt; c with (a &lt; b) &amp; (b &lt; c)).</Rule>
+      Use &amp; (AND), | (OR), ~ (NOT) instead of and, or, not.
+      Avoid chained comparisons (e.g., replace a &lt; b &lt; c with (a &lt; b) &amp; (b &lt; c)).
     </Rules>
   </Filtering>
 
   <Sorting>
     <Syntax>.ORDER_BY(field.ASC()/DESC(), ...)</Syntax>
     <Parameters>
-      <Parameter>.ASC(na_pos='last') → Sort ascending, nulls last.</Parameter>
-      <Parameter>.DESC(na_pos='first') → Sort descending, nulls first.</Parameter>
+      .ASC(na_pos='last') → Sort ascending, nulls last.
+      .DESC(na_pos='first') → Sort descending, nulls first.
     </Parameters>
     <Examples>
       <Example>
@@ -101,7 +101,7 @@
       <Code>customers.TOP_K(10, by=COUNT(orders).DESC())</Code>
     </Example>
     <Rules>
-      <Rule>The two parameters are obligatory.</Rule>
+      The two parameters are obligatory.
     </Rules>
   </TopK>
 
@@ -144,7 +144,7 @@
       </Function>
     </Functions>
     <Rules>
-      <Rule>Aggregations Function does not support calling aggregations inside of aggregations</Rule>
+      Aggregations Function does not support calling aggregations inside of aggregations
     </Rules>
   </AggregationFunctions>
 
@@ -152,11 +152,11 @@
     <Purpose>Group records by keys.</Purpose>
     <Syntax>PARTITION(name='group_name', by=(key1, key2))</Syntax>
     <Rules>
-      <Rule>All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the PARTITION.</Rule>
-      <Rule>Partition keys must be scalar fields from the collection.</Rule>
-      <Rule>You must use Aggregation functions to call plural values inside PARTITION.</Rule>
+      All the parameters in "by=(key1, key2)" must be use in CALCULATE without using the "name" of the PARTITION.
+      Partition keys must be scalar fields from the collection.
+      You must use Aggregation functions to call plural values inside PARTITION.
     </Rules>
-    <GoodExamples>
+    <Examples>
       <Example>
         <Description>Group addresses by state and count occupants</Description>
         <Code>
@@ -310,17 +310,17 @@
         ).CALCULATE(state, max_packs=MAX(cities.n_packages))
       </Code>
     </Example>
-    </GoodExamples>
+    <Examples>
   </Partition>
 
   <WindowFunctions>
     <Ranking>
       <Syntax>RANKING(by=field.DESC(), per='collection', allow_ties=False)</Syntax>
       <Parameters>
-        <Parameter>by: Ordering criteria (e.g., acctbal.DESC())</Parameter>
-        <Parameter>per: Hierarchy level (e.g.,per="nation" for per-nation ranking)</Parameter>
-        <Parameter>allow_ties (default False): Allow tied ranks</Parameter>
-        <Parameter>dense (default False): Use dense ranking</Parameter>
+        by: Ordering criteria (e.g., acctbal.DESC())
+        per: Hierarchy level (e.g.,per="nation" for per-nation ranking)
+        allow_ties (default False): Allow tied ranks
+        dense (default False): Use dense ranking
       </Parameters>
       <Examples>
         <Example>
@@ -341,9 +341,9 @@
     <Percentile>
       <Syntax>PERCENTILE(by=field.ASC(), n_buckets=100, per="name_antecesor")</Syntax>
       <Parameters>
-        <Parameter>by: Ordering criteria</Parameter>
-        <Parameter>per (optional): optional argument (default None) for the same per argument as all other window functions</Parameter>
-        <Parameter>n_buckets (default 100): Number of percentile buckets</Parameter>
+        by: Ordering criteria
+        per (optional): optional argument (default None) for the same per argument as all other window functions
+        n_buckets (default 100): Number of percentile buckets
       </Parameters>
       <Example>
         <Code>
@@ -356,8 +356,8 @@
     <RelSum>
       <Syntax>RELSUM(expression, per=None)</Syntax>
       <Parameters>
-        <Parameter>expression: the singular expression to take the sum of across multiple rows</Parameter>
-        <Parameter>per (optional): optional argument (default None) for the same per argument as all other window functions</Parameter>
+        expression: the singular expression to take the sum of across multiple rows
+        per (optional): optional argument (default None) for the same per argument as all other window functions
       </Parameters>
       <Example>
         <Code>
@@ -370,8 +370,8 @@
     <RelAvg>
       <Syntax>RELAVG(expression, per=None)</Syntax>
       <Parameters>
-        <Parameter>expression: the singular expression to take the average of across multiple rows</Parameter>
-        <Parameter>per (optional): optional argument (default None) for the same per argument as all other window functions</Parameter>
+        expression: the singular expression to take the average of across multiple rows
+        per (optional): optional argument (default None) for the same per argument as all other window functions
       </Parameters>
       <Example>
         <Code>
@@ -384,8 +384,8 @@
     <RelCount>
       <Syntax>RELCOUNT(expression, per=None)</Syntax>
       <Parameters>
-        <Parameter>expression: the singular expression to count the number of non-null entries across multiple rows</Parameter>
-        <Parameter>per (optional): optional argument (default None) for the same per argument as all other window functions</Parameter>
+        expression: the singular expression to count the number of non-null entries across multiple rows
+        per (optional): optional argument (default None) for the same per argument as all other window functions
       </Parameters>
       <Example>
         <Code>
@@ -398,7 +398,7 @@
     <RelSize>
       <Syntax>RELSIZE(per=None)</Syntax>
       <Parameters>
-        <Parameter>per (optional): optional argument (default None) for the same per argument as all other window functions</Parameter>
+        per (optional): optional argument (default None) for the same per argument as all other window functions
       </Parameters>
       <Example>
         <Code>
@@ -422,21 +422,19 @@
   <Singular>
     <Purpose>SINGULAR in PyDough ensures data is explicitly treated as singular in sub-collection contexts, preventing undefined behavior if used correctly.</Purpose>
     <Examples>
-      <GoodExample>
-        <Description>Access the package cost of the most recent package ordered by each person</Description>
-        <Code>
-          most_recent_package = packages.WHERE(
-              RANKING(by=order_date.DESC(), levels=1) == 1
-          ).SINGULAR()
-          People.CALCULATE(
-              ssn,
-              first_name,
-              middle_name,
-              last_name,
-              most_recent_package_cost=most_recent_package.package_cost
-          )
+      <Description>Access the package cost of the most recent package ordered by each person</Description>
+      <Code>
+        most_recent_package = packages.WHERE(
+            RANKING(by=order_date.DESC(), levels=1) == 1
+        ).SINGULAR()
+        People.CALCULATE(
+            ssn,
+            first_name,
+            middle_name,
+            last_name,
+            most_recent_package_cost=most_recent_package.package_cost
+        )
         </Code>
-      </GoodExample>
     </Examples>
   </Singular>
 
@@ -470,7 +468,7 @@
       <Syntax>string[start:stop:step]</Syntax>
       <Example>Customers(country_code = phone[:3])</Example>
       <Rules>
-        <Rule>Step must be 1 or omitted; start/stop non-negative or omitted.</Rule>
+        Step must be 1 or omitted; start/stop non-negative or omitted.
       </Rules>
     </Slicing>
   </OtherOperators>
