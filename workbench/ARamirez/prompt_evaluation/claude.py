@@ -11,7 +11,6 @@ class ClaudeModel:
         self.brt = boto3.client(service_name='bedrock-runtime', config= config)
 
     def ask_claude_with_stream(self, question, prompt, model, provider):
-        print(question)
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 20000,
