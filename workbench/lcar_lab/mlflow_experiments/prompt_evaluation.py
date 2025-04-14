@@ -14,7 +14,7 @@ from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
 import mlflow
 from test_data.eval import compare_output, execute_code_and_extract_result
-from utils import autocommit, get_git_commit, modified_files, untracked_files
+from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from claude import ClaudeModel, DeepseekModel
 import pydough
 from abc import ABC, abstractmethod
@@ -330,6 +330,11 @@ def main(git_hash):
 if __name__ == "__main__":
 
     cwd = os.getcwd()
+     # Define the database path
+    db_path = './test_data/tpch.db'
+
+    # Download the database if it's not already present
+    download_database(db_path)
     untracked= untracked_files(cwd)
     modified= modified_files(cwd)
     
