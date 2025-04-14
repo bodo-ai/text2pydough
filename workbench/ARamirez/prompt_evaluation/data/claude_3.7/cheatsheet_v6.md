@@ -372,68 +372,6 @@ PARTITION(name='group_name', by=(key1, key2))
   ).CALCULATE(state, max_packs=MAX(cities.n_packages))
   ```
 
-### **Bad Examples**
-  - **Partition people by their birth year to find the number of people born in each year**: Invalid because the `email` property is referenced, which is not one of the partition keys, even though the data being partitioned does have an `email` property.
-    ```
-    People.CALCULATE(birth_year=YEAR(birth_date)).PARTITION(name="years", by=birth_year).CALCULATE(
-    birth_year,
-    email,
-    n_people=COUNT(People)
-  )
-    ```
-
-  - **Count how many packages were ordered in each year**: Invalid because `YEAR(order_date)` is not allowed to be used as a partition term (it must be placed in a `CALCULATE` so it is accessible as a named reference).
-    ```
-    Packages.PARTITION(name="years", by=YEAR(order_date)).CALCULATE(
-    n_packages=COUNT(Packages)
-    )
-    ```
-
-  - **Count how many people live in each state**: Invalid because `current_address.state` is not allowed to be used as a partition term (it must be placed in a `CALCULATE` so it is accessible as a named reference).
-    ``` 
-    People.PARTITION(name="state", by=current_address.state).CALCULATE(
-    n_packages=COUNT(People)
-    )
-    ```
-  - **Partition people by their birth year to find the number of people born in each year.**: Invalid because the `People.email` property is referenced, which is plural with regards to the `years` collection and thus cannot be referenced in a calculate unless it is aggregated.
-  ```
-  People.CALCULATE(birth_year=YEAR(birth_date)).PARTITION(name="years", by=birth_year).CALCULATE(
-      birth_year,
-      People.email,
-      n_people=COUNT(People)
-  )
-  ```
-
-  **Bad Example #1**: Invalid version of good example #7 that did not use a `CALCULATE` to make `state` available via down-streaming or to bind `first_name[:1]` to a name, therefore neither can be used as a partition term.
-  ```
-  Addresses.current_occupants.PARTITION(name="combinations", by=(state, first_name[:1])).CALCULATE(
-      state,
-      first_name[:1],
-      n_people=COUNT(current_occupants),
-  ).TOP_K(10, by=n_people.DESC())
-  ```
-
-  - **Bad Example #2**: Partition people by their birth year to find the number of people born in each year. Invalid because the `email` property is referenced, which is not one of the partition keys, even though the data being partitioned does have an `email` property.
-  ```
-  People.CALCULATE(birth_year=YEAR(birth_date)).PARTITION(name="years", by=birth_year).CALCULATE(
-      birth_year,
-      email,
-      n_people=COUNT(People)
-  )
-  ```
-
-  - **Bad Example #9**: Invalid version of good example #7 that accesses the sub-collection of `combinations` with the wrong name `Addresses` instead of `current_occupants`.
-  ```
-  people_info = Addresses.CALCULATE(state).current_occupants.CALCULATE(
-      first_letter=first_name[:1],
-  )
-  people_info.PARTITION(name="combinations", by=(state, first_letter)).CALCULATE(
-      state,
-      first_letter,
-      n_people=COUNT(Addresses),
-  ).TOP_K(10, by=n_people.DESC())
-  ```
-
 ## **8. WINDOW FUNCTIONS**  
 
 Window functions in PyDough have an optional `per` argument. If this argument is omitted, it means that the window function applies to all records of the current collection (e.g. rank all customers). If it is provided, it should be a string that describes which ancestor of the current context the window function should be calculated with regards to, and in that case it means that the set of values used by the window function should be per-record of the correspond ancestor (e.g. rank all customers per-nation).
