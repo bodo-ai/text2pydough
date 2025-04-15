@@ -224,7 +224,7 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
       pct_of_packages=100.0 * COUNT(packages) / total_packages,
   )
     ```
-
+The examples shown are not from the current database; just treat them as examples.
   - **Good Example #1**: Find every unique state.
   ```
   PARTITION(Addresses, name="addrs", by=state).CALCULATE(state)
