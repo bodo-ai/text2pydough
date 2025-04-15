@@ -327,7 +327,7 @@ def main(git_hash):
 
         combined_list = questions_df['question'].tolist()
 
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads, args.iterations)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads, args.num_iterations)
 
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
