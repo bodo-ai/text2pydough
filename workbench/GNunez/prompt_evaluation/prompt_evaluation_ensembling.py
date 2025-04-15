@@ -196,7 +196,7 @@ def ensembling_process(client, updated_question, formatted_prompt):
     counts = defaultdict(list)
 
     try:
-        for i in range(30):
+        for i in range(5):
             response = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
