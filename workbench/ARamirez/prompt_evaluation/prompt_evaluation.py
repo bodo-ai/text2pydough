@@ -99,6 +99,7 @@ class OtherAIProvider(AIProvider):
 
 
     def ask(self, question, prompt):
+        print(question)
         """Generates a response using AI Suite."""
         messages = [
             {"role": "system", "content": prompt},
