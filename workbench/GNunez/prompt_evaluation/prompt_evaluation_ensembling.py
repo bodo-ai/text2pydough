@@ -112,9 +112,7 @@ class OtherAIProvider(AIProvider):
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
-                temperature=self.temperature,
-                topP=0,
-                topK=0
+                temperature=self.temperature
             
             )
             return response.choices[0].message.content
@@ -196,7 +194,7 @@ def ensembling_process(client, updated_question, formatted_prompt):
     counts = defaultdict(list)
 
     try:
-        for i in range(5):
+        for i in range(50):
             response = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
