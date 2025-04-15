@@ -1,4 +1,5 @@
 <PyDoughCheatSheet>
+  The examples shown are not from the current database; just treat them as examples.
   <GeneralRules>
     <Rules>
     Use `HAS` function to verify the 1 to N relationship between tables, and you can identify them because the related subcollection has a plural name.
@@ -20,9 +21,9 @@
   <CollectionsSubCollections>
     <Syntax>Access collections/sub-collections using dot notation.</Syntax>
     <Examples>
-      <Example>People → Access all records in the 'People' collection.</Example>
-      <Example>People.current_address → Access current addresses linked to people.</Example>
-      <Example>Packages.customer → Access customers linked to packages.</Example>
+      People → Access all records in the 'People' collection.
+      People.current_address → Access current addresses linked to people.
+      Packages.customer → Access customers linked to packages.
     </Examples>
   </CollectionsSubCollections>
 
@@ -30,19 +31,11 @@
     <Purpose>Derive new fields, rename existing ones or select specific fields.</Purpose>
     <Syntax>Collection.CALCULATE(field=expression, ...)</Syntax>
     <Examples>
-      <Example>
-        <Description>Select fields</Description>
-        <Code>People.CALCULATE(first_name=first_name, last_name=last_name)</Code>
-      </Example>
-      <Example>
-        <Description>Derived fields</Description>
-        <Code>
-          Packages.CALCULATE(  
+      Select fields: People.CALCULATE(first_name=first_name, last_name=last_name)
+      Derived fields= Packages.CALCULATE(  
               customer_name=JOIN_STRINGS(' ', customer.first_name, customer.last_name),  
               cost_per_unit=package_cost / quantity  
           )
-        </Code>
-      </Example>
     </Examples>
     <Rules>
       Use aggregation functions (e.g., SUM, COUNT) for plural sub-collections.
@@ -56,18 +49,9 @@
   <Filtering>
     <Syntax>.WHERE(condition)</Syntax>
     <Examples>
-      <Example>
-        <Description>Filter people with negative account balance</Description>
-        <Code>People.WHERE(acctbal < 0)</Code>
-      </Example>
-      <Example>
-        <Description>Filter packages ordered in 2023</Description>
-        <Code>Packages.WHERE(YEAR(order_date) == 2023)</Code>
-      </Example>
-      <Example>
-        <Description>Filter addresses with occupants</Description>
-        <Code>Addresses.WHERE(HAS(current_occupants)==1)</Code>
-      </Example>
+      Filter people with negative account balance: ```People.WHERE(acctbal < 0)```
+      Filter packages ordered in 2023: ```Packages.WHERE(YEAR(order_date) == 2023)```
+      Filter addresses with occupants: ```Addresses.WHERE(HAS(current_occupants)==1)```
     </Examples>
     <Rules>
       Use &amp; (AND), | (OR), ~ (NOT) instead of and, or, not.
@@ -82,14 +66,8 @@
       .DESC(na_pos='first') → Sort descending, nulls first.
     </Parameters>
     <Examples>
-      <Example>
-        <Description>Alphabetical sort</Description>
-        <Code>People.ORDER_BY(last_name.ASC(), first_name.ASC())</Code>
-      </Example>
-      <Example>
-        <Description>Most expensive packages first</Description>
-        <Code>Packages.ORDER_BY(package_cost.DESC())</Code>
-      </Example>
+      Alphabetical sort: ```People.ORDER_BY(last_name.ASC(), first_name.ASC())```
+      Most expensive packages first: ```Packages.ORDER_BY(package_cost.DESC())```
     </Examples>
   </Sorting>
 
@@ -97,8 +75,7 @@
     <Purpose>Select top k records.</Purpose>
     <Syntax>.TOP_K(k, by=field.DESC())</Syntax>
     <Example>
-      <Description>Top 10 customers by orders count</Description>
-      <Code>customers.TOP_K(10, by=COUNT(orders).DESC())</Code>
+      Top 10 customers by orders count: ```customers.TOP_K(10, by=COUNT(orders).DESC())```
     </Example>
     <Rules>
       The two parameters are obligatory.
@@ -157,36 +134,27 @@
       You must use Aggregation functions to call plural values inside PARTITION.
     </Rules>
     <Examples>
-      <Example>
-        <Description>Group addresses by state and count occupants</Description>
-        <Code>
-          Addresses.PARTITION(name="states", by=(state)).CALCULATE(
-            state,
-            n_people=COUNT(Addresses.current_occupants)
-          )
-        </Code>
-      </Example>
-      <Example>
-        <Description>Group packages by year/month</Description>
-        <Code>
-          package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
-          package_info.PARTITION(name='packs', by=(order_year, order_month))
-        </Code>
-      </Example>
-      <Example>
-        <Description>Find packages below average cost for their year/month</Description>
-        <Code>
-          package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
-          package_info.PARTITION(name="months", by=(order_year, order_month)).CALCULATE(
-              avg_package_cost=AVG(Packages.package_cost)
-          ).Packages.WHERE(
-              package_cost &lt; avg_package_cost
-          )
-        </Code>
-      </Example>
-         <Example>
-      <Name>Good Example #3: Find the top 5 years with the most people born in that year who have yahoo email accounts</Name>
-      <Code>
+      1. Group addresses by state and count occupants: 
+      ```
+      Addresses.PARTITION(name="states", by=(state)).CALCULATE(
+        state,
+        n_people=COUNT(Addresses.current_occupants)
+      )
+      ```
+      2. Group packages by year/month:
+      ```
+      package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
+      package_info.PARTITION(name='packs', by=(order_year, order_month))
+      ```
+      3. Find packages below average cost for their year/month:
+      ```
+        package_info = Packages.CALCULATE(order_year=YEAR(order_date), order_month=MONTH(order_date))
+        package_info.PARTITION(name="months", by=(order_year, order_month)).CALCULATE(
+        avg_package_cost=AVG(Packages.package_cost)).Packages.WHERE(package_cost &lt; avg_package_cost)
+      ```
+        
+      4. Find the top 5 years with the most people born in that year who have yahoo email accounts:
+      ```  
         yahoo_people = People.CALCULATE(
             birth_year=YEAR(birth_date)
         ).WHERE(ENDSWITH(email, "@yahoo.com"))
@@ -194,26 +162,20 @@
             birth_year,
             n_people=COUNT(People)
         ).TOP_K(5, by=n_people.DESC())
-      </Code>
-    </Example>
+      ```
+      5: Identify the states whose current occupants account for at least 1% of all packages purchased:
+      ```
+          GRAPH.CALCULATE(
+              total_packages=COUNT(Packages)
+          ).Addresses.WHERE(
+            HAS(current_occupants.package) == 1
+          ).PARTITION(name="states", by=state).CALCULATE(
+              state,
+              pct_of_packages=100.0 * COUNT(Addresses.current_occupants.package) / total_packages
+          ).WHERE(pct_of_packages >= 1.0)
+        ```
 
-    <Example>
-      <Name>Good Example #4: Identify the states whose current occupants account for at least 1% of all packages purchased</Name>
-      <Code>
-        GRAPH.CALCULATE(
-            total_packages=COUNT(Packages)
-        ).Addresses.WHERE(
-          HAS(current_occupants.package) == 1
-        ).PARTITION(name="states", by=state).CALCULATE(
-            state,
-            pct_of_packages=100.0 * COUNT(Addresses.current_occupants.package) / total_packages
-        ).WHERE(pct_of_packages >= 1.0)
-      </Code>
-    </Example>
-
-    <Example>
-      <Name>Good Example #5: Identify which months of the year have numbers of packages shipped in that month that are above the average for all months</Name>
-      <Code>
+    6: Identify which months of the year have numbers of packages shipped in that month that are above the average for all months
         pack_info = Packages.CALCULATE(order_month=MONTH(order_date))
         month_info = pack_info.PARTITION(name="months", by=order_month).CALCULATE(
             n_packages=COUNT(Packages)
@@ -223,8 +185,7 @@
         ).PARTITION(pack_info, name="months", by=order_month).CALCULATE(
             month,
         ).WHERE(COUNT(Packages) > avg_packages_per_month)
-      </Code>
-    </Example>
+     
 
     <Example>
       <Name>Good Example #6: Find the 10 most frequent combinations of the state that the person lives in and the first letter of that person's name</Name>
