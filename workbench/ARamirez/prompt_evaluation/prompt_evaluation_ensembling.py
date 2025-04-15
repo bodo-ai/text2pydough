@@ -185,7 +185,7 @@ def get_azure_response(client, prompt, data, question, database_content, script_
         print(f"Azure AI error: {e}")
         return None
 
-def ensembling_process(client, updated_question, formatted_prompt):
+def ensembling_process(client, updated_question, formatted_prompt, iterations):
     """
     Performs an ensembling process to generate multiple responses from an AI client.
     Uses a direct comparison approach to identify matching results.
@@ -194,7 +194,7 @@ def ensembling_process(client, updated_question, formatted_prompt):
     counts = defaultdict(list)
 
     try:
-        for i in range(50):
+        for i in range(iterations):
             response = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
@@ -233,13 +233,13 @@ def ensembling_process(client, updated_question, formatted_prompt):
         print(f"AI Suite error: {e}")
         return None
 
-def get_other_provider_response(client, prompt, data, question, database_content,script_content):
+def get_other_provider_response(client, prompt, data, question, database_content,script_content, num_iterations):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
         start_time = time.time()
-        response = ensembling_process(client, updated_question,formatted_prompt)
+        response = ensembling_process(client, updated_question,formatted_prompt, num_iterations)
         end_time = time.time()
         execution_time = end_time - start_time
         return response, execution_time
@@ -247,39 +247,38 @@ def get_other_provider_response(client, prompt, data, question, database_content
         print(f"AI Suite error: {e}")
         return None
 
-def get_claude_response(client, prompt, data, question, database_content, script_content):
+def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
     start_time = time.time()
-    response=client.ask(updated_question,formatted_prompt)
+    response=ensembling_process(client, updated_question,formatted_prompt, num_iterations)
     end_time = time.time()
     execution_time = end_time - start_time
-    corrected_response = correct(client, updated_question, response,formatted_prompt)
-    return corrected_response, execution_time
+    return response, execution_time
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
-    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content = args
+    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations = args
 
     if provider == "azure":
         client = AzureAIProvider(model_id)
         return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)
     elif provider == "aws-deepseek":
         client = DeepSeekAIProvider(provider, model_id, temperature)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
-        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)
 
-def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads):
+def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads,num_iterations):
     """ Processes questions in parallel using multiprocessing. """
     with multiprocessing.Pool(processes=num_threads) as pool:  # Adjust process count as needed
         original_responses = pool.map(
             process_question_wrapper, 
-            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
+            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations) for q in questions]
         )
     
     return original_responses
@@ -297,6 +296,7 @@ def main(git_hash):
     parser.add_argument("--model_id", type=str, help="Model ID.")
     parser.add_argument("--temperature", type=float, help="Set the temperature to the model")
     parser.add_argument("--num_threads", type=int, help="Set the numbers of threads to the model")
+    parser.add_argument("--num_iterations", type=int, help="Set the numbers of threads to the model")
 
     parser.set_defaults(eval_results=False)
     args = parser.parse_args()
@@ -327,7 +327,7 @@ def main(git_hash):
 
         combined_list = questions_df['question'].tolist()
 
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads, args.iterations)
 
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
@@ -365,7 +365,11 @@ def main(git_hash):
                 "questions_file": args.questions,
                 "provider": args.provider,
                 "model_id": args.model_id,
-                "temperature": args.temperature
+                "temperature": args.temperature,
+                "threads": args.num_threads,
+                "iterations": args.num_iterations
+
+
             }
         )
        
