@@ -13,7 +13,6 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-import mlflow
 from test_data.eval import compare_df, compare_output, execute_code_and_extract_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from claude import ClaudeModel, DeepseekModel
@@ -129,10 +128,8 @@ def extract_python_code(text):
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
-    matches = re.findall(r"```(?:\w*\n)?(.*?)\n```", text, re.DOTALL)
+    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
     return matches[-1].strip() if matches else ""
-
-import os
 
 def format_prompt(prompt, data, question, database_content, script_content):
     if question in data:
@@ -171,8 +168,6 @@ def correct(client, question,  code, prompt):
         return "".join([code, response])
     return response
 
-    
-   
 def get_azure_response(client, prompt, data, question, database_content, script_content):
     """Generates a response using Azure AI."""
     formatted_prompt = format_prompt(prompt,data,question,database_content, script_content)
@@ -283,115 +278,72 @@ def process_questions(data, provider, model_id, formatted_prompt, questions, tem
     
     return original_responses
 
-def main(git_hash):
+def main():
     # Argument Parser
     parser = argparse.ArgumentParser(description="Process a script file and questions CSV.")
-    parser.add_argument("--description", type=str, default="MLFlow")
-    parser.add_argument("--name", type=str, default="MLFlow project")
     parser.add_argument("--pydough_file", type=str, help="Path to the script file.")
     parser.add_argument("--database_structure", type=str, help="Path to the database file.")
     parser.add_argument("--prompt_file", type=str, help="Path to the prompt file.")
     parser.add_argument("--questions", type=str, help="Path to the questions CSV file.")
-    parser.add_argument("--provider", type=str, help="Model provider (either 'azure' or another provider).")
+    parser.add_argument("--provider", type=str, help="Model provider (e.g., 'azure', 'claude').")
     parser.add_argument("--model_id", type=str, help="Model ID.")
-    parser.add_argument("--temperature", type=float, help="Set the temperature to the model")
-    parser.add_argument("--num_threads", type=int, help="Set the numbers of threads to the model")
-    parser.add_argument("--num_iterations", type=int, help="Set the numbers of threads to the model")
+    parser.add_argument("--temperature", type=float, help="Set the temperature for the model.")
+    parser.add_argument("--num_threads", type=int, help="Number of threads for parallel processing.")
+    parser.add_argument("--num_iterations", type=int, help="Number of iterations for ensembling.")
 
-    parser.set_defaults(eval_results=False)
     args = parser.parse_args()
-    
+
     # Create result directory if not exists
     folder_path = f"./results/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
-    
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
-    expr_name = "text2pydough"  # create a new experiment (do not replace)
-    experiment= mlflow.set_experiment(expr_name)
-    with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash},experiment_id=experiment.experiment_id):
-        # Read Files Efficiently
-        with open(args.prompt_file, "r", encoding="utf-8") as f:
-            prompt = f.read()
 
-        with open(args.pydough_file, "r", encoding="utf-8") as f:
-            script_content = f.read()
+    # Read Files Efficiently
+    with open(args.prompt_file, "r", encoding="utf-8") as f:
+        prompt = f.read()
 
-        with open(args.database_structure, "r", encoding="utf-8") as f:
-            database_content = f.read()
+    with open(args.pydough_file, "r", encoding="utf-8") as f:
+        script_content = f.read()
 
-        with open("./queries_context.json","r") as json_data:
-            data = json.load(json_data)
+    with open(args.database_structure, "r", encoding="utf-8") as f:
+        database_content = f.read()
 
-        # Read Questions
-        questions_df = pd.read_csv(args.questions, encoding="utf-8")
+    with open("data/queries_context.json", "r") as json_data:
+        data = json.load(json_data)
 
-        combined_list = questions_df['question'].tolist()
+    # Read Questions
+    questions_df = pd.read_csv(args.questions, encoding="utf-8")
+    combined_list = questions_df['question'].tolist()
 
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads, args.num_iterations)
+    responses = process_questions(
+        data,
+        args.provider.lower(),
+        args.model_id,
+        prompt,
+        combined_list,
+        args.temperature,
+        database_content,
+        script_content,
+        args.num_threads,
+        args.num_iterations
+    )
 
-        response_column = [response[0] for response in responses]  # Extract corrected responses
-        execution_time_column = [response[1] for response in responses]  # Extract execution times
+    response_column = [response[0] for response in responses]
+    execution_time_column = [response[1] for response in responses]
 
-        # Save responses and execution times into the DataFrame
-        questions_df["response"] = response_column
-        questions_df["execution_time"] = execution_time_column
+    # Save responses and execution times into the DataFrame
+    questions_df["response"] = response_column
+    questions_df["execution_time"] = execution_time_column
 
-        output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
+    output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+    questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
-        questions_df.to_csv(output_file, index=False, encoding="utf-8")
-
-        folder_path = f"./results/{args.provider}/{args.model_id}/test"
-        os.makedirs(folder_path, exist_ok=True)
-
-        output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
-        total_rows = len(responses)
-
-        counts = responses['comparison_result'].dropna().value_counts()
-        percentages = counts / total_rows
-
-        mlflow.log_metrics(
-            percentages,
-        )
-        mlflow.log_metric("total_script_queries", total_rows)
-        mlflow.log_artifact(output_file)
-
-        mlflow.log_params(
-            {
-                "pydough_file": args.pydough_file,
-                "database_structure": args.database_structure,
-                "prompt_file": args.prompt_file,
-                "prompt": prompt,
-                "questions_file": args.questions,
-                "provider": args.provider,
-                "model_id": args.model_id,
-                "temperature": args.temperature,
-                "threads": args.num_threads,
-                "iterations": args.num_iterations
-
-
-            }
-        )
-       
-        mlflow.set_tag("llm_output", output_file)
-        mlflow.set_tag("csv" ,responses) 
-        mlflow.log_artifact(output_file)
-    
+    questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
 if __name__ == "__main__":
 
-    cwd = os.getcwd()
-     # Define the database path
     db_path = './test_data/tpch.db'
-
-    # Download the database if it's not already present
+    
     download_database(db_path)
-    untracked= untracked_files(cwd)
-    modified= modified_files(cwd)
     
-    if untracked or modified:
-        autocommit(cwd)
+    main()
 
-    git_hash= get_git_commit(cwd)
-    
-    main(git_hash)
