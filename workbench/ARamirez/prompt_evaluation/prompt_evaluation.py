@@ -180,7 +180,7 @@ def correct(client, question,  code, prompt):
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
         response=client.ask(q, prompt)
-        return "".join([code, response.text])
+        return "".join([code, response])
     return response
 
     
@@ -229,7 +229,7 @@ def get_gemini_response(client, prompt, data, question, database_content, script
     response, usage=client.ask(updated_question,formatted_prompt)
     end_time = time.time()
     execution_time = end_time - start_time
-    corrected_response = correct(client, updated_question, response.text,formatted_prompt)
+    corrected_response = correct(client, updated_question, response,formatted_prompt)
     return corrected_response, execution_time, usage
 
 def process_question_wrapper(args):
