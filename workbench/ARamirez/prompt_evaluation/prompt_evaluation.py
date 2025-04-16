@@ -1,3 +1,4 @@
+#%%
 import argparse
 import ast
 import json
@@ -129,11 +130,11 @@ def extract_python_code(text):
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
-    matches = re.findall(r"```(?:\w*\n)?(.*?)\n```", text, re.DOTALL)
+    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
     return matches[-1].strip() if matches else ""
 
 import os
-
+#%%
 def format_prompt(prompt, data, question, database_content, script_content):
     if question in data:
         recomendation = data[question].get("context_id", "")
@@ -344,3 +345,27 @@ if __name__ == "__main__":
     git_hash= get_git_commit(cwd)
     
     main(git_hash)
+
+#%%
+test= """
+"Return the distinct list of customer IDs that have made a purchase, based on joining the customers and sales tables.",SELECT DISTINCT c._id AS customer_id FROM customers AS c JOIN sales AS s ON c._id = s.customer_id;,Dealership,"*   **Function Selection:**
+    *   `Customers`: To access the customer data.
+    *   `WHERE`: To filter customers based on a condition.
+    *   `HAS`: To check if a customer has made any purchases (i.e., if the `car_purchases` sub-collection is not empty).
+    *   `CALCULATE`: To select the customer ID (`_id`).
+*   **Partitioning Strategy:**
+    *   `PARTITION` is not necessary here. We can directly filter the `Customers` collection based on the existence of related sales records.
+*   **Code:**
+    ```python
+    # Filter customers who have made at least one purchase and select their ID
+    purchasing_customer_ids = Customers.WHERE(HAS(car_purchases) == 1).CALCULATE(customer_id=_id)
+    ```
+*   **Explanation:**
+    1.  `Customers`: Starts with the `Customers` collection.
+    2.  `.WHERE(HAS(car_purchases) == 1)`: Filters this collection to include only those customers for whom the `car_purchases` sub-collection (linking to `Sales`) contains at least one record. `HAS(car_purchases)` returns true if the sub-collection is not empty, and we compare it to `1` (PyDough's representation of True).
+    3.  `.CALCULATE(customer_id=_id)`: For the filtered customers, selects their unique identifier (`_id`) and renames it to `customer_id`. Since we are operating on the `Customers` collection level, each resulting row corresponds to a unique customer who has made a purchase, effectively giving a distinct list of their IDs."
+
+"""
+
+extract_python_code(test)
+# %%
