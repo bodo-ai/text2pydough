@@ -179,7 +179,7 @@ def correct(client, question,  code, prompt):
         The original question was: '{question}'. 
         Can you help me fix the issue? Please make sure to use the right syntax and rules for creating pydough code.""")
 
-        response=client.ask(q, prompt)
+        response, usage=client.ask(q, prompt)
         return "".join([code, response])
     return response
 
