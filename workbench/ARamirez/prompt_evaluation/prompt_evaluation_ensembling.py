@@ -207,7 +207,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
 
     try:
         for i in range(iterations):
-            response = client.ask(updated_question, formatted_prompt)
+            response, usage = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
@@ -268,35 +268,35 @@ def get_claude_response(client, prompt, data, question, database_content, script
     execution_time = end_time - start_time
     return response, execution_time
 
-def get_gemini_response(client, prompt, data, question, database_content, script_content):
+def get_gemini_response(client, prompt, data, question, database_content, script_content,num_iterations):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
     start_time = time.time()
-    response, usage=client.ask(updated_question,formatted_prompt)
+    response=ensembling_process(client, updated_question,formatted_prompt, num_iterations)
     end_time = time.time()
     execution_time = end_time - start_time
     corrected_response = correct(client, updated_question, response,formatted_prompt)
-    return corrected_response, execution_time, usage
+    return corrected_response, execution_time
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
-    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content = args
+    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations = args
 
     if provider == "azure":
         client = AzureAIProvider(model_id)
         return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
     elif provider == "aws-deepseek":
         client = DeepSeekAIProvider(provider, model_id, temperature)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
     elif provider == "google":
         client = GeminiAIProvider(provider, model_id, temperature)
-        return get_gemini_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_gemini_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
-        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads,num_iterations):
     """ Processes questions in parallel using multiprocessing. """
@@ -356,11 +356,9 @@ def main(git_hash):
 
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
-        usage_column = [response[2] for response in responses]  # add this line
         # Save responses and execution times into the DataFrame
         questions_df["response"] = response_column
         questions_df["execution_time"] = execution_time_column
-        questions_df["usage"] = usage_column  # add this column
 
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
