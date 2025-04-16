@@ -1,0 +1,1887 @@
+question,sql,db_name,response,extracted_python_code
+"For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order.","SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p._id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s._id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;",Dealership,"*   **Function Selection & Justification**:
+    *   `WHERE`: To filter `Sales` by `sale_price > 30000` and later to filter payments based on the calculated date range.
+    *   `CALCULATE`: To derive new fields for each payment: the start date of the week the payment occurred (`payment_week_start`), the day number within that week (`day_num_in_week`), and a flag indicating if it was a weekend (`is_weekend_payment`).
+    *   `DATETIME`: To determine the start of the current week (`DATETIME('now', 'start of week')`), the start of the 8-week period prior (`DATETIME(..., '-56 days')`), and the start of the week for each `payment_date`.
+    *   `DATEDIFF`: To calculate the number of days between the start of a payment's week and the payment date itself, necessary to identify the day of the week.
+    *   `ISIN`: To check if the calculated day number corresponds to a Saturday (day 5) or Sunday (day 6), assuming the week starts on Monday (day 0).
+    *   `PARTITION`: To group the filtered payments by the `payment_week_start` date, enabling aggregation per week.
+    *   `COUNT`: To count the total number of payments within each weekly partition.
+    *   `SUM`: To sum the `is_weekend_payment` flag within each weekly partition, effectively counting weekend payments.
+    *   `ORDER_BY`: To sort the final weekly results chronologically by `week_start_date`.
+
+*   **Partitioning Strategy**:
+    *   Partitioning by `payment_week_start` is essential because the request requires aggregating payment counts *for each* of the specified weeks. This grouping allows `COUNT` and `SUM` to operate on a per-week basis.
+
+```python
+# Define the start of the current week and the start of the 8-week period before that
+current_week_start_date = DATETIME('now', 'start of week')
+# Calculate the date 56 days (8 weeks) before the start of the current week
+start_period_date = DATETIME(current_week_start_date, '-56 days')
+
+# 1. Filter sales with price > $30,000
+# 2. Access their payments
+# 3. Calculate the start of the week for each payment date
+# 4. Calculate the day number within the week (0=Mon, ..., 5=Sat, 6=Sun)
+# 5. Flag payments made on weekends (Saturday or Sunday)
+payments_info = Sales.WHERE(
+    sale_price > 30000
+).payment.CALCULATE(
+    payment_week_start = DATETIME(payment_date, 'start of week'),
+    # Calculate day number within the week (0=Mon, 1=Tue, ..., 5=Sat, 6=Sun)
+    day_num_in_week = DATEDIFF(""days"", DATETIME(payment_date, 'start of week'), payment_date),
+    # Check if the calculated day number is 5 (Saturday) or 6 (Sunday)
+    is_weekend_payment = ISIN(day_num_in_week, (5, 6))
+)
+
+# 6. Filter these payments to include only those within the last 8 weeks (excluding the current week)
+filtered_payments = payments_info.WHERE(
+    (payment_week_start >= start_period_date) & (payment_week_start < current_week_start_date)
+)
+
+# 7. Partition the filtered payments by the week they occurred in
+# 8. For each week, calculate the total payments and the count of weekend payments
+# 9. Select the week start date and the calculated counts
+# 10. Order the results by week start date ascending
+weekly_payment_summary = PARTITION(
+    filtered_payments,
+    name='payments_in_week', # Name for the partition group
+    by=payment_week_start    # Group by the calculated week start date
+).CALCULATE(
+    week = payment_week_start, # Select the week start date (partition key)
+    total_payments_received = COUNT(payments_in_week), # Count all payments in this week's group
+    weekend_payments_received = SUM(payments_in_week.is_weekend_payment) # Sum the weekend flag (True=1, False=0)
+).ORDER_BY(week.ASC()) # Sort by the week start date
+```
+
+*   **Explanation**:
+    1.  Define `current_week_start_date` as the Monday of the current week and `start_period_date` as the Monday 8 weeks prior.
+    2.  Filter the `Sales` collection to keep only records where `sale_price` exceeds 30,000.
+    3.  Access the `payment` sub-collection for these filtered sales.
+    4.  For each payment, calculate `payment_week_start` (the Monday of the week the payment occurred), `day_num_in_week` (0 for Monday, 6 for Sunday), and `is_weekend_payment` (True if `day_num_in_week` is 5 or 6).
+    5.  Filter these calculated payment records, keeping only those where `payment_week_start` falls within the 8-week window defined by `start_period_date` (inclusive) and `current_week_start_date` (exclusive).
+    6.  Partition the filtered payments using `payment_week_start` as the key. This groups all payments from the same week together.
+    7.  For each weekly partition (`payments_in_week`):
+        *   Select the `payment_week_start` date as `week`.
+        *   Calculate `total_payments_received` by counting all records in the partition.
+        *   Calculate `weekend_payments_received` by summing the `is_weekend_payment` flag (True counts as 1, False as 0).
+    8.  Sort the final results in ascending order based on the `week` date.","# Define the start of the current week and the start of the 8-week period before that
+current_week_start_date = DATETIME('now', 'start of week')
+# CALCULATE the date 56 days (8 weeks) before the start of the current week
+start_period_date = DATETIME(current_week_start_date, '-56 days')
+
+# 1. Filter sales with price > $30,000
+# 2. Access their payments
+# 3. CALCULATE the start of the week for each payment date
+# 4. CALCULATE the DAY number within the week (0=Mon, ..., 5=Sat, 6=Sun)
+# 5. Flag payments made on weekends (Saturday or Sunday)
+payments_info = Sales.WHERE(
+    sale_price > 30000
+).payment.CALCULATE(
+    payment_week_start = DATETIME(payment_date, 'start of week'),
+    # CALCULATE DAY number within the week (0=Mon, 1=Tue, ..., 5=Sat, 6=Sun)
+    day_num_in_week = DATEDIFF(""days"", DATETIME(payment_date, 'start of week'), payment_date),
+    # Check if the calculated DAY number is 5 (Saturday) or 6 (Sunday)
+    is_weekend_payment = ISIN(day_num_in_week, (5, 6))
+)
+
+# 6. Filter these payments to include only those within the last 8 weeks (excluding the current week)
+filtered_payments = payments_info.WHERE(
+    (payment_week_start >= start_period_date) & (payment_week_start < current_week_start_date)
+)
+
+# 7. PARTITION the filtered payments by the week they occurred in
+# 8. For each week, CALCULATE the total payments and the count of weekend payments
+# 9. Select the week start date and the calculated counts
+# 10. Order the results by week start date ascending
+weekly_payment_summary = PARTITION(
+    filtered_payments,
+    name='payments_in_week', # Name for the PARTITION group
+    by=payment_week_start    # Group by the calculated week start date
+).CALCULATE(
+    week = payment_week_start, # Select the week start date (PARTITION key)
+    total_payments_received = COUNT(payments_in_week), # Count all payments in this week's group
+    weekend_payments_received = SUM(payments_in_week.is_weekend_payment) # SUM the weekend flag (True=1, False=0)
+).ORDER_BY(week.ASC()) # Sort by the week start date"
+"How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.","WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id AND s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id, sp.first_name, sp.last_name) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;",Dealership,"```python
+import datetime
+
+# Define the start date for the 30-day window (inclusive)
+# Calculate the date 30 days ago from today, starting at midnight.
+start_date_30_days_ago = DATETIME('now', '-30 days', 'start of day')
+
+# Calculate the number of sales for each salesperson in the last 30 days
+salesperson_sales_last_30_days = Salespersons.CALCULATE(
+    # Select the salesperson's ID
+    salesperson_id=_id,
+    # Select the salesperson's first name
+    sp_first_name=first_name,
+    # Select the salesperson's last name
+    sp_last_name=last_name,
+    # Count the sales made by this salesperson where the sale date is within the last 30 days
+    num_sales=COUNT(sales_made.WHERE(sale_date >= start_date_30_days_ago))
+# Order the results by the number of sales in descending order
+).ORDER_BY(num_sales.DESC())
+```
+
+**Explanation:**
+
+1.  **`start_date_30_days_ago = DATETIME('now', '-30 days', 'start of day')`**: This line defines a variable `start_date_30_days_ago`. It uses the `DATETIME` function to calculate the date and time exactly 30 days before the current moment (`'now'`) and then truncates it to the beginning of that day (`'start of day'`). This ensures we capture all sales from 30 days ago up to the current time.
+2.  **`Salespersons.CALCULATE(...)`**: We start with the `Salespersons` collection and use `CALCULATE` to select existing fields and compute a new one.
+3.  **`salesperson_id=_id, sp_first_name=first_name, sp_last_name=last_name`**: These select the salesperson's ID, first name, and last name, renaming them for clarity in the output.
+4.  **`num_sales=COUNT(sales_made.WHERE(sale_date >= start_date_30_days_ago))`**: This calculates the number of sales for each salesperson within the specified date range.
+    *   `sales_made`: Accesses the list of sales associated with each salesperson.
+    *   `.WHERE(sale_date >= start_date_30_days_ago)`: Filters these sales, keeping only those where the `sale_date` is on or after the calculated start date (within the last 30 days, inclusive).
+    *   `COUNT(...)`: Counts the number of sales records remaining after the filter for each salesperson. This count is assigned to the new field `num_sales`.
+5.  **`.ORDER_BY(num_sales.DESC())`**: This sorts the resulting collection of salespersons based on the `num_sales` field in descending order, placing the salesperson with the most sales at the top.
+
+This code retrieves the ID, first name, and last name of each salesperson, counts their sales within the last 30 days (inclusive), and orders them from the highest number of sales to the lowest.","import datetime
+
+# Define the start date for the 30-DAY window (inclusive)
+# CALCULATE the date 30 days ago from today, starting at midnight.
+start_date_30_days_ago = DATETIME('now', '-30 days', 'start of DAY')
+
+# CALCULATE the number of sales for each salesperson in the last 30 days
+salesperson_sales_last_30_days = Salespersons.CALCULATE(
+    # Select the salesperson's ID
+    salesperson_id=_id,
+    # Select the salesperson's first name
+    sp_first_name=first_name,
+    # Select the salesperson's last name
+    sp_last_name=last_name,
+    # Count the sales made by this salesperson WHERE the sale date is within the last 30 days
+    num_sales=COUNT(sales_made.WHERE(sale_date >= start_date_30_days_ago))
+# Order the results by the number of sales in descending order
+).ORDER_BY(num_sales.DESC())"
+"How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","SELECT c.make, c.model, COUNT(s._id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;",Dealership,"*   **Function Selection & Justification**:
+    *   `Cars`: Access the car data, including `vin_number`, `make`, and `model`.
+    *   `WHERE`: Filter the `Cars` collection to include only those whose `vin_number` contains 'M5'.
+    *   `LIKE` and `LOWER`: Used within `WHERE` to perform a case-insensitive partial match on the `vin_number`.
+    *   `PARTITION`: Group the filtered cars by `make` and `model` to aggregate sales counts per model.
+    *   `CALCULATE`: Select the `make` and `model` from the partition keys and compute the total sales count for each group.
+    *   `COUNT`: Aggregate the number of sales records (`sale_records`) within each partition group.
+
+*   **Partitioning Strategy**:
+    *   Partitioning is necessary to group the results by car `make` and `model`. The `PARTITION` function will be used with `make` and `model` as the grouping keys.
+
+*   **Code**:
+    ```python
+    # Filter cars where the VIN contains 'M5' (case-insensitive)
+    cars_with_m5_vin = Cars.WHERE(LIKE(LOWER(vin_number), '%m5%'))
+
+    # Partition the filtered cars by make and model, then count the sales for each group
+    sales_per_model_with_m5_vin = PARTITION(
+        cars_with_m5_vin,
+        name='model_group',
+        by=(make, model)
+    ).CALCULATE(
+        car_make=make,
+        car_model=model,
+        number_of_sales=COUNT(model_group.sale_records)
+    )
+    ```
+
+*   **Explanation**:
+    1.  `cars_with_m5_vin = Cars.WHERE(LIKE(LOWER(vin_number), '%m5%'))`: This line filters the `Cars` collection. It converts the `vin_number` to lowercase using `LOWER` and then uses `LIKE` with the pattern `'%m5%'` to find cars where the VIN contains 'm5' anywhere within it, case-insensitively.
+    2.  `PARTITION(...)`: This function takes the `cars_with_m5_vin` collection and groups the cars based on unique combinations of `make` and `model`. Each group is accessible via the name `model_group`.
+    3.  `.CALCULATE(...)`: This operates on each partition group created.
+        *   `car_make=make`: Selects the `make` for the group (which is one of the partition keys).
+        *   `car_model=model`: Selects the `model` for the group (the other partition key).
+        *   `number_of_sales=COUNT(model_group.sale_records)`: Counts the total number of sales records associated with all cars belonging to the current `make` and `model` group. The result is assigned to the `number_of_sales` field.
+    4.  The final result `sales_per_model_with_m5_vin` contains one record for each unique car make and model combination found in the filtered set, along with the total count of sales for that specific model.",
+How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,"SELECT COUNT(s._id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');",Dealership,"1.  **Analyze the Input**: The request asks for the count and total revenue of 'Toyota' cars sold within the last 30 days (inclusive of today) from the `Dealership` database.
+
+2.  **Function Selection & Justification**:
+    *   `Cars`: To access car data.
+    *   `WHERE`: To filter cars by `make == 'Toyota'` and sales by `sale_date`.
+    *   `sale_records`: To access the sales associated with the filtered cars.
+    *   `DATETIME`: To calculate the start date of the 30-day period (`DATETIME('now', '-29 days', 'start of day')`).
+    *   `GRAPH.CALCULATE`: To perform the final aggregation (COUNT and SUM) across the filtered sales records and return a single result row.
+    *   `COUNT`: To count the number of sales that meet the criteria.
+    *   `SUM`: To calculate the total revenue from the `sale_price` of the qualifying sales.
+
+3.  **Partitioning Strategy**: `PARTITION` is not required because the aggregation (count and sum) is performed over the entire set of filtered sales records, not grouped by any specific attribute.
+
+4.  **Ranking Considerations**: `RANKING` is not needed for this query.
+
+5.  **Handling Ambiguity**: The phrase ""last 30 days inclusive of today"" is interpreted as the period starting from 29 days before today's date up to and including today.
+
+6.  **Code Generation**:
+
+    ```python
+    # Define the start date for the 30-day period (inclusive of today)
+    start_period = DATETIME('now', '-29 days', 'start of day')
+
+    # Filter sales records for Toyota cars sold within the last 30 days
+    toyota_sales_last_30_days = Dealership.Cars.WHERE(
+        make == 'Toyota'
+    ).sale_records.WHERE(
+        sale_date >= start_period
+    )
+
+    # Calculate the total number of sales and total revenue
+    result = Dealership.CALCULATE(
+        number_of_sales=COUNT(toyota_sales_last_30_days),
+        total_revenue=SUM(toyota_sales_last_30_days.sale_price)
+    )
+    ```
+
+7.  **Code Presentation**:
+    ```python
+    # Define the start date for the 30-day period (inclusive of today)
+    start_period = DATETIME('now', '-29 days', 'start of day')
+
+    # Filter sales records for Toyota cars sold within the last 30 days
+    toyota_sales_last_30_days = Dealership.Cars.WHERE(
+        make == 'Toyota'
+    ).sale_records.WHERE(
+        sale_date >= start_period
+    )
+
+    # Calculate the total number of sales and total revenue
+    result = Dealership.CALCULATE(
+        number_of_sales=COUNT(toyota_sales_last_30_days),
+        total_revenue=SUM(toyota_sales_last_30_days.sale_price)
+    )
+    ```
+
+8.  **Step-by-Step Explanation**:
+    *   `start_period = DATETIME('now', '-29 days', 'start of day')`: This line defines a variable `start_period` representing the beginning of the day 29 days prior to the current date. This marks the start of our 30-day window.
+    *   `toyota_sales_last_30_days = Dealership.Cars.WHERE(make == 'Toyota').sale_records.WHERE(sale_date >= start_period)`: This filters the `Cars` collection to select only those with `make` equal to 'Toyota'. Then, it accesses their associated `sale_records` and further filters these sales to include only those where the `sale_date` is on or after the calculated `start_period`.
+    *   `result = Dealership.CALCULATE(...)`: This performs a calculation at the top level of the `Dealership` graph.
+    *   `number_of_sales=COUNT(toyota_sales_last_30_days)`: This counts the total number of sales records obtained from the previous filtering step.
+    *   `total_revenue=SUM(toyota_sales_last_30_days.sale_price)`: This sums the `sale_price` for all the sales records identified in the filtering step.
+    *   The final `result` variable holds a single record containing the `number_of_sales` and `total_revenue` for Toyota cars sold in the specified period.",
+"Return the first name, last name, total sales amount, number of sales, and SR for each salespersonSR = sales rank of each salesperson ordered by their total sales amount descending","WITH salesperson_sales AS (SELECT salesperson_id, SUM(sale_price) AS total_sales, COUNT(*) AS num_sales FROM sales GROUP BY salesperson_id) SELECT s.first_name, s.last_name, ss.total_sales, ss.num_sales, RANK() OVER (ORDER BY CASE WHEN ss.total_sales IS NULL THEN 1 ELSE 0 END DESC, ss.total_sales DESC) AS sales_rank FROM salesperson_sales AS ss JOIN salespersons AS s ON ss.salesperson_id = s._id;",Dealership,"*   **Function Selection:**
+    *   `Salespersons`: Access the collection containing salesperson information.
+    *   `CALCULATE`: To compute aggregated values (total sales amount, number of sales) and the sales rank (SR) for each salesperson, and to select the final required fields.
+    *   `SUM`: To aggregate the `sale_price` from the `sales_made` sub-collection for each salesperson.
+    *   `COUNT`: To count the number of sales in the `sales_made` sub-collection for each salesperson.
+    *   `RANKING`: To determine the sales rank based on the total sales amount.
+    *   `ORDER_BY`: To sort the final result by the sales rank.
+
+*   **Partitioning Strategy:**
+    *   `PARTITION` is not required for this query. Aggregations (`SUM`, `COUNT`) and ranking (`RANKING`) can be performed directly on the `Salespersons` collection using `CALCULATE`.
+
+*   **Ranking Considerations:**
+    *   `RANKING` will be applied globally across all salespersons based on their total sales amount in descending order. `levels` is not needed as the ranking is across the entire collection.
+
+```python
+# Calculate total sales amount and number of sales for each salesperson
+salesperson_stats = Salespersons.CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    total_sales_amount=SUM(sales_made.sale_price),
+    num_sales=COUNT(sales_made)
+)
+
+# Calculate the sales rank (SR) based on total sales amount and select final fields
+salesperson_performance = salesperson_stats.CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    total_sales_amount=total_sales_amount,
+    num_sales=num_sales,
+    SR=RANKING(by=total_sales_amount.DESC())
+).ORDER_BY(SR.ASC())
+
+```
+
+*   **Explanation:**
+    1.  `salesperson_stats = Salespersons.CALCULATE(...)`: This first step accesses the `Salespersons` collection and calculates two new fields for each salesperson:
+        *   `total_sales_amount`: Sums the `sale_price` for all sales linked to the salesperson via the `sales_made` sub-collection.
+        *   `num_sales`: Counts the total number of sales records linked to the salesperson via `sales_made`.
+        *   It also selects the `first_name` and `last_name`.
+    2.  `salesperson_performance = salesperson_stats.CALCULATE(...)`: This second step takes the intermediate result (`salesperson_stats`) and calculates the sales rank:
+        *   `SR=RANKING(by=total_sales_amount.DESC())`: Assigns a rank (`SR`) to each salesperson based on their `total_sales_amount` calculated in the previous step. The highest sales amount gets rank 1.
+        *   It then selects the final required fields: `first_name`, `last_name`, `total_sales_amount`, `num_sales`, and the calculated `SR`.
+    3.  `.ORDER_BY(SR.ASC())`: Sorts the final result in ascending order based on the sales rank (`SR`), so the top salesperson appears first.","# CALCULATE total sales amount and number of sales for each salesperson
+salesperson_stats = Salespersons.CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    total_sales_amount=SUM(sales_made.sale_price),
+    num_sales=COUNT(sales_made)
+)
+
+# CALCULATE the sales rank (SR) based on total sales amount and select final fields
+salesperson_performance = salesperson_stats.CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    total_sales_amount=total_sales_amount,
+    num_sales=num_sales,
+    SR=RANKING(by=total_sales_amount.DESC())
+).ORDER_BY(SR.ASC())"
+"Return the highest sale price for each make and model of cars that have been sold and are no longer in inventory, ordered by the sale price from highest to lowest. Use the most recent date in the inventory_snapshots table to determine that car's inventory status.When getting a car's inventory status, always take the latest status from the inventory_snapshots table","WITH latest_inventory_status AS (SELECT car_id, is_in_inventory, ROW_NUMBER() OVER (PARTITION BY car_id ORDER BY CASE WHEN snapshot_date IS NULL THEN 1 ELSE 0 END DESC, snapshot_date DESC) AS rn FROM inventory_snapshots) SELECT c.make, c.model, MAX(s.sale_price) AS highest_sale_price FROM cars AS c JOIN sales AS s ON c._id = s.car_id JOIN latest_inventory_status AS lis ON c._id = lis.car_id WHERE lis.is_in_inventory = FALSE AND lis.rn = 1 GROUP BY c.make, c.model ORDER BY CASE WHEN highest_sale_price IS NULL THEN 1 ELSE 0 END DESC, highest_sale_price DESC;",Dealership,"*   **Function Selection & Justification:**
+    *   `Cars`: To access the base collection of cars.
+    *   `CALCULATE`: To select/rename fields (`make`, `model`) and derive new ones (`latest_snapshot`, `is_in_inventory_latest`). Multiple `CALCULATE` steps are used to build up the required information.
+    *   `inventory_snapshots`: To access the inventory history for each car.
+    *   `ORDER_BY`: Used twice: first to sort `inventory_snapshots` by `snapshot_date` to find the latest, and second to sort the final result by `highest_sale_price`.
+    *   `TOP_K`: Used with `ORDER_BY` to select the single latest snapshot record (`k=1`).
+    *   `SINGULAR`: To convert the single latest snapshot record (obtained via `TOP_K`) into a singular context, allowing direct access to its fields like `is_in_inventory`.
+    *   `DEFAULT_TO`: To handle cases where a car might not have any inventory snapshots. We default `is_in_inventory` to `True` in such cases, ensuring these cars are filtered out by the subsequent `WHERE` clause.
+    *   `WHERE`: To filter the `Cars` collection, keeping only those whose latest inventory status is `False`.
+    *   `sale_records`: To access the sales associated with the filtered cars.
+    *   `PARTITION`: To group the relevant sales records by `make` and `model`. This is essential for calculating the maximum price *per group*.
+    *   `MAX`: An aggregation function used within the `PARTITION`'s `CALCULATE` step to find the highest `sale_price` for each make/model group.
+
+*   **Partitioning Strategy:**
+    *   Partitioning is necessary to group sales data by `make` and `model`.
+    *   The `PARTITION` function is applied to the `sales_to_analyze` collection, which contains sales records already filtered to include only cars sold and confirmed not in inventory.
+    *   The partitioning keys are `make` and `model`, derived from the car associated with each sale.
+
+*   **Ranking Considerations:**
+    *   While `RANKING` isn't used directly, the combination `ORDER_BY(snapshot_date.DESC()).TOP_K(1, by=snapshot_date.DESC()).SINGULAR()` effectively ranks snapshots by date and selects the top one (the latest) for each car.
+
+```python
+# Step 1: Identify cars that have been sold and whose latest inventory status is 'not in inventory'
+cars_not_in_inventory = Cars.CALCULATE(
+    # Keep make and model for grouping later
+    car_make=make,
+    car_model=model,
+    # Find the latest inventory snapshot for each car
+    latest_snapshot=inventory_snapshots.ORDER_BY(snapshot_date.DESC()).TOP_K(1, by=snapshot_date.DESC()).SINGULAR()
+).CALCULATE(
+    car_make=car_make,
+    car_model=car_model,
+    # Determine the inventory status from the latest snapshot. Default to True (in inventory) if no snapshot exists.
+    is_in_inventory_latest=DEFAULT_TO(latest_snapshot.is_in_inventory, True),
+    # Check if the car has any sale records
+    has_sales=HAS(sale_records) == 1
+).WHERE(
+    # Filter for cars that are explicitly marked as NOT in inventory in their latest snapshot AND have been sold
+    (is_in_inventory_latest == False) & (has_sales == True)
+)
+
+# Step 2: Access the sales records for these specific cars, getting make, model, and sale price
+sales_to_analyze = cars_not_in_inventory.sale_records.CALCULATE(
+    make=car.car_make,  # Access make from the parent car context
+    model=car.car_model, # Access model from the parent car context
+    price=sale_price    # Get the sale price for aggregation
+)
+
+# Step 3: Partition the sales by make and model, calculate the max sale price for each group, and order
+highest_sales_by_make_model = PARTITION(
+    sales_to_analyze,
+    name='sales_group',
+    by=(make, model) # Group by the make and model derived in sales_to_analyze
+).CALCULATE(
+    make=make,       # Select the make (partition key)
+    model=model,     # Select the model (partition key)
+    highest_sale_price=MAX(sales_group.price) # Calculate the maximum sale price within the group
+).ORDER_BY(highest_sale_price.DESC()) # Order the final result by the calculated highest price, descending
+```
+
+*   **Explanation:**
+    1.  The code first identifies cars (`cars_not_in_inventory`) by:
+        *   Finding the latest inventory snapshot for each car using `ORDER_BY` date descending and `TOP_K(1)`.
+        *   Extracting the `is_in_inventory` status from this latest snapshot, defaulting to `True` if no snapshot exists.
+        *   Checking if the car has any associated `sale_records`.
+        *   Filtering to keep only cars where the latest status is `False` (not in inventory) and `has_sales` is `True`.
+    2.  It then accesses the `sale_records` for these filtered cars (`sales_to_analyze`), calculating the `make`, `model` (from the parent car context), and the `sale_price` (renamed to `price`).
+    3.  Finally, it uses `PARTITION` to group these sales records by `make` and `model`.
+    4.  Within each partition (group), it calculates the `MAX` sale price, naming it `highest_sale_price`.
+    5.  The result includes the `make`, `model`, and `highest_sale_price` for each group, ordered by `highest_sale_price` from highest to lowest.","# Step 1: Identify cars that have been sold and whose latest inventory status is 'not in inventory'
+cars_not_in_inventory = Cars.CALCULATE(
+    # Keep make and model for grouping later
+    car_make=make,
+    car_model=model,
+    # Find the latest inventory snapshot for each car
+    latest_snapshot=inventory_snapshots.ORDER_BY(snapshot_date.DESC()).TOP_K(1, by=snapshot_date.DESC()).SINGULAR()
+).CALCULATE(
+    car_make=car_make,
+    car_model=car_model,
+    # Determine the inventory status from the latest snapshot. Default to True (in inventory) if no snapshot exists.
+    is_in_inventory_latest=DEFAULT_TO(latest_snapshot.is_in_inventory, True),
+    # Check if the car HAS any sale records
+    has_sales=HAS(sale_records) == 1
+).WHERE(
+    # Filter for cars that are explicitly marked as NOT in inventory in their latest snapshot AND have been sold
+    (is_in_inventory_latest == False) & (has_sales == True)
+)
+
+# Step 2: Access the sales records for these specific cars, getting make, model, and sale price
+sales_to_analyze = cars_not_in_inventory.sale_records.CALCULATE(
+    make=car.car_make,  # Access make from the parent car context
+    model=car.car_model, # Access model from the parent car context
+    price=sale_price    # Get the sale price for aggregation
+)
+
+# Step 3: PARTITION the sales by make and model, CALCULATE the MAX sale price for each group, and order
+highest_sales_by_make_model = PARTITION(
+    sales_to_analyze,
+    name='sales_group',
+    by=(make, model) # Group by the make and model derived in sales_to_analyze
+).CALCULATE(
+    make=make,       # Select the make (PARTITION key)
+    model=model,     # Select the model (PARTITION key)
+    highest_sale_price=MAX(sales_group.price) # CALCULATE the maximum sale price within the group
+).ORDER_BY(highest_sale_price.DESC()) # Order the final result by the calculated highest price, descending"
+"What are the details and average sale price for cars that have 'Ford' in their make name or 'Mustang' in the model name? Return make, model, year, color, vin_number and avg_sale_price.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","SELECT c.make, c.model, c.year, c.color, c.vin_number, AVG(s.sale_price) AS avg_sale_price FROM cars AS c JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.make) LIKE '%ford%' OR LOWER(c.model) LIKE '%mustang%' GROUP BY c.make, c.model, c.year, c.color, c.vin_number;",Dealership,"*   **Function Selection & Justification**:
+    *   `Cars`: To access the car data.
+    *   `WHERE`: To filter cars based on the make or model criteria.
+    *   `LIKE`: To perform case-insensitive partial matching for make and model names using wildcards (`%`).
+    *   `LOWER`: To convert make and model names to lowercase for case-insensitive comparison within `LIKE`.
+    *   `|`: Logical OR operator to combine the make and model conditions.
+    *   `CALCULATE`: To select the required car details and compute the average sale price.
+    *   `AVG`: To calculate the average sale price from the `sale_records` sub-collection for each selected car.
+*   **Partitioning Strategy**: `PARTITION` is not required as the aggregation (average sale price) is performed per car, which can be handled directly within `CALCULATE` after filtering the `Cars` collection.
+*   **Ranking Considerations**: `RANKING` is not needed for this query.
+
+```python
+# Filter cars where make contains 'Ford' or model contains 'Mustang' (case-insensitive)
+# Calculate the average sale price for each matching car
+# Select the required car details along with the average sale price
+ford_mustang_cars_avg_price = Cars.WHERE(
+    (LIKE(LOWER(make), '%ford%')) | (LIKE(LOWER(model), '%mustang%'))
+).CALCULATE(
+    make=make,
+    model=model,
+    year=year,
+    color=color,
+    vin_number=vin_number,
+    avg_sale_price=AVG(sale_records.sale_price)
+)
+```
+
+*   **Step-by-Step Explanation**:
+    1.  `Cars.WHERE(...)`: Filters the `Cars` collection.
+    2.  `(LIKE(LOWER(make), '%ford%'))`: Checks if the lowercase version of the `make` field contains ""ford"".
+    3.  `|`: Combines the two conditions with a logical OR.
+    4.  `(LIKE(LOWER(model), '%mustang%'))`: Checks if the lowercase version of the `model` field contains ""mustang"".
+    5.  `.CALCULATE(...)`: For each car that meets the filter criteria, calculates new fields or selects existing ones.
+    6.  `make=make, model=model, year=year, color=color, vin_number=vin_number`: Selects the specified car details.
+    7.  `avg_sale_price=AVG(sale_records.sale_price)`: Calculates the average `sale_price` from all associated records in the `sale_records` sub-collection for the current car and assigns it to the `avg_sale_price` field.","# Filter cars WHERE make CONTAINS 'Ford' or model CONTAINS 'Mustang' (case-insensitive)
+# CALCULATE the average sale price for each matching car
+# Select the required car details along with the average sale price
+ford_mustang_cars_avg_price = Cars.WHERE(
+    (LIKE(LOWER(make), '%ford%')) | (LIKE(LOWER(model), '%mustang%'))
+).CALCULATE(
+    make=make,
+    model=model,
+    year=year,
+    color=color,
+    vin_number=vin_number,
+    avg_sale_price=AVG(sale_records.sale_price)
+)"
+"What are the PMSPS and PMSR in the last 6 months excluding the current month, for salespersons hired between 2022 and 2023 (both inclusive)? Return all months in your answer, including those where metrics are 0. Order by month ascending.PMSPS = per month salesperson sales count. PMSR = per month sales revenue in dollars. Truncate date to month for aggregation.","WITH RECURSIVE date_range(month_start) AS (SELECT DATE('now', '-6 months', 'start of month') AS month_start UNION ALL SELECT DATE(month_start, '+1 month') FROM date_range WHERE month_start < DATE('now', '-1 month', 'start of month')), sales_metrics AS (SELECT strftime('%Y-%m', s.sale_date) AS sale_month, COUNT(s._id) AS PMSPS, SUM(s.sale_price) AS PMSR FROM sales AS s JOIN salespersons AS sp ON s.salesperson_id = sp._id WHERE strftime('%Y', sp.hire_date) BETWEEN '2022' AND '2023' AND s.sale_date >= DATE('now', '-6 months', 'start of month') AND s.sale_date < DATE('now', 'start of month') GROUP BY sale_month) SELECT dr.month_start, COALESCE(sm.PMSPS, 0) AS PMSPS, COALESCE(sm.PMSR, 0) AS PMSR FROM date_range AS dr LEFT JOIN sales_metrics AS sm ON strftime('%Y-%m', dr.month_start) = sm.sale_month ORDER BY dr.month_start ASC;",Dealership,"Okay, let's generate the PyDough code step by step.
+
+**1. Analyze the Input**
+
+*   **Goal:** Calculate monthly sales count (PMSPS) and monthly sales revenue (PMSR) for a specific group of salespersons over a defined time period.
+*   **Salesperson Filter:** Hired between Jan 1, 2022, and Dec 31, 2023 (inclusive).
+*   **Time Period:** The last 6 full months, excluding the current month.
+*   **Output:** Year, Month, PMSPS, PMSR for each month in the period, including months with zero values for the metrics. Ordered by month ascending.
+*   **Database:** Dealership
+*   **Collections:** `Sales`, `Salespersons`.
+
+**2. Function Selection & Justification**
+
+*   `DATETIME('now', ...)`: To dynamically calculate the start and end dates of the 6-month period relative to the current date. We need `'start of month'` to align with month boundaries and `'-6 months'` to define the lookback period.
+*   `WHERE`: To filter `Sales` records to include only those within the calculated 6-month date range (`sale_date`).
+*   `CALCULATE`: To extract `sale_year` and `sale_month` from `sale_date`, and crucially, to create intermediate conditional values (`is_relevant_sale_flag`, `relevant_sale_price_value`) needed for aggregation.
+*   `YEAR`, `MONTH`: To extract date components for filtering (`YEAR(salesperson.hire_date)`) and partitioning (`YEAR(sale_date)`, `MONTH(sale_date)`).
+*   `IFF`: To create a binary flag (`is_relevant_sale_flag`) that is 1 if the sale meets the salesperson criteria (hired 2022-2023) and 0 otherwise. This allows counting relevant sales using `SUM`.
+*   `KEEP_IF`: To isolate the `sale_price` only for sales meeting the salesperson criteria, returning `null` otherwise. This ensures `SUM` only aggregates revenue from the target group.
+*   `PARTITION`: To group the prepared sales data by `sale_year` and `sale_month`. This is essential for calculating the monthly aggregates (PMSPS, PMSR) and ensures that all months *with any sales* within the period are represented in the output structure.
+*   `SUM`: To aggregate the `is_relevant_sale_flag` (giving the count of relevant sales, PMSPS) and `relevant_sale_price_value` (giving the total revenue from relevant sales, PMSR) within each monthly partition.
+*   `DEFAULT_TO`: To ensure that `PMSR` shows `0.0` instead of `null` for months where sales occurred but none were by the relevant salespersons.
+*   `ORDER_BY`: To sort the final monthly results chronologically (`year.ASC()`, `month.ASC()`).
+
+**3. Partitioning Strategy**
+
+Partitioning is necessary to group sales by month. We will partition the `Sales` data (after initial date filtering and calculation of helper fields) by `sale_year` and `sale_month`. This approach allows us to consider all months within the period that had *any* sales activity and then calculate the specific metrics for the target salesperson group within each month, defaulting to zero if they had no activity in a given month.
+
+**4. Code Generation**
+
+```python
+# Define the date range: last 6 full months excluding the current month
+# Start date is the first day of the month, 6 months ago
+start_period_date = DATETIME('now', 'start of month', '-6 months')
+# End date is the first day of the current month (the range is exclusive of this date)
+end_period_date = DATETIME('now', 'start of month')
+
+# Prepare sales data: Filter by date range and calculate helper fields
+sales_data_prepared = Sales.WHERE(
+    (sale_date >= start_period_date) & (sale_date < end_period_date)
+).CALCULATE(
+    # Extract year and month from sale date for partitioning
+    sale_year_val=YEAR(sale_date),
+    sale_month_val=MONTH(sale_date),
+    # Create a flag: 1 if salesperson was hired in 2022 or 2023, else 0
+    is_relevant_sale_flag=IFF(
+        (YEAR(salesperson.hire_date) >= 2022) & (YEAR(salesperson.hire_date) <= 2023),
+        1,
+        0
+    ),
+    # Get sale price only if salesperson is relevant, else null
+    relevant_sale_price_value=KEEP_IF(
+        sale_price,
+        (YEAR(salesperson.hire_date) >= 2022) & (YEAR(salesperson.hire_date) <= 2023)
+    )
+)
+
+# Partition the prepared data by year and month to aggregate monthly metrics
+monthly_metrics_calculation = PARTITION(
+    sales_data_prepared,
+    name='monthly_sales_group',
+    by=(sale_year_val, sale_month_val)
+).CALCULATE(
+    # Output the year and month
+    year=sale_year_val,
+    month=sale_month_val,
+    # Calculate PMSPS: Sum the flag (counts relevant sales)
+    PMSPS=SUM(monthly_sales_group.is_relevant_sale_flag),
+    # Calculate PMSR: Sum relevant prices, default to 0.0 if null (no relevant sales in the month)
+    PMSR=DEFAULT_TO(SUM(monthly_sales_group.relevant_sale_price_value), 0.0)
+# Order results chronologically
+).ORDER_BY(year.ASC(), month.ASC())
+
+# Assign the final result to a variable
+salesperson_monthly_performance = monthly_metrics_calculation
+```
+
+**5. Step-by-Step Explanation**
+
+1.  **Define Date Range:** `start_period_date` and `end_period_date` are calculated using `DATETIME('now', ...)` to define the 6-month window ending just before the current month starts.
+2.  **Prepare Sales Data:**
+    *   The `Sales` collection is filtered using `WHERE` to include only sales records where the `sale_date` falls within the defined `start_period_date` (inclusive) and `end_period_date` (exclusive).
+    *   `CALCULATE` is used to:
+        *   Extract the `sale_year_val` and `sale_month_val` from the `sale_date`.
+        *   Create `is_relevant_sale_flag`: This flag is set to `1` using `IFF` if the sale's associated `salesperson` was hired (`hire_date`) in 2022 or 2023, and `0` otherwise.
+        *   Create `relevant_sale_price_value`: This uses `KEEP_IF` to retain the `sale_price` only if the salesperson meets the hiring criteria; otherwise, it becomes `null`.
+3.  **Partition and Aggregate:**
+    *   The prepared data (`sales_data_prepared`) is partitioned using `PARTITION` based on the `sale_year_val` and `sale_month_val`. This groups all sales from the period by month.
+    *   Within each monthly partition (`monthly_sales_group`), `CALCULATE` is used again to compute the final metrics:
+        *   `year` and `month` are selected directly from the partition keys.
+        *   `PMSPS` (Per Month Salesperson Sales Count) is calculated by `SUM(monthly_sales_group.is_relevant_sale_flag)`. Since the flag is 1 for relevant sales and 0 otherwise, summing it counts the relevant sales in that month.
+        *   `PMSR` (Per Month Sales Revenue) is calculated by `SUM(monthly_sales_group.relevant_sale_price_value)`. `SUM` ignores the `null` values (where the sale wasn't relevant), effectively summing only the revenue from the target group. `DEFAULT_TO(..., 0.0)` ensures that if a month had sales, but none from the target group, PMSR is 0.0 instead of null.
+4.  **Order Results:** The final monthly results are sorted chronologically using `ORDER_BY(year.ASC(), month.ASC())`.
+5.  **Assign Variable:** The complete query result is assigned to the variable `salesperson_monthly_performance`.
+
+This code calculates the required metrics for the specified salespersons and time frame, including months within the period where the target group had zero activity (provided there was *any* sale activity in that month).","# Define the date range: last 6 full months excluding the current MONTH
+# Start date is the first DAY of the MONTH, 6 months ago
+start_period_date = DATETIME('now', 'start of MONTH', '-6 months')
+# End date is the first DAY of the current MONTH (the range is exclusive of this date)
+end_period_date = DATETIME('now', 'start of MONTH')
+
+# Prepare sales data: Filter by date range and CALCULATE helper fields
+sales_data_prepared = Sales.WHERE(
+    (sale_date >= start_period_date) & (sale_date < end_period_date)
+).CALCULATE(
+    # Extract year and MONTH from sale date for partitioning
+    sale_year_val=YEAR(sale_date),
+    sale_month_val=MONTH(sale_date),
+    # Create a flag: 1 if salesperson was hired in 2022 or 2023, else 0
+    is_relevant_sale_flag=IFF(
+        (YEAR(salesperson.hire_date) >= 2022) & (YEAR(salesperson.hire_date) <= 2023),
+        1,
+        0
+    ),
+    # Get sale price only if salesperson is relevant, else null
+    relevant_sale_price_value=KEEP_IF(
+        sale_price,
+        (YEAR(salesperson.hire_date) >= 2022) & (YEAR(salesperson.hire_date) <= 2023)
+    )
+)
+
+# PARTITION the prepared data by year and MONTH to aggregate monthly metrics
+monthly_metrics_calculation = PARTITION(
+    sales_data_prepared,
+    name='monthly_sales_group',
+    by=(sale_year_val, sale_month_val)
+).CALCULATE(
+    # Output the year and MONTH
+    year=sale_year_val,
+    MONTH=sale_month_val,
+    # CALCULATE PMSPS: SUM the flag (counts relevant sales)
+    PMSPS=SUM(monthly_sales_group.is_relevant_sale_flag),
+    # CALCULATE PMSR: SUM relevant prices, default to 0.0 if null (no relevant sales in the MONTH)
+    PMSR=DEFAULT_TO(SUM(monthly_sales_group.relevant_sale_price_value), 0.0)
+# Order results chronologically
+).ORDER_BY(year.ASC(), MONTH.ASC())
+
+# Assign the final result to a variable
+salesperson_monthly_performance = monthly_metrics_calculation"
+What is the ASP for sales made in the first quarter of 2023?ASP = Average Sale Price in the first quarter of 2023.,SELECT AVG(sale_price) AS ASP FROM sales WHERE sale_date >= '2023-01-01' AND sale_date <= '2023-03-31';,Dealership,"*   **Function Selection & Justification**:
+    *   `WHERE`: To filter the `Sales` collection based on the `sale_date` to include only records from the first quarter of 2023 (January, February, March).
+    *   `YEAR`, `MONTH`: To extract the year and month from the `sale_date` for filtering.
+    *   `AVG`: To calculate the average `sale_price` of the filtered sales records.
+    *   `CALCULATE`: Used at the graph level (`Dealership`) to compute the final average sale price as a single value.
+
+*   **Partitioning Strategy**:
+    *   `PARTITION` is not required as we need a single aggregate value (average sale price) across all sales within the specified period, not grouped by any specific attribute.
+
+*   **Code Generation**:
+    ```python
+    # Filter sales for the first quarter of 2023
+    sales_in_q1_2023 = Sales.WHERE(
+        (YEAR(sale_date) == 2023) &
+        (MONTH(sale_date) >= 1) &
+        (MONTH(sale_date) <= 3)
+    )
+
+    # Calculate the average sale price for these sales
+    average_sale_price_q1_2023 = Dealership.CALCULATE(
+        asp_q1_2023=AVG(sales_in_q1_2023.sale_price)
+    )
+    ```
+
+*   **Step-by-Step Explanation**:
+    1.  `sales_in_q1_2023 = Sales.WHERE(...)`: This line filters the `Sales` collection. It keeps only the sales records where the `sale_date` falls within the first quarter (months 1, 2, or 3) of the year 2023.
+    2.  `average_sale_price_q1_2023 = Dealership.CALCULATE(...)`: This line calculates the final result. It computes the average (`AVG`) of the `sale_price` for all the sales records stored in the `sales_in_q1_2023` filtered collection. The result is assigned to a new field named `asp_q1_2023`.",
+"What is the average number of days between the sale date and payment received date, rounded to 2 decimal places?","WITH sale_payments AS (SELECT s._id AS sale_id, s.sale_date, MAX(p.payment_date) AS latest_payment_date FROM sales AS s JOIN payments_received AS p ON s._id = p.sale_id GROUP BY s._id, s.sale_date) SELECT ROUND(AVG(julianday(latest_payment_date) - julianday(sale_date)), 2) AS avg_days_to_paymen FROM sale_payments;",Dealership,"*   **Function Selection & Justification**:
+    *   `PaymentsReceived`: This is the starting collection as we need the `payment_date` from each payment record.
+    *   `CALCULATE`: Used initially on `PaymentsReceived` to compute the difference in days between the payment date and the sale date for each payment.
+    *   `DATEDIFF`: This function is necessary to calculate the difference between two dates (`payment_date` and `sale_record.sale_date`) in days.
+    *   `Dealership.CALCULATE`: Used at the top level (graph level) to compute the overall average across all calculated day differences.
+    *   `AVG`: This aggregation function is required to calculate the average of the day differences computed for each payment.
+    *   `ROUND`: This function is needed to round the final average value to 2 decimal places as requested.
+*   **Partitioning Strategy**: `PARTITION` is not required for this query as we need a single global average across all payments, not grouped by any specific attribute.
+*   **Ranking Considerations**: `RANKING` is not needed as no ranking is requested.
+
+```python
+# Calculate the difference in days for each payment received relative to its sale date
+payment_day_diffs = PaymentsReceived.CALCULATE(
+    days_difference=DATEDIFF(""days"", sale_record.sale_date, payment_date)
+)
+
+# Calculate the global average of these differences and round to 2 decimal places
+average_days_to_payment = Dealership.CALCULATE(
+    avg_days_diff=ROUND(AVG(payment_day_diffs.days_difference), 2)
+)
+```
+
+*   **Step-by-Step Explanation**:
+    1.  `payment_day_diffs = PaymentsReceived.CALCULATE(...)`: This line starts with the `PaymentsReceived` collection. For each payment record, it calculates a new field named `days_difference`.
+    2.  `DATEDIFF(""days"", sale_record.sale_date, payment_date)`: Inside the `CALCULATE`, this function computes the number of days between the `sale_date` (accessed via the `sale_record` relationship) and the `payment_date` of the current payment record.
+    3.  `average_days_to_payment = Dealership.CALCULATE(...)`: This line performs a calculation at the top level of the `Dealership` graph.
+    4.  `AVG(payment_day_diffs.days_difference)`: It calculates the average value of the `days_difference` field across all records generated in the `payment_day_diffs` intermediate collection.
+    5.  `ROUND(..., 2)`: The calculated average is then rounded to 2 decimal places.
+    6.  `avg_days_diff=...`: The final rounded average is assigned to the field `avg_days_diff` in the result. The final output will be a single record containing this average value.","# CALCULATE the difference in days for each payment received relative to its sale date
+payment_day_diffs = PaymentsReceived.CALCULATE(
+    days_difference=DATEDIFF(""days"", sale_record.sale_date, payment_date)
+)
+
+# CALCULATE the global average of these differences and ROUND to 2 decimal places
+average_days_to_payment = Dealership.CALCULATE(
+    avg_days_diff=ROUND(AVG(payment_day_diffs.days_difference), 2)
+)"
+What is the GPM for all car sales in 2023?GPM (gross profit margin) = (total revenue - total cost) / total cost * 100,"SELECT (SUM(sale_price) - SUM(cars.cost)) / SUM(cars.cost) * 100 AS gpm FROM sales JOIN cars ON sales.car_id = cars._id WHERE strftime('%Y', sale_date) = '2023';",Dealership,"*   **Function Selection & Justification**:
+    *   `Sales`: To access sales records.
+    *   `WHERE`: To filter sales records based on the `sale_date`.
+    *   `YEAR`: To extract the year from the `sale_date`.
+    *   `GRAPH.CALCULATE`: To perform aggregations across the filtered sales records to calculate total revenue and total cost.
+    *   `SUM`: To calculate the total `sale_price` (revenue) and total `car.cost` (cost) for the filtered sales.
+    *   Arithmetic operators (`-`, `/`, `*`): To apply the GPM formula.
+
+*   **Partitioning Strategy**:
+    *   `PARTITION` is not required because the calculation needs the overall GPM for all sales in 2023, not grouped by any specific attribute.
+
+*   **Ranking Considerations**:
+    *   `RANKING` is not needed for this calculation.
+
+```python
+# Filter sales records for the year 2023
+sales_in_2023 = Sales.WHERE(YEAR(sale_date) == 2023)
+
+# Calculate total revenue and total cost for 2023 sales at the graph level
+# Then calculate the Gross Profit Margin (GPM)
+gpm_2023_result = GRAPH.CALCULATE(
+    total_revenue_val=SUM(sales_in_2023.sale_price),
+    total_cost_val=SUM(sales_in_2023.car.cost)
+).CALCULATE(
+    # GPM = (Total Revenue - Total Cost) / Total Cost * 100
+    gpm_2023=(total_revenue_val - total_cost_val) / total_cost_val * 100.0
+)
+```
+
+*   **Step-by-Step Explanation**:
+    1.  `sales_in_2023 = Sales.WHERE(YEAR(sale_date) == 2023)`: This line filters the `Sales` collection to include only those records where the `sale_date` falls within the year 2023.
+    2.  `GRAPH.CALCULATE(...)`: This initiates a calculation at the top level of the graph.
+    3.  `total_revenue_val=SUM(sales_in_2023.sale_price)`: Calculates the sum of `sale_price` for all sales that occurred in 2023.
+    4.  `total_cost_val=SUM(sales_in_2023.car.cost)`: Calculates the sum of the `cost` for all cars associated with the sales that occurred in 2023. Accessing `car.cost` works because `car` is a singular relationship from a `Sales` record.
+    5.  `.CALCULATE(gpm_2023=(total_revenue_val - total_cost_val) / total_cost_val * 100.0)`: This takes the previously calculated `total_revenue_val` and `total_cost_val` and applies the GPM formula: `(revenue - cost) / cost * 100`. The result is assigned to the field `gpm_2023`. Using `100.0` ensures floating-point division for the percentage calculation.
+    6.  The final result is stored in the `gpm_2023_result` variable, containing a single record with the calculated `gpm_2023`.","# Filter sales records for the year 2023
+sales_in_2023 = Sales.WHERE(YEAR(sale_date) == 2023)
+
+# CALCULATE total revenue and total cost for 2023 sales at the graph level
+# Then CALCULATE the Gross Profit Margin (GPM)
+gpm_2023_result = GRAPH.CALCULATE(
+    total_revenue_val=SUM(sales_in_2023.sale_price),
+    total_cost_val=SUM(sales_in_2023.car.cost)
+).CALCULATE(
+    # GPM = (Total Revenue - Total Cost) / Total Cost * 100
+    gpm_2023=(total_revenue_val - total_cost_val) / total_cost_val * 100.0
+)"
+"What is the make, model and sale price of the car with the highest sale price that was sold on the same day it went out of inventory?","SELECT c.make, c.model, s.sale_price FROM cars AS c JOIN sales AS s ON c._id = s.car_id JOIN inventory_snapshots AS i ON c._id = i.car_id AND DATE(s.sale_date) = DATE(i.snapshot_date) WHERE i.is_in_inventory = 0 ORDER BY s.sale_price DESC LIMIT 1;",Dealership,"Okay, let's break this down.
+
+1.  **Analyze the Input**: We need to find the `make`, `model`, and `sale_price` of a specific car. The criteria for this car are:
+    *   It must have the highest `sale_price` among a specific group of cars.
+    *   This group consists of cars that were sold (`Sales` record exists) on the *exact same day* they were marked as out of inventory (`InventorySnapshots` record with `is_in_inventory == False`).
+
+2.  **Function Selection & Justification**:
+    *   `Sales`: This is the primary collection to start with, as it contains `sale_price` and links to `Cars` and `sale_date`.
+    *   `WHERE`: Needed twice. First, to filter the `InventorySnapshots` for the relevant date and status. Second, to filter the `Sales` based on whether a matching snapshot exists.
+    *   `HAS`: To check if a car has a corresponding `InventorySnapshots` record meeting the criteria (`is_in_inventory == False` and `snapshot_date == sale_date`). We compare the result to `1` to ensure it evaluates to True.
+    *   `car`: To navigate from a `Sales` record to its associated `Cars` record.
+    *   `inventory_snapshots`: To access the inventory history linked to a `Cars` record.
+    *   `TOP_K`: To select the single (`k=1`) sale record with the maximum `sale_price` after filtering. We need `.DESC()` to get the highest price.
+    *   `CALCULATE`: To select and format the final output fields: `make`, `model` (from the associated car), and `sale_price`.
+
+3.  **Partitioning Strategy**: `PARTITION` is not required. We are looking for a single global maximum across all sales that meet the criteria, not grouping by any specific attribute.
+
+4.  **Ranking Considerations**: `RANKING` is not necessary. `TOP_K(1, by=...)` directly gives us the top record based on the specified criteria.
+
+5.  **Code Generation**:
+
+```python
+# Filter sales records to find those where the sale occurred on the same day
+# the car was marked as out of inventory.
+sales_on_inventory_exit_day = Sales.WHERE(
+    HAS(
+        # Access the car associated with the sale, then its inventory snapshots
+        car.inventory_snapshots.WHERE(
+            # Filter snapshots: must be marked 'out of inventory' AND snapshot date must match the sale date
+            (is_in_inventory == False) & (snapshot_date == sale_date)
+        )
+     # Ensure at least one such snapshot exists
+    ) == 1
+)
+
+# From the filtered sales, find the one with the highest sale price
+# and select the car's make, model, and the sale price.
+highest_priced_car_sold_on_exit = sales_on_inventory_exit_day.TOP_K(
+    1, by=sale_price.DESC() # Find the top 1 sale by descending sale price
+).CALCULATE(
+    car_make=car.make,      # Get the make from the associated car
+    car_model=car.model,    # Get the model from the associated car
+    car_sale_price=sale_price # Get the sale price from the sale record
+)
+```
+
+6.  **Step-by-Step Explanation**:
+    *   The code first filters the `Sales` collection.
+    *   The `WHERE` clause checks, for each sale, if there exists (`HAS(...) == 1`) an associated inventory snapshot (`car.inventory_snapshots`) for the *same car*.
+    *   This snapshot must meet two conditions: `is_in_inventory` must be `False`, and the `snapshot_date` must equal the `sale_date` of the sale being considered.
+    *   The result (`sales_on_inventory_exit_day`) contains only sales that happened on the day the car left inventory.
+    *   Next, `TOP_K(1, by=sale_price.DESC())` is applied to this filtered set to find the single sale record with the highest `sale_price`.
+    *   Finally, `CALCULATE` selects the `make` and `model` from the car associated with that top sale (`car.make`, `car.model`) and the `sale_price` from the sale record itself, renaming them for clarity.","# Filter sales records to find those WHERE the sale occurred on the same DAY
+# the car was marked as out of inventory.
+sales_on_inventory_exit_day = Sales.WHERE(
+    HAS(
+        # Access the car associated with the sale, then its inventory snapshots
+        car.inventory_snapshots.WHERE(
+            # Filter snapshots: must be marked 'out of inventory' AND snapshot date must match the sale date
+            (is_in_inventory == False) & (snapshot_date == sale_date)
+        )
+     # Ensure at least one such snapshot exists
+    ) == 1
+)
+
+# From the filtered sales, find the one with the highest sale price
+# and select the car's make, model, and the sale price.
+highest_priced_car_sold_on_exit = sales_on_inventory_exit_day.TOP_K(
+    1, by=sale_price.DESC() # Find the top 1 sale by descending sale price
+).CALCULATE(
+    car_make=car.make,      # Get the make from the associated car
+    car_model=car.model,    # Get the model from the associated car
+    car_sale_price=sale_price # Get the sale price from the sale record
+)"
+"What is the total payments received per month? Also calculate the MoM change for each month.MoM change = (current month value - prev month value). Return all months in your answer, including those where there were no payments.","WITH monthly_totals AS (SELECT strftime('%Y-%m', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;WITH monthly_totals AS (SELECT strftime('%Y-%m-01', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m-01', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m-01', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m-01', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;WITH monthly_totals AS (SELECT strftime('%Y-%m-01 00:00:00', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m-01 00:00:00', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m-01 00:00:00', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m-01 00:00:00', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;",Dealership,"1.  **Analyze the Input**: The request asks for the total payments received aggregated by month and year. Additionally, it requires the calculation of the month-over-month (MoM) change for these totals. The result should include all months, even those without payments.
+
+2.  **Function Selection & Justification**:
+    *   `CALCULATE`: To extract the year and month from the `payment_date` and select the `payment_amount`.
+    *   `YEAR`, `MONTH`: Date functions needed to extract year and month components from `payment_date`.
+    *   `PARTITION`: To group the `PaymentsReceived` data by the extracted `year` and `month`.
+    *   `SUM`: An aggregation function required to calculate the total `payment_amount` for each month group created by `PARTITION`.
+    *   `ORDER_BY`: To sort the final results chronologically by year and then month.
+    *   **MoM Calculation Limitation**: Calculating the MoM change (current month - previous month) typically requires accessing the previous row's value in an ordered dataset (like SQL's `LAG` function). Based on the provided PyDough reference, there isn't a direct equivalent window function or mechanism to easily access the previous row's aggregated value within the same query structure. Therefore, calculating the MoM change directly in this PyDough query is not feasible with the documented features.
+    *   **Missing Months Limitation**: The `PARTITION` function groups existing data. It does not automatically generate rows for year/month combinations where no payments occurred. Fulfilling the requirement to ""Return all months... including those where there were no payments"" would necessitate a different approach, possibly involving a pre-defined calendar structure, which is beyond the standard operations described.
+
+3.  **Partitioning Strategy**: Partitioning is necessary to group payments. We will partition the `PaymentsReceived` collection after adding `year` and `month` fields, using `(pay_year, pay_month)` as the partitioning keys.
+
+4.  **Code Generation**: The code will focus on calculating the monthly totals, acknowledging the limitations for MoM change and including all months.
+
+```python
+# Step 1: Add year and month fields to the PaymentsReceived collection
+payments_with_date_info = PaymentsReceived.CALCULATE(
+    pay_year=YEAR(payment_date),
+    pay_month=MONTH(payment_date),
+    pay_amount=payment_amount
+)
+
+# Step 2: Partition by year and month to calculate the total payments for each month
+# Note: This will only include months where payments actually occurred.
+# Calculating MoM change directly is not supported by standard PyDough functions shown.
+monthly_payment_totals = PARTITION(
+    payments_with_date_info,
+    name='monthly_payments_group',
+    by=(pay_year, pay_month)
+).CALCULATE(
+    year=pay_year,
+    month=pay_month,
+    total_payments_received=SUM(monthly_payments_group.pay_amount)
+).ORDER_BY(pay_year.ASC(), pay_month.ASC())
+
+```
+
+5.  **Step-by-Step Explanation**:
+    *   The first `CALCULATE` step processes the `PaymentsReceived` collection, extracting the `year` and `month` from the `payment_date` and selecting the `payment_amount`. These new fields (`pay_year`, `pay_month`, `pay_amount`) are temporarily added to each payment record.
+    *   The `PARTITION` function then groups these processed records based on the unique combinations of `pay_year` and `pay_month`. The `name='monthly_payments_group'` assigns a temporary name to access records within each group.
+    *   Inside the second `CALCULATE` applied to the partitioned data, we select the `year` and `month` (which are the partitioning keys) and compute the `total_payments_received` for each group using `SUM(monthly_payments_group.pay_amount)`.
+    *   Finally, `ORDER_BY` sorts the resulting monthly totals chronologically, first by year and then by month.
+    *   The query calculates the total payments received per month for months with data but cannot calculate the MoM change or include months with zero payments due to limitations in standard PyDough functionality as described in the reference.","# Step 1: Add year and MONTH fields to the PaymentsReceived collection
+payments_with_date_info = PaymentsReceived.CALCULATE(
+    pay_year=YEAR(payment_date),
+    pay_month=MONTH(payment_date),
+    pay_amount=payment_amount
+)
+
+# Step 2: PARTITION by year and MONTH to CALCULATE the total payments for each MONTH
+# Note: This will only include months WHERE payments actually occurred.
+# Calculating MoM change directly is not supported by standard PyDough functions shown.
+monthly_payment_totals = PARTITION(
+    payments_with_date_info,
+    name='monthly_payments_group',
+    by=(pay_year, pay_month)
+).CALCULATE(
+    year=pay_year,
+    MONTH=pay_month,
+    total_payments_received=SUM(monthly_payments_group.pay_amount)
+).ORDER_BY(pay_year.ASC(), pay_month.ASC())"
+"What is the TSC in the past 7 days, inclusive of today?TSC = Total Sales Count.","SELECT COUNT(_id) AS TSC FROM sales WHERE sale_date >= DATE('now', '-7 days');",Dealership,"*   **Function Selection & Justification**:
+    *   `GRAPH.CALCULATE`: To compute a single aggregated value (Total Sales Count) across the relevant data.
+    *   `COUNT`: To count the number of sales records that meet the criteria.
+    *   `Sales`: The collection containing the sales records.
+    *   `WHERE`: To filter the sales records based on the sale date.
+    *   `DATETIME`: To determine the date 7 days ago (inclusive of today, so it's today minus 6 days) to set the lower bound for the filter.
+    *   `sale_date`: The field within the `Sales` collection representing the date of the sale.
+
+*   **Partitioning Strategy**:
+    *   `PARTITION` is not required because the goal is to calculate a single aggregate count over a filtered subset of the `Sales` collection, not to group sales by any specific key.
+
+*   **Ranking Considerations**:
+    *   `RANKING` is not needed for this query as we are only counting records within a specific time frame.
+
+*   **PyDough Code**:
+    ```python
+    # Define the start date for the 7-day window (inclusive of today)
+    start_date_limit = DATETIME('now', 'start of day', '-6 days')
+
+    # Calculate the total sales count within the last 7 days
+    total_sales_count_last_7_days = GRAPH.CALCULATE(
+        tsc_past_7_days=COUNT(Sales.WHERE(sale_date >= start_date_limit))
+    )
+    ```
+
+*   **Step-by-Step Explanation**:
+    1.  `start_date_limit = DATETIME('now', 'start of day', '-6 days')`: This line defines a variable `start_date_limit`. It uses the `DATETIME` function to get the current timestamp (`'now'`), truncates it to the beginning of the current day (`'start of day'`), and then subtracts 6 days (`'-6 days'`). This effectively sets the earliest date for sales to be included (7 days ago, including today).
+    2.  `total_sales_count_last_7_days = GRAPH.CALCULATE(...)`: This initiates a calculation at the top level of the graph to produce a single result row.
+    3.  `tsc_past_7_days=COUNT(Sales.WHERE(sale_date >= start_date_limit))`: Inside `CALCULATE`, a field named `tsc_past_7_days` is created.
+        *   `Sales.WHERE(sale_date >= start_date_limit)`: This filters the `Sales` collection, keeping only the records where the `sale_date` is on or after the calculated `start_date_limit`.
+        *   `COUNT(...)`: This counts the number of sales records remaining after the filter is applied. The result is assigned to `tsc_past_7_days`.
+    4.  The final result stored in `total_sales_count_last_7_days` is a collection with a single row and a single column `tsc_past_7_days` containing the total count of sales in the specified period.",
+"Who are the top 3 salespersons by ASP? Return their first name, last name and ASP.ASP (average selling price) = total sales amount / number of sales","SELECT salespersons.first_name, salespersons.last_name, AVG(sales.sale_price) AS ASP FROM sales JOIN salespersons ON sales.salesperson_id = salespersons._id GROUP BY salespersons.first_name, salespersons.last_name ORDER BY ASP DESC LIMIT 3;",Dealership,"Okay, let's break this down.
+
+1.  **Analyze the Input:** The request asks for the top 3 salespersons ranked by their Average Selling Price (ASP). ASP is defined as the total sales amount divided by the number of sales. The output should include the salesperson's first name, last name, and their calculated ASP. We'll use the `Dealership` database.
+
+2.  **Function Selection & Justification:**
+    *   `Salespersons`: This is the primary collection containing salesperson information.
+    *   `CALCULATE`: We need this function multiple times:
+        *   First, to calculate intermediate values for each salesperson: the total sum of their sales (`SUM(sales_made.sale_price)`) and the count of their sales (`COUNT(sales_made)`).
+        *   Second, to calculate the ASP (`total_sales_amount / num_sales`). We need a separate `CALCULATE` because the intermediate fields (`total_sales_amount`, `num_sales`) are needed for the ASP calculation.
+        *   Third, to select the final required fields (`first_name`, `last_name`, `ASP`).
+    *   `SUM`: To aggregate the `sale_price` from the `sales_made` sub-collection for each salesperson.
+    *   `COUNT`: To count the number of records in the `sales_made` sub-collection for each salesperson.
+    *   `WHERE`: To filter out salespersons with zero sales to prevent division by zero when calculating ASP.
+    *   `TOP_K`: To select the top 3 salespersons based on the calculated ASP.
+    *   `.DESC()`: To specify descending order for ASP within `TOP_K`.
+
+3.  **Partitioning Strategy:** `PARTITION` is not required. The calculations can be performed directly on the `Salespersons` collection by aggregating data from its `sales_made` sub-collection.
+
+4.  **Ranking Considerations:** `TOP_K` is the appropriate function here as we need the top N records based on a calculated value (ASP).
+
+5.  **Code Generation:**
+
+```python
+# Calculate total sales amount and number of sales for each salesperson
+salesperson_performance = Salespersons.CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    total_sales_amount=SUM(sales_made.sale_price),
+    num_sales=COUNT(sales_made)
+)
+
+# Filter out salespersons with no sales and calculate ASP
+salesperson_asp = salesperson_performance.WHERE(num_sales > 0).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    asp_calculated=total_sales_amount / num_sales
+)
+
+# Select the top 3 salespersons by ASP and format the output
+top_3_salespersons_by_asp = salesperson_asp.TOP_K(
+    3, by=asp_calculated.DESC()
+).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    ASP=asp_calculated
+)
+```
+
+6.  **Step-by-Step Explanation:**
+    *   The first `CALCULATE` accesses the `Salespersons` collection and computes two new fields for each salesperson: `total_sales_amount` (sum of `sale_price` from all their `sales_made`) and `num_sales` (count of their `sales_made`). It also keeps `first_name` and `last_name`.
+    *   The `WHERE` clause filters this result to include only salespersons who have made at least one sale (`num_sales > 0`), preventing potential division-by-zero errors.
+    *   The second `CALCULATE` computes the `asp_calculated` by dividing `total_sales_amount` by `num_sales` for the filtered salespersons.
+    *   `TOP_K(3, by=asp_calculated.DESC())` selects the top 3 records from the result, ordered by `asp_calculated` in descending order.
+    *   The final `CALCULATE` selects the `first_name`, `last_name`, and renames `asp_calculated` to `ASP` for the final output.","# CALCULATE total sales amount and number of sales for each salesperson
+salesperson_performance = Salespersons.CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    total_sales_amount=SUM(sales_made.sale_price),
+    num_sales=COUNT(sales_made)
+)
+
+# Filter out salespersons with no sales and CALCULATE ASP
+salesperson_asp = salesperson_performance.WHERE(num_sales > 0).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    asp_calculated=total_sales_amount / num_sales
+)
+
+# Select the top 3 salespersons by ASP and format the output
+top_3_salespersons_by_asp = salesperson_asp.TOP_K(
+    3, by=asp_calculated.DESC()
+).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    ASP=asp_calculated
+)"
+"Who are the top 5 salespersons by total sales amount? Return their ID, first name, last name and total sales amount.To get the total sales amount per salesperson, join the salespersons and sales tables, group by salesperson, and sum the sale_price. Always order results with NULLS last.","WITH salesperson_sales AS (SELECT s._id, s.first_name, s.last_name, SUM(sa.sale_price) AS total_sales FROM salespersons AS s LEFT JOIN sales AS sa ON s._id = sa.salesperson_id GROUP BY s._id) SELECT _id, first_name, last_name, total_sales FROM salesperson_sales ORDER BY total_sales DESC LIMIT 5;",Dealership,"*   **Function Selection:**
+    *   `Salespersons`: Access the collection containing salesperson information.
+    *   `CALCULATE`: To compute the total sales amount for each salesperson and select the required output fields.
+    *   `SUM`: To aggregate the `sale_price` from the `sales_made` sub-collection for each salesperson.
+    *   `TOP_K`: To select the top 5 salespersons based on their total sales amount.
+
+*   **Partitioning Strategy:**
+    *   `PARTITION` is not necessary for this query. The aggregation can be performed directly on the `Salespersons` collection using `CALCULATE`.
+
+*   **Ranking Considerations:**
+    *   `RANKING` is not needed. `TOP_K` directly selects the top records based on the specified criteria.
+
+```python
+top_salespersons = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    sp_first_name=first_name,
+    sp_last_name=last_name,
+    total_sales_amount=SUM(sales_made.sale_price)
+).TOP_K(
+    5,
+    by=total_sales_amount.DESC(na_pos='last')
+).CALCULATE(
+    salesperson_id=salesperson_id,
+    first_name=sp_first_name,
+    last_name=sp_last_name,
+    total_sales_amount=total_sales_amount
+)
+```
+
+*   **Explanation:**
+    1.  `Salespersons.CALCULATE(...)`: Starts with the `Salespersons` collection and calculates intermediate fields.
+        *   `salesperson_id=_id`: Selects the salesperson's ID.
+        *   `sp_first_name=first_name`: Selects the salesperson's first name.
+        *   `sp_last_name=last_name`: Selects the salesperson's last name.
+        *   `total_sales_amount=SUM(sales_made.sale_price)`: Calculates the total sales amount for each salesperson by summing the `sale_price` from all their associated records in the `sales_made` sub-collection.
+    2.  `.TOP_K(5, by=total_sales_amount.DESC(na_pos='last'))`: Selects the top 5 salespersons based on the calculated `total_sales_amount` in descending order. `na_pos='last'` ensures any salespersons with no sales (resulting in NULL or 0 depending on implementation) are placed at the end.
+    3.  `.CALCULATE(...)`: Selects the final required fields (`salesperson_id`, `first_name`, `last_name`, `total_sales_amount`) from the top 5 results.","top_salespersons = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    sp_first_name=first_name,
+    sp_last_name=last_name,
+    total_sales_amount=SUM(sales_made.sale_price)
+).TOP_K(
+    5,
+    by=total_sales_amount.DESC(na_pos='last')
+).CALCULATE(
+    salesperson_id=salesperson_id,
+    first_name=sp_first_name,
+    last_name=sp_last_name,
+    total_sales_amount=total_sales_amount
+)"
+"Return the car ID, make, model and year for cars that have no sales records, by doing a left join from the cars to sales table.","SELECT c._id AS car_id, c.make, c.model, c.year FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE s.car_id IS NULL;",Dealership,"*   **Function Selection**:
+    *   `Cars`: To access the car data.
+    *   `WHERE`: To filter the cars based on the condition that they have no sales records.
+    *   `HASNOT`: To check if the `sale_records` sub-collection is empty for each car.
+    *   `CALCULATE`: To select the required fields: `_id`, `make`, `model`, and `year`.
+
+*   **Partitioning Strategy**:
+    *   `PARTITION` is not required for this query as the filtering can be done directly on the `Cars` collection using the `HASNOT` function on the `sale_records` sub-collection.
+
+*   **Ranking Considerations**:
+    *   `RANKING` is not needed for this query.
+
+```python
+# Filter the Cars collection to find cars that have no associated sale_records
+unsold_cars = Cars.WHERE(HASNOT(sale_records) == 1).CALCULATE(
+    car_id=_id,  # Select the car's unique identifier
+    car_make=make,  # Select the car's make
+    car_model=model,  # Select the car's model
+    car_year=year  # Select the car's manufacturing year
+)
+```
+
+*   **Explanation**:
+    1.  `Cars`: Starts the query with the `Cars` collection.
+    2.  `.WHERE(HASNOT(sale_records) == 1)`: Filters the `Cars` collection, keeping only those cars for which the `sale_records` sub-collection is empty (i.e., `HASNOT` returns True, which is compared to 1).
+    3.  `.CALCULATE(...)`: Selects and renames the specified fields (`_id` as `car_id`, `make` as `car_make`, `model` as `car_model`, `year` as `car_year`) for the cars that met the filter condition.
+    4.  `unsold_cars = ...`: Assigns the resulting collection of unsold cars with the selected fields to the variable `unsold_cars`.","# Filter the Cars collection to find cars that have no associated sale_records
+unsold_cars = Cars.WHERE(HASNOT(sale_records) == 1).CALCULATE(
+    car_id=_id,  # Select the car's unique identifier
+    car_make=make,  # Select the car's make
+    car_model=model,  # Select the car's model
+    car_year=year  # Select the car's manufacturing year
+)"
+"Return the distinct list of customer IDs that have made a purchase, based on joining the customers and sales tables.",SELECT DISTINCT c._id AS customer_id FROM customers AS c JOIN sales AS s ON c._id = s.customer_id;,Dealership,"*   **Function Selection:**
+    *   `Customers`: To access the customer data.
+    *   `WHERE`: To filter customers based on a condition.
+    *   `HAS`: To check if a customer has made any purchases (i.e., if the `car_purchases` sub-collection is not empty).
+    *   `CALCULATE`: To select the customer ID (`_id`).
+
+*   **Partitioning Strategy:**
+    *   `PARTITION` is not necessary here. We can directly filter the `Customers` collection based on the existence of related sales records.
+
+*   **Code:**
+    ```python
+    # Filter customers who have made at least one purchase and select their ID
+    purchasing_customer_ids = Customers.WHERE(HAS(car_purchases) == 1).CALCULATE(customer_id=_id)
+    ```
+
+*   **Explanation:**
+    1.  `Customers`: Starts with the `Customers` collection.
+    2.  `.WHERE(HAS(car_purchases) == 1)`: Filters this collection to include only those customers for whom the `car_purchases` sub-collection (linking to `Sales`) contains at least one record. `HAS(car_purchases)` returns true if the sub-collection is not empty, and we compare it to `1` (PyDough's representation of True).
+    3.  `.CALCULATE(customer_id=_id)`: For the filtered customers, selects their unique identifier (`_id`) and renames it to `customer_id`. Since we are operating on the `Customers` collection level, each resulting row corresponds to a unique customer who has made a purchase, effectively giving a distinct list of their IDs.",
+"Return the distinct list of salesperson IDs that have received a cash payment, based on joining the salespersons, sales and payments_received tables.",SELECT DISTINCT s._id AS salesperson_id FROM salespersons AS s JOIN sales AS sa ON s._id = sa.salesperson_id JOIN payments_received AS p ON sa._id = p.sale_id WHERE p.payment_method = 'cash';,Dealership,"*   **Function Selection:**
+    *   `Salespersons`: The starting collection to get salesperson information.
+    *   `.WHERE()`: To filter the `Salespersons` collection based on a condition.
+    *   `HAS()`: To check for the existence of related records (sales with cash payments). We need to check if a salesperson has at least one (`HAS(...) == 1`) sale (`sales_made`) linked to a payment (`payment`) where the `payment_method` is 'Cash'.
+    *   `.CALCULATE()`: To select the `_id` field from the filtered salespersons.
+
+*   **Partitioning Strategy:**
+    *   `PARTITION` is not required for this query. We are filtering the main `Salespersons` collection directly based on conditions in its sub-collections. The distinctness of salesperson IDs is handled by starting with the `Salespersons` collection and applying filters.
+
+```python
+# Find salespersons who have received at least one cash payment for a sale they made.
+cash_payment_salespersons = Salespersons.WHERE(
+    # Check if the salesperson has any sales_made...
+    HAS(
+        # ...where the associated payment record(s)...
+        sales_made.payment.WHERE(
+            # ...have a payment_method of 'Cash'.
+            payment_method == 'Cash'
+        )
+    ) == 1 # Ensure at least one such record exists
+).CALCULATE(
+    # Select only the salesperson's ID.
+    salesperson_id=_id
+)
+```
+
+*   **Explanation:**
+    1.  Start with the `Salespersons` collection.
+    2.  Use `.WHERE()` to filter these salespersons.
+    3.  Inside the `WHERE` clause, use `HAS()` to check for the existence of a specific path:
+        *   Navigate from `Salespersons` to their `sales_made` (a list of sales).
+        *   From each sale in `sales_made`, navigate to its associated `payment` (a list of payments received for that sale).
+        *   Filter these `payment` records using an inner `.WHERE()` to keep only those where `payment_method == 'Cash'`.
+    4.  The `HAS()` function returns true (1) if the filtered sub-collection (cash payments for any sale made by the salesperson) is not empty. The outer `WHERE` condition `HAS(...) == 1` keeps only those salespersons for whom `HAS` returned true.
+    5.  Finally, use `.CALCULATE()` to select only the `_id` for each qualifying salesperson, renaming it to `salesperson_id`. The result is a collection containing the distinct IDs of salespersons who have received a cash payment for at least one sale.","# Find salespersons who have received at least one cash payment for a sale they made.
+cash_payment_salespersons = Salespersons.WHERE(
+    # Check if the salesperson HAS any sales_made...
+    HAS(
+        # ...WHERE the associated payment record(s)...
+        sales_made.payment.WHERE(
+            # ...have a payment_method of 'Cash'.
+            payment_method == 'Cash'
+        )
+    ) == 1 # Ensure at least one such record exists
+).CALCULATE(
+    # Select only the salesperson's ID.
+    salesperson_id=_id
+)"
+"Return the salesperson ID, first name and last name for salespersons that have no sales records, by doing a left join from the salespersons to sales table.","SELECT s._id AS salesperson_id, s.first_name, s.last_name FROM salespersons AS s LEFT JOIN sales AS sa ON s._id = sa.salesperson_id WHERE sa.salesperson_id IS NULL;",Dealership,"*   **Function Selection & Justification**:
+    *   `Salespersons`: Access the collection containing salesperson data.
+    *   `WHERE`: Filter the salespersons based on a condition.
+    *   `HASNOT`: Check if the `sales_made` sub-collection (representing the relationship to the `Sales` collection) is empty for each salesperson. This directly identifies salespersons without any sales records, effectively achieving the goal without needing an explicit join concept like in SQL.
+    *   `CALCULATE`: Select and rename the required fields (`_id`, `first_name`, `last_name`).
+
+*   **Partitioning Strategy**: `PARTITION` is not required for this query as we are filtering the main `Salespersons` collection directly based on a property related to its sub-collection.
+
+*   **Code Generation**:
+    ```python
+    inactive_salespersons = Salespersons.WHERE(
+        HASNOT(sales_made) == 1
+    ).CALCULATE(
+        salesperson_id=_id,
+        first_name=first_name,
+        last_name=last_name
+    )
+    ```
+
+*   **Step-by-Step Explanation**:
+    1.  `Salespersons`: Start with the `Salespersons` collection.
+    2.  `.WHERE(HASNOT(sales_made) == 1)`: Filter this collection to keep only those salespersons for whom the `sales_made` sub-collection (linking to their sales records) is empty. The `HASNOT(sales_made)` function returns `True` if the `sales_made` collection has no records, and we explicitly compare it to `1` (PyDough's representation of True).
+    3.  `.CALCULATE(salesperson_id=_id, first_name=first_name, last_name=last_name)`: Select the `_id`, `first_name`, and `last_name` fields for the filtered salespersons, renaming `_id` to `salesperson_id`.",
+"Return the top 5 salespersons by number of sales in the past 30 days? Return their first and last name, total sales count and total revenue amount.","SELECT sp.first_name, sp.last_name, COUNT(s._id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN salespersons AS sp ON s.salesperson_id = sp._id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp.first_name, sp.last_name, sp._id ORDER BY total_sales DESC LIMIT 5;",Dealership,"1.  **Analyze the Input:** The request asks for the top 5 salespersons based on the count of sales made in the last 30 days. The output should include their first name, last name, the total count of sales in that period, and the total revenue from those sales.
+
+2.  **Function Selection & Justification:**
+    *   `Salespersons`: To access the list of salespersons and their details (`first_name`, `last_name`).
+    *   `sales_made`: To access the sales records associated with each salesperson.
+    *   `WHERE`: To filter the `sales_made` collection to include only sales within the last 30 days.
+    *   `DATEDIFF`: To calculate the difference in days between the `sale_date` and the current date.
+    *   `DATETIME('now')`: To get the current timestamp for the `DATEDIFF` calculation.
+    *   `CALCULATE`: To compute the count of recent sales and the sum of their sale prices for each salesperson, and to select the final output fields.
+    *   `COUNT`: To count the number of sales within the filtered period.
+    *   `SUM`: To calculate the total revenue (`sale_price`) from the filtered sales.
+    *   `TOP_K`: To select the top 5 salespersons based on the calculated sales count.
+    *   `.DESC()`: To sort the salespersons by sales count in descending order for `TOP_K`.
+
+3.  **Partitioning Strategy:** `PARTITION` is not strictly necessary here. We can achieve the goal by starting from the `Salespersons` collection and calculating aggregates over their `sales_made` sub-collection after filtering.
+
+4.  **Ranking Considerations:** `TOP_K` is used directly to get the top 5 salespersons based on the sales count aggregate.
+
+5.  **Handling Ambiguity:** The term ""past 30 days"" is interpreted as the last 30 days including today.
+
+6.  **Code Generation:**
+
+```python
+# Define a filter for sales made in the last 30 days
+recent_sales_filter = DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30
+
+# Calculate performance metrics for each salesperson
+salesperson_performance = Salespersons.CALCULATE(
+    sp_first_name=first_name,
+    sp_last_name=last_name,
+    # Count sales within the last 30 days
+    sales_count_last_30_days=COUNT(sales_made.WHERE(recent_sales_filter)),
+    # Sum revenue from sales within the last 30 days
+    total_revenue_last_30_days=SUM(sales_made.WHERE(recent_sales_filter).sale_price)
+)
+
+# Select the top 5 salespersons based on the number of sales in the last 30 days
+top_5_salespersons_by_sales_count = salesperson_performance.TOP_K(
+    5,
+    by=sales_count_last_30_days.DESC()
+).CALCULATE(
+    # Select the required output fields
+    first_name=sp_first_name,
+    last_name=sp_last_name,
+    total_sales_count=sales_count_last_30_days,
+    total_revenue=DEFAULT_TO(total_revenue_last_30_days, 0.0) # Ensure revenue is 0 if no sales
+)
+```
+
+7.  **Step-by-Step Explanation:**
+    *   `recent_sales_filter`: Defines a condition to check if a sale occurred within the last 30 days from the current time using `DATEDIFF` and `DATETIME('now')`.
+    *   `salesperson_performance`: Starts with the `Salespersons` collection. For each salesperson, it calculates:
+        *   `sp_first_name`: Renames `first_name`.
+        *   `sp_last_name`: Renames `last_name`.
+        *   `sales_count_last_30_days`: Counts the number of sales records (`sales_made`) that satisfy the `recent_sales_filter`.
+        *   `total_revenue_last_30_days`: Sums the `sale_price` for the sales records (`sales_made`) that satisfy the `recent_sales_filter`.
+    *   `top_5_salespersons_by_sales_count`: Takes the `salesperson_performance` results and selects the top 5 records based on `sales_count_last_30_days` in descending order using `TOP_K`.
+    *   The final `CALCULATE` selects and renames the fields for the output: `first_name`, `last_name`, `total_sales_count` (from `sales_count_last_30_days`), and `total_revenue` (from `total_revenue_last_30_days`, defaulting to 0.0 if there were no sales).","# Define a filter for sales made in the last 30 days
+recent_sales_filter = DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30
+
+# CALCULATE performance metrics for each salesperson
+salesperson_performance = Salespersons.CALCULATE(
+    sp_first_name=first_name,
+    sp_last_name=last_name,
+    # Count sales within the last 30 days
+    sales_count_last_30_days=COUNT(sales_made.WHERE(recent_sales_filter)),
+    # SUM revenue from sales within the last 30 days
+    total_revenue_last_30_days=SUM(sales_made.WHERE(recent_sales_filter).sale_price)
+)
+
+# Select the top 5 salespersons based on the number of sales in the last 30 days
+top_5_salespersons_by_sales_count = salesperson_performance.TOP_K(
+    5,
+    by=sales_count_last_30_days.DESC()
+).CALCULATE(
+    # Select the required output fields
+    first_name=sp_first_name,
+    last_name=sp_last_name,
+    total_sales_count=sales_count_last_30_days,
+    total_revenue=DEFAULT_TO(total_revenue_last_30_days, 0.0) # Ensure revenue is 0 if no sales
+)"
+"Return the top 5 states by total revenue, showing the number of unique customers and total revenue (based on sale price) for each state.","SELECT c.state, COUNT(DISTINCT s.customer_id) AS unique_customers, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN customers AS c ON s.customer_id = c._id GROUP BY c.state ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC LIMIT 5;",Dealership,"*   **Function Selection & Justification:**
+    *   `PARTITION`: To group customers by their state. This is necessary to calculate aggregates per state.
+    *   `CALCULATE`: To define the required output fields: state, total revenue, and the count of unique customers for each state.
+    *   `SUM`: To aggregate the `sale_price` from the `car_purchases` (which links to `Sales`) for all customers within each state partition, calculating the total revenue per state.
+    *   `COUNT`: To count the number of customers within each state partition, representing the number of unique customers for that state.
+    *   `TOP_K`: To select the top 5 states based on the calculated `total_revenue`.
+    *   `.DESC()`: To sort the `total_revenue` in descending order for `TOP_K`.
+
+*   **Partitioning Strategy:**
+    *   Partitioning the `Customers` collection by the `state` field is the most direct way to group data geographically. This allows for state-level aggregation of sales revenue and customer counts.
+
+```python
+# Partition customers by state
+state_customer_revenue = PARTITION(
+    Customers,
+    name='cust_group',
+    by=state
+).CALCULATE(
+    # Select the state from the partition key
+    state=state,
+    # Calculate total revenue by summing sale prices of all car purchases made by customers in this state
+    total_revenue=SUM(cust_group.car_purchases.sale_price),
+    # Count the number of customers in this state partition (representing unique customers per state)
+    unique_customers=COUNT(cust_group)
+)
+
+# Select the top 5 states based on total revenue and format the output
+top_5_states_by_revenue = state_customer_revenue.TOP_K(
+    5,
+    by=total_revenue.DESC()
+).CALCULATE(
+    # Select the final required fields
+    state=state,
+    unique_customers=unique_customers,
+    total_revenue=total_revenue
+)
+```
+
+*   **Step-by-Step Explanation:**
+    1.  `PARTITION(Customers, name='cust_group', by=state)`: Groups the `Customers` collection by the `state` field. Each group (`cust_group`) contains all customers residing in a particular state.
+    2.  `.CALCULATE(...)`: For each state group created by the partition:
+        *   `state=state`: Selects the state name (which is the partition key).
+        *   `total_revenue=SUM(cust_group.car_purchases.sale_price)`: Calculates the total revenue for the state by navigating from the customers in the group (`cust_group`) to their `car_purchases` (which are `Sales` records) and summing the `sale_price` of those purchases.
+        *   `unique_customers=COUNT(cust_group)`: Counts the number of customers within the current state group, effectively giving the count of unique customers for that state.
+    3.  `.TOP_K(5, by=total_revenue.DESC())`: Sorts the resulting state summaries by `total_revenue` in descending order and selects the top 5.
+    4.  `.CALCULATE(state=state, unique_customers=unique_customers, total_revenue=total_revenue)`: Selects the final required fields (state, unique\_customers, total\_revenue) for the top 5 states.
+    5.  `top_5_states_by_revenue = ...`: Assigns the final result to the variable `top_5_states_by_revenue`.","# PARTITION customers by state
+state_customer_revenue = PARTITION(
+    Customers,
+    name='cust_group',
+    by=state
+).CALCULATE(
+    # Select the state from the PARTITION key
+    state=state,
+    # CALCULATE total revenue by summing sale prices of all car purchases made by customers in this state
+    total_revenue=SUM(cust_group.car_purchases.sale_price),
+    # Count the number of customers in this state PARTITION (representing unique customers per state)
+    unique_customers=COUNT(cust_group)
+)
+
+# Select the top 5 states based on total revenue and format the output
+top_5_states_by_revenue = state_customer_revenue.TOP_K(
+    5,
+    by=total_revenue.DESC()
+).CALCULATE(
+    # Select the final required fields
+    state=state,
+    unique_customers=unique_customers,
+    total_revenue=total_revenue
+)"
+"What are the top 3 payment methods by total payment amount received? Return the payment method, total number of payments and total amount.","SELECT payment_method, COUNT(*) AS total_payments, SUM(payment_amount) AS total_amount FROM payments_received GROUP BY payment_method ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 3;",Dealership,"*   **Function Selection & Justification**:
+    *   `PARTITION`: Needed to group the `PaymentsReceived` collection by `payment_method`. This allows us to perform aggregations for each distinct payment method.
+    *   `CALCULATE`: Used after `PARTITION` to compute the required aggregated values (total amount and count) for each payment method group.
+    *   `SUM`: An aggregation function required within `CALCULATE` to sum the `payment_amount` for each group.
+    *   `COUNT`: An aggregation function required within `CALCULATE` to count the number of payments for each group.
+    *   `TOP_K`: Needed to select the top 3 payment methods based on the calculated total payment amount.
+
+*   **Partitioning Strategy**:
+    *   Partitioning is necessary to group the data by `payment_method`. The `payment_method` field is the appropriate key for partitioning as the goal is to aggregate results per method.
+
+*   **Code**:
+    ```python
+    # Group payments by payment method and calculate total amount and count for each
+    top_payment_methods = PARTITION(
+        Dealership.PaymentsReceived,
+        name='payments_group',
+        by=payment_method
+    ).CALCULATE(
+        payment_method=payment_method,
+        total_payments_count=COUNT(payments_group),
+        total_payment_amount_received=SUM(payments_group.payment_amount)
+    ).TOP_K( # Select the top 3 based on the total amount received
+        3,
+        by=total_payment_amount_received.DESC()
+    )
+    ```
+
+*   **Explanation**:
+    1.  `PARTITION(Dealership.PaymentsReceived, name='payments_group', by=payment_method)`: Groups all records in the `PaymentsReceived` collection based on their `payment_method`. Each group is accessible via the name `payments_group`.
+    2.  `.CALCULATE(...)`: For each group created by `PARTITION`, this calculates:
+        *   `payment_method=payment_method`: Selects the payment method (the partitioning key).
+        *   `total_payments_count=COUNT(payments_group)`: Counts the number of payment records within each `payments_group`.
+        *   `total_payment_amount_received=SUM(payments_group.payment_amount)`: Sums the `payment_amount` for all payments within each `payments_group`.
+    3.  `.TOP_K(3, by=total_payment_amount_received.DESC())`: Sorts the results based on the calculated `total_payment_amount_received` in descending order and selects the top 3 entries.",
+"What are the top 5 best selling car models by total revenue? Return the make, model, total number of sales and total revenue.","SELECT c.make, c.model, COUNT(s._id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id GROUP BY c.make, c.model ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC LIMIT 5;",Dealership,"*   **Function Selection & Justification**:
+    *   `CALCULATE`: To access the `make` and `model` from the related `Cars` collection via `Sales.car` and make them available for partitioning. Also used within the partition to compute the aggregated values and select the final output fields.
+    *   `PARTITION`: To group the sales records by car make and model. This allows aggregating revenue and sales count per model.
+    *   `SUM`: To calculate the total sales revenue for each car model group.
+    *   `COUNT`: To count the number of sales for each car model group.
+    *   `TOP_K`: To select the top 5 car models based on the calculated total revenue.
+    *   `.DESC()`: Used within `TOP_K` to sort the models by total revenue in descending order.
+
+*   **Partitioning Strategy**:
+    *   Partitioning is necessary to group sales data by car model (`make` and `model`).
+    *   We will partition the `Sales` collection after calculating `car.make` and `car.model` as new fields. The partition keys will be these calculated fields (`car_make`, `car_model`).
+
+*   **Code Generation**:
+    ```python
+    # Calculate make and model for each sale for partitioning
+    sales_data = Sales.CALCULATE(
+        car_make=car.make,
+        car_model=car.model,
+        sale_amount=sale_price
+    )
+
+    # Partition sales by make and model, calculate total revenue and count
+    model_sales_summary = PARTITION(
+        sales_data,
+        name='model_group',
+        by=(car_make, car_model)
+    ).CALCULATE(
+        make=car_make,
+        model=car_model,
+        total_revenue=SUM(model_group.sale_amount),
+        total_sales_count=COUNT(model_group)
+    )
+
+    # Get the top 5 models by total revenue
+    top_5_selling_models = model_sales_summary.TOP_K(
+        5,
+        by=total_revenue.DESC()
+    )
+    ```
+
+*   **Step-by-Step Explanation**:
+    1.  `sales_data = Sales.CALCULATE(...)`: This step accesses the `Sales` collection and, for each sale, retrieves the `make` and `model` of the associated car (`Sales.car.make`, `Sales.car.model`) and the `sale_price`. These are stored as temporary fields `car_make`, `car_model`, and `sale_amount` to be used in the next step.
+    2.  `model_sales_summary = PARTITION(...)`: This partitions the `sales_data` based on the unique combinations of `car_make` and `car_model`. Each partition (`model_group`) contains all sales records for a specific car make and model.
+    3.  `.CALCULATE(...)`: Within each partition, this calculates:
+        *   `make=car_make`: Selects the make (partition key).
+        *   `model=car_model`: Selects the model (partition key).
+        *   `total_revenue=SUM(model_group.sale_amount)`: Calculates the sum of `sale_amount` for all sales within that make/model group.
+        *   `total_sales_count=COUNT(model_group)`: Counts the number of sales records within that make/model group.
+    4.  `top_5_selling_models = model_sales_summary.TOP_K(...)`: This takes the results from the partitioning and calculation step (one row per make/model with aggregated data) and selects the top 5 rows based on the `total_revenue` field in descending order. The final result is assigned to the `top_5_selling_models` variable.",
+"What are the total number of customer signups for the top 2 states? Return the state and total signups, starting from the top.","SELECT state, COUNT(*) AS total_signups FROM customers GROUP BY state ORDER BY CASE WHEN total_signups IS NULL THEN 1 ELSE 0 END DESC, total_signups DESC LIMIT 2;",Dealership,"*   **Function Selection:**
+    *   `Customers`: Access the customer data.
+    *   `PARTITION`: Group customers by their state.
+    *   `CALCULATE`: Select the state and compute the count of customers within each state partition.
+    *   `COUNT`: Aggregate function to count the number of customers in each state group.
+    *   `TOP_K`: Select the top 2 states based on the customer count.
+
+*   **Partitioning Strategy:**
+    *   Partitioning is necessary to group customers by state.
+    *   The partition key will be the `state` field from the `Customers` collection.
+
+*   **Code Generation:**
+
+```python
+# Partition customers by state and count the number of signups in each state
+state_signups = PARTITION(Customers, name='cust_group', by=state).CALCULATE(
+    state_name=state,
+    total_signups=COUNT(cust_group)
+)
+
+# Select the top 2 states with the most signups
+top_2_states_signups = state_signups.TOP_K(2, by=total_signups.DESC())
+
+```
+
+*   **Step-by-Step Explanation:**
+    1.  `PARTITION(Customers, name='cust_group', by=state)`: Groups the `Customers` collection by the `state` field. Each group is accessible via the name `cust_group`.
+    2.  `.CALCULATE(state_name=state, total_signups=COUNT(cust_group))`: For each state partition, calculates two fields:
+        *   `state_name`: The name of the state (taken directly from the partition key `state`).
+        *   `total_signups`: The total number of customers in that state group, calculated using `COUNT(cust_group)`.
+    3.  `.TOP_K(2, by=total_signups.DESC())`: Selects the top 2 rows from the result of the `PARTITION` and `CALCULATE` operations, ordered by `total_signups` in descending order.
+    4.  The final result is assigned to the variable `top_2_states_signups`, containing the state name and total signups for the top 2 states.","# PARTITION customers by state and count the number of signups in each state
+state_signups = PARTITION(Customers, name='cust_group', by=state).CALCULATE(
+    state_name=state,
+    total_signups=COUNT(cust_group)
+)
+
+# Select the top 2 states with the most signups
+top_2_states_signups = state_signups.TOP_K(2, by=total_signups.DESC())"
+"Who were the top 3 sales representatives by total revenue in the past 3 months, inclusive of today's date? Return their first name, last name, total number of sales and total revenue. Note that revenue refers to the sum of sale_price in the sales table.","SELECT c.first_name, c.last_name, COUNT(s._id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN salespersons AS c ON s.salesperson_id = c._id WHERE s.sale_date >= DATE('now', '-3 months') GROUP BY c.first_name, c.last_name ORDER BY total_revenue DESC LIMIT 3;",Dealership,"Okay, let's break this down.
+
+1.  **Analyze the Input:**
+    *   We need to find the top 3 salespersons based on their total revenue (`sale_price`) from sales made in the last 3 months (inclusive of today).
+    *   The output should include the salesperson's first name, last name, the total count of their sales in that period, and their total revenue in that period.
+    *   We'll use the `Dealership` database.
+
+2.  **Function Selection & Justification:**
+    *   `Salespersons`: The base collection containing salesperson information.
+    *   `sales_made`: The sub-collection linking salespersons to their sales records.
+    *   `WHERE`: To filter the `sales_made` records to include only those within the last 3 months.
+    *   `DATETIME('now', '-3 months')`: To calculate the start date of our 3-month window. We need sales on or after this date.
+    *   `COUNT`: To count the number of sales records for each salesperson within the filtered timeframe.
+    *   `SUM`: To sum the `sale_price` for each salesperson's sales within the filtered timeframe.
+    *   `CALCULATE`: To compute the `total_sales_count` and `total_revenue` for each salesperson and to select the required output fields (`first_name`, `last_name`).
+    *   `TOP_K`: To select the top 3 salespersons based on the calculated `total_revenue`.
+
+3.  **Partitioning Strategy:**
+    *   `PARTITION` is not necessary. We can perform the aggregations directly on the `Salespersons` collection level, aggregating data from the `sales_made` sub-collection.
+
+4.  **Ranking Considerations:**
+    *   `RANKING` is not needed. `TOP_K` directly gives us the top N results based on a specified metric.
+
+5.  **Code Generation:**
+
+```python
+# Define the start date for the last 3 months
+start_date_3_months_ago = DATETIME('now', '-3 months')
+
+# Calculate total sales count and revenue per salesperson for the last 3 months
+salesperson_performance = Salespersons.CALCULATE(
+    rep_first_name=first_name,
+    rep_last_name=last_name,
+    # Filter sales within the aggregation functions
+    total_sales_count=COUNT(sales_made.WHERE(sale_date >= start_date_3_months_ago)),
+    total_revenue=SUM(sales_made.WHERE(sale_date >= start_date_3_months_ago).sale_price)
+)
+
+# Select the top 3 salespersons by total revenue
+top_3_salespersons = salesperson_performance.TOP_K(
+    3,
+    by=total_revenue.DESC()
+).CALCULATE(
+    # Select only the requested fields using the calculated names
+    first_name=rep_first_name,
+    last_name=rep_last_name,
+    total_sales_count=total_sales_count,
+    total_revenue=total_revenue
+)
+```
+
+6.  **Step-by-Step Explanation:**
+    *   `start_date_3_months_ago = DATETIME('now', '-3 months')`: Defines a variable holding the date exactly 3 months prior to the current moment.
+    *   `salesperson_performance = Salespersons.CALCULATE(...)`: Starts with the `Salespersons` collection and calculates new fields for each salesperson.
+        *   `rep_first_name=first_name`, `rep_last_name=last_name`: Selects the first and last names, renaming them to avoid conflicts.
+        *   `total_sales_count=COUNT(sales_made.WHERE(sale_date >= start_date_3_months_ago))`: Counts the sales records (`sales_made`) for each salesperson, but only includes sales where the `sale_date` is on or after `start_date_3_months_ago`.
+        *   `total_revenue=SUM(sales_made.WHERE(sale_date >= start_date_3_months_ago).sale_price)`: Sums the `sale_price` from the sales records (`sales_made`) for each salesperson, again filtering for sales on or after `start_date_3_months_ago`.
+    *   `top_3_salespersons = salesperson_performance.TOP_K(...)`: Takes the calculated performance data and selects the top 3 rows based on `total_revenue` in descending order.
+    *   `.CALCULATE(...)`: Selects and renames the final required fields (`first_name`, `last_name`, `total_sales_count`, `total_revenue`) from the top 3 results.","# Define the start date for the last 3 months
+start_date_3_months_ago = DATETIME('now', '-3 months')
+
+# CALCULATE total sales count and revenue per salesperson for the last 3 months
+salesperson_performance = Salespersons.CALCULATE(
+    rep_first_name=first_name,
+    rep_last_name=last_name,
+    # Filter sales within the aggregation functions
+    total_sales_count=COUNT(sales_made.WHERE(sale_date >= start_date_3_months_ago)),
+    total_revenue=SUM(sales_made.WHERE(sale_date >= start_date_3_months_ago).sale_price)
+)
+
+# Select the top 3 salespersons by total revenue
+top_3_salespersons = salesperson_performance.TOP_K(
+    3,
+    by=total_revenue.DESC()
+).CALCULATE(
+    # Select only the requested fields using the calculated names
+    first_name=rep_first_name,
+    last_name=rep_last_name,
+    total_sales_count=total_sales_count,
+    total_revenue=total_revenue
+)"
+Return the name and phone number of the salesperson with the shortest time from being hired to getting fired. Return the number of days he/she was employed for.,"SELECT s.first_name, s.last_name, s.phone, julianday(s.termination_date) - julianday(s.hire_date) AS days_employed FROM salespersons AS s ORDER BY CASE WHEN days_employed IS NULL THEN 1 ELSE 0 END, days_employed ASC LIMIT 1;",Dealership,"*   **Function Selection & Justification**:
+    *   `Salespersons`: To access the data about salespersons.
+    *   `WHERE`: To filter only those salespersons who have a `termination_date` (i.e., they have been fired or left).
+    *   `PRESENT`: To check if the `termination_date` field is not null.
+    *   `CALCULATE`: To compute the employment duration and select the required fields.
+    *   `DATEDIFF`: To calculate the difference in days between the `hire_date` and `termination_date`.
+    *   `TOP_K`: To find the single salesperson with the minimum employment duration.
+    *   `ASC`: To specify ascending order for `TOP_K`, finding the minimum duration.
+    *   `JOIN_STRINGS`: To combine the `first_name` and `last_name` into a full name.
+*   **Partitioning Strategy**:
+    *   `PARTITION` is not required because we need to find the minimum duration across all salespersons, not within specific groups.
+*   **Ranking Considerations**:
+    *   `RANKING` is not necessary. `TOP_K(1, by=duration.ASC())` directly selects the record with the minimum duration.
+
+```python
+shortest_employed_salesperson = Salespersons.WHERE(
+    PRESENT(termination_date)  # Filter for salespersons with a termination date
+).CALCULATE(
+    # Calculate the duration of employment in days
+    employment_duration_days=DATEDIFF(""days"", hire_date, termination_date),
+    # Combine first and last names
+    full_name=JOIN_STRINGS(' ', first_name, last_name),
+    # Select the phone number
+    phone_num=phone
+).TOP_K(
+    1, by=employment_duration_days.ASC()  # Find the salesperson with the shortest employment duration
+).CALCULATE(
+    # Select the final required fields with desired names
+    salesperson_name=full_name,
+    salesperson_phone=phone_num,
+    days_employed=employment_duration_days
+)
+```
+
+*   **Step-by-Step Explanation**:
+    1.  Start with the `Salespersons` collection.
+    2.  Filter the collection using `WHERE` to include only salespersons for whom the `termination_date` is present (not null), meaning they are no longer employed.
+    3.  Use `CALCULATE` to:
+        *   Compute `employment_duration_days` by finding the difference in days between `hire_date` and `termination_date` using `DATEDIFF`.
+        *   Create `full_name` by joining `first_name` and `last_name` with a space.
+        *   Select the `phone` number and assign it to `phone_num`.
+    4.  Apply `TOP_K(1, by=employment_duration_days.ASC())` to the result. This sorts the filtered and calculated salespersons by their employment duration in ascending order (`ASC`) and selects the top 1 record, which corresponds to the salesperson with the shortest employment time.
+    5.  Use a final `CALCULATE` to select and rename the required fields: `full_name` as `salesperson_name`, `phone_num` as `salesperson_phone`, and `employment_duration_days` as `days_employed`.
+    6.  The result is assigned to the `shortest_employed_salesperson` variable.","shortest_employed_salesperson = Salespersons.WHERE(
+    PRESENT(termination_date)  # Filter for salespersons with a termination date
+).CALCULATE(
+    # CALCULATE the duration of employment in days
+    employment_duration_days=DATEDIFF(""days"", hire_date, termination_date),
+    # Combine first and last names
+    full_name=JOIN_STRINGS(' ', first_name, last_name),
+    # Select the phone number
+    phone_num=phone
+).TOP_K(
+    1, by=employment_duration_days.ASC()  # Find the salesperson with the shortest employment duration
+).CALCULATE(
+    # Select the final required fields with desired names
+    salesperson_name=full_name,
+    salesperson_phone=phone_num,
+    days_employed=employment_duration_days
+)"
+Return the number of payments made on weekends to the vendor named 'Utility Company',"SELECT COUNT(*) AS weekend_payments FROM payments_made WHERE vendor_name = 'Utility Company' AND strftime('%w', payment_date) IN ('0', '6');",Dealership,"Okay, let's break this down.
+
+1.  **Analyze the Input**: The goal is to count payments made to a specific vendor ('Utility Company') specifically on weekends (Saturday or Sunday).
+2.  **Function Selection & Justification**:
+    *   `Dealership.PaymentsMade`: We need to access the collection containing payment records.
+    *   `.WHERE()`: This function is required to filter the payments based on two criteria: the vendor name and the day of the week the payment was made.
+    *   `vendor_name == 'Utility Company'`: This condition filters for the specific vendor.
+    *   **Weekend Check**: The provided PyDough reference lacks a function like `DAYOFWEEK` to directly determine if a `payment_date` falls on a Saturday or Sunday. Therefore, filtering specifically for weekends is **not possible** with the documented functions. We can only filter by vendor.
+    *   `COUNT()`: After filtering (only by vendor in this case), we need to count the number of resulting records.
+    *   `Dealership.CALCULATE()`: To return the final count as a single value.
+3.  **Partitioning Strategy**: `PARTITION` is not needed as we are performing a simple count on a filtered collection, not grouping by any key.
+4.  **Ranking Considerations**: `RANKING` is not required for this counting task.
+5.  **Handling Ambiguity**: The main issue is the lack of a weekend-checking function. The query will be adapted to count all payments for the vendor, acknowledging the limitation.
+6.  **Code Generation**:
+
+```python
+# Filter payments made to 'Utility Company'.
+# Note: Filtering by weekend (Saturday/Sunday) is not possible with the documented PyDough functions
+# as there is no function to extract the day of the week from 'payment_date'.
+# This query counts *all* payments made to 'Utility Company', regardless of the day.
+utility_payments_count = Dealership.CALCULATE(
+    num_payments_to_utility_company=COUNT(
+        PaymentsMade.WHERE(vendor_name == 'Utility Company')
+    )
+)
+```
+
+7.  **Step-by-Step Explanation**:
+    *   The query starts at the top level of the `Dealership` graph.
+    *   `Dealership.CALCULATE(...)` is used to compute a single result value.
+    *   Inside `CALCULATE`, `COUNT(PaymentsMade.WHERE(vendor_name == 'Utility Company'))` performs the core logic:
+        *   It accesses the `PaymentsMade` collection.
+        *   It applies a `.WHERE()` filter to keep only records where the `vendor_name` is exactly 'Utility Company'.
+        *   `COUNT()` then counts the number of records remaining after the filter.
+    *   The final result is assigned to the field `num_payments_to_utility_company`.
+    *   Crucially, the weekend filtering condition cannot be applied due to limitations in the available PyDough functions. The result represents the total count of payments to 'Utility Company' on any day.","# Filter payments made to 'Utility Company'.
+# Note: Filtering by weekend (Saturday/Sunday) is not possible with the documented PyDough functions
+# as there is no function to extract the DAY of the week from 'payment_date'.
+# This query counts *all* payments made to 'Utility Company', regardless of the DAY.
+utility_payments_count = Dealership.CALCULATE(
+    num_payments_to_utility_company=COUNT(
+        PaymentsMade.WHERE(vendor_name == 'Utility Company')
+    )
+)"
+"show me the daily total amount of payments received in the whole of the previous ISO week not including the current week, split by the payment_method","SELECT payment_date, payment_method, SUM(payment_amount) AS total_amount FROM payments_received WHERE payment_date >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND payment_date < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY payment_date, payment_method ORDER BY payment_date DESC, payment_method ASC;",Dealership,"Okay, let's break this down.
+
+**1. Analyze the Input**
+
+*   **Goal**: Calculate the sum of `payment_amount` for each day within the *previous* ISO week.
+*   **Source Data**: `PaymentsReceived` collection.
+*   **Grouping**: The results need to be grouped by the day of the `payment_date` and the `payment_method`.
+*   **Filtering**: Only include payments where `payment_date` falls within the previous ISO week (Monday to Sunday). The current week should be excluded.
+*   **Output**: For each day and payment method combination in the previous week, show the date, the payment method, and the total payment amount.
+
+**2. Function Selection & Justification**
+
+*   **`DATETIME`**: Needed to:
+    *   Get the current date/time (`'now'`).
+    *   Determine the start of the current ISO week (`'start of week'`). We assume this aligns with ISO standards (Monday).
+    *   Calculate the start and end dates of the *previous* ISO week by subtracting days from the start of the current week.
+    *   Truncate the `payment_date` to its day component (`'start of day'`) for daily grouping.
+*   **`WHERE`**: Required to filter `PaymentsReceived` records to include only those whose `payment_date` falls between the calculated start and end dates of the previous ISO week.
+*   **`CALCULATE`**: Used *before* partitioning to create the `payment_day` field needed for grouping. Also used *after* partitioning to select the final output fields and perform the aggregation.
+*   **`PARTITION`**: Necessary to group the filtered payments by the calculated `payment_day` and the `payment_method`.
+*   **`SUM`**: Required within the final `CALCULATE` after `PARTITION` to sum the `payment_amount` for each group (day + payment method).
+*   **`ORDER_BY`** (Optional but recommended): To present the results in a logical order, typically by date and then payment method.
+
+**3. Partitioning Strategy**
+
+*   Partitioning is required because we need to aggregate (`SUM`) amounts based on distinct combinations of day and payment method.
+*   We will partition by two keys:
+    1.  The day extracted from `payment_date` (calculated as `payment_day`).
+    2.  The `payment_method`.
+*   This ensures that `SUM(payment_amount)` operates correctly within each unique day/method group.
+
+**4. Ranking Considerations**
+
+*   `RANKING` is not needed for this request.
+
+**5. Handling Ambiguity**
+
+*   The main assumption is that `DATETIME('now', 'start of week')` correctly identifies the start of the ISO week (Monday). If the system's definition of 'start of week' is different (e.g., Sunday), the date calculations would need adjustment. We proceed assuming it means Monday.
+
+**6. Code Generation**
+
+```python
+# Define date boundaries for the previous ISO week
+# Assuming DATETIME('now', 'start of week') returns the timestamp for the preceding Monday
+start_of_current_iso_week = DATETIME('now', 'start of week')
+start_of_previous_iso_week = DATETIME(start_of_current_iso_week, '-7 days')
+# The end of the previous week is the day before the start of the current week
+end_of_previous_iso_week = DATETIME(start_of_current_iso_week, '-1 day')
+
+# Filter payments within the previous week and calculate the payment day
+payments_in_prev_week = PaymentsReceived.WHERE(
+    (payment_date >= start_of_previous_iso_week) & (payment_date <= end_of_previous_iso_week)
+).CALCULATE(
+    # Truncate payment_date to the start of the day for daily grouping
+    payment_day = DATETIME(payment_date, 'start of day'),
+    # Select fields needed for partitioning and aggregation
+    pay_method = payment_method,
+    pay_amount = payment_amount
+)
+
+# Partition by the calculated day and payment method
+# Then calculate the sum of amounts for each group
+daily_totals_by_method = PARTITION(
+    payments_in_prev_week,
+    name='payments_group',
+    by=(payment_day, pay_method)
+).CALCULATE(
+    # Output the grouping keys
+    payment_date_day = payment_day,
+    payment_method_type = pay_method,
+    # Calculate the total amount for the group
+    total_daily_amount = SUM(payments_group.pay_amount)
+).ORDER_BY(payment_date_day.ASC(), payment_method_type.ASC()) # Order results for clarity
+
+# Assign the final result to a variable
+previous_week_daily_payments = daily_totals_by_method
+```
+
+**7. Step-by-Step Explanation**
+
+1.  **Date Calculation**: We first determine the start date (`start_of_previous_iso_week`) and end date (`end_of_previous_iso_week`) of the full ISO week immediately preceding the current one. This uses `DATETIME` with `'now'`, `'start of week'`, and date subtractions.
+2.  **Filtering**: The `PaymentsReceived` collection is filtered using `WHERE` to keep only records whose `payment_date` falls within the calculated `start_of_previous_iso_week` and `end_of_previous_iso_week`.
+3.  **Pre-Calculation**: Before partitioning, `CALCULATE` is used on the filtered data to:
+    *   Create a `payment_day` field by truncating `payment_date` to the start of the day using `DATETIME(payment_date, 'start of day')`. This is essential for daily grouping.
+    *   Select the `payment_method` (aliased as `pay_method`) and `payment_amount` (aliased as `pay_amount`) needed for the next steps.
+4.  **Partitioning**: The `PARTITION` function groups the intermediate results (`payments_in_prev_week`) based on the unique combinations of `payment_day` and `pay_method`. Each group is accessible via the name `payments_group`.
+5.  **Aggregation & Output**: The final `CALCULATE` operates on the partitioned data. For each group:
+    *   It outputs the `payment_day` (renamed `payment_date_day`) and `pay_method` (renamed `payment_method_type`) which were the partitioning keys.
+    *   It calculates the `SUM` of `pay_amount` for all records within that specific `payments_group`, naming the result `total_daily_amount`.
+6.  **Ordering**: `ORDER_BY` sorts the final results first by date (`payment_date_day`) and then by payment method (`payment_method_type`) for better readability.
+7.  **Assignment**: The final computed collection is assigned to the variable `previous_week_daily_payments`.","# Define date boundaries for the previous ISO week
+# Assuming DATETIME('now', 'start of week') returns the timestamp for the preceding Monday
+start_of_current_iso_week = DATETIME('now', 'start of week')
+start_of_previous_iso_week = DATETIME(start_of_current_iso_week, '-7 days')
+# The end of the previous week is the DAY before the start of the current week
+end_of_previous_iso_week = DATETIME(start_of_current_iso_week, '-1 DAY')
+
+# Filter payments within the previous week and CALCULATE the payment DAY
+payments_in_prev_week = PaymentsReceived.WHERE(
+    (payment_date >= start_of_previous_iso_week) & (payment_date <= end_of_previous_iso_week)
+).CALCULATE(
+    # Truncate payment_date to the start of the DAY for daily grouping
+    payment_day = DATETIME(payment_date, 'start of DAY'),
+    # Select fields needed for partitioning and aggregation
+    pay_method = payment_method,
+    pay_amount = payment_amount
+)
+
+# PARTITION by the calculated DAY and payment method
+# Then CALCULATE the SUM of amounts for each group
+daily_totals_by_method = PARTITION(
+    payments_in_prev_week,
+    name='payments_group',
+    by=(payment_day, pay_method)
+).CALCULATE(
+    # Output the grouping keys
+    payment_date_day = payment_day,
+    payment_method_type = pay_method,
+    # CALCULATE the total amount for the group
+    total_daily_amount = SUM(payments_group.pay_amount)
+).ORDER_BY(payment_date_day.ASC(), payment_method_type.ASC()) # Order results for clarity
+
+# Assign the final result to a variable
+previous_week_daily_payments = daily_totals_by_method"
+What were the total quarterly sales in 2023 grouped by customer's state? Represent each quarter as the first date in the quarter.,"SELECT CASE WHEN strftime('%m', s.sale_date) BETWEEN '01' AND '03' THEN '2023-01-01' WHEN strftime('%m', s.sale_date) BETWEEN '04' AND '06' THEN '2023-04-01' WHEN strftime('%m', s.sale_date) BETWEEN '07' AND '09' THEN '2023-07-01' ELSE '2023-10-01' END AS quarter, c.state, SUM(s.sale_price) AS total_sales FROM sales AS s JOIN customers AS c ON s.customer_id = c._id WHERE strftime('%Y', s.sale_date) = '2023' GROUP BY c.state, quarter HAVING SUM(s.sale_price) > 0 ORDER BY quarter, c.state;",Dealership,"Okay, let's break this down.
+
+1.  **Goal**: Calculate total quarterly sales for 2023, grouped by customer state.
+2.  **Data Needed**: Sales data (`Sales` collection), specifically `sale_date`, `sale_price`, and the associated customer's state (`customer.state`).
+3.  **Filtering**: We only need sales from the year 2023.
+4.  **Calculations**:
+    *   Determine the quarter for each sale based on `sale_date`.
+    *   Represent each quarter by its start date (e.g., Q1 -> YYYY-01-01, Q2 -> YYYY-04-01, etc.). We can use the `DATETIME` function combined with `IFF` and `MONTH` to achieve this.
+    *   Extract the customer's state using `customer.state`.
+5.  **Grouping**: We need to group the results by the calculated quarter start date and the customer's state. The `PARTITION` function is suitable for this.
+6.  **Aggregation**: For each group (state and quarter), we need to sum the `sale_price`. The `SUM` aggregation function will be used within the `CALCULATE` after `PARTITION`.
+
+**Function Selection:**
+
+*   `Sales`: To access sales records.
+*   `.WHERE()`: To filter sales records for the year 2023 using `YEAR(sale_date)`.
+*   `.CALCULATE()`: To extract the customer state (`customer.state`), sale price (`sale_price`), and calculate the start date of the quarter (`quarter_start_date`) for each sale.
+    *   `YEAR()`: To extract the year from `sale_date`.
+    *   `MONTH()`: To extract the month from `sale_date`.
+    *   `DATETIME()`: To manipulate dates, specifically to find the start of the year and add months to get the quarter start date.
+    *   `IFF()`: To implement the conditional logic for determining the quarter start date based on the month.
+*   `PARTITION()`: To group the intermediate results by customer state and the calculated quarter start date.
+*   `SUM()`: To aggregate the `sale_price` within each partition group in the final `CALCULATE`.
+*   `.ORDER_BY()`: (Optional but good practice) To sort the final results, for example, by state and then by quarter.
+
+**PyDough Code:**
+
+```python
+# Calculate intermediate values: customer state, sale price, and quarter start date for 2023 sales
+sales_with_quarter = Sales.WHERE(YEAR(sale_date) == 2023).CALCULATE(
+    cust_state=customer.state,
+    price=sale_price,
+    # Calculate the start date of the quarter for the sale_date
+    month_num=MONTH(sale_date),
+    year_start=DATETIME(sale_date, 'start of year'),
+    q_start_date=IFF(
+        month_num <= 3,
+        year_start,
+        IFF(
+            month_num <= 6,
+            DATETIME(year_start, '+ 3 months'),
+            IFF(
+                month_num <= 9,
+                DATETIME(year_start, '+ 6 months'),
+                DATETIME(year_start, '+ 9 months')
+            )
+        )
+    )
+)
+
+# Partition by state and quarter start date, then calculate total sales for each group
+quarterly_sales_by_state = PARTITION(
+    sales_with_quarter,
+    name='quarterly_group',
+    by=(cust_state, q_start_date)
+).CALCULATE(
+    state=cust_state,
+    quarter_start=q_start_date,
+    total_quarterly_sales=SUM(quarterly_group.price)
+).ORDER_BY(state.ASC(), quarter_start.ASC())
+
+```
+
+**Explanation:**
+
+1.  `sales_with_quarter = Sales.WHERE(...)`: We start with the `Sales` collection and filter records where the `sale_date` is in the year 2023.
+2.  `.CALCULATE(...)`: For each filtered sale, we calculate:
+    *   `cust_state`: The state of the customer associated with the sale.
+    *   `price`: The `sale_price` of the transaction.
+    *   `month_num`: The month number (1-12) of the `sale_date`.
+    *   `year_start`: The first day of the year 2023, derived from the `sale_date`.
+    *   `q_start_date`: The start date of the quarter. This is calculated using nested `IFF` conditions based on `month_num`. It returns the `year_start` for Q1, `year_start` plus 3 months for Q2, plus 6 months for Q3, and plus 9 months for Q4.
+3.  `quarterly_sales_by_state = PARTITION(...)`: We partition the intermediate `sales_with_quarter` collection.
+    *   `name='quarterly_group'`: Names the grouped data within each partition.
+    *   `by=(cust_state, q_start_date)`: Specifies that the grouping should be done based on the customer's state and the calculated quarter start date.
+4.  `.CALCULATE(...)`: For each partition (unique combination of state and quarter start date):
+    *   `state=cust_state`: Selects the state (partition key).
+    *   `quarter_start=q_start_date`: Selects the quarter start date (partition key).
+    *   `total_quarterly_sales=SUM(quarterly_group.price)`: Calculates the sum of `price` for all sales records belonging to that specific state and quarter, accessing the grouped prices via `quarterly_group.price`.
+5.  `.ORDER_BY(state.ASC(), quarter_start.ASC())`: Sorts the final result first by state alphabetically and then by the quarter start date chronologically.","# CALCULATE intermediate values: customer state, sale price, and quarter start date for 2023 sales
+sales_with_quarter = Sales.WHERE(YEAR(sale_date) == 2023).CALCULATE(
+    cust_state=customer.state,
+    price=sale_price,
+    # CALCULATE the start date of the quarter for the sale_date
+    month_num=MONTH(sale_date),
+    year_start=DATETIME(sale_date, 'start of year'),
+    q_start_date=IFF(
+        month_num <= 3,
+        year_start,
+        IFF(
+            month_num <= 6,
+            DATETIME(year_start, '+ 3 months'),
+            IFF(
+                month_num <= 9,
+                DATETIME(year_start, '+ 6 months'),
+                DATETIME(year_start, '+ 9 months')
+            )
+        )
+    )
+)
+
+# PARTITION by state and quarter start date, then CALCULATE total sales for each group
+quarterly_sales_by_state = PARTITION(
+    sales_with_quarter,
+    name='quarterly_group',
+    by=(cust_state, q_start_date)
+).CALCULATE(
+    state=cust_state,
+    quarter_start=q_start_date,
+    total_quarterly_sales=SUM(quarterly_group.price)
+).ORDER_BY(state.ASC(), quarter_start.ASC())"
+"Which cars were in inventory in the latest snapshot for march 2023? Return the car _id, make, model, and year. Cars are considered to be in inventory"" if is_in_inventory is True.""","WITH latest_snapshot AS (SELECT MAX(snapshot_date) AS snapshot_date FROM inventory_snapshots WHERE snapshot_date BETWEEN '2023-03-01' AND '2023-03-31'), latest_snapshot_data AS (SELECT inv.car_id FROM inventory_snapshots AS inv JOIN latest_snapshot AS ls ON inv.snapshot_date = ls.snapshot_date WHERE inv.is_in_inventory = TRUE) SELECT c._id, c.make, c.model, c.year FROM cars AS c JOIN latest_snapshot_data AS lsd ON c._id = lsd.car_id;",Dealership,"*   **Function Selection:**
+    *   `WHERE`: To filter `InventorySnapshots` based on the month and year of `snapshot_date`, the calculated latest date, and the `is_in_inventory` status.
+    *   `MONTH`, `YEAR`: To extract the month and year from the `snapshot_date` for filtering.
+    *   `MAX`: To determine the latest `snapshot_date` among all snapshots taken in March 2023.
+    *   `CALCULATE`: Used at the `Dealership` graph level to compute the overall latest snapshot date for March 2023. Also used at the end to select the required fields from the `Cars` collection.
+    *   `.car`: To navigate from the filtered `InventorySnapshots` records to their corresponding `Cars` records.
+
+*   **Partitioning Strategy:** `PARTITION` is not required because the query involves filtering based on a calculated maximum date for a specific period (March 2023) and a boolean flag, rather than grouping data by specific keys.
+
+*   **Ranking Considerations:** `RANKING` is not the most suitable approach here. While it could find the latest snapshot per car, the requirement is to find cars present in the *single latest snapshot* taken during March 2023 overall. Calculating the maximum date directly is more appropriate.
+
+```python
+# Calculate the latest snapshot date specifically for March 2023
+latest_snapshot_info = Dealership.CALCULATE(
+    latest_date_in_march_2023=MAX(
+        InventorySnapshots.WHERE(
+            (MONTH(snapshot_date) == 3) & (YEAR(snapshot_date) == 2023)
+        ).snapshot_date
+    )
+)
+
+# Filter InventorySnapshots to find those matching the latest date in March 2023
+# and where the car was marked as being in inventory.
+# Then, access the related car and select the required fields.
+cars_in_latest_inventory = latest_snapshot_info.InventorySnapshots.WHERE(
+    (snapshot_date == latest_date_in_march_2023) &
+    (is_in_inventory == True) # Explicitly check if the flag is True
+).car.CALCULATE(
+    car_id=_id,
+    car_make=make,
+    car_model=model,
+    car_year=year
+)
+```
+
+*   **Explanation:**
+    1.  `latest_snapshot_info = Dealership.CALCULATE(...)`: This calculates the maximum `snapshot_date` found within the `InventorySnapshots` collection, but only considering snapshots where the month is March (`MONTH(snapshot_date) == 3`) and the year is 2023 (`YEAR(snapshot_date) == 2023`). This maximum date is stored in the variable `latest_date_in_march_2023`.
+    2.  `latest_snapshot_info.InventorySnapshots`: We start from the `InventorySnapshots` collection, inheriting the calculated `latest_date_in_march_2023`.
+    3.  `.WHERE(...)`: This filters the snapshots based on two conditions combined with `&` (AND):
+        *   `snapshot_date == latest_date_in_march_2023`: It keeps only the snapshots taken exactly on the latest date found in step 1.
+        *   `is_in_inventory == True`: It further filters these snapshots to include only those where the `is_in_inventory` flag is explicitly True.
+    4.  `.car`: For the filtered snapshots, it navigates to the associated `Cars` records.
+    5.  `.CALCULATE(...)`: Finally, for these specific cars, it selects and renames the required fields: `_id` as `car_id`, `make` as `car_make`, `model` as `car_model`, and `year` as `car_year`.","# CALCULATE the latest snapshot date specifically for March 2023
+latest_snapshot_info = Dealership.CALCULATE(
+    latest_date_in_march_2023=MAX(
+        InventorySnapshots.WHERE(
+            (MONTH(snapshot_date) == 3) & (YEAR(snapshot_date) == 2023)
+        ).snapshot_date
+    )
+)
+
+# Filter InventorySnapshots to find those matching the latest date in March 2023
+# and WHERE the car was marked as being in inventory.
+# Then, access the related car and select the required fields.
+cars_in_latest_inventory = latest_snapshot_info.InventorySnapshots.WHERE(
+    (snapshot_date == latest_date_in_march_2023) &
+    (is_in_inventory == True) # Explicitly check if the flag is True
+).car.CALCULATE(
+    car_id=_id,
+    car_make=make,
+    car_model=model,
+    car_year=year
+)"

@@ -186,7 +186,7 @@ def extract_python_code(text):
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
-    match = re.search(r"```python\n(.*?)\n```", text, re.DOTALL)
+    match = re.search( r"```(?:\w+\n)?(.*?)```" , text, re.DOTALL)
     if match:
         python_code = match.group(1).strip()
         # Convert the extracted code to uppercase
