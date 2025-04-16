@@ -16,7 +16,7 @@ from azure.core.credentials import AzureKeyCredential
 import mlflow
 from test_data.eval import compare_output, execute_code_and_extract_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
-from claude import ClaudeModel, DeepseekModel
+from claude import ClaudeModel, DeepseekModel, GeminiModel
 import pydough
 from abc import ABC, abstractmethod
 
@@ -73,7 +73,19 @@ class DeepSeekAIProvider(AIProvider):
         """Generates a response using Claude AI."""
         return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
 
+class GeminiAIProvider(AIProvider):
+    """Handles responses from gemini genAI."""
 
+    def __init__(self, provider, model_id, temperature):
+        self.client = GeminiModel(temperature)
+        self.provider = provider
+        self.model_id = model_id
+
+    def ask(self, question, prompt):
+        """Generates a response using gemini genAI."""
+        response= self.client.generate_content(question, prompt, self.model_id, self.provider)
+        return response.text, response.usage_metadata
+    
 # === Claude AI Provider ===
 class ClaudeAIProvider(AIProvider):
     """Handles responses from Claude AI."""
@@ -85,8 +97,8 @@ class ClaudeAIProvider(AIProvider):
 
     def ask(self, question, prompt):
         """Generates a response using Claude AI."""
-        return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
-
+        response= self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
+        return response.text, 
 
 # === Other AI Providers (e.g., AI Suite) ===
 class OtherAIProvider(AIProvider):
@@ -100,7 +112,6 @@ class OtherAIProvider(AIProvider):
 
 
     def ask(self, question, prompt):
-        print(question)
         """Generates a response using AI Suite."""
         messages = [
             {"role": "system", "content": prompt},
@@ -211,6 +222,16 @@ def get_claude_response(client, prompt, data, question, database_content, script
     corrected_response = correct(client, updated_question, response,formatted_prompt)
     return corrected_response, execution_time
 
+def get_gemini_response(client, prompt, data, question, database_content, script_content):
+    """Generates a response using aisuite."""
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+    start_time = time.time()
+    response, usage=client.ask(updated_question,formatted_prompt)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    corrected_response = correct(client, updated_question, response.text,formatted_prompt)
+    return corrected_response.text, execution_time, usage
+
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
     provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content = args
@@ -224,6 +245,9 @@ def process_question_wrapper(args):
     elif provider == "aws-deepseek":
         client = DeepSeekAIProvider(provider, model_id, temperature)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content)
+    elif provider == "google":
+        client = GeminiAIProvider(provider, model_id, temperature)
+        return get_gemini_response(client, formatted_prompt, data, q, database_content, script_content)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
@@ -285,11 +309,12 @@ def main(git_hash):
 
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
+        usage_column = [response[2] for response in responses]  # add this line
 
         # Save responses and execution times into the DataFrame
         questions_df["response"] = response_column
         questions_df["execution_time"] = execution_time_column
-
+        questions_df["usage"] = usage_column  # add this column
         output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
@@ -345,3 +370,5 @@ if __name__ == "__main__":
     git_hash= get_git_commit(cwd)
     
     main(git_hash)
+
+# %%
