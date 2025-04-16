@@ -29,6 +29,8 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - If you need to get the best rankings within a CALCULATE method, you can use the RANKING method instead of TOP_K, and then filter them by the ranking number.
 
+  - The examples shown are not from the current database; just treat them as examples, use the corresponding Database for each case, for example TPCH, Dealership, etc.
+
 ## **1. COLLECTIONS & SUB-COLLECTIONS**  
 
 ### **Syntax** 
@@ -224,7 +226,6 @@ PARTITION(Collection, name='group_name', by=(key1, key2))
       pct_of_packages=100.0 * COUNT(packages) / total_packages,
   )
     ```
-The examples shown are not from the current database; just treat them as examples.
   - **Good Example #1**: Find every unique state.
   ```
   PARTITION(Addresses, name="addrs", by=state).CALCULATE(state)
