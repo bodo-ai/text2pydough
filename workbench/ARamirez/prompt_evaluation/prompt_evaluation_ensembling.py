@@ -275,8 +275,7 @@ def get_gemini_response(client, prompt, data, question, database_content, script
     response=ensembling_process(client, updated_question,formatted_prompt, num_iterations)
     end_time = time.time()
     execution_time = end_time - start_time
-    corrected_response = correct(client, updated_question, response,formatted_prompt)
-    return corrected_response, execution_time
+    return response, execution_time
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
