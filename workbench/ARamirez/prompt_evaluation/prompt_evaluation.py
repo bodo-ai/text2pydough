@@ -344,5 +344,3 @@ if __name__ == "__main__":
     git_hash= get_git_commit(cwd)
     
     main(git_hash)
-
-# 4041
