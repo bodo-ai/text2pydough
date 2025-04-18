@@ -1,5 +1,6 @@
 import argparse
 import ast
+import bodo
 import json
 import multiprocessing
 import os
@@ -123,6 +124,7 @@ def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
+@bodo.jit(cache=True)
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
     if not isinstance(text, str):  # Ensure text is a string
@@ -220,8 +222,8 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
 
             if most_common_index is not None:
                 return dfs_and_responses[most_common_index][1]
-            #else:
-            #    print("No common result found, returning the first response as fallback.")
+            else:
+                #print("No common result found, returning the first response as fallback.")
                 return dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
@@ -240,6 +242,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
         return response, execution_time
     except Exception as e:
         #print(f"AI Suite error: {e}")
+        #return None
         return "N/A", -1
 
 def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations):
@@ -251,10 +254,9 @@ def get_claude_response(client, prompt, data, question, database_content, script
     execution_time = end_time - start_time
     return response, execution_time
 
-def process_question_wrapper(args):
+@bodo.wrap_python(bodo.string_type)
+def process_question_wrapper(provider, model_id, formatted_prompt, q, temperature, database_content, script_content, num_iterations):
     """ Wrapper function to handle multiprocessing calls. """
-    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations = args
-    # Adding here for consistency with timing with Bodo.
     with open("data/queries_context.json", "r") as json_data:
         data = json.load(json_data)
 
@@ -271,15 +273,20 @@ def process_question_wrapper(args):
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)[0]
 
-def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads,num_iterations):
-    """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=num_threads) as pool:  # Adjust process count as needed
-        original_responses = pool.map(
-            process_question_wrapper, 
-            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations) for q in questions]
+
+@bodo.jit(cache=True)
+def run(questions_file, provider, model_id, formatted_prompt, temperature, database_content, script_content, num_iterations, output_file):
+    #print("Bodo total number of ranks: ", bodo.get_size())
+    questions_df = pd.read_csv(questions_file)
+    #questions_df = pd.read_parquet(questions_file)
+    questions_df["response"] = questions_df.apply(
+            lambda row: process_question_wrapper(
+                provider, model_id, formatted_prompt, row["question"], temperature, database_content, script_content, num_iterations), axis=1
         )
-    
-    return original_responses
+    questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
+    questions_df.to_csv(output_file, index=False)#, encoding="utf-8")
+    #return questions_df
+
 
 def main():
     # Argument Parser
@@ -297,7 +304,7 @@ def main():
     args = parser.parse_args()
 
     # Create result directory if not exists
-    folder_path = f"./results/original_eval/{args.provider}/{args.model_id}/"
+    folder_path = f"./results/bodo_eval/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
     output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
 
@@ -311,41 +318,20 @@ def main():
     with open(args.database_structure, "r", encoding="utf-8") as f:
         database_content = f.read()
 
+    # FIXME: data type is not accepted by Bodo
     with open("data/queries_context.json", "r") as json_data:
         data = json.load(json_data)
 
     # Read Questions
     print("File: ", args.questions, "num_threads: ", args.num_threads)
     t0 = time.time()
-    questions_df = pd.read_csv(args.questions, encoding="utf-8")
-    combined_list = questions_df['question'].tolist()
+    questions_df = run(args.questions, args.provider.lower(), args.model_id, prompt, args.temperature, database_content, script_content, args.num_iterations, output_file)
+    t1 = time.time()
+    print("Bodo Total time: ", t1-t0)
 
-    responses = process_questions(
-        data,
-        args.provider.lower(),
-        args.model_id,
-        prompt,
-        combined_list,
-        args.temperature,
-        database_content,
-        script_content,
-        args.num_threads,
-        args.num_iterations
-    )
 
-    response_column = responses #[response[0] for response in responses]
-    #execution_time_column = [response[1] for response in responses]
-
-    # Save responses and execution times into the DataFrame
-    questions_df["response"] = response_column
-    #questions_df["execution_time"] = execution_time_column
-
-    questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
-
-    questions_df.to_csv(output_file, index=False, encoding="utf-8")
-
-    t1=time.time()
-    print("Multi-processing Total time: ", t1-t0)
+    # FIXME: Why Bodo complained here? It's out of JIT function
+    #questions_df.to_csv(output_file, index=False)#, encoding="utf-8")
 
 if __name__ == "__main__":
     # import pdb; pdb.set_trace()
