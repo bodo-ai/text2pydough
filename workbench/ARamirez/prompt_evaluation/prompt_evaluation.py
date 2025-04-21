@@ -5,6 +5,7 @@ import json
 import multiprocessing
 import os
 import re
+import textwrap
 import pandas as pd
 import aisuite as ai
 import time
@@ -142,11 +143,13 @@ def extract_python_code(text):
         return ""
 
     matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
-    return matches[-1].strip() if matches else ""
+    return textwrap.dedent(matches[-1]).strip() if matches else ""
 
 import os
 #%%
-def format_prompt(prompt, data, question, database_content, script_content):
+def format_prompt(prompt, data, question, database_content, script_content, db_name=None):
+    database_content = read_file(f"{os.path.dirname(__file__)}/data/database/{db_name}_graph.md")
+
     if question in data:
         recomendation = data[question].get("context_id", "")
         similar_code= data[question].get("similar_queries", "similar code not found")
@@ -158,7 +161,9 @@ def format_prompt(prompt, data, question, database_content, script_content):
     
     return question, prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
-def correct(client, question,  code, prompt):
+def correct(client, question,  code, prompt, db_name):
+    pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/test_data/{db_name}_graph.json", db_name)
+    pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/test_data/{db_name}.db",  check_same_thread=False)
     extracted_code= extract_python_code(code)
     local_env = {"pydough": pydough, "datetime": datetime}
     response= code    
@@ -222,14 +227,16 @@ def get_claude_response(client, prompt, data, question, database_content, script
     corrected_response = correct(client, updated_question, response,formatted_prompt)
     return corrected_response, execution_time
 
-def get_gemini_response(client, prompt, data, question, database_content, script_content):
+def get_gemini_response(client, prompt, data, df, database_content, script_content):
     """Generates a response using aisuite."""
-    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+    question= df['question']
+    db_name= df['db_name']
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,db_name,script_content, db_name)
     start_time = time.time()
     response, usage=client.ask(updated_question,formatted_prompt)
     end_time = time.time()
     execution_time = end_time - start_time
-    corrected_response = correct(client, updated_question, response,formatted_prompt)
+    corrected_response = correct(client, updated_question, response,formatted_prompt, db_name)
     return corrected_response, execution_time, usage
 
 def process_question_wrapper(args):
@@ -252,15 +259,28 @@ def process_question_wrapper(args):
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
 
-def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads):
+def process_questions(data, provider, model_id, formatted_prompt, questions_df, temperature, database_content, script_content, num_threads):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=num_threads) as pool:  # Adjust process count as needed
+    with multiprocessing.Pool(processes=num_threads) as pool:
         original_responses = pool.map(
-            process_question_wrapper, 
-            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content) for q in questions]
+            process_question_wrapper,
+            [
+                (
+                    provider,
+                    model_id,
+                    formatted_prompt,
+                    data,
+                    row,
+                    temperature,
+                    database_content,
+                    script_content
+                )
+                for _, row in questions_df.iterrows()
+            ]
         )
     
     return original_responses
+
 
 def main(git_hash):
     # Argument Parser
@@ -288,24 +308,17 @@ def main(git_hash):
     experiment= mlflow.set_experiment(expr_name)
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash},experiment_id=experiment.experiment_id):
         # Read Files Efficiently
-        with open(args.prompt_file, "r", encoding="utf-8") as f:
-            prompt = f.read()
-
-        with open(args.pydough_file, "r", encoding="utf-8") as f:
-            script_content = f.read()
-
-        with open(args.database_structure, "r", encoding="utf-8") as f:
-            database_content = f.read()
-
+        prompt = read_file(args.prompt_file)
+        script_content = read_file(args.pydough_file)
+        database_content = read_file(args.database_structure)
+   
         with open("./queries_context.json","r") as json_data:
             data = json.load(json_data)
 
         # Read Questions
         questions_df = pd.read_csv(args.questions, encoding="utf-8")
 
-        combined_list = questions_df['question'].tolist()
-
-        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, combined_list, args.temperature,database_content,script_content, args.num_threads)
+        responses = process_questions(data,args.provider.lower(), args.model_id, prompt, questions_df, args.temperature,database_content,script_content, args.num_threads)
 
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
@@ -323,7 +336,7 @@ def main(git_hash):
         folder_path = f"./results/{args.provider}/{args.model_id}/test"
         os.makedirs(folder_path, exist_ok=True)
 
-        output_file, responses= compare_output(folder_path,output_file, "./test_data/tpch.db")
+        output_file, responses= compare_output(folder_path,output_file)
         total_rows = len(responses)
 
         counts = responses['comparison_result'].dropna().value_counts()
@@ -370,5 +383,4 @@ if __name__ == "__main__":
     git_hash= get_git_commit(cwd)
     
     main(git_hash)
-
 # %%

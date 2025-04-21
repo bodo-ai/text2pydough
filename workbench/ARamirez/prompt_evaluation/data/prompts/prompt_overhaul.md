@@ -8,8 +8,6 @@ To assist you in this task, you will be provided with the following context:
 1. **PyDough Reference File**  
 This file contains the core concepts, functions, and syntax of the PyDough language. It serves as a reference for understanding the PyDough syntax and structure.
 
-The examples shown are not from the current database; just treat them as examples.
-
 {script_content}
 
 2. **Database Structure Reference File**  
