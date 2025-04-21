@@ -162,12 +162,11 @@ def format_prompt(prompt, data, question, database_content, script_content, db_n
     return question, prompt.format(script_content=script_content, database_content=database_content, similar_queries=similar_code, recomendation=recomendation)
 
 def correct(client, question,  code, prompt, db_name):
-    pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/test_data/{db_name}_graph.json", db_name)
-    pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/test_data/{db_name}.db",  check_same_thread=False)
+    
     extracted_code= extract_python_code(code)
     local_env = {"pydough": pydough, "datetime": datetime}
     response= code    
-    result, exception= execute_code_and_extract_result(extracted_code, local_env)
+    result, exception= execute_code_and_extract_result(extracted_code, local_env,db_name)
     
     if result is None:
 
