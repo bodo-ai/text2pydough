@@ -210,6 +210,8 @@ def process_row(row):
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
         db_name= row["db_name"]
+        print(question, db_name)
+
         result, exception = execute_code_and_extract_result(extracted_code, local_env, db_name)
         
         if result is not None:
