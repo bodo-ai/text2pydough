@@ -1,6 +1,6 @@
 ## **PYDOUGH CHEAT SHEET**  
 This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code. 
-The examples shown are not from the current database; just treat them as examples.
+
 ### **GENERAL RULES**: 
 
   - You should use `HAS` function to verify the 1 to N relationship beetwen tables, and you can identify them because the related subcollection has a plural name. For example, for the query "Give the number of orders for every nation", you solve like this: `nations.WHERE(HAS(customers.orders)==1).CALCULATE(nation_name=name, num_of_orders=COUNT(customers.orders.key))`.
