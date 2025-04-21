@@ -66,7 +66,7 @@ class GeminiModel:
             self.api_key = os.environ["GOOGLE_API_KEY"]  
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        self.brt =  genai.Client(api_key="AIzaSyCIJ8R71urQshcnFNFUXOAuD0bs14yGIe0")
+        self.brt =  genai.Client(api_key=self.api_key)
         self.temperature= temperature
 
     def generate_content(self, question, prompt, model, provider):
