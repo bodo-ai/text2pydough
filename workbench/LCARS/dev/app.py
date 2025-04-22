@@ -52,7 +52,7 @@ client = st.session_state.client
         
 # ---------------------- PAGE HEADER ----------------------
 st.image("logo.png", width=150, use_container_width=False)
-st.title("PyDough LLM Demo v3 (Gemini 2.5)")
+st.title("PyDough LLM Demo v3 (Gemini 2.5 Pro)")
 
 st.markdown(
     """
@@ -274,6 +274,13 @@ with col1:
     if new_definition:
         client.add_definition(new_definition)
         st.toast("✅ Definition successfully added.")
+    
+    # Toggle for including comments in the generated code
+    include_comments = st.checkbox("Include comments in code", value=st.session_state.client.include_comments)
+
+    # Sync the toggle with the LLMClient
+    st.session_state.client.include_comments = include_comments
+
 
     # Reset button
     if st.button("🔄 Restart"):
