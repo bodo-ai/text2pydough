@@ -76,9 +76,7 @@ class GeminiModel:
         config=types.GenerateContentConfig(
             system_instruction=prompt,
             temperature=self.temperature,
-            top_p= 1,
-            
-            seed= 42
+
 
         ),
     )
