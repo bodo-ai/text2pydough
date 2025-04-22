@@ -148,7 +148,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
     
     # Get all tables
     tables = insp.get_table_names()
-    
+    print(tables)
     # primary key lookup (helps with cardinality later)
     pk_map = {}
     for tbl in tables:
@@ -157,7 +157,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             result = conn.execute(text(f"PRAGMA table_info({tbl})"))
             pk_cols = [row[1] for row in result if row[5] > 0]  # row[5] is pk flag
             pk_map[tbl] = pk_cols
-
+    print(pk_map)
     graph: Dict[str, Any] = {graph_name: {}}
 
     # pre‑pass to collect column info & PKs
