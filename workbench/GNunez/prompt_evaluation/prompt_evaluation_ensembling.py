@@ -376,16 +376,14 @@ def main(git_hash):
         mlflow.sklearn.log_model(
             sk_model=None,
             artifact_path="model",
-            registered_model_name="gemini-ai-model",
+            registered_model_name=args.model_id,
             metadata={
                 "provider": args.provider,
                 "model_id": args.model_id,
                 "temperature": args.temperature,
                 "prompt_file": args.prompt_file,
                 "script_file": args.pydough_file,
-                "database_structure": args.database_structure,
-                "fine_tuned": args.fine_tuned,
-                "fine_tuning_dir": args.fine_tuning_dir,
+                "database_structure": args.database_structure
             }
         )
        
