@@ -82,17 +82,14 @@ def replace_with_upper(text):
 
 def format_prompt(script_content, prompt, data, question, database_content, definitions):
     ids = data[question]["context_id"]
-    # contexts = (
-    #     open(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}", 'r').read() if os.path.exists(f"../../ARamirez/prompt_evaluation/data/pydough_files/{id}") else ''
-    #     for id in ids
-    # )
     prompt_string = ' '.join(ids)
+    comment_note = "Include comments" if include_comments else "IMPORTANT: Do not include comments in the code."
     return prompt.format(
         script_content=script_content,
         database_content=database_content,
         similar_queries="",
         definitions=definitions,
-        recomendation=prompt_string
+        recomendation=f"{prompt_string}. {comment_note}"
     )
 
 def extract_python_code(text):
@@ -136,7 +133,8 @@ class LLMClient:
         prompt_file='./prompt.md', 
         script_file="./cheatsheet_v6.md", 
         temperature=0.0,
-        definitions=[]
+        definitions=[],
+        include_comments=True
     ):
         """
         Initializes the LLMClient with the provider and model.
@@ -158,6 +156,7 @@ class LLMClient:
         self.database = read_file(database_file)
         self.temperature = temperature
         self.definitions = definitions
+        self.include_comments = include_comments
 
     def add_definition(self, new_definition):
         """Add a new definition to definitions list."""
@@ -222,7 +221,8 @@ class LLMClient:
                         demo_dict,
                         best_match,  # Most similar key found
                         self.database,
-                        self.definitions
+                        self.definitions,
+                        self.include_comments
                     )
                 else:
                     # If no adequate match is found, use the standard prompt
@@ -231,7 +231,7 @@ class LLMClient:
                         database_content=self.database,
                         similar_queries="",
                         definitions=self.definitions,
-                        recomendation=""
+                        recomendation="Include comments" if self.include_comments else "IMPORTANT: Do not include comments in the code."
                     )
             else:
                 # If not in dict, use the standard prompt.
@@ -240,7 +240,7 @@ class LLMClient:
                     database_content=self.database,
                     similar_queries="",
                     definitions=self.definitions,
-                    recomendation=""
+                    recomendation="Include comments" if self.include_comments else "IMPORTANT: Do not include comments in the code."
                 )
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)
