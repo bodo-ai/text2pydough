@@ -373,7 +373,7 @@ def main(git_hash):
             }
         )
 
-        mlflow.gemini.log_model(
+        mlflow.sklearn.log_model(
             sk_model=None,
             artifact_path="model",
             registered_model_name="gemini-ai-model",
