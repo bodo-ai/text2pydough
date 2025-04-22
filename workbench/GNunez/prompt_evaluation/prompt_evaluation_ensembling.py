@@ -198,7 +198,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
             response = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
-            result, exception = execute_code_and_extract_result(extracted_code, local_env)
+            result, exception = execute_code_and_extract_result(extracted_code, local_env, "TPCH")
 
             if result is not None:
                 dfs_and_responses.append((result, response))
