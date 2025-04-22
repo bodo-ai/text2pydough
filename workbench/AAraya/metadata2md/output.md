@@ -94,3 +94,105 @@
 - **comment**: Additional comments or notes about the customer.
 - **nation**: The corresponding nations for this record (reverse of `nations.customers`).
 - **orders**: A list of all orders associated with this record (reverse of `orders.customer`).
+
+### Example Relationship Queries
+
+To get all `nations` from each `regions`:
+```python
+regions.nations.CALCULATE(key, name, comment)
+```
+
+To get all `suppliers` from each `nations`:
+```python
+nations.suppliers.CALCULATE(key, name, region_key, comment)
+```
+
+To get all `customers` from each `nations`:
+```python
+nations.customers.CALCULATE(key, name, region_key, comment)
+```
+
+To get the corresponding `regions` for each `nations`:
+```python
+nations.region.CALCULATE(key, name, comment)
+```
+
+To get all `supply_records` from each `parts`:
+```python
+parts.supply_records.CALCULATE(key, name, manufacturer, brand, part_type, size)
+```
+
+To get all `lines` from each `parts`:
+```python
+parts.lines.CALCULATE(key, name, manufacturer, brand, part_type, size)
+```
+
+To get all `supply_records` from each `suppliers`:
+```python
+suppliers.supply_records.CALCULATE(key, name, address, nation_key, phone, account_balance)
+```
+
+To get all `lines` from each `suppliers`:
+```python
+suppliers.lines.CALCULATE(key, name, address, nation_key, phone, account_balance)
+```
+
+To get the corresponding `nations` for each `suppliers`:
+```python
+suppliers.nation.CALCULATE(key, name, region_key, comment)
+```
+
+To get the corresponding `supply_records` for each `lines`:
+```python
+lines.part_and_supplier.CALCULATE(order_key, part_key, supplier_key, line_number, quantity, extended_price)
+```
+
+To get the corresponding `orders` for each `lines`:
+```python
+lines.order.CALCULATE(order_key, part_key, supplier_key, line_number, quantity, extended_price)
+```
+
+To get the corresponding `parts` for each `lines`:
+```python
+lines.part.CALCULATE(key, name, manufacturer, brand, part_type, size)
+```
+
+To get the corresponding `suppliers` for each `lines`:
+```python
+lines.supplier.CALCULATE(key, name, address, nation_key, phone, account_balance)
+```
+
+To get the corresponding `parts` for each `supply_records`:
+```python
+supply_records.part.CALCULATE(key, name, manufacturer, brand, part_type, size)
+```
+
+To get the corresponding `suppliers` for each `supply_records`:
+```python
+supply_records.supplier.CALCULATE(key, name, address, nation_key, phone, account_balance)
+```
+
+To get all `lines` from each `supply_records`:
+```python
+supply_records.lines.CALCULATE(order_key, part_key, supplier_key, line_number, quantity, extended_price)
+```
+
+To get the corresponding `customers` for each `orders`:
+```python
+orders.customer.CALCULATE(key, customer_key, order_status, total_price, order_date, order_priority)
+```
+
+To get all `lines` from each `orders`:
+```python
+orders.lines.CALCULATE(order_key, part_key, supplier_key, line_number, quantity, extended_price)
+```
+
+To get the corresponding `nations` for each `customers`:
+```python
+customers.nation.CALCULATE(key, name, region_key, comment)
+```
+
+To get all `orders` from each `customers`:
+```python
+customers.orders.CALCULATE(key, customer_key, order_status, total_price, order_date, order_priority)
+```
