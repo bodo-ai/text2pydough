@@ -3,19 +3,23 @@ import sys
 from collections import defaultdict
 
 def json_to_markdown(metadata: dict) -> str:
-    # Map to store: {collection: list of (reverse_name, from_collection, singular, reverse_of)}
     inferred_reverse_relationships = defaultdict(list)
+    fields_per_collection = {}
 
+    # Index reverse relationships and scalar fields
     for collections in metadata.values():
         for collection_name, collection in collections.items():
-            for prop_name, prop in collection.get("properties", {}).items():
+            props = collection.get("properties", {})
+            fields_per_collection[collection_name] = [
+                name for name, p in props.items() if p["type"] == "table_column"
+            ]
+            for prop_name, prop in props.items():
                 if prop["type"] in {"simple_join", "compound"}:
-                    target = prop["other_collection_name"]
-                    inferred_reverse_relationships[target].append({
+                    inferred_reverse_relationships[prop["other_collection_name"]].append({
                         "name": prop["reverse_relationship_name"],
                         "from": collection_name,
                         "reverse_of": prop_name,
-                        "singular": prop.get("no_collisions", False)  # flip side
+                        "singular": prop.get("no_collisions", False)
                     })
 
     def describe_table_column(name, col):
@@ -42,7 +46,7 @@ def json_to_markdown(metadata: dict) -> str:
             "key": "A unique identifier",
             "name": "The name",
             "comment": "Additional comments or notes",
-            "address": "The directional address",
+            "address": "The address",
             "phone": "The phone number",
             "email": "The email",
         }
@@ -56,6 +60,7 @@ def json_to_markdown(metadata: dict) -> str:
 
     markdown = []
 
+    # Main section: document each collection
     for graph_name, collections in metadata.items():
         for collection, info in collections.items():
             markdown.append(f"### The `{collection}` collection contains the following columns:")
@@ -68,7 +73,7 @@ def json_to_markdown(metadata: dict) -> str:
                 elif prop_info["type"] in {"simple_join", "compound"}:
                     markdown.append(describe_join(prop_name, prop_info))
 
-            # Include inferred reverse relationships
+            # Add inferred reverse relationships if missing
             for reverse in inferred_reverse_relationships.get(collection, []):
                 if reverse["name"] not in existing:
                     markdown.append(describe_inferred_reverse(
@@ -80,8 +85,45 @@ def json_to_markdown(metadata: dict) -> str:
 
             markdown.append("")
 
+    # Extra section: auto-generated example queries
+    markdown.append("### Example Relationship Queries (Auto-generated)")
+    markdown.append("")
+
+    for graph_name, collections in metadata.items():
+        for collection, info in collections.items():
+            props = info.get("properties", {})
+            scalar_fields = fields_per_collection.get(collection, [])[:6]
+            scalar_fields_str = ", ".join(scalar_fields) if scalar_fields else "..."
+
+            # Direct relationships
+            for prop_name, prop_info in props.items():
+                if prop_info["type"] in {"simple_join", "compound"}:
+                    is_plural = not prop_info.get("singular", True)
+                    other = prop_info["other_collection_name"]
+                    if is_plural:
+                        markdown.append(f"To get all `{other}` from each `{collection}`:")
+                    else:
+                        markdown.append(f"To get the corresponding `{other}` for each `{collection}`:")
+                    markdown.append(f"```python\n{collection}.{prop_name}.CALCULATE({scalar_fields_str})\n```")
+                    markdown.append("")
+
+            # Reverse relationships
+            for reverse in inferred_reverse_relationships.get(collection, []):
+                from_coll = reverse["from"]
+                reverse_name = reverse["name"]
+                singular = reverse["singular"]
+                reverse_fields = fields_per_collection.get(from_coll, [])[:6]
+                reverse_str = ", ".join(reverse_fields) if reverse_fields else "..."
+                if singular:
+                    markdown.append(f"To get the corresponding `{from_coll}` for each `{collection}`:")
+                else:
+                    markdown.append(f"To get all `{from_coll}` from each `{collection}`:")
+                markdown.append(f"```python\n{collection}.{reverse_name}.CALCULATE({reverse_str})\n```")
+                markdown.append("")
+
     return "\n".join(markdown)
 
+# CLI usage
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: python mdgeneration.py <input.json> <output.md>")
