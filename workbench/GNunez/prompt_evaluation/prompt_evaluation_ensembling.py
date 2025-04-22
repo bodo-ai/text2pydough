@@ -373,7 +373,6 @@ def main(git_hash):
             }
         )
 
-        # Log a placeholder artifact (e.g., model metadata in a JSON file)
         metadata_path = "model_metadata.json"
         metadata = {
             "provider": args.provider,
