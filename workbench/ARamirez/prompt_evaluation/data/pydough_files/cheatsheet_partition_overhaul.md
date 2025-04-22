@@ -1,5 +1,5 @@
 ## **PYDOUGH CHEAT SHEET**  
-This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code. 
+The examples shown are not from the current database; just treat them as examples.
 
 ### **GENERAL RULES**: 
 
