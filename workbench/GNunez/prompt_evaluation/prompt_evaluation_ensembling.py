@@ -382,7 +382,7 @@ if __name__ == "__main__":
 
     cwd = os.getcwd()
      # Define the database path
-    db_path = './test_data/TPCH.db'
+    db_path = './test_data/tpch.db'
 
     # Download the database if it's not already present
     download_database(db_path)
