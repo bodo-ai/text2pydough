@@ -376,7 +376,6 @@ def main(git_hash):
         mlflow.sklearn.log_model(
             sk_model=None,
             artifact_path="model",
-            registered_model_name=args.model_id,
             metadata={
                 "provider": args.provider,
                 "model_id": args.model_id,
