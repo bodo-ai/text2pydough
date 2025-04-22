@@ -16,7 +16,7 @@ from azure.core.credentials import AzureKeyCredential
 import mlflow
 from test_data.eval import compare_df, compare_output, execute_code_and_extract_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
-from claude import ClaudeModel, DeepseekModel
+from claude import ClaudeModel, DeepseekModel, GeminiModel
 from collections import defaultdict
 import pydough
 from abc import ABC, abstractmethod
@@ -88,7 +88,19 @@ class ClaudeAIProvider(AIProvider):
         """Generates a response using Claude AI."""
         return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider)
 
+class GeminiAIProvider(AIProvider):
+    """Handles responses from gemini genAI."""
 
+    def __init__(self, provider, model_id, temperature):
+        self.client = GeminiModel(temperature)
+        self.provider = provider
+        self.model_id = model_id
+
+    def ask(self, question, prompt):
+        """Generates a response using gemini genAI."""
+        response= self.client.generate_content(question, prompt, self.model_id, self.provider)
+        return response.text, response.usage_metadata
+    
 # === Other AI Providers (e.g., AI Suite) ===
 class OtherAIProvider(AIProvider):
     """Handles responses from other AI providers like AI Suite."""
@@ -129,7 +141,7 @@ def extract_python_code(text):
     if not isinstance(text, str):  # Ensure text is a string
         return ""
 
-    matches = re.findall(r"```(?:\w*\n)?(.*?)\n```", text, re.DOTALL)
+    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
     return matches[-1].strip() if matches else ""
 
 import os
@@ -195,7 +207,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
 
     try:
         for i in range(iterations):
-            response = client.ask(updated_question, formatted_prompt)
+            response, usage = client.ask(updated_question, formatted_prompt)
             extracted_code = extract_python_code(response)
             local_env = {"pydough": pydough, "datetime": datetime}
             result, exception = execute_code_and_extract_result(extracted_code, local_env)
@@ -256,6 +268,15 @@ def get_claude_response(client, prompt, data, question, database_content, script
     execution_time = end_time - start_time
     return response, execution_time
 
+def get_gemini_response(client, prompt, data, question, database_content, script_content,num_iterations):
+    """Generates a response using aisuite."""
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+    start_time = time.time()
+    response=ensembling_process(client, updated_question,formatted_prompt, num_iterations)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    return response, execution_time
+
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
     provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations = args
@@ -265,10 +286,13 @@ def process_question_wrapper(args):
         return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
     elif provider == "aws-deepseek":
         client = DeepSeekAIProvider(provider, model_id, temperature)
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
+    elif provider == "google":
+        client = GeminiAIProvider(provider, model_id, temperature)
+        return get_gemini_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)
     else:
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)
@@ -331,7 +355,6 @@ def main(git_hash):
 
         response_column = [response[0] for response in responses]  # Extract corrected responses
         execution_time_column = [response[1] for response in responses]  # Extract execution times
-
         # Save responses and execution times into the DataFrame
         questions_df["response"] = response_column
         questions_df["execution_time"] = execution_time_column

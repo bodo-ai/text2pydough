@@ -1,4 +1,5 @@
 # %%
+import os
 import boto3
 import json
 import pandas as pd
@@ -56,7 +57,43 @@ class ClaudeModel:
     def extract_usage(self, response_body):
         return response_body.get('usage', {})
 # %%
+from google import genai
+from google.genai import types
 
+class GeminiModel:
+    def __init__(self, temperature):
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]  
+        except KeyError:
+            raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
+        self.brt =  genai.Client(api_key=self.api_key)
+        self.temperature= temperature
+
+    def generate_content(self, question, prompt, model, provider):
+        response = self.brt.models.generate_content(
+        model=model,
+        contents=question,
+        config=types.GenerateContentConfig(
+            system_instruction=prompt,
+            temperature=self.temperature,
+        ),
+    )
+        return response
+
+    def chat(self, question, prompt, model, provider, chat= None):
+        if not chat:
+            chat = self.brt.chats.create(model=model)
+        response = chat.send_message(
+            question,        
+            config=types.GenerateContentConfig(
+            system_instruction=prompt,
+            temperature=self.temperature,
+        ))
+        return response, chat
+    
+    def extract_usage(self, response_body):
+        return response_body.get('usage', {})
+    
 # %%
 import boto3
 import json

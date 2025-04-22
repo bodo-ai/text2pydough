@@ -175,7 +175,8 @@
           ).WHERE(pct_of_packages >= 1.0)
         ```
 
-    6: Identify which months of the year have numbers of packages shipped in that month that are above the average for all months
+    6: Identify which months of the year have numbers of packages shipped in that month that are above the average for all months:
+    ```
         pack_info = Packages.CALCULATE(order_month=MONTH(order_date))
         month_info = pack_info.PARTITION(name="months", by=order_month).CALCULATE(
             n_packages=COUNT(Packages)
@@ -185,6 +186,7 @@
         ).PARTITION(pack_info, name="months", by=order_month).CALCULATE(
             month,
         ).WHERE(COUNT(Packages) > avg_packages_per_month)
+      ```
      
 
     <Example>
