@@ -60,6 +60,8 @@ To generate the PyDough code snippet, follow these steps:
 
 5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
 
+6. The examples shown are not from the current database schema; just treat them as examples and make sure to use the right high top level collection.
+
 {recomendation}
 
 </instructions>
