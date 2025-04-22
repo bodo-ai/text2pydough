@@ -1,5 +1,5 @@
 ## **PYDOUGH CHEAT SHEET**  
-This cheat sheet is a context for learning how to create PyDough code. You must follow all the written rules. Each section represents important features and rules to keep in mind when developing PyDough code. 
+The examples shown are not from the current database; just treat them as examples.
 
 ### **GENERAL RULES**: 
 
@@ -169,6 +169,9 @@ Select top k records.
 
 - **NDISTINCT(collection)**: Distinct count.  
   Example: NDISTINCT(Addresses.state)  
+
+- **MEDIAN(collection.attribute)**: Takes the median of the plural set of numerical values it is called on. Note: absent records are ignored when deriving the median.
+  Example:Customers.CALCULATE(name,median_order_price = MEDIAN(orders.total_price))
 
 ### **Rules** 
 Aggregations Function does not support calling aggregations inside of aggregations
@@ -587,6 +590,56 @@ Customers.CALCULATE(ratio = acctbal / RELSIZE())
 # that nation.
 Nations.customers.CALCULATE(ratio = acctbal / RELSIZE(per="Nations"))
 ```
+### PREV
+
+The `PREV` function returns the value of an expression from a preceding record in the collection. The arguments:
+
+#### **Parameters:**
+- `expression`: the expression to return the shifted value of.
+- `n` (optional): optional argument (default `1`) how many records backwards to look.
+- `default` (optional): optional argument (default `None`) the value to output when there is no record `n` before the current record. This must be a valid literal.
+- `by`: 1+ collation values, either as a single expression or an iterable of expressions, used to order the records of the current context.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
+
+#### **Examples**
+```
+# Find the 10 customers with at least 5 orders with the largest average time
+# gap between their orders, in days.
+order_info = orders.CALCULATE(
+   day_diff=DATEDIFF("days", PREV(order_date, by=order_date.ASC(), per="Customers"), order_date)
+)
+Customers.WHERE(COUNT(orders) > 5).CALCULATE(
+   name,
+   average_order_gap=AVG(order_info.day_diff)
+).TOP_K(10, by=average_order_gap.DESC())
+
+# For every year/month, calculate the percent change in the number of
+# orders made in that month from the previous month.
+PARTITION(
+   Orders(year=YEAR(order_date), month=MONTH(order_date)),
+   name="orders",
+   by=(year, month)
+).CALCULATE(
+   year,
+   month,
+   n_orders=COUNT(orders),
+   pct_change=
+      100.0
+      * (COUNT(orders) - PREV(COUNT(orders), by=(year.ASC(), month.ASC())))
+      / PREV(COUNT(orders), by=(year.ASC(), month.ASC()))
+)
+```
+
+### NEXT
+
+The `NEXT` function returns the value of an expression from a following record in the collection. In other words, `NEXT(expr, n)` is the same as `PREV(expr, -n)`. The arguments:
+
+#### **Parameters:**
+- `expression`: the expression to return the shifted value of.
+- `n` (optional): optional argument (default `1`) how many records forward to look.
+- `default` (optional): optional argument (default `None`) the value to output when there is no record `n` after the current record. This must be a valid literal.
+- `by`: 1+ collation values, either as a single expression or an iterable of expressions, used to order the records of the current context.
+- `per` (optional): optional argument (default `None`) for the same `per` argument as all other window functions.
 
 ## **9. CONTEXTLESS EXPRESSIONS**   
 
@@ -756,12 +809,13 @@ Customers(country\_code = phone\[:3\])
   The modifier arguments can be the following (all of the options are case-insensitive and ignore leading/trailing/extra whitespace):
 
   - A string literal in the format `start of <UNIT>` indicating to truncate the datetime value to a certain unit, which can be the following:
-    - Years: Supported aliases are "years", "year", and "y".
-    - Months: Supported aliases are "months", "month", and "mm".
-    - Days: Supported aliases are "days", "day", and "d".
-    - Hours: Supported aliases are "hours", "hour", and "h".
-    - Minutes: Supported aliases are "minutes", "minute", and "m".
-    - Seconds: Supported aliases are "seconds", "second", and "s".
+   - **Years**: Supported aliases are `"years"`, `"year"`, and `"y"`.
+   - **Months**: Supported aliases are `"months"`, `"month"`, and `"mm"`.
+   - **Days**: Supported aliases are `"days"`, `"day"`, and `"d"`.
+   - **Weeks**: Supported aliases are `"weeks"`, `"week"`, and `"w"`.
+   - **Hours**: Supported aliases are `"hours"`, `"hour"`, and `"h"`.
+   - **Minutes**: Supported aliases are `"minutes"`, `"minute"`, and `"m"`.
+   - **Seconds**: Supported aliases are `"seconds"`, `"second"`, and `"s"`.
 
   - A string literal in the form `±<AMT> <UNIT>` indicating to add/subtract a date/time interval to the datetime value. The sign can be `+` or `-`, and if omitted the default is `+`. The amount must be an integer. The unit must be one of the same unit strings allowed for truncation. For example, "Days", "DAYS", and "d" are all treated the same due to case insensitivity.
 
@@ -784,24 +838,51 @@ Customers(country\_code = phone\[:3\])
 
   # For each order, truncates the order date to the first day of the year
   Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
+
+  # Get the orders made in the past 70 days
+  orders_in_70_days= Orders.WHERE((DATEDIFF("days",date, 'now') <= 70))
+  result= TPCH.CALCULATE(total_orders=COUNT(orders_in_70_days))
   ```
 
 * DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time:     years, months, days, hours, minutes, or seconds.
 
-  - `DATEDIFF("years", x, y)`: Returns the number of full years since `x` that `y` occurred. For example, if `x` is December 31, 2009, and `y` is January 1, 2010, it counts as 1 year apart, even though they are only 1 day apart.
-  - `DATEDIFF("months", x, y)`: Returns the number of full months since `x` that `y` occurred. For example, if `x` is January 31, 2014, and `y` is February 1, 2014, it counts as 1 month apart, even though they are only 1 day apart.
-  - `DATEDIFF("days", x, y)`: Returns the number of full days since `x` that `y` occurred. For example, if `x` is 11:59 PM on one day, and `y` is 12:01 AM the next day, it counts as 1 day apart, even though they are only 2 minutes apart.
-  - `DATEDIFF("hours", x, y)`: Returns the number of full hours since `x` that `y` occurred. For example, if `x` is 6:59 PM and `y` is 7:01 PM on the same day, it counts as 1 hour apart, even though the difference is only 2 minutes.
-  - `DATEDIFF("minutes", x, y)`: Returns the number of full minutes since `x` that `y` occurred. For example, if `x` is 7:00 PM and `y` is 7:01 PM, it counts as 1 minute apart, even though the difference is exactly 60 seconds.
-  - `DATEDIFF("seconds", x, y)`: Returns the number of full seconds since `x` that `y` occurred. For example, if `x` is at 7:00:01 PM and `y` is at 7:00:02 PM, it counts as 1 second apart.
+  - `DATEDIFF("years", x, y)`: Returns the **number of full years since x that y occurred**. For example, if **x** is December 31, 2009, and **y** is January 1, 2010, it counts as **1 year apart**, even though they are only 1 day apart.
+  - `DATEDIFF("months", x, y)`: Returns the **number of full months since x that y occurred**. For example, if **x** is January 31, 2014, and **y** is February 1, 2014, it counts as **1 month apart**, even though they are only 1 day apart.
+  - `DATEDIFF("weeks", x, y)`: Returns the **number of full weeks since x that y occurred**. The dates x and y are first truncated to the start of week (as specified by the `start_of_week` config), then the difference in number of full weeks is calculated (a week is defined as 7 days). For example, if `start_of_week` is set to Saturday:
+    ```python
+    # If x is "2025-03-18" (Tuesday) and y is "2025-03-31" (Monday)
+    DATEDIFF("weeks", x, y) returns 2
+    ```
+  - `DATEDIFF("days", x, y)`: Returns the **number of full days since x that y occurred**. For example, if **x** is 11:59 PM on one day, and **y** is 12:01 AM the next day, it counts as **1 day apart**, even though they are only 2 minutes apart.
+  - `DATEDIFF("hours", x, y)`: Returns the **number of full hours since x that y occurred**. For example, if **x** is 6:59 PM and **y** is 7:01 PM on the same day, it counts as **1 hour apart**, even though the difference is only 2 minutes.
+  - `DATEDIFF("minutes", x, y)`: Returns the **number of full minutes since x that y occurred**. For example, if **x** is 7:00 PM and **y** is 7:01 PM, it counts as **1 minute apart**, even though the difference is exactly 60 seconds.
+  - `DATEDIFF("seconds", x, y)`: Returns the **number of full seconds since x that y occurred**. For example, if **x** is at 7:00:01 PM and **y** is at 7:00:02 PM, it counts as **1 second apart**.
 
   - Example:
   ``` 
   # Calculates, for each order, the number of days since January 1st 1992
   # that the order was placed:
   Orders.CALCULATE( 
-    days_since=DATEDIFF("days", datetime.date(1992, 1, 1), order_date)
+    days_since=DATEDIFF("days", "1992-01-01", order_date)
   )
+  ```
+
+* DAYOFWEEK:
+
+  The `DAYOFWEEK` function returns the day of the week for a given date/timestamp. It takes a single argument, which is a date/timestamp, and returns an integer between 1 and 7. In other words, `DAYOFWEEK` returns which day of the week is the given date/timestamp, where the first day of the give date/timestamp is decided by the `start_of_week` config.
+
+  ```
+  # Returns the day of the week for the order date
+  Orders.CALCULATE(day_of_week = DAYOFWEEK(order_date))
+  ```
+
+* DAYNAME:
+
+  The `DAYNAME` function returns the name of the day of the week for a given date/timestamp. It takes a single argument, which is a date/timestamp, and returns a string, corresponding to the name of the day of the week. This returns one of the following: `"Monday"`, `"Tuesday"`, `"Wednesday"`, `"Thursday"`, `"Friday"`, `"Saturday"`, or `"Sunday"`.
+
+  ```
+  # Returns the name of the day of the week for the order date
+  Orders.CALCULATE(day_name = DAYNAME(order_date))
   ```
 
 ## **CONDITIONAL FUNCTIONS**
@@ -864,7 +945,7 @@ Customers(country\_code = phone\[:3\])
 * **Calculates, for each order, the number of days since January 1st 1992**:
   
   Orders.CALCULATE( 
-   days_since=DATEDIFF("days",datetime.date(1992, 1, 1), order_date)
+   days_since=DATEDIFF("days","1992-01-01", order_date)
   )
 
 * **Filter Nations by Name**  
