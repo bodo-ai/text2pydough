@@ -140,6 +140,7 @@ def get_foreign_keys(engine: Engine, table: str) -> List[Dict[str, Any]]:
                 "referred_columns": [row[4]],  # to column
                 "constrained_columns": [row[3]],  # from column
             })
+    print(f"fks: {fks} from child table: {table}")
     return fks
 
 def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
