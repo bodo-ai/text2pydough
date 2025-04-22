@@ -800,7 +800,7 @@ Customers(country\_code = phone\[:3\])
   # Calculates, for each order, the number of days since January 1st 1992
   # that the order was placed:
   Orders.CALCULATE( 
-    days_since=DATEDIFF("days", datetime.date(1992, 1, 1), order_date)
+    days_since=DATEDIFF("days", "1992-01-01", order_date)
   )
   ```
 
@@ -864,7 +864,7 @@ Customers(country\_code = phone\[:3\])
 * **Calculates, for each order, the number of days since January 1st 1992**:
   
   Orders.CALCULATE( 
-   days_since=DATEDIFF("days",datetime.date(1992, 1, 1), order_date)
+   days_since=DATEDIFF("days","1992-01-01", order_date)
   )
 
 * **Filter Nations by Name**  
