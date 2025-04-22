@@ -784,6 +784,10 @@ Customers(country\_code = phone\[:3\])
 
   # For each order, truncates the order date to the first day of the year
   Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
+
+  # Get the orders made in the past 70 days
+  orders_in_70_days= Orders.WHERE((DATEDIFF("days",date, 'now') <= 70))
+  result= TPCH.CALCULATE(total_orders=COUNT(orders_in_70_days))
   ```
 
 * DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time:     years, months, days, hours, minutes, or seconds.
