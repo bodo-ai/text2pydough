@@ -373,18 +373,32 @@ def main(git_hash):
             }
         )
 
-        mlflow.sklearn.log_model(
-            sk_model = None,
-            artifact_path = "model",
-            registered_model_name = args.model_id,
-            metadata = {
-                "provider": args.provider,
-                "model_id": args.model_id,
-                "temperature": args.temperature,
-                "prompt_file": args.prompt_file,
-                "script_file": args.pydough_file,
-                "database_structure": args.database_structure
-            }
+        # Log a placeholder artifact (e.g., model metadata in a JSON file)
+        metadata_path = "model_metadata.json"
+        metadata = {
+            "provider": args.provider,
+            "model_id": args.model_id,
+            "temperature": args.temperature,
+            "prompt_file": args.prompt_file,
+            "script_file": args.pydough_file,
+            "database_structure": args.database_structure,
+            "fine_tuned": args.fine_tuned,
+            "fine_tuning_dir": args.fine_tuning_dir,
+        }
+
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f)
+
+        # Log the artifact
+        mlflow.log_artifact(metadata_path, artifact_path="model")
+
+        # Register the model
+        run_id = mlflow.active_run().info.run_id
+        model_uri = f"runs:/{run_id}/model"
+
+        mlflow.register_model(
+            model_uri=model_uri,
+            name=args.model_id
         )
        
         mlflow.set_tag("llm_output", output_file)
