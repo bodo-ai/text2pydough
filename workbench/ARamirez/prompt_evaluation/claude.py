@@ -85,14 +85,6 @@ class GeminiModel:
                 temperature= 0,
                 top_p= 1.0,
                 seed= 42,
-                top_k=None,
-                safety_settings=[
-                types.SafetySetting(
-                    category='HARM_CATEGORY_HATE_SPEECH',
-                    threshold='BLOCK_ONLY_HIGH',
-                )
-            ]
-                
             ),
         
         )
