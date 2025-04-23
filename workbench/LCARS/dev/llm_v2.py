@@ -83,7 +83,7 @@ def replace_with_upper(text):
 def format_prompt(script_content, prompt, data, question, database_content, definitions, include_comments):
     ids = data[question]["context_id"]
     prompt_string = ' '.join(ids)
-    comment_note = "Include code comments, just the necessary" if include_comments else "IMPORTANT: Do not include comments in the code."
+    comment_note = "" if include_comments else "IMPORTANT: Do not include comments in the code."
     return prompt.format(
         script_content=script_content,
         database_content=database_content,
