@@ -11,7 +11,7 @@ from datetime import datetime
 
 import pandas as pd
 import pydough
-from test_data.eval import execute_code_and_extract_result
+from test_data.eval import compare_output, execute_code_and_extract_result
 from google import genai
 from google.genai import types
 
@@ -64,7 +64,7 @@ def extract_python_code(text):
 def format_prompt(prompt_template, data, question, script, db_name=None):
     db_content = ""
     if db_name:
-        db_path = os.path.join("data", "database", f"{db_name}_graph.md")
+        db_path = f"{db_name}_graph.md"
         db_content = read_file(db_path)
 
     q_data = data.get(question, {})
@@ -115,14 +115,21 @@ def main():
             data = json.load(f)
 
         df = pd.read_csv(args.questions)
-        results = process_questions_sequentially(data, prompt_template, df, script)
+        results = process_questions(data, prompt_template, df, script)
 
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
 
-        output_file = f"responses_gemini_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+        output_path = f"./results"
+        os.makedirs(output_path, exist_ok=True)
+        output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         df.to_csv(output_file, index=False)
+
+        test_path = f"{output_path}/test"
+        os.makedirs(test_path, exist_ok=True)
+        tested_file, tested_df = compare_output(test_path, output_file)
+        total_rows = len(tested_df)
         print(f"✅ Responses saved to {output_file}")
 
     except Exception as e:
