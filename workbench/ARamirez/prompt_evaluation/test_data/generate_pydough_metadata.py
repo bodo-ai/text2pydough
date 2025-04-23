@@ -227,6 +227,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             }
             graph[graph_name][parent]["properties"][child] = parent_prop
             print(f"table {tbl}, parent {parent}")
+            print(f"fks {fks}")
             print(f"parent_prop: {parent_prop} \n")
             #print(f"child prop: {child_prop}\n")
     return graph
