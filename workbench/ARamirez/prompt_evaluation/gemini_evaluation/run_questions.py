@@ -115,6 +115,7 @@ def main():
             data = json.load(f)
 
         df = pd.read_csv(args.questions)
+        print("----Processing questions----")
         results = process_questions(data, prompt_template, df, script)
 
         df["response"] = [r[0] for r in results]
@@ -128,8 +129,8 @@ def main():
 
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
+        print("----Evaluating questions----")
         tested_file, tested_df = compare_output(test_path, output_file)
-        total_rows = len(tested_df)
         print(f"✅ Responses saved to {output_file}")
 
     except Exception as e:
