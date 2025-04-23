@@ -62,8 +62,8 @@ class ClaudeAIProvider(AIProvider):
         return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider, **kwargs)
 
 class DeepSeekAIProvider(AIProvider):
-    def __init__(self, provider, model_id, temperature):
-        self.client = DeepseekModel(temperature)
+    def __init__(self, provider, model_id):
+        self.client = DeepseekModel()
         self.provider = provider
         self.model_id = model_id
 
@@ -71,8 +71,8 @@ class DeepSeekAIProvider(AIProvider):
         return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider, **kwargs)
 
 class GeminiAIProvider(AIProvider):
-    def __init__(self, provider, model_id, temperature):
-        self.client = GeminiModel(temperature)
+    def __init__(self, provider, model_id):
+        self.client = GeminiModel()
         self.provider = provider
         self.model_id = model_id
 
@@ -81,19 +81,17 @@ class GeminiAIProvider(AIProvider):
         return response.text, response.usage_metadata
 
 class OtherAIProvider(AIProvider):
-    def __init__(self, provider, model_id, temperature, config=None):
+    def __init__(self, provider, model_id, config=None):
         self.client = ai.Client(config) if config else ai.Client()
         self.provider = provider
         self.model_id = model_id
-        self.temperature = temperature
-
+    
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
-                temperature=self.temperature,
                 **kwargs
             )
             return response.choices[0].message.content
@@ -157,13 +155,13 @@ def get_other_provider_response(client, prompt, data, question, db, script, **kw
 
 # === Processor Wrapper ===
 def process_question_wrapper(args):
-    provider, model_id, prompt, data, q, temperature, db, script, kwargs = args
+    provider, model_id, prompt, data, q, db, script, kwargs = args
     client = {
         "azure": AzureAIProvider(model_id),
         "aws-thinking": ClaudeAIProvider(provider, model_id),
-        "aws-deepseek": DeepSeekAIProvider(provider, model_id, temperature),
-        "google": GeminiAIProvider(provider, model_id, temperature)
-    }.get(provider, OtherAIProvider(provider, model_id, temperature))
+        "aws-deepseek": DeepSeekAIProvider(provider, model_id),
+        "google": GeminiAIProvider(provider, model_id)
+    }.get(provider, OtherAIProvider(provider, model_id))
 
     func_map = {
         "azure": get_azure_response,
@@ -175,10 +173,10 @@ def process_question_wrapper(args):
     handler = func_map.get(provider, get_other_provider_response)
     return handler(client, prompt, data, q, db, script, **kwargs)
 
-def process_questions(data, provider, model_id, prompt, questions_df, temperature, db, script, threads, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, db, script, threads, **kwargs):
     with multiprocessing.Pool(threads) as pool:
         return pool.map(process_question_wrapper, [
-            (provider, model_id, prompt, data, row, temperature, db, script, kwargs)
+            (provider, model_id, prompt, data, row, db, script, kwargs)
             for _, row in questions_df.iterrows()
         ])
 
@@ -215,7 +213,6 @@ def main(git_hash):
     parser.add_argument("--questions", type=str)
     parser.add_argument("--provider", type=str)
     parser.add_argument("--model_id", type=str)
-    parser.add_argument("--temperature", type=float)
     parser.add_argument("--num_threads", type=int)
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -229,7 +226,7 @@ def main(git_hash):
         db_content = read_file(args.database_structure)
         with open("./queries_context.json") as f: data = json.load(f)
         df = pd.read_csv(args.questions)
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, args.temperature, db_content, script, args.num_threads, **kwargs)
+        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, db_content, script, args.num_threads, **kwargs)
 
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
