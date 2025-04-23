@@ -227,7 +227,7 @@ def main(git_hash):
         with open("./queries_context.json") as f: data = json.load(f)
         df = pd.read_csv(args.questions)
         results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, db_content, script, args.num_threads, **kwargs)
-        print(r[0] for r in results)
+        print(r[1] for r in results)
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
