@@ -73,18 +73,18 @@ def get_response(client, prompt, data, row, script, **kwargs):
 
 from concurrent.futures import ThreadPoolExecutor
 
-def process_question_wrapper(client, prompt, data, row, script, kwargs):
-    return get_response(client, prompt, data, row, script, **kwargs)
+from concurrent.futures import ThreadPoolExecutor
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
     client = get_provider(provider, model_id)
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [
-            executor.submit(process_question_wrapper, client, prompt, data, row, script, kwargs)
-            for _, row in questions_df.iterrows()
-        ]
-        return [future.result() for future in futures]
 
+    def thread_wrapper(row):
+        return get_response(client, prompt, data, row, script, **kwargs)
+
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
+
+    return results
 
 
 # === CLI Parser ===
