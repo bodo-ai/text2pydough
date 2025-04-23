@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 import multiprocessing
 import mlflow
-
+from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from test_data.eval import compare_output, execute_code_and_extract_result
@@ -24,17 +24,22 @@ def get_provider(provider, model_id, config=None):
     if provider == "azure":
         return AzureAIProvider(model_id)
     elif provider == "aws-thinking":
-        return ClaudeAIProvider(provider, model_id)
+        return ClaudeAIProvider(model_id)
     elif provider == "aws-deepseek":
-        return DeepSeekAIProvider(provider, model_id)
+        return DeepSeekAIProvider(model_id)
     elif provider == "google":
-        return GeminiAIProvider(provider, model_id)
+        return GeminiAIProvider(model_id)
     else:
         return OtherAIProvider(provider, model_id, config)
     
 def read_file(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"File not found: {path}")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        raise IOError(f"Failed to read file {path}: {e}")
 
 def extract_python_code(text):
     if not isinstance(text, str): return ""
@@ -70,10 +75,6 @@ def get_response(client, prompt, data, row, script, **kwargs):
     if isinstance(response, tuple):  # Gemini returns (text, usage)
         return response[0], duration, response[1]
     return correct(client, formatted_q, response, formatted_prompt), duration, None
-
-from concurrent.futures import ThreadPoolExecutor
-
-from concurrent.futures import ThreadPoolExecutor
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
     client = get_provider(provider, model_id)

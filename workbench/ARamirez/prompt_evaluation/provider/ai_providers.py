@@ -43,10 +43,9 @@ class AzureAIProvider(AIProvider):
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
 class ClaudeAIProvider(AIProvider):
-    def __init__(self, provider, model_id):
+    def __init__(self, model_id):
         config = Config(read_timeout=800)
         self.brt = boto3.client(service_name='bedrock-runtime', config=config)
-        self.provider = provider
         self.model_id = model_id
 
     def ask(self, question, prompt, **kwargs):
@@ -93,10 +92,9 @@ class ClaudeAIProvider(AIProvider):
         return ''.join(text_delta)
 
 class DeepSeekAIProvider(AIProvider):
-    def __init__(self, provider, model_id):
+    def __init__(self, model_id):
         config = Config(read_timeout=500)
         self.brt = boto3.client(service_name='bedrock-runtime', config=config)
-        self.provider = provider
         self.model_id = model_id
 
     def ask(self, question, prompt, **kwargs):
@@ -124,12 +122,11 @@ class DeepSeekAIProvider(AIProvider):
 
 class GeminiAIProvider(AIProvider):
 
-    def __init__(self, provider, model_id):
+    def __init__(self, model_id):
         try:
             self.api_key = os.environ["GOOGLE_API_KEY"]  
             self.project = os.environ["GOOGLE_PROJECT_ID"]
             self.location = os.environ["GOOGLE_REGION"]
-            self.provider = provider
             self.model_id = model_id
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
