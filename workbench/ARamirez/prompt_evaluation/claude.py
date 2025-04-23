@@ -77,7 +77,6 @@ class GeminiModel:
         self.brt = genai.Client(vertexai=True, project=self.project, location=self.location)
 
     def generate_content(self, question, prompt, model, provider, **kwargs):
-        print(kwargs)
         response = self.brt.models.generate_content(
             model=model,
             contents=question,
