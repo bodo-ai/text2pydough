@@ -248,8 +248,9 @@ def main(git_hash):
 
         counts = tested_df['comparison_result'].dropna().value_counts()
         percentages = counts / total_rows
+        filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
-        mlflow.log_params(vars(args))
+        mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(
             percentages,
