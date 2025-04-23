@@ -74,7 +74,7 @@ def get_response(client, prompt, data, row, script, **kwargs):
 
     if isinstance(response, tuple):  # Gemini returns (text, usage)
         return response[0], duration, response[1]
-    return correct(client, formatted_q, response, formatted_prompt), duration, None
+    return response, duration, None
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
     def thread_wrapper(row):
