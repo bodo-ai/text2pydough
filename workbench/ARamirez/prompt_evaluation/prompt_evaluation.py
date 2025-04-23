@@ -174,11 +174,11 @@ def process_question_wrapper(args):
     return handler(client, prompt, data, q, db, script, **kwargs)
 #TODO Inicializar el cliente antes despues de la 176. 
 def process_questions(data, provider, model_id, prompt, questions_df, db, script, threads, **kwargs):
-    
     return map(process_question_wrapper, [
-            (provider, model_id, prompt, data, row, db, script, kwargs)
-            for _, row in questions_df.iterrows()
-        ])
+        (provider, model_id, prompt, data, row, db, script, kwargs)
+        for _, row in questions_df.iterrows()
+    ])
+
 
 # === CLI Parser ===
 def parse_extra_args(extra_args):
@@ -226,8 +226,8 @@ def main(git_hash):
         db_content = read_file(args.database_structure)
         with open("./queries_context.json") as f: data = json.load(f)
         df = pd.read_csv(args.questions)
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, db_content, script, args.num_threads, **kwargs)
-        print(r[1] for r in results)
+        results = list(process_questions(data, args.provider.lower(), args.model_id, prompt, df, db_content, script, args.num_threads, **kwargs))
+        
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
