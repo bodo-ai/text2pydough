@@ -80,6 +80,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
     client = get_provider(provider, model_id)
 
     def thread_wrapper(row):
+        print("Thread started. API Key:", os.getenv("GOOGLE_API_KEY"))
+
         return get_response(client, prompt, data, row, script, **kwargs)
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
