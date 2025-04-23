@@ -1,6 +1,6 @@
 # Script for Processing Questions and Prompt with AI Model
 
-This script processes a set of questions against a script and database, generating responses using a gemini. 
+This script processes a set of questions against a script and database, generating responses using gemini. 
 
 ## 📁 Project Structure
 
