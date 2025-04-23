@@ -139,7 +139,7 @@ class GeminiAIProvider(AIProvider):
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
                 temperature= 0,
-                top_p= 1,
+                top_p= 1.0,
                 seed= 42,
             ),
         
