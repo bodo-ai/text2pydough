@@ -172,7 +172,7 @@ def process_question_wrapper(args):
 
     handler = func_map.get(provider, get_other_provider_response)
     return handler(client, prompt, data, q, db, script, **kwargs)
-
+#TODO Inicializar el cliente antes despues de la 176. 
 def process_questions(data, provider, model_id, prompt, questions_df, db, script, threads, **kwargs):
     with multiprocessing.Pool(threads) as pool:
         return pool.map(process_question_wrapper, [
@@ -243,7 +243,7 @@ def main(git_hash):
         tested_file, tested_df = compare_output(test_path, output_file)
         total_rows = len(tested_df)
 
-        counts = tested_df['comparison_result'].dropna().value_counts()
+        counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
         filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
