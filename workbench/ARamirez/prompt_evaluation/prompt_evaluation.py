@@ -77,10 +77,8 @@ def get_response(client, prompt, data, row, script, **kwargs):
     return correct(client, formatted_q, response, formatted_prompt), duration, None
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
-    client = get_provider(provider, model_id)
-
     def thread_wrapper(row):
-        print("Thread started. API Key:", os.getenv("GOOGLE_API_KEY"))
+        client = get_provider(provider, model_id)
 
         return get_response(client, prompt, data, row, script, **kwargs)
 
