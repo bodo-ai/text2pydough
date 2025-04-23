@@ -77,6 +77,8 @@ class GeminiModel:
         self.client = genai.Client(vertexai=True, project=self.project, location=self.location)
 
     def generate_content(self, question, prompt, model, provider, **kwargs):
+        with open("complete_prompt.md", "w", encoding="utf-8") as file:
+            file.write(prompt)
         response = self.client.models.generate_content(
             model=model,
             contents=question,
