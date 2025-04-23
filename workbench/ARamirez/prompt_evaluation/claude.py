@@ -82,7 +82,9 @@ class GeminiModel:
             contents=question,
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
-                **kwargs
+                temperature= 0,
+                top_p= 1,
+                seed= 42
             ),
         )
         return response
