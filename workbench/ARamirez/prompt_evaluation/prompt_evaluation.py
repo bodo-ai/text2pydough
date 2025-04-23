@@ -244,9 +244,16 @@ def main(git_hash):
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
         tested_file, tested_df = compare_output(test_path, output_file)
+        total_rows = len(tested_df)
+
+        counts = tested_df['comparison_result'].dropna().value_counts()
+        percentages = counts / total_rows
 
         mlflow.log_params(vars(args))
         mlflow.log_params(kwargs)
+        mlflow.log_metrics(
+            percentages,
+        )
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
 
@@ -257,3 +264,5 @@ if __name__ == "__main__":
     if untracked_files(cwd) or modified_files(cwd):
         autocommit(cwd)
     main(get_git_commit(cwd))
+
+# %%
