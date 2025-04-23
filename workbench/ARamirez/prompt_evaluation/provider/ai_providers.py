@@ -138,9 +138,9 @@ class GeminiAIProvider(AIProvider):
             contents=question,
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
-                temperature= 0,
-                top_p= 1.0,
-                seed= 42,
+                temperature= 0.0001,
+                top_p= 0.9,
+                
             ),
         
         )
