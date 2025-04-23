@@ -174,8 +174,8 @@ def process_question_wrapper(args):
     return handler(client, prompt, data, q, db, script, **kwargs)
 #TODO Inicializar el cliente antes despues de la 176. 
 def process_questions(data, provider, model_id, prompt, questions_df, db, script, threads, **kwargs):
-    with multiprocessing.Pool(threads) as pool:
-        return pool.map(process_question_wrapper, [
+    
+    return map(process_question_wrapper, [
             (provider, model_id, prompt, data, row, db, script, kwargs)
             for _, row in questions_df.iterrows()
         ])
