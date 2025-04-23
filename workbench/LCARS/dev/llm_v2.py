@@ -80,10 +80,10 @@ def replace_with_upper(text):
     # Replace the matched words using the replacer function
     return re.sub(r'\b\w+\b', replacer, text)
 
-def format_prompt(script_content, prompt, data, question, database_content, definitions):
+def format_prompt(script_content, prompt, data, question, database_content, definitions, include_comments):
     ids = data[question]["context_id"]
     prompt_string = ' '.join(ids)
-    comment_note = "Include comments" if include_comments else "IMPORTANT: Do not include comments in the code."
+    comment_note = "Include code comments" if include_comments else "IMPORTANT: Do not include comments in the code."
     return prompt.format(
         script_content=script_content,
         database_content=database_content,
@@ -129,7 +129,7 @@ def read_file(file_path):
 class LLMClient:
     def __init__(
         self, 
-        database_file='../../ARamirez/prompt_evaluation/data/database/tcph_graph.md', 
+        database_file='./tcph_graph.md', 
         prompt_file='./prompt.md', 
         script_file="./cheatsheet_v6.md", 
         temperature=0.0,
@@ -231,7 +231,7 @@ class LLMClient:
                         database_content=self.database,
                         similar_queries="",
                         definitions=self.definitions,
-                        recomendation="Include comments" if self.include_comments else "IMPORTANT: Do not include comments in the code."
+                        recomendation="Include code comments" if self.include_comments else "IMPORTANT: Do not include comments in the code."
                     )
             else:
                 # If not in dict, use the standard prompt.
