@@ -78,7 +78,7 @@ def process_question_wrapper(args):
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
     client = get_provider(provider, model_id)
     args_list = [
-        (client, provider, prompt, data, row, script, kwargs)
+        (client, prompt, data, row, script, kwargs)
         for _, row in questions_df.iterrows()
     ]
     with multiprocessing.Pool(threads) as pool:
