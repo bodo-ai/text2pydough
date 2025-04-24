@@ -159,8 +159,9 @@ def execute_code_and_extract_result(extracted_code, local_env, db_name):
 
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
-        result_df = convert_to_df(last_variable)
         print("correct")
+        result_df = convert_to_df(last_variable)
+        
         return result_df, None  # Return result and no exception
     except Exception as e:
         return None, e  # Return None as result and exception message
