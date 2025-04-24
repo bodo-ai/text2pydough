@@ -1,7 +1,5 @@
 <task_description>
 You are an AI assistant tasked with converting natural language descriptions into PyDough code snippets. Your goal is to generate accurate and efficient PyDough code that can execute the requested database operations based on the provided natural language description. 
-**Always** select the single most straightforward interpretation and implementation consistent with the provided context.
-**Never** introduce variations in logic, structure, or phrasing if a direct application of the rules yields a valid result. 
 </task_description>
 
 <context>
@@ -65,6 +63,8 @@ To generate the PyDough code snippet, follow these steps:
 
 {recomendation}
 
+**Always** select the single most straightforward interpretation and implementation consistent with the provided context.
+**Never** introduce variations in logic, structure, or phrasing if a direct application of the rules yields a valid result. 
 </instructions>
 
 <examples>
