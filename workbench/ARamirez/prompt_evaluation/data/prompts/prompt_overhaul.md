@@ -64,7 +64,6 @@ To generate the PyDough code snippet, follow these steps:
 
 6. The examples shown are not from the current database schema; just treat them as examples and make sure to use the right high top level collection.
 
-7. Do not change the case of the database structure.
 {recomendation}
 
 </instructions>
