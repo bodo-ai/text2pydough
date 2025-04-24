@@ -62,9 +62,6 @@ To generate the PyDough code snippet, follow these steps:
 6. The examples shown are not from the current database schema; just treat them as examples and make sure to use the right high top level collection.
 
 {recomendation}
-
-**Always** select the single most straightforward interpretation and implementation consistent with the provided context.
-**Never** introduce variations in logic, structure, or phrasing if a direct application of the rules yields a valid result. 
 </instructions>
 
 <examples>
