@@ -17,6 +17,9 @@ from test_data.eval import compare_output, execute_code_and_extract_result
 from claude import ClaudeModel, DeepseekModel, GeminiModel
 import aisuite as ai
 from provider.ai_providers import *
+from dynamic_prompt.generate_pydough_metadata import generate_metadata
+from dynamic_prompt.mdgen import json_to_markdown
+from sqlalchemy import create_engine, inspect, text
 
 # === Helper Functions ===
 
@@ -46,14 +49,44 @@ def extract_python_code(text):
     matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
-def format_prompt(prompt, data, question, script, db_name=None):
-    if db_name:
-        db_content = read_file(f"{os.path.dirname(__file__)}/data/database/{db_name}_graph.md")
+def prepare_db_markdown_map(df, base_path="test_data"):
+    db_names = df["db_name"].dropna().unique()
+    db_markdown_map = {}
+
+    for db_name in db_names:
+        json_file = os.path.join(base_path, f"{db_name}_graph.json")
+        
+        # Only generate if missing
+        if not os.path.exists(json_file):
+            print(f"[INFO] Generating JSON for: {db_name}")
+            url = f"sqlite:///{os.path.join(base_path, f"{db_name}.db")}"
+            engine = create_engine(url)
+            md= generate_metadata(engine,db_name)
+            with open(json_file, "w") as f:
+                json.dump(md, f, indent=2)
+
+        if db_name not in db_markdown_map:
+            with open(json_file, "r") as f:
+                data = json.load(f)
+                db_markdown_map[db_name] = json_to_markdown(data)
+
+    return db_markdown_map
+
+def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=None):
+    db_content = ""
+    if db_name and db_markdown_map and db_name in db_markdown_map:
+        db_content = db_markdown_map[db_name]
+
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return question, prompt.format(script_content=script, database_content=db_content,
-                                   similar_queries=similar_code, recomendation=recommendation)
+
+    return question, prompt.format(
+        script_content=script,
+        database_content=db_content,
+        similar_queries=similar_code,
+        recomendation=recommendation
+    )
 
 def correct(client, question, code, prompt, db_name=None):
     extracted_code = extract_python_code(code)
@@ -64,10 +97,10 @@ def correct(client, question, code, prompt, db_name=None):
         return "".join([code, response])
     return code
 
-def get_response(client, prompt, data, row, script, **kwargs):
+def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwargs):
     question = row["question"]
     db_name = row.get("db_name", None)
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name)
+    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
     response = client.ask(formatted_q, formatted_prompt, **kwargs)
     duration = time.time() - start
@@ -76,19 +109,16 @@ def get_response(client, prompt, data, row, script, **kwargs):
         return response[0], duration, response[1]
     return response, duration, None
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, **kwargs):
     def thread_wrapper(row):
         client = get_provider(provider, model_id)
-
-        return get_response(client, prompt, data, row, script, **kwargs)
+        return get_response(client, prompt, data, row, script, db_markdown_map=db_markdown_map, **kwargs)
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
     return results
 
-
-# === CLI Parser ===
 def parse_extra_args(extra_args):
     kwargs = {}
     if extra_args:
@@ -111,6 +141,7 @@ def parse_extra_args(extra_args):
     return kwargs
 
 # === Entry Point ===
+
 def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
@@ -128,11 +159,17 @@ def main(git_hash):
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
+
         prompt = read_file(args.prompt_file)
         script = read_file(args.pydough_file)
-        with open("./queries_context.json") as f: data = json.load(f)
+
+        with open("./queries_context.json") as f:
+            data = json.load(f)
+
         df = pd.read_csv(args.questions)
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, **kwargs)
+        db_markdown_map = prepare_db_markdown_map(df)
+
+        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
 
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
@@ -155,9 +192,7 @@ def main(git_hash):
 
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
-        mlflow.log_metrics(
-            percentages,
-        )
+        mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
 
@@ -168,5 +203,3 @@ if __name__ == "__main__":
     if untracked_files(cwd) or modified_files(cwd):
         autocommit(cwd)
     main(get_git_commit(cwd))
-
-# %%
