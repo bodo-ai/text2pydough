@@ -152,10 +152,10 @@ def convert_to_df(last_variable):
 def execute_code_and_extract_result(extracted_code, local_env, db_name):
     """Executes the Python code and returns the result or raises an exception."""
     try:
-        print("correct")
         print(db_name)
         pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/{db_name}_graph.json", db_name)
         pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/{db_name}.db",  check_same_thread=False)
+        print("correct")
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
