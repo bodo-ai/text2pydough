@@ -104,7 +104,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     start = time.time()
     response = client.ask(formatted_q, formatted_prompt, **kwargs)
     duration = time.time() - start
-    response= correct(client, formatted_q, response, prompt, db_name=db_name)
+    #response= correct(client, formatted_q, response, prompt, db_name=db_name)
     if isinstance(response, tuple):  # Gemini returns (text, usage)
         return response[0], duration, response[1]
     return response, duration, None
