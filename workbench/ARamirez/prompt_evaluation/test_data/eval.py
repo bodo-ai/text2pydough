@@ -155,7 +155,6 @@ def execute_code_and_extract_result(extracted_code, local_env, db_name):
         pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/{db_name}_graph.json", db_name)
         pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/{db_name}.db",  check_same_thread=False)
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
-        print(transformed_source)
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
         result_df = convert_to_df(last_variable)
