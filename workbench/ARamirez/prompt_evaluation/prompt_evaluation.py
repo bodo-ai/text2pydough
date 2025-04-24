@@ -76,6 +76,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     db_content = ""
     if db_name and db_markdown_map and db_name in db_markdown_map:
         db_content = db_markdown_map[db_name]
+        print(db_content)
 
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
