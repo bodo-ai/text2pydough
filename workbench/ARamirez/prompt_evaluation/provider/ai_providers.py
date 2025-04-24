@@ -130,7 +130,7 @@ class GeminiAIProvider(AIProvider):
             self.model_id = model_id
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        self.client = genai.Client(vertexai=True, project=self.project, location=self.location)
+        self.client = genai.Client(api_key= self.api_key)
     
     def ask(self, question, prompt, **kwargs):
         response = self.client.models.generate_content(
@@ -138,9 +138,7 @@ class GeminiAIProvider(AIProvider):
             contents=question,
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
-                temperature= 0,
-                top_p= 1.0,
-                seed= 42,
+                **kwargs
             ),
         
         )
