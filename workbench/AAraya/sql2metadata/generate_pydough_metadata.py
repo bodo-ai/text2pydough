@@ -148,6 +148,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
     
     # Get all tables
     tables = insp.get_table_names()
+    
     # primary key lookup (helps with cardinality later)
     pk_map = {}
     for tbl in tables:
@@ -156,6 +157,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             result = conn.execute(text(f"PRAGMA table_info({tbl})"))
             pk_cols = [row[1] for row in result if row[5] > 0]  # row[5] is pk flag
             pk_map[tbl] = pk_cols
+
     graph: Dict[str, Any] = {graph_name: {}}
 
     # pre‑pass to collect column info & PKs
@@ -183,7 +185,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             # If no primary key, use all columns as a composite key
             unique_props = [[col["name"] for col in cols]]
 
-        graph[graph_name][tbl.lower()] = {
+        graph[graph_name][tbl] = {
             "type": "simple_table",
             "table_path": f"main.{tbl}",
             "unique_properties": unique_props,
@@ -198,6 +200,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             child = tbl
             col_map = dict(zip(fk["constrained_columns"],
                              fk["referred_columns"]))
+
             # decide relationship names
             child_rel_name = p.plural(parent) if not cardinality(child,
                                                                list(col_map),
@@ -205,31 +208,28 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             parent_rel_name = p.singular_noun(child) or child
 
             # --------------- child --> parent (many/one‑to‑one) ------------
-            #child_prop = {
-            #    "type": "simple_join",
-            #    "other_collection_name": parent,
-            #    "singular": True,  # child row → 1 parent
-            #    "no_collisions": False,
-            #    "keys": col_map,
-            #    "reverse_relationship_name": parent_rel_name,
-            #}
-            #graph[graph_name][child]["properties"][parent_rel_name] = child_prop
+            child_prop = {
+                "type": "simple_join",
+                "other_collection_name": parent,
+                "singular": True,  # child row → 1 parent
+                "no_collisions": False,
+                "keys": col_map,
+                "reverse_relationship_name": parent_rel_name,
+            }
+            graph[graph_name][child]["properties"][parent_rel_name] = child_prop
 
             # --------------- parent --> children ---------------------------
             rev_col_map = {v: [k] for k, v in col_map.items()}
             parent_prop = {
                 "type": "simple_join",
-                "other_collection_name": child.lower(),
+                "other_collection_name": child,
                 "singular": cardinality(child, list(col_map), pk_map),
                 "no_collisions": not cardinality(child, list(col_map), pk_map),
                 "keys": rev_col_map,
-                "reverse_relationship_name": child_rel_name.lower(),
+                "reverse_relationship_name": child_rel_name,
             }
-            graph[graph_name][parent.lower()]["properties"][child.lower()] = parent_prop
-            print(f"table {tbl}, parent {parent}")
-            print(f"fks {fks}")
-            print(f"parent_prop: {parent_prop} \n")
-            #print(f"child prop: {child_prop}\n")
+            graph[graph_name][parent]["properties"][child_rel_name] = parent_prop
+
     return graph
 
 def test_json_validates_against_spec(metadata_path: str) -> Tuple[bool, str]:

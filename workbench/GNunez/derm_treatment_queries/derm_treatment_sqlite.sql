@@ -1,48 +1,112 @@
+-- Enable foreign key support in SQLite
+PRAGMA foreign_keys = ON;
 
-CREATE TABLE doctors (doc_id INTEGER PRIMARY KEY, first_name TEXT(50),
- last_name TEXT(50),
- specialty TEXT /* possible values: dermatology, immunology, general, oncology */, year_reg INTEGER /* year the doctor was registered and obtained license */, med_school_name TEXT(100),
- loc_city TEXT(50),
- loc_state TEXT(2),
- loc_zip TEXT(10),
- bd_cert_num TEXT(20) /* board certification number */);
+-- Dimension tables with primary keys
+CREATE TABLE doctors (
+    doc_id INTEGER PRIMARY KEY,
+    first_name TEXT(50),
+    last_name TEXT(50),
+    specialty TEXT,
+    year_reg INTEGER,
+    med_school_name TEXT(100),
+    loc_city TEXT(50),
+    loc_state TEXT(2),
+    loc_zip TEXT(10),
+    bd_cert_num TEXT(20)
+);
 
-CREATE TABLE patients (patient_id INTEGER PRIMARY KEY, first_name TEXT(50),
- last_name TEXT(50),
- date_of_birth DATE, date_of_registration DATE, gender TEXT(10) /* Male, Female, Others */, email TEXT(100),
- phone TEXT(20),
- addr_street TEXT(100),
- addr_city TEXT(50),
- addr_state TEXT(2),
- addr_zip TEXT(10),
- ins_type TEXT /* possible values: private, medicare, medicaid, uninsured */, ins_policy_num TEXT(20),
- height_cm REAL, weight_kg REAL);
+CREATE TABLE patients (
+    patient_id INTEGER PRIMARY KEY,
+    first_name TEXT(50),
+    last_name TEXT(50),
+    date_of_birth DATE,
+    date_of_registration DATE,
+    gender TEXT(10),
+    email TEXT(100),
+    phone TEXT(20),
+    addr_street TEXT(100),
+    addr_city TEXT(50),
+    addr_state TEXT(2),
+    addr_zip TEXT(10),
+    ins_type TEXT,
+    ins_policy_num TEXT(20),
+    height_cm REAL,
+    weight_kg REAL
+);
 
-CREATE TABLE drugs (drug_id INTEGER PRIMARY KEY, drug_name TEXT(100),
- manufacturer TEXT(100),
- drug_type TEXT /* possible values: biologic, small molecule, topical */, moa TEXT /* mechanism of action */, fda_appr_dt DATE /* FDA approval date. NULL if drug is still under trial. */, admin_route TEXT /* possible values: oral, injection, topical */, dos_amt REAL(10, 2),
- dos_unit TEXT(20),
- dos_freq_hrs INTEGER, ndc TEXT(20) /* National Drug Code  */);
+CREATE TABLE drugs (
+    drug_id INTEGER PRIMARY KEY,
+    drug_name TEXT(100),
+    manufacturer TEXT(100),
+    drug_type TEXT,
+    moa TEXT,
+    fda_appr_dt DATE,
+    admin_route TEXT,
+    dos_amt REAL(10, 2),
+    dos_unit TEXT(20),
+    dos_freq_hrs INTEGER,
+    ndc TEXT(20)
+);
 
-CREATE TABLE diagnoses (diag_id INTEGER PRIMARY KEY, diag_code TEXT(10),
- diag_name TEXT(100),
- diag_desc TEXT);
+CREATE TABLE diagnoses (
+    diag_id INTEGER PRIMARY KEY,
+    diag_code TEXT(10),
+    diag_name TEXT(100),
+    diag_desc TEXT
+);
 
-CREATE TABLE treatments (treatment_id INTEGER PRIMARY KEY, patient_id INTEGER , doc_id INTEGER , drug_id INTEGER , diag_id INTEGER , start_dt DATE, end_dt DATE /* NULL if treatment is ongoing */, is_placebo INTEGER, tot_drug_amt REAL(10, 2),
- drug_unit TEXT /* possible values: mg, ml, g */);
+-- Fact tables with foreign keys
+CREATE TABLE treatments (
+    treatment_id INTEGER PRIMARY KEY,
+    patient_id INTEGER NOT NULL REFERENCES patients(patient_id),
+    doc_id INTEGER NOT NULL REFERENCES doctors(doc_id),
+    drug_id INTEGER NOT NULL REFERENCES drugs(drug_id),
+    diag_id INTEGER NOT NULL REFERENCES diagnoses(diag_id),
+    start_dt DATE,
+    end_dt DATE,
+    is_placebo INTEGER,
+    tot_drug_amt REAL(10, 2),
+    drug_unit TEXT
+);
 
-CREATE TABLE outcomes (outcome_id INTEGER PRIMARY KEY, treatment_id INTEGER , assess_dt DATE, day7_lesion_cnt INTEGER /* lesion counts on day 7. */, day30_lesion_cnt INTEGER, day100_lesion_cnt INTEGER, day7_pasi_score REAL(4, 1) /* PASI score range 0-72 */, day30_pasi_score REAL(4, 1),
- day100_pasi_score REAL(4, 1),
- day7_tewl REAL(5, 2) /* in g/m^2/h  */, day30_tewl REAL(5, 2),
- day100_tewl REAL(5, 2),
- day7_itch_vas INTEGER /* visual analog scale 0-100 */, day30_itch_vas INTEGER, day100_itch_vas INTEGER, day7_hfg REAL(4, 1) /* hair growth factor range 0-5  */, day30_hfg REAL(4, 1),
- day100_hfg REAL(4, 1));
+CREATE TABLE outcomes (
+    outcome_id INTEGER PRIMARY KEY,
+    treatment_id INTEGER NOT NULL REFERENCES treatments(treatment_id),
+    assess_dt DATE,
+    day7_lesion_cnt INTEGER,
+    day30_lesion_cnt INTEGER,
+    day100_lesion_cnt INTEGER,
+    day7_pasi_score REAL(4, 1),
+    day30_pasi_score REAL(4, 1),
+    day100_pasi_score REAL(4, 1),
+    day7_tewl REAL(5, 2),
+    day30_tewl REAL(5, 2),
+    day100_tewl REAL(5, 2),
+    day7_itch_vas INTEGER,
+    day30_itch_vas INTEGER,
+    day100_itch_vas INTEGER,
+    day7_hfg REAL(4, 1),
+    day30_hfg REAL(4, 1),
+    day100_hfg REAL(4, 1)
+);
 
-CREATE TABLE adverse_events (id INTEGER PRIMARY KEY /* 1 row per adverse event per treatment_id */, treatment_id INTEGER , reported_dt DATE, description TEXT);
+CREATE TABLE adverse_events (
+    id INTEGER PRIMARY KEY,
+    treatment_id INTEGER NOT NULL REFERENCES treatments(treatment_id),
+    reported_dt DATE,
+    description TEXT
+);
 
-CREATE TABLE concomitant_meds (id INTEGER PRIMARY KEY /* 1 row per med per treatment_id */, treatment_id INTEGER , med_name TEXT(100),
- start_dt TEXT /* YYYY-MM-DD */, end_dt TEXT /* YYYY-MM-DD NULL if still taking */, dose_amt REAL(10, 2),
- dose_unit TEXT /* possible values: mg, ml, g */, freq_hrs INTEGER);
+CREATE TABLE concomitant_meds (
+    id INTEGER PRIMARY KEY,
+    treatment_id INTEGER NOT NULL REFERENCES treatments(treatment_id),
+    med_name TEXT(100),
+    start_dt TEXT,
+    end_dt TEXT,
+    dose_amt REAL(10, 2),
+    dose_unit TEXT,
+    freq_hrs INTEGER
+);
 
 INSERT INTO doctors (doc_id, first_name, last_name, specialty, year_reg, med_school_name, loc_city, loc_state, loc_zip, bd_cert_num) VALUES
  (1, 'John', 'Doe', 'dermatology', STRFTIME('%Y', DATE('now')) - 2, 'Johns Hopkins University', 'Baltimore', 'MD', '21201', 'ABC123'),
