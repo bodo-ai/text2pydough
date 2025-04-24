@@ -163,7 +163,7 @@ def execute_code_and_extract_result(extracted_code, local_env, db_name):
         result_df = convert_to_df(last_variable)
         return result_df, None  # Return result and no exception
     except Exception as e:
-        return None, str(e)  # Return None as result and exception message
+        return None, e  # Return None as result and exception message
 
 def query_sqlite_db(
     query: str,
