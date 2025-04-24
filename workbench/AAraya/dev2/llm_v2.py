@@ -240,7 +240,7 @@ class LLMClient:
                     database_content=self.database,
                     similar_queries="",
                     definitions=self.definitions,
-                    recomendation="Include comments, just the necessary" if self.include_comments else "IMPORTANT: Do not include comments in the code."
+                    recomendation="" if self.include_comments else "IMPORTANT: Do not include comments in the code."
                 )
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)
