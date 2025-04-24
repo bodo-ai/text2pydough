@@ -180,14 +180,12 @@ def main(git_hash):
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
 
-        percentages_dict = percentages.to_dict()  
-        metrics_json = json.dumps(percentages_dict, indent=4) 
+        percentages_dict = percentages.to_dict()
+        metrics_json = json.dumps(percentages_dict, indent=4)
 
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            metrics_path = os.path.join(temp_dir, "metrics.json")
-            with open(metrics_path, "w") as metrics_file:
-                metrics_file.write(metrics_json)
+        metrics_path = "./metrics.json"
+        with open(metrics_path, "w") as metrics_file:
+            metrics_file.write(metrics_json)
 
         mlflow.pyfunc.log_model(
             artifact_path="Gemini Model",
