@@ -1,6 +1,7 @@
 # main.py
 
 import argparse
+import io
 import json
 import os
 import re
@@ -178,12 +179,20 @@ def main(git_hash):
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
 
-        print(percentages)
+        percentages_dict = percentages.to_dict()  
+        metrics_json = json.dumps(percentages_dict, indent=4) 
+
+
+        metrics_artifact = io.StringIO(metrics_json)
 
         mlflow.pyfunc.log_model(
             artifact_path="Gemini Model",
             python_model=GeminiWrapper(model_id=args.model_id),
-            artifacts={"prompt_file": args.prompt_file}
+            artifacts={
+                "prompt_file": args.prompt_file,
+                "pydough_file": args.pydough_file,
+                "metrics.json": metrics_artifact
+            }
         )
 
 if __name__ == "__main__":
