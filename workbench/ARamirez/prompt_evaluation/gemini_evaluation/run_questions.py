@@ -131,7 +131,7 @@ def main():
         os.makedirs(test_path, exist_ok=True)
         print("----Evaluating questions----")
         tested_file, tested_df = compare_output(test_path, output_file)
-        print(f"✅ Responses saved to {output_file}")
+        print(f"✅ Responses saved to {tested_file}")
 
     except Exception as e:
         print(f"❌ Failed to complete process: {e}")
