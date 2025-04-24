@@ -178,10 +178,11 @@ def main(git_hash):
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
 
+        print(percentages)
+
         mlflow.pyfunc.log_model(
             artifact_path="Gemini Model",
             python_model=GeminiWrapper(model_id=args.model_id),
-            registered_model_name="Gemini Model",
             artifacts={"prompt_file": args.prompt_file}
         )
 
