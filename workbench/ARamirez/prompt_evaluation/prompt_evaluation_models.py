@@ -184,9 +184,10 @@ def main(git_hash):
         metrics_json = json.dumps(percentages_dict, indent=4) 
 
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as temp_metrics_file:
-            temp_metrics_file.write(metrics_json)
-            temp_metrics = temp_metrics_file.name
+        with tempfile.TemporaryDirectory() as temp_dir:
+            metrics_path = os.path.join(temp_dir, "metrics.json")
+            with open(metrics_path, "w") as metrics_file:
+                metrics_file.write(metrics_json)
 
         mlflow.pyfunc.log_model(
             artifact_path="Gemini Model",
@@ -194,7 +195,7 @@ def main(git_hash):
             artifacts={
                 "prompt_file": args.prompt_file,
                 "pydough_file": args.pydough_file,
-                "metrics.json": temp_metrics
+                "metrics.json": metrics_path
             }
         )
 
