@@ -77,7 +77,6 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     if db_name and db_markdown_map and db_name in db_markdown_map:
         db_content = db_markdown_map[db_name]
 
-    print(db_markdown_map)
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
@@ -105,7 +104,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     start = time.time()
     response = client.ask(formatted_q, formatted_prompt, **kwargs)
     duration = time.time() - start
-    #response= correct(client, formatted_q, response, prompt, db_name=db_name)
+    response= correct(client, formatted_q, response, formatted_prompt, db_name=db_name)
     if isinstance(response, tuple):  # Gemini returns (text, usage)
         return response[0], duration, response[1]
     return response, duration, None
