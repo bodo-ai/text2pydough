@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import tempfile
 import textwrap
 import time
 from typing import List
@@ -183,7 +184,9 @@ def main(git_hash):
         metrics_json = json.dumps(percentages_dict, indent=4) 
 
 
-        metrics_artifact = io.StringIO(metrics_json)
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as temp_metrics_file:
+            temp_metrics_file.write(metrics_json)
+            temp_metrics = temp_metrics_file.name
 
         mlflow.pyfunc.log_model(
             artifact_path="Gemini Model",
@@ -191,7 +194,7 @@ def main(git_hash):
             artifacts={
                 "prompt_file": args.prompt_file,
                 "pydough_file": args.pydough_file,
-                "metrics.json": metrics_artifact
+                "metrics.json": temp_metrics
             }
         )
 
