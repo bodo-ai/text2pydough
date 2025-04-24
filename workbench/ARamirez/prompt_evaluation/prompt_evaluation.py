@@ -90,7 +90,8 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
 def correct(client, question, code, prompt, db_name=None):
     extracted_code = extract_python_code(code)
-    result, error = execute_code_and_extract_result(extracted_code, {"pydough": pydough, "datetime": datetime}, db_name)
+    env= {"pydough": pydough, "datetime": datetime}
+    result, error = execute_code_and_extract_result(extracted_code, env, db_name)
     if result is None:
         q = f"""Fix this Pydough code: {code}. Error: {error}. Question: {question}."""
         response = client.ask(q, prompt)
