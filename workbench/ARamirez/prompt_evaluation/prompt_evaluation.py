@@ -96,6 +96,8 @@ def correct(client, question, code, prompt, db_name):
     if result is None:
         q = f"""Fix this Pydough code: {code}. Error: {error}. Question: {question}."""
         response = client.ask(q, prompt)
+        if isinstance(response, tuple):  # Gemini returns (text, usage)
+            return  "".join([code, response[0]])
         return "".join([code, response])
     return code
 
