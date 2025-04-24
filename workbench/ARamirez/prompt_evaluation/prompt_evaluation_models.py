@@ -6,6 +6,7 @@ import os
 import re
 import textwrap
 import time
+from typing import List
 import pandas as pd
 from datetime import datetime
 import multiprocessing
@@ -27,7 +28,7 @@ class GeminiWrapper(PythonModel):
     def load_context(self, context):
         self.client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
-    def predict(self, context, model_input):
+    def predict(self, context, model_input: List[str]) -> List[str]:
         response = self.client.models.generate_content(
             model=self.model_id,
             contents=model_input
