@@ -183,7 +183,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             # If no primary key, use all columns as a composite key
             unique_props = [[col["name"] for col in cols]]
 
-        graph[graph_name][tbl] = {
+        graph[graph_name][tbl.lower()] = {
             "type": "simple_table",
             "table_path": f"main.{tbl}",
             "unique_properties": unique_props,
@@ -219,13 +219,13 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             rev_col_map = {v: [k] for k, v in col_map.items()}
             parent_prop = {
                 "type": "simple_join",
-                "other_collection_name": child,
+                "other_collection_name": child.lower(),
                 "singular": cardinality(child, list(col_map), pk_map),
                 "no_collisions": not cardinality(child, list(col_map), pk_map),
                 "keys": rev_col_map,
-                "reverse_relationship_name": child_rel_name,
+                "reverse_relationship_name": child_rel_name.lower(),
             }
-            graph[graph_name][parent]["properties"][child] = parent_prop
+            graph[graph_name][parent.lower()]["properties"][child.lower()] = parent_prop
             print(f"table {tbl}, parent {parent}")
             print(f"fks {fks}")
             print(f"parent_prop: {parent_prop} \n")
