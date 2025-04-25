@@ -1,0 +1,408 @@
+question_id,question,ground_truth_sql,generated_response,generated_pydough,evaluation_match,evaluation_explanation,feedback_loops,dataframe_match,error
+5,Find the names of all customers and number of orders placed in 1995 in Europe who have an account balance greater than $700 and placed at least one order in 1995. Sorted in descending order by the number of orders.,"SELECT c.c_name AS customer_name, COUNT(o.o_orderkey) AS order_count_1995 FROM customer c JOIN nation n ON c.c_nationkey = n.n_nationkey JOIN region r ON n.n_regionkey = r.r_regionkey JOIN orders o ON c.c_custkey = o.o_custkey WHERE r.r_name = 'EUROPE' AND c.c_acctbal > 700 AND o.o_orderdate BETWEEN '1995-01-01' AND '1995-12-31' GROUP BY c.c_name, c.c_acctbal ORDER BY order_count_1995 DESC, c.c_acctbal DESC;","1. **Analysis of the question:**
+The question asks to find customers in Europe with specific criteria: account balance greater than $700, and at least one order placed in 1995. The output should include the customer's name and the number of orders they placed in 1995, sorted by the number of orders in descending order.
+
+2. **Step-by-step explanation of the solution:**
+- Start with the `customers` collection.
+- Filter customers based on the following conditions:
+    - They belong to a nation in the ""EUROPE"" region.
+    - Their account balance is greater than $700.
+    - They have placed at least one order in 1995.
+- Calculate the customer's name and the number of orders placed in 1995.
+- Sort the results in descending order based on the number of orders.
+
+3. **The PyDough code:**
+```python
+european_customers_1995 = customers.WHERE(
+    (nation.region.name == ""EUROPE"") &
+    (acctbal > 700) &
+    (HAS(orders.WHERE(YEAR(order_date) == 1995)) == 1)
+).CALCULATE(
+    customer_name=name,
+    num_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995))
+).ORDER_BY(num_orders_1995.DESC())
+```
+
+4. **Explanation of how the code works:**
+- `customers.WHERE(...)`: This filters the `customers` collection based on the specified conditions.
+    - `nation.region.name == ""EUROPE""`: Checks if the customer's nation is in the ""EUROPE"" region.
+    - `acctbal > 700`: Checks if the customer's account balance is greater than $700.
+    - `HAS(orders.WHERE(YEAR(order_date) == 1995)) == 1`: Checks if the customer has at least one order in 1995.
+- `.CALCULATE(customer_name=name, num_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)))`: This calculates the customer's name and the number of orders placed in 1995.
+    - `customer_name=name`: Assigns the customer's name to the `customer_name` field.
+    - `num_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995))`: Counts the number of orders placed by the customer in 1995.
+- `.ORDER_BY(num_orders_1995.DESC())`: This sorts the results in descending order based on the number of orders placed in 1995.","european_customers_1995 = customers.WHERE(
+    (nation.region.name == ""EUROPE"") &
+    (acctbal > 700) &
+    (HAS(orders.WHERE(YEAR(order_date) == 1995)) == 1)
+).CALCULATE(
+    customer_name=name,
+    num_orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995))
+).ORDER_BY(num_orders_1995.DESC())",False,"The generated response is incorrect because it does not produce the same result as the ground truth SQL query. The PyDough code needs to be modified to:
+
+- Ensure that *all* orders considered for the count are from 1995.
+- Include the account balance in the `CALCULATE` clause.
+- Sort by account balance in descending order when the number of orders is the same.",3,False,
+6,"Find suppliers in each nation who have a total availqty of more than 1000 units of parts with 'BRASS' in their type. List the supplier name, nation name, and the sum of the parts supplied, sorted in descending order by parts supplied","SELECT s.s_name AS SupplierName, n.n_name AS Nation, SUM(ps.ps_availqty) AS TotalUnitsSupplied FROM supplier s JOIN nation n ON s.s_nationkey = n.n_nationkey JOIN partsupp ps ON s.s_suppkey = ps.ps_suppkey JOIN part p ON ps.ps_partkey = p.p_partkey WHERE p.p_type LIKE '%BRASS%' GROUP BY s.s_name, n.n_name HAVING SUM(ps.ps_availqty) > 1000 ORDER BY TotalUnitsSupplied DESC;","```text
+1. Analysis of the question:
+The question asks to find suppliers in each nation who have a total availqty of more than 1000 units of parts with 'BRASS' in their type. The final result should include the supplier name, nation name, and the sum of the parts supplied, sorted in descending order by parts supplied. This requires filtering parts by their type, grouping suppliers by nation, calculating the sum of available quantities for each supplier within each nation, filtering suppliers based on the sum of available quantities, and finally sorting the results.
+
+2. Step-by-step explanation of the solution:
+a. Filter the `parts` collection to include only parts with 'BRASS' in their `part_type`.
+b. Join the filtered `parts` with the `supply_records` collection to access the `availqty`.
+c. Join the `supply_records` with the `suppliers` collection to access the supplier's `name` and `nation_key`.
+d. Join the `suppliers` with the `nations` collection to access the nation's `name`.
+e. Partition the data by `nation_key` and `supplier_key` to group supply records by nation and supplier.
+f. Calculate the sum of `availqty` for each group.
+g. Filter the groups where the sum of `availqty` is greater than 1000.
+h. Select the supplier name, nation name, and the sum of the parts supplied.
+i. Sort the results in descending order by the sum of parts supplied.
+
+3. The PyDough code in a Python code block:
+```python
+brass_parts = parts.WHERE(CONTAINS(part_type, 'BRASS'))
+supplier_parts = brass_parts.supply_records.CALCULATE(
+    availqty=availqty,
+    supplier_key=supplier_key,
+    part_key=part_key,
+    supplycost=supplycost,
+    comment=comment
+).supplier.CALCULATE(
+    supplier_name=name,
+    nation_key=nation_key,
+    account_balance=account_balance,
+    address=address,
+    comment=comment,
+    phone=phone
+).nation.CALCULATE(nation_name=name, nation_key=key)
+
+nation_supplier_parts = supplier_parts.PARTITION(name=""nation_supplier"", by=(nation_key, supplier_key)).CALCULATE(
+    nation_name=nation_name,
+    supplier_name=supplier_name,
+    total_availqty=SUM(brass_parts.supply_records.availqty)
+).WHERE(total_availqty > 1000).ORDER_BY(total_availqty.DESC())
+
+result = nation_supplier_parts.CALCULATE(supplier_name=supplier_name, nation_name=nation_name, total_parts_supplied=total_availqty)
+```
+
+4. Explanation of how the code works:
+a. `brass_parts = parts.WHERE(CONTAINS(part_type, 'BRASS'))`: This line filters the `parts` collection to include only parts where the `part_type` contains the string 'BRASS'.
+b. `supplier_parts = brass_parts.supply_records.CALCULATE(...)`: This line navigates from the filtered `brass_parts` to their `supply_records`, then to the `supplier`, and finally to the `nation`. It also selects the necessary fields from each collection.
+c. `nation_supplier_parts = supplier_parts.PARTITION(name=""nation_supplier"", by=(nation_key, supplier_key)).CALCULATE(...)`: This line partitions the data by `nation_key` and `supplier_key`, calculates the sum of `availqty` for each group, and filters the groups where the sum is greater than 1000.
+d. `result = nation_supplier_parts.CALCULATE(supplier_name=supplier_name, nation_name=nation_name, total_parts_supplied=total_availqty)`: This line selects the supplier name, nation name, and the sum of the parts supplied, and assigns the result to the `result` variable.
+```","brass_parts = parts.WHERE(CONTAINS(part_type, 'BRASS'))
+supplier_parts = brass_parts.supply_records.CALCULATE(
+    availqty=availqty,
+    supplier_key=supplier_key,
+    part_key=part_key,
+    supplycost=supplycost,
+    comment=comment
+).supplier.CALCULATE(
+    supplier_name=name,
+    nation_key=nation_key,
+    account_balance=account_balance,
+    address=address,
+    comment=comment,
+    phone=phone
+).nation.CALCULATE(nation_name=name, nation_key=key)
+
+nation_supplier_parts = supplier_parts.PARTITION(name=""nation_supplier"", by=(nation_key, supplier_key)).CALCULATE(
+    nation_name=nation_name,
+    supplier_name=supplier_name,
+    total_availqty=SUM(brass_parts.supply_records.availqty)
+).WHERE(total_availqty > 1000).ORDER_BY(total_availqty.DESC())
+
+result = nation_supplier_parts.CALCULATE(supplier_name=supplier_name, nation_name=nation_name, total_parts_supplied=total_availqty)",False,"The generated response is incorrect. It returns an empty DataFrame, while the ground truth contains a DataFrame with columns 'SupplierName', 'Nation', and 'TotalUnitsSupplied', and the data is ordered. The generated code attempts to implement the logic but fails to produce the correct result.",3,False,
+7,Find parts names that are supplied by at least five different nations. Show the part name and the count of distinct nations that supply each part,"SELECT p.P_NAME AS PartName, COUNT(DISTINCT n.N_NAME) AS NumberOfNations FROM PART p JOIN PARTSUPP ps ON p.P_PARTKEY = ps.PS_PARTKEY JOIN SUPPLIER s ON ps.PS_SUPPKEY = s.S_SUPPKEY JOIN NATION n ON s.S_NATIONKEY = n.N_NATIONKEY GROUP BY p.P_NAME HAVING COUNT(DISTINCT n.N_NAME) > 5 ORDER BY NumberOfNations DESC;","```text
+1. Analysis of the question
+The question asks to find the names of parts that are supplied by at least five different nations. The final result should include the part name and the count of distinct nations that supply each part. This requires joining parts with suppliers through supply records and then grouping by part name to count the distinct nations.
+
+2. Step-by-step explanation of the solution
+a. Start with the `parts` collection.
+b. Navigate to `supply_records` and then to `supplier` to link parts to suppliers.
+c. Navigate from `supplier` to `nation` to identify the nation of each supplier.
+d. Partition the data by `part_name` to group the supply records for each part.
+e. Calculate the count of distinct nations for each part using `NDISTINCT(supplier.nation.name)`.
+f. Filter the results to include only parts supplied by at least five distinct nations.
+g. Select the `part_name` and the `nation_count` for the final output.
+
+3. The PyDough code in a Python code block
+```python
+part_nation_counts = parts.PARTITION(name=""part_groups"", by=name).CALCULATE(
+    part_name=name,
+    nation_count=NDISTINCT(supply_records.supplier.nation.name)
+).WHERE(nation_count >= 5).CALCULATE(part_name=part_name, nation_count=nation_count)
+```
+
+4. Explanation of how the code works
+a. `parts.PARTITION(name=""part_groups"", by=name)`: This partitions the `parts` collection by the `name` field, creating groups of supply records for each unique part name.
+b. `.CALCULATE(part_name=name, nation_count=NDISTINCT(supply_records.supplier.nation.name))`: This calculates the `part_name` and the number of distinct nations that supply each part. It navigates from `supply_records` to `supplier` and then to `nation` to count the distinct nation names.
+c. `.WHERE(nation_count >= 5)`: This filters the results to include only parts that are supplied by at least five distinct nations.
+d. `.CALCULATE(part_name=part_name, nation_count=nation_count)`: This selects the `part_name` and `nation_count` for the final output.
+```","part_nation_counts = parts.PARTITION(name=""part_groups"", by=name).CALCULATE(
+    part_name=name,
+    nation_count=NDISTINCT(supply_records.supplier.nation.name)
+).WHERE(nation_count >= 5).CALCULATE(part_name=part_name, nation_count=nation_count)",False,The generated response is incorrect because it does not produce a DataFrame.,3,False,
+8,"Which 10 customers purchased the highest quantity of products with 'green' in the product name during 1998? Provide their names, adress and the total quantity ordered.","SELECT c_name AS customer_name, c_address AS customer_address, SUM(l_quantity) AS total_quantity_ordered FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey JOIN part ON l_partkey = p_partkey WHERE p_name LIKE '%green%' AND strftime('%Y', o_orderdate) = '1998' GROUP BY c_name, c_address ORDER BY total_quantity_ordered DESC LIMIT 10;","```text
+1. Analysis of the question
+The question asks for the top 10 customers who purchased the highest quantity of products with 'green' in the product name during 1998. We need to filter the lines collection for the year 1998 and products with 'green' in their name. Then, we need to group by customer and sum the quantity. Finally, we need to select the top 10 customers based on the total quantity ordered.
+
+2. Step-by-step explanation of the solution
+First, filter the lines collection for the year 1998 and products with 'green' in their name.
+Second, calculate the customer name, address and the total quantity ordered.
+Third, group by customer.
+Finally, select the top 10 customers based on the total quantity ordered.
+
+3. The PyDough code in a Python code block
+```python
+customer_quantity = lines.WHERE(
+    (YEAR(order.order_date) == 1998) & (CONTAINS(part.name, ""green""))
+).CALCULATE(
+    cust_name = order.customer.name,
+    cust_address = order.customer.address
+).PARTITION(name=""customer_groups"", by=(cust_name, cust_address)).CALCULATE(
+    customer_name = cust_name,
+    customer_address = cust_address,
+    total_quantity = SUM(lines.quantity)
+).TOP_K(10, by=total_quantity.DESC())
+```
+
+4. Explanation of how the code works
+The code first filters the `lines` collection to include only those line items that were ordered in 1998 and whose part name contains ""green"". Then, it calculates the customer's name and address. After that, it partitions the result by customer name and address. Finally, it calculates the total quantity ordered by each customer and selects the top 10 customers based on the total quantity ordered.
+```","customer_quantity = lines.WHERE(
+    (YEAR(order.order_date) == 1998) & (CONTAINS(part.name, ""green""))
+).CALCULATE(
+    cust_name = order.customer.name,
+    cust_address = order.customer.address
+).PARTITION(name=""customer_groups"", by=(cust_name, cust_address)).CALCULATE(
+    customer_name = cust_name,
+    customer_address = cust_address,
+    total_quantity = SUM(lines.quantity)
+).TOP_K(10, by=total_quantity.DESC())",False,False,3,False,
+9,Which is the average discount applied on orders for each market segment? Sorted in descending order,"SELECT c_mktsegment AS market_segment, AVG(l_discount) AS average_discount FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey GROUP BY c_mktsegment;","```text
+1. Analysis of the question:
+The question asks for the average discount applied on orders for each market segment. This requires calculating the average discount for each market segment and then sorting the results in descending order. The market segment information is available in the `customers` collection, and the discount information is available in the `lines` collection. We need to join these two collections through the `orders` collection.
+
+2. Step-by-step explanation of the solution:
+First, we need to group the orders by market segment. Since the market segment is a property of the customer, and the order is linked to the customer, we can start from the `customers` collection and use PARTITION to group by `mktsegment`. Then, we can calculate the average discount for each market segment using the `AVG` function on the `lines.discount` field. Finally, we sort the results in descending order using `ORDER_BY`.
+
+3. The PyDough code in a Python code block:
+```python
+market_segments_avg_discount = customers.PARTITION(name=""market_segment_group"", by=mktsegment).CALCULATE(
+    market_segment=mktsegment,
+    avg_discount=AVG(orders.lines.discount)
+).ORDER_BY(avg_discount.DESC())
+```
+
+4. Explanation of how the code works:
+- `customers.PARTITION(name=""market_segment_group"", by=mktsegment)`: This partitions the `customers` collection by the `mktsegment` field, creating groups of customers belonging to the same market segment.
+- `.CALCULATE(market_segment=mktsegment, avg_discount=AVG(orders.lines.discount))`: This calculates the average discount for each market segment. `market_segment=mktsegment` selects the market segment name, and `avg_discount=AVG(orders.lines.discount)` calculates the average discount by navigating from customers to orders to lines and then applying the AVG function to the discount field.
+- `.ORDER_BY(avg_discount.DESC())`: This sorts the results in descending order based on the calculated average discount.
+```","market_segments_avg_discount = customers.PARTITION(name=""market_segment_group"", by=mktsegment).CALCULATE(
+    market_segment=mktsegment,
+    avg_discount=AVG(orders.lines.discount)
+).ORDER_BY(avg_discount.DESC())",False,False,3,False,
+10,What were the 20 most popular products (parts) within each market segment in 1998?,"WITH ProductPopularity AS (SELECT c_mktsegment AS market_segment, p_name AS product_name, SUM(l_quantity) AS total_quantity FROM customer JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey JOIN part ON l_partkey = p_partkey WHERE strftime('%Y', o_orderdate) = '1998' GROUP BY c_mktsegment, p_name) SELECT market_segment, product_name, total_quantity FROM (SELECT market_segment, product_name, total_quantity, ROW_NUMBER() OVER (PARTITION BY market_segment ORDER BY total_quantity DESC) AS rank FROM ProductPopularity) WHERE rank <= 20;","```text
+1. Analysis of the question
+The question asks for the top 20 most popular parts within each market segment in 1998. This requires filtering the lines table by the year 1998, grouping by market segment and part name, counting the occurrences of each part within each segment, and then selecting the top 20 parts within each segment based on their count.
+
+2. Step-by-step explanation of the solution
+a. Filter the `lines` table for the year 1998.
+b. Extract the market segment from the `customer` associated with the `order` and the `part_name` from the `part` associated with the `lines`.
+c. Partition the data by `mktsegment` and `part_name`.
+d. Calculate the count of each `part_name` within each `mktsegment`.
+e. For each `mktsegment`, select the top 20 `part_name` based on their counts.
+
+3. The PyDough code in a Python code block
+```python
+lines_1998_info = lines.WHERE(YEAR(order.order_date) == 1998).CALCULATE(
+    mktsegment = order.customer.mktsegment,
+    part_name = part.name
+)
+
+part_totals_per_segment = lines_1998_info.PARTITION(
+    name=""part_segment_groups"", by=(mktsegment, part_name)
+).CALCULATE(
+    mktsegment = mktsegment,
+    part_name = part_name,
+    part_count = COUNT(lines)
+)
+
+top_parts_per_segment = part_totals_per_segment.PARTITION(name=""segment_groups"", by=mktsegment).CALCULATE(
+    mktsegment = mktsegment,
+    top_parts = TOP_K(20, by=part_count.DESC())
+).top_parts.CALCULATE(
+    mktsegment = mktsegment,
+    part_name = part_name,
+    part_count = part_count
+)
+result = top_parts_per_segment
+```
+
+4. Explanation of how the code works
+a. The code first filters the `lines` table to include only records from the year 1998. It then extracts the `mktsegment` from the `order.customer` and the `part_name` from the `part` and stores them in `lines_1998_info`.
+b. The `lines_1998_info` is then partitioned by `mktsegment` and `part_name`. Within each partition, the code counts the occurrences of each `part_name` within each `mktsegment` using `COUNT(lines)` and stores the result in `part_count`.
+c. Finally, the `part_totals_per_segment` is partitioned by `mktsegment`. Within each `mktsegment`, the code selects the top 20 parts based on their `part_count` using `TOP_K(20, by=part_count.DESC())`. The result is stored in `top_parts_per_segment`, which contains the `mktsegment`, `part_name`, and `part_count` for the top 20 parts in each market segment.","lines_1998_info = lines.WHERE(YEAR(order.order_date) == 1998).CALCULATE(
+    mktsegment = order.customer.mktsegment,
+    part_name = part.name
+)
+
+part_totals_per_segment = lines_1998_info.PARTITION(
+    name=""part_segment_groups"", by=(mktsegment, part_name)
+).CALCULATE(
+    mktsegment = mktsegment,
+    part_name = part_name,
+    part_count = COUNT(lines)
+)
+
+top_parts_per_segment = part_totals_per_segment.PARTITION(name=""segment_groups"", by=mktsegment).CALCULATE(
+    mktsegment = mktsegment,
+    top_parts = TOP_K(20, by=part_count.DESC())
+).top_parts.CALCULATE(
+    mktsegment = mktsegment,
+    part_name = part_name,
+    part_count = part_count
+)
+result = top_parts_per_segment",False,"The generated response is incorrect. The generated code returns an empty DataFrame, while the ground truth contains the top 20 most popular products within each market segment in 1998.",3,False,
+11,Retrieves the top 3 suppliers with the highest total sales for each region,"WITH SupplierSales AS (SELECT r_name AS region_name, s_name AS supplier_name, SUM(l_extendedprice * l_quantity) AS total_sales FROM region JOIN nation ON r_regionkey = n_regionkey JOIN supplier ON n_nationkey = s_nationkey JOIN lineitem ON s_suppkey = l_suppkey JOIN orders ON l_orderkey = o_orderkey GROUP BY r_name, s_name) SELECT region_name, supplier_name, total_sales FROM (SELECT region_name, supplier_name, total_sales, ROW_NUMBER() OVER (PARTITION BY region_name ORDER BY total_sales DESC) AS rank FROM SupplierSales) WHERE rank <= 3;","```text
+1. Analysis of the question
+The question asks for the top 3 suppliers with the highest total sales for each region. This requires calculating the total sales for each supplier within each region and then selecting the top 3 suppliers based on these sales. We need to use PARTITION to group suppliers by region and then use TOP_K to select the top 3 suppliers within each region. Total sales is defined as the sum of extended_price * (1 - discount).
+
+2. Step-by-step explanation of the solution
+First, calculate the total sales for each line item.
+Next, group the line items by supplier and region using PARTITION.
+Then, calculate the total sales for each supplier within each region.
+Finally, select the top 3 suppliers with the highest total sales for each region using TOP_K.
+
+3. The PyDough code in a Python code block
+```python
+supplier_sales = lines.CALCULATE(
+    total_sales=extended_price * (1 - discount),
+    supplier_key=supplier_key,
+    region_key=supplier.nation.region_key
+)
+
+supplier_region_sales = supplier_sales.PARTITION(name=""supplier_regions"", by=(supplier_key, region_key)).CALCULATE(
+    supplier_key=supplier_key,
+    region_key=region_key,
+    total_sales=SUM(total_sales)
+)
+
+top_suppliers_per_region = regions.CALCULATE(region_name=name).PARTITION(name=""regions"", by=key).CALCULATE(
+    region_name=region_name,
+    top_suppliers=supplier_region_sales.WHERE(region_key == key).TOP_K(3, by=total_sales.DESC())
+)
+
+final_result = top_suppliers_per_region.CALCULATE(region_name=region_name, top_suppliers=top_suppliers)
+```
+
+4. Explanation of how the code works
+The code first calculates the total sales for each line item and extracts the supplier and region keys. Then, it partitions the line items by supplier and region, calculating the total sales for each supplier within each region. Finally, it partitions the data by region and selects the top 3 suppliers with the highest total sales for each region using TOP_K. The final result includes the region name and the top suppliers for each region.
+```","supplier_sales = lines.CALCULATE(
+    total_sales=extended_price * (1 - discount),
+    supplier_key=supplier_key,
+    region_key=supplier.nation.region_key
+)
+
+supplier_region_sales = supplier_sales.PARTITION(name=""supplier_regions"", by=(supplier_key, region_key)).CALCULATE(
+    supplier_key=supplier_key,
+    region_key=region_key,
+    total_sales=SUM(total_sales)
+)
+
+top_suppliers_per_region = regions.CALCULATE(region_name=name).PARTITION(name=""regions"", by=key).CALCULATE(
+    region_name=region_name,
+    top_suppliers=supplier_region_sales.WHERE(region_key == key).TOP_K(3, by=total_sales.DESC())
+)
+
+final_result = top_suppliers_per_region.CALCULATE(region_name=region_name, top_suppliers=top_suppliers)",False,The generated response is incorrect because it provides code and explanation but does not produce a DataFrame.,3,False,
+12,"For each European country, list the number of customers and the number of orders they placed in 1995, including customers who didn't place any orders that year.","SELECT n_name AS country_name, COUNT(DISTINCT c_custkey) AS total_customers, COUNT(DISTINCT CASE WHEN o_orderdate >= '1995-01-01' AND o_orderdate <= '1995-12-31' THEN o_orderkey END) AS total_orders_1995 FROM nation JOIN region ON n_regionkey = r_regionkey JOIN customer ON n_nationkey = c_nationkey LEFT JOIN orders ON c_custkey = o_custkey WHERE r_name = 'EUROPE' GROUP BY n_name;","```text
+1. Analysis of the question:
+The question asks for the number of customers and the number of orders placed in 1995 for each European country. This requires filtering nations by region to include only European countries, counting the number of customers in each nation, and counting the number of orders placed by those customers in 1995. The query must include customers who didn't place any orders in 1995.
+
+2. Step-by-step explanation of the solution:
+a. Filter the `nations` collection to include only nations in the ""EUROPE"" region.
+b. For each nation, calculate the number of customers.
+c. For each nation, calculate the number of orders placed in 1995.
+d. Return the nation name, the number of customers, and the number of orders placed in 1995.
+
+3. The PyDough code in a Python code block:
+```python
+european_nations = TPCH.nations.WHERE(region.name == ""EUROPE"")
+nation_customer_order_counts = european_nations.CALCULATE(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    num_orders_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+)
+result = nation_customer_order_counts
+```
+
+4. Explanation of how the code works:
+a. `european_nations = TPCH.nations.WHERE(region.name == ""EUROPE"")`: This line filters the `nations` collection to include only nations where the region name is ""EUROPE"".
+b. `nation_customer_order_counts = european_nations.CALCULATE(...)`: This line calculates the required fields for each European nation.
+    - `nation_name=name`: This selects the name of the nation.
+    - `num_customers=COUNT(customers)`: This counts the total number of customers in each nation.
+    - `num_orders_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))`: This counts the number of orders placed by customers in each nation in 1995.
+c. `result = nation_customer_order_counts`: This line assigns the result to the variable `result`.
+```","european_nations = TPCH.nations.WHERE(region.name == ""EUROPE"")
+nation_customer_order_counts = european_nations.CALCULATE(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    num_orders_1995=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+)
+result = nation_customer_order_counts",False,"The generated response is incorrect. The generated code produced an empty DataFrame, while the ground truth contains the correct counts for each European country.",1,True,
+13,Retrieve the customer name of the customers who placed more orders in 1995 than in 1994,"SELECT c_name AS customer_name FROM customer JOIN orders ON c_custkey = o_custkey WHERE (strftime('%Y', o_orderdate) = '1994' OR strftime('%Y', o_orderdate) = '1995') GROUP BY c_custkey, c_name HAVING SUM(CASE WHEN strftime('%Y', o_orderdate) = '1995' THEN 1 ELSE 0 END) > SUM(CASE WHEN strftime('%Y', o_orderdate) = '1994' THEN 1 ELSE 0 END);","```text
+1. Analysis of the question
+The question asks to retrieve the customer names of those customers who placed more orders in 1995 than in 1994. This requires filtering customers based on their order counts in 1995 and 1994 and comparing these counts.
+
+2. Step-by-step explanation of the solution
+First, calculate the number of orders placed by each customer in 1995 and 1994. Then, filter the customers based on the condition that the number of orders in 1995 is greater than the number of orders in 1994. Finally, retrieve the names of the filtered customers.
+
+3. The PyDough code in a Python code block
+```python
+customer_orders = customers.CALCULATE(
+    customer_name=name,
+    orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)),
+    orders_1994=COUNT(orders.WHERE(YEAR(order_date) == 1994))
+).WHERE(orders_1995 > orders_1994).CALCULATE(customer_name=customer_name)
+```
+
+4. Explanation of how the code works
+The code first calculates the number of orders placed by each customer in 1995 and 1994 using the `CALCULATE` function and the `COUNT` aggregation function with a `WHERE` clause to filter orders by year. Then, it filters the customers based on the condition that the number of orders in 1995 is greater than the number of orders in 1994 using the `WHERE` clause. Finally, it selects the customer name using the `CALCULATE` function.","customer_orders = customers.CALCULATE(
+    customer_name=name,
+    orders_1995=COUNT(orders.WHERE(YEAR(order_date) == 1995)),
+    orders_1994=COUNT(orders.WHERE(YEAR(order_date) == 1994))
+).WHERE(orders_1995 > orders_1994).CALCULATE(customer_name=customer_name)",False,"The generated response is incorrect. The generated code produced an empty DataFrame, while the ground truth contains the correct counts for each European country.",0,True,
+14,Which is the average order value per Nation? List the nation name and average order value. The order value is defined as extended_price * quantity,"SELECT n_name AS nation_name, AVG(l_extendedprice * l_quantity) AS average_order_value FROM nation JOIN customer ON n_nationkey = c_nationkey JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey GROUP BY n_name;","```text
+1. Analysis of the question
+The question asks for the average order value per nation. The order value is defined as extended_price * quantity. We need to calculate this value for each order and then calculate the average of these values for each nation.
+
+2. Step-by-step explanation of the solution
+First, we need to calculate the order value for each line item. Then, we need to associate each line item with its nation. After that, we can group the line items by nation and calculate the average order value for each nation.
+
+3. The PyDough code in a Python code block
+```python
+nation_order_values = nations.customers.orders.lines.CALCULATE(
+    nation_name=order.customer.nation.name,
+    order_value=extended_price * quantity
+)
+
+average_order_value_per_nation = nation_order_values.PARTITION(name=""nation_groups"", by=nation_name).CALCULATE(
+    nation_name=nation_name,
+    average_order_value=AVG(nation_groups.order_value)
+)
+```
+
+4. Explanation of how the code works
+The first CALCULATE calculates the order value for each line item and associates it with the nation name.
+The PARTITION groups the line items by nation name.
+The second CALCULATE calculates the average order value for each nation.
+```","nation_order_values = nations.customers.orders.lines.CALCULATE(
+    nation_name=order.customer.nation.name,
+    order_value=extended_price * quantity
+)
+
+average_order_value_per_nation = nation_order_values.PARTITION(name=""nation_groups"", by=nation_name).CALCULATE(
+    nation_name=nation_name,
+    average_order_value=AVG(nation_groups.order_value)
+)",False,The generated response is incorrect as it does not produce a DataFrame.,3,False,
