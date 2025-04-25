@@ -3,7 +3,7 @@ import sys
 from collections import defaultdict
 
 """
-Usage: python mdgeneration.py <input.json> <output.md>
+Usage: python mdgen.py <input.json> <output.md>
 """
 
 def json_to_markdown(metadata: dict) -> str:
