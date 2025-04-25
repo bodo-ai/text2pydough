@@ -68,7 +68,7 @@ def prepare_db_markdown_map(df, base_path="test_data"):
         if db_name not in db_markdown_map:
             with open(json_file, "r") as f:
                 data = json.load(f)
-                db_markdown_map[db_name] = json_to_markdown(data)
+                db_markdown_map[db_name] = md
 
     return db_markdown_map
 
