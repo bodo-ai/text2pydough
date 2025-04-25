@@ -2,6 +2,10 @@ import json
 import sys
 from collections import defaultdict
 
+"""
+Usage: python mdgen.py <input.json> <output.md>
+"""
+
 def json_to_markdown(metadata: dict) -> str:
     inferred_reverse_relationships = defaultdict(list)
     fields_per_collection = {}
@@ -126,7 +130,7 @@ def json_to_markdown(metadata: dict) -> str:
 # CLI usage
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python mdgeneration.py <input.json> <output.md>")
+        print("Usage: python mdgen.py <input.json> <output.md>")
         sys.exit(1)
 
     input_file, output_file = sys.argv[1], sys.argv[2]
