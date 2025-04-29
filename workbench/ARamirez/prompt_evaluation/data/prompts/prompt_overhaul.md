@@ -23,13 +23,7 @@ Here are some examples of PyDough code snippets along with their corresponding n
 4. **Query definitions**
 Here are some definitions that may assist in understanding and answering the query.
 
-[
-    "Total Order Value is defined as the sum of extended_price * (1 - discount).",
-    "Aggregate Revenue is defined as the sum of LineItem_ExtendedPrice minus the sum of LineItem_Discount.",
-    "Average Revenue per Ship Date is defined as the sum of revenue divided by the count of distinct ship dates.",
-    "Partial Revenue is defined as quantity * extended_price * (1 - discount).",
-    "Profit is defined as revenue minus cost."
-]
+{definitions}
 </context>
 
 <instructions>
