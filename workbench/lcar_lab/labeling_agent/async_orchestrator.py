@@ -1,3 +1,4 @@
+import mlflow
 import pandas as pd
 import os
 import asyncio
@@ -11,6 +12,9 @@ from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from tqdm import tqdm
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
+
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
+experiment = mlflow.set_experiment("labeling_agent")
 
 # Set up executors at module level
 THREAD_EXECUTOR = ThreadPoolExecutor(max_workers=os.cpu_count() * 5)
@@ -279,48 +283,54 @@ async def main():
                       help='Path to the questions CSV file')
     args = parser.parse_args()
     
+    
     # Update the global constant
     MAX_CONCURRENT_QUESTIONS = args.concurrent_questions
-    
+        
     # Set up output directory
     if args.output_dir:
         output_dir = args.output_dir
     else:
         output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
-    
+        
     # Create output filename with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_csv_path = os.path.join(output_dir, f"pydough_results_{timestamp}.csv")
-    
+        
     # Verify all required files exist
     required_files = {
-        'Database Directory': args.db_base_path,
-        'Metadata Base Directory': args.metadata_base_path,
-        'Cheatsheet': args.cheatsheet_path,
-        'Questions CSV': args.questions_csv_path
+            'Database Directory': args.db_base_path,
+            'Metadata Base Directory': args.metadata_base_path,
+            'Cheatsheet': args.cheatsheet_path,
+            'Questions CSV': args.questions_csv_path
     }
-    
+        
     for name, path in required_files.items():
         if not os.path.exists(path):
             print(f"Error: {name} file not found at {path}")
             print(f"Please ensure the {name.lower()} file exists at the specified path.")
             return
-    
-    # Create output directory if it doesn't exist
+        
+        # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Process questions
+        
+        # Process questions
     await process_questions(
-        questions_csv_path=args.questions_csv_path,
-        output_csv_path=output_csv_path,
-        db_base_path=args.db_base_path,
-        metadata_base_path=args.metadata_base_path,
-        cheatsheet_path=args.cheatsheet_path,
-        num_questions=args.num_questions,
-        start_row=args.start_row
-    )
-    
+            questions_csv_path=args.questions_csv_path,
+            output_csv_path=output_csv_path,
+            db_base_path=args.db_base_path,
+            metadata_base_path=args.metadata_base_path,
+            cheatsheet_path=args.cheatsheet_path,
+            num_questions=args.num_questions,
+            start_row=args.start_row
+        )
+        
     print(f"\nProcessing complete! Results saved to: {output_csv_path}")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    
+    with mlflow.start_run(description="Testing langchain autolog", run_name="Langchain test", experiment_id=experiment.experiment_id):
+        mlflow.langchain.autolog(
+            log_models=True
+        )
+        asyncio.run(main()) 
