@@ -213,12 +213,15 @@ async def process_questions(
     async def safe_process(row, idx):
         async with sem:
             db_name = row['db_name']
-            dataset_name= row['dataset_name']
-            db_path = os.path.join(db_base_path, dataset_name, f"{db_name}.sqlite")
-            metadata_path = os.path.join(metadata_base_path, dataset_name , f"{db_name}_graph.json")
+            dataset_name = row['dataset_name']
+
+            db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
+            metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+            metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
+
             if not os.path.exists(metadata_path):
-                md= generate_metadata(db_path,db_name)
-                # Create the metadata JSON file from database
+                os.makedirs(metadata_dir, exist_ok=True)  # Correct call to makedirs
+                md = generate_metadata(db_path, db_name)
                 with open(metadata_path, 'w') as f:
                     json.dump(md, f, indent=2)
 
