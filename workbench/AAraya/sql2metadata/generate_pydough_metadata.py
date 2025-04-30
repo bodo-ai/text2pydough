@@ -111,10 +111,10 @@ def build_properties(columns: List[Dict[str, Any]], fk_by_col: Dict[str, Any]) -
     """Return the property dict for a table, minus joins (added later)."""
     props = {}
     for col in columns:
-        name = col["name"].lower()
+        name=col["name"].lower().replace("#", "n_")
         props[name] = {
             "type": "table_column",
-            "column_name": name,
+            "column_name": col["name"],
             "data_type": resolve_sqlite_type(col["type"]),
         }
     return props
@@ -200,7 +200,7 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             parent = fk["referred_table"]
             child = tbl
             col_map = {
-                fk_col.lower(): ref_col.lower()
+                fk_col.lower().replace("#", "n_"): ref_col.lower().replace("#", "n_")
                 for fk_col, ref_col in zip(fk["constrained_columns"], fk["referred_columns"])
             }
             

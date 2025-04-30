@@ -83,7 +83,7 @@ def replace_with_upper(text):
 def format_prompt(script_content, prompt, data, question, database_content, definitions, include_comments):
     ids = data[question]["context_id"]
     prompt_string = ' '.join(ids)
-    comment_note = "Include code comments" if include_comments else "IMPORTANT: Do not include comments in the code."
+    comment_note = "" if include_comments else "IMPORTANT: Do not include comments in the code."
     return prompt.format(
         script_content=script_content,
         database_content=database_content,
@@ -101,6 +101,23 @@ def extract_python_code(text):
     # Combine all the matched code snippets into a single string, separated by newlines
     combined_code = "\n".join([match.strip() for match in matches])
     return combined_code
+
+def remove_comments_from_code(code):
+    """Remove Python-style and inline # comments from code."""
+    if not code:
+        return code
+    lines = code.splitlines()
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if "#" in line:
+            quote_count = line.count('"') + line.count("'")
+            if quote_count % 2 == 0:
+                line = line.split("#")[0].rstrip()
+        cleaned.append(line)
+    return "\n".join(cleaned)
 
 class Result:
     def __init__(
@@ -231,7 +248,7 @@ class LLMClient:
                         database_content=self.database,
                         similar_queries="",
                         definitions=self.definitions,
-                        recomendation="Include code comments" if self.include_comments else "IMPORTANT: Do not include comments in the code."
+                        recomendation="" if self.include_comments else "IMPORTANT: Do not include comments in the code."
                     )
             else:
                 # If not in dict, use the standard prompt.
@@ -240,7 +257,7 @@ class LLMClient:
                     database_content=self.database,
                     similar_queries="",
                     definitions=self.definitions,
-                    recomendation="Include comments" if self.include_comments else "IMPORTANT: Do not include comments in the code."
+                    recomendation="" if self.include_comments else "IMPORTANT: Do not include comments in the code."
                 )
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)
@@ -258,6 +275,8 @@ class LLMClient:
             # Extract and process the response
             response = completion.choices[0].message.content
             extracted_code = extract_python_code(response)
+            if not self.include_comments:
+                extracted_code = remove_comments_from_code(extracted_code)
             extracted_code = replace_with_upper(extracted_code)
             # Fill the result object
             result.code = extracted_code
