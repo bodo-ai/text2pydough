@@ -1,5 +1,5 @@
 ## **PYDOUGH CHEAT SHEET**  
-The examples shown are not from the current database schema; just treat them as examples nad make sure to use the right schema.
+The examples shown are not from the current database schema; just treat them as examples and make sure to use the right schema.
 
 ### **GENERAL RULES**: 
 
