@@ -4,9 +4,9 @@
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 echo $BASE_DIR
 # Set up all required paths
-DB_PATH="${BASE_DIR}/mount-folder/datasets"
-METADATA_PATH="${BASE_DIR}/mount-folder/datasets"
-CHEATSHEET_PATH="${BASE_DIR}/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
+DB_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/mount-folder/datasets"
+METADATA_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/mount-folder/datasets"
+CHEATSHEET_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
 QUESTIONS_CSV_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/golden_dataset.csv"
 OUTPUT_DIR="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/results"
 
