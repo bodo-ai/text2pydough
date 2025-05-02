@@ -8,6 +8,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
+import bodo
+import hashlib
 
 pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db",  check_same_thread=False)
@@ -152,6 +154,32 @@ def compare_df(
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
+def hash_result(result):
+    """Generates a hash for the result."""
+    if isinstance(result, pd.DataFrame):
+        # Replace NaNs with a consistent placeholder
+        result = result.fillna("__nan__")
+        # Sort columns alphabetically and rows by all column values
+        result = result.sort_index(axis=1).sort_values(by=sorted(result.columns)).reset_index(drop=True)
+        result = result.to_csv(index=False)
+    elif isinstance(result, str):
+        result = result.encode('utf-8')
+    # TODO: Test hashlib.sha256
+    return hashlib.md5(result).hexdigest()
+
+@bodo.wrap_python(bodo.string_type)
+def execute_code_and_extract_resulthash_bodo(extracted_code):
+    """Executes the Python code and returns the result or raises an exception."""
+    try:
+        local_env = {"pydough": pydough, "datetime": datetime}
+        transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
+        exec(transformed_source, {}, local_env)
+        last_variable = list(local_env.values())[-1]
+        #print(last_variable)
+        result_df = convert_to_df(last_variable)
+        return result_df, None  # Return result and no exception
+    except Exception as e:
+        return None, str(e)  # Return None as result and exception message
 def execute_code_and_extract_result(extracted_code, local_env):
     """Executes the Python code and returns the result or raises an exception."""
     try:

@@ -2,20 +2,18 @@ import argparse
 import ast
 import bodo
 import json
-import multiprocessing
 import os
 import re
 import pandas as pd
 import aisuite as ai
 import time
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-from test_data.eval import compare_df, compare_output, execute_code_and_extract_result
-from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
+from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, execute_code_and_extract_resulthash_bodo
+from utils import download_database
 from claude import ClaudeModel, DeepseekModel
 from collections import defaultdict
 import pydough
@@ -182,6 +180,30 @@ def get_azure_response(client, prompt, data, question, database_content, script_
         #print(f"Azure AI error: {e}")
         return None
 
+def get_response(client, updated_question, formatted_prompt):
+    """Generates a response using aisuite."""
+    try:
+        response = client.ask(updated_question, formatted_prompt)
+        return response
+    except Exception as e:
+        #print(f"AI Suite error: {e}")
+        return None
+
+def get_other_provider_response(client, prompt, data, question, database_content,script_content):
+    """Generates a response using aisuite."""
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+   
+    try:
+        start_time = time.time()
+        result, response = get_response(client, updated_question,formatted_prompt)
+        end_time = time.time()
+        response_time = end_time - start_time
+        return result, response, response_time
+    except Exception as e:
+        #print(f"AI Suite error: {e}")
+        #return None
+        return "N/A", -1
+
 def ensembling_process(client, updated_question, formatted_prompt, iterations):
     """
     Performs an ensembling process to generate multiple responses from an AI client.
@@ -223,27 +245,12 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
             if most_common_index is not None:
                 return dfs_and_responses[most_common_index][1]
             else:
-                #print("No common result found, returning the first response as fallback.")
+            #    print("No common result found, returning the first response as fallback.")
                 return dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
         #print(f"AI Suite error: {e}")
         return None
-
-def get_other_provider_response(client, prompt, data, question, database_content,script_content, num_iterations):
-    """Generates a response using aisuite."""
-    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-   
-    try:
-        start_time = time.time()
-        response = ensembling_process(client, updated_question,formatted_prompt, num_iterations)
-        end_time = time.time()
-        execution_time = end_time - start_time
-        return response, execution_time
-    except Exception as e:
-        #print(f"AI Suite error: {e}")
-        #return None
-        return "N/A", -1
 
 def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations):
     """Generates a response using aisuite."""
@@ -256,7 +263,7 @@ def get_claude_response(client, prompt, data, question, database_content, script
 
 @bodo.wrap_python(bodo.string_type)
 def process_question_wrapper(provider, model_id, formatted_prompt, q, temperature, database_content, script_content, num_iterations):
-    """ Wrapper function to handle multiprocessing calls. """
+    """ Wrapper function to handle API calls. """
     with open("data/queries_context.json", "r") as json_data:
         data = json.load(json_data)
 
@@ -271,21 +278,38 @@ def process_question_wrapper(provider, model_id, formatted_prompt, q, temperatur
         return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)[0]
     else:
         client = OtherAIProvider(provider, model_id, temperature)
-        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)[0]
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
 
-
+ 
 @bodo.jit(cache=True)
-def run(questions_file, provider, model_id, formatted_prompt, temperature, database_content, script_content, num_iterations, output_file):
-    #print("Bodo total number of ranks: ", bodo.get_size())
-    questions_df = pd.read_csv(questions_file)
-    #questions_df = pd.read_parquet(questions_file)
-    questions_df["response"] = questions_df.apply(
-            lambda row: process_question_wrapper(
-                provider, model_id, formatted_prompt, row["question"], temperature, database_content, script_content, num_iterations), axis=1
-        )
-    questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
-    questions_df.to_csv(output_file, index=False)#, encoding="utf-8")
-    #return questions_df
+def run(question, provider, model_id, formatted_prompt, temperature, database_content, script_content, num_iterations, output_file):
+    """ Main function to process questions and get responses.
+    Overall process:
+    1. Run the question n times in parallel.
+    2. Get response from the AI provider.
+    3. Extract Python code from the response.
+    4. Execute the code and get the dataframe result hash.
+    4. Find the most common hash result.
+    6. Get the corresponding response.
+    """
+
+    df_response = pd.DataFrame(columns=["hash", "response", 'extracted_code', "call_time", "exec_time"], index=range(num_iterations))
+    t0 = time.time()
+    for i in bodo.prange(num_iterations):
+        # 1. Get response
+        df_response[["response", "call_time"]].iloc[i] = process_question_wrapper(
+                provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)
+        # 2. Extract Python code, execute it, and get the dataframe result hash
+        df_response['extracted_code'].iloc[i] = extract_python_code(df_response['response'].iloc[i])
+        df_response["hash"].iloc[i] = execute_code_and_extract_resulthash_bodo(df_response.extracted_code)
+    # 3. Find most common hash result
+    most_common_ans = df_response["hash"].value_counts()[0]
+    # 4. Get the corresponding response
+    response = df_response[df_response["hash"] == most_common_ans]["response"].values[0]
+    t1 = time.time()
+    print("Most common response: ", response, "Time taken: ", t1-t0)
+    df_response.to_csv(output_file, index=False)
+    return df_response
 
 
 def main():

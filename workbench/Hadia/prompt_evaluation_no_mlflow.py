@@ -220,7 +220,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
 
             if most_common_index is not None:
                 return dfs_and_responses[most_common_index][1]
-            #else:
+            else:
             #    print("No common result found, returning the first response as fallback.")
                 return dfs_and_responses[0][1] if dfs_and_responses else None
 
