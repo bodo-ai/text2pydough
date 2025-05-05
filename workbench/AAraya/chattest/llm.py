@@ -230,7 +230,7 @@ class LLMClient:
                         self.script,
                         self.prompt,
                         demo_dict,
-                        best_match,  # Most similar key found
+                        best_match,  
                         self.database,
                         self.definitions,
                         self.include_comments
@@ -259,13 +259,19 @@ class LLMClient:
                 {"role": "system", "content": formatted_prompt}, 
                 {"role": "user", "content": f"{question}. Let´s solve the query step by step"}
             ]
-            raw_response, _ = self.client.start_chat(
-                question=f"{question}. Let´s solve the query step by step",
-                prompt=formatted_prompt,
-                temperature=self.temperature,
-                top_p=0,
-                top_k=0
-            )
+            if self.client.chat_session is None:
+                raw_response, _ = self.client.start_chat(
+                    question=f"{question}. Let’s solve the query step by step",
+                    prompt=formatted_prompt,
+                    temperature=self.temperature,
+                    top_p=0,
+                    top_k=0
+                )
+            else:
+                raw_response = self.client.chat(
+                    question=f"{question}. Let’s solve the query step by step"
+                )
+            print("RAW RESPONSE TEXT:\n", response_text)
             response = "".join(
                 part.text for part in raw_response.candidates[0].content.parts if part.text
             )
@@ -323,4 +329,7 @@ class LLMClient:
             except Exception as e:
                 return Result(original_question=result.original_question, exception=e)
         return result
+    
+    def reset_chat(self):
+        self.client.chat_session = None
 # %%
