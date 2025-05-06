@@ -184,7 +184,6 @@ def get_azure_response(client, prompt, data, question, database_content, script_
 def get_response(client, updated_question, formatted_prompt):
     """Generates a response using aisuite."""
     try:
-        print("Ask: ", update_question, "and formatted_prompt: ", formatted_prompt)
         response = client.ask(updated_question, formatted_prompt)
         return response
     except Exception as e:
@@ -196,12 +195,12 @@ def get_other_provider_response(client, prompt, data, question, database_content
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
-        print("Get response")
+        #print("Get response")
         start_time = time.time()
-        result, response = get_response(client, updated_question,formatted_prompt)
+        response = get_response(client, updated_question,formatted_prompt)
         end_time = time.time()
         response_time = end_time - start_time
-        return result, response, response_time
+        return response, response_time
     except Exception as e:
         #print(f"AI Suite error: {e}")
         #return None
@@ -264,7 +263,7 @@ def get_claude_response(client, prompt, data, question, database_content, script
     execution_time = end_time - start_time
     return response, execution_time
 
-output_type = bodo.typeof(("hello", 1))
+output_type = bodo.typeof(("hello", 1.2))
 
 @bodo.wrap_python(output_type)
 def process_question_wrapper(provider, model_id, formatted_prompt, q, temperature, database_content, script_content, num_iterations):
@@ -303,25 +302,24 @@ def run(question, provider, model_id, formatted_prompt, temperature, database_co
     for i in bodo.prange(num_iterations):
         # 1. Get response
         # columns: response #and call_time
-        print("process_question_wrapper")
+        #print("process_question_wrapper")
         df_response.iloc[i, 1] = process_question_wrapper(
                 provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
         # 2. Extract Python code, execute it, and get the dataframe result hash
         # column: extracted_code
-        print("extract_python_code")
+        #print("extract_python_code")
         df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
+        #print("execute_code_and_extract_result_hash_bodo")
         # column: hash
-        print("execute_code_and_extract_result_hash_bodo")
         df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo(df_response.extracted_code.iloc[i])
-        print("DONE.")
     # 3. Find most common hash result
-    print("Find most common hash")
+    #print("Find most common hash")
     most_common_ans = df_response["hash"].value_counts().idxmax()
     # 4. Get the corresponding response
-    print("Find corresponding response")
+    #print("Find corresponding response")
     response = df_response[df_response["hash"] == most_common_ans]["response"].iloc[0]
     t1 = time.time()
-    print("Most common response: ", response, "Time taken: ", t1-t0)
+    #print("Most common response: ", response, "Time taken: ", t1-t0)
     df_response.to_csv(output_file, index=False)
     return df_response
 
@@ -362,10 +360,14 @@ def main():
 
     # Read Questions
     print("File: ", args.questions, "num_threads: ", args.num_threads)
+    with open(args.questions, "r", encoding="utf-8") as f:
+        question = f.read()
+
     t0 = time.time()
-    questions_df = run(args.questions, args.provider.lower(), args.model_id, prompt, args.temperature, database_content, script_content, args.num_iterations, output_file)
+    questions_df = run(question, args.provider.lower(), args.model_id, prompt, args.temperature, database_content, script_content, args.num_iterations, output_file)
     t1 = time.time()
     print("Bodo Total time: ", t1-t0)
+    print("output_file: ", output_file)
 
 
     # FIXME: Why Bodo complained here? It's out of JIT function

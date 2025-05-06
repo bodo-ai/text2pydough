@@ -1,14 +1,10 @@
 export GOOGLE_PROJECT_ID="solid-drive-448717-p8"
 export GOOGLE_REGION="us-central1"
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/solid-drive-448717-p8-757817f0ec29.json"
-numranks=2
+numranks=4
 export BODO_NUM_WORKERS="$numranks"
 
-
-for i in {1..1}
-do
-    echo "Running iteration $i..."
-    python "prompt_evaluation_bodo.py" \
+python "prompt_evaluation_bodo.py" \
         --pydough_file "data/cheatsheet.md" \
         --database_structure "data/tpch_graph.md" \
 	--questions "./question.txt" \
@@ -18,7 +14,6 @@ do
         --temperature 0.0 \
         --num_threads $numranks \
         --num_iterations $numranks #>> "bodo_${numranks}_ranks.txt"
-done
 
         #--questions "/bodofs/Users/hadia/LLM/questions_only.csv" \
         #--questions "115_questions_only.csv" \
