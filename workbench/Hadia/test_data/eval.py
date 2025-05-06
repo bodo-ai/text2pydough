@@ -152,7 +152,7 @@ def compare_df(
         return is_equal
     
 def convert_to_df(last_variable):
-    return pydough.to_df(last_variable)
+    return pydough.to_df(last_variable)#, display_sql=True)
 
 def hash_result(result):
     """Generates a hash for the result."""
@@ -168,21 +168,16 @@ def hash_result(result):
 @bodo.wrap_python(bodo.string_type)
 def execute_code_and_extract_result_hash_bodo(extracted_code):
     """Executes the Python code and returns the result or raises an exception."""
-    #try:
-    local_env = {"pydough": pydough, "datetime": datetime}
-    print("extracted_code: ", extracted_code)
-    transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
-    exec(transformed_source, {}, local_env)
-    last_variable = list(local_env.values())[-1]
-    print("last_variable: ", last_variable)
-    result_df = convert_to_df(last_variable)
-    print("result_df: ", result_df)
-    hash_val = hash_result(result_df)
-    print("hash_val: ", hash_val)
-    return hash_val # Return result and no exception
-    #except Exception as e:
-    #    print(str(e))
-    #    return str(e)  # Return None as result and exception message
+    try:
+        local_env = {"pydough": pydough, "datetime": datetime}
+        transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
+        exec(transformed_source, {}, local_env)
+        last_variable = list(local_env.values())[-1]
+        result_df = convert_to_df(last_variable)
+        hash_val = hash_result(result_df)
+        return hash_val # Return result and no exception
+    except Exception as e:
+        return str(e)  # Return None as result and exception message
 def execute_code_and_extract_result(extracted_code, local_env):
     """Executes the Python code and returns the result or raises an exception."""
     try:
