@@ -1,4 +1,5 @@
 import argparse
+from numba.types import Tuple
 import ast
 import bodo
 import json
@@ -12,7 +13,7 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, execute_code_and_extract_resulthash_bodo
+from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, execute_code_and_extract_result_hash_bodo
 from utils import download_database
 from claude import ClaudeModel, DeepseekModel
 from collections import defaultdict
@@ -183,6 +184,7 @@ def get_azure_response(client, prompt, data, question, database_content, script_
 def get_response(client, updated_question, formatted_prompt):
     """Generates a response using aisuite."""
     try:
+        print("Ask: ", update_question, "and formatted_prompt: ", formatted_prompt)
         response = client.ask(updated_question, formatted_prompt)
         return response
     except Exception as e:
@@ -194,6 +196,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
+        print("Get response")
         start_time = time.time()
         result, response = get_response(client, updated_question,formatted_prompt)
         end_time = time.time()
@@ -261,7 +264,9 @@ def get_claude_response(client, prompt, data, question, database_content, script
     execution_time = end_time - start_time
     return response, execution_time
 
-@bodo.wrap_python(bodo.string_type)
+output_type = bodo.typeof(("hello", 1))
+
+@bodo.wrap_python(output_type)
 def process_question_wrapper(provider, model_id, formatted_prompt, q, temperature, database_content, script_content, num_iterations):
     """ Wrapper function to handle API calls. """
     with open("data/queries_context.json", "r") as json_data:
@@ -297,15 +302,24 @@ def run(question, provider, model_id, formatted_prompt, temperature, database_co
     t0 = time.time()
     for i in bodo.prange(num_iterations):
         # 1. Get response
-        df_response[["response", "call_time"]].iloc[i] = process_question_wrapper(
-                provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)
+        # columns: response #and call_time
+        print("process_question_wrapper")
+        df_response.iloc[i, 1] = process_question_wrapper(
+                provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
         # 2. Extract Python code, execute it, and get the dataframe result hash
-        df_response['extracted_code'].iloc[i] = extract_python_code(df_response['response'].iloc[i])
-        df_response["hash"].iloc[i] = execute_code_and_extract_resulthash_bodo(df_response.extracted_code)
+        # column: extracted_code
+        print("extract_python_code")
+        df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
+        # column: hash
+        print("execute_code_and_extract_result_hash_bodo")
+        df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo(df_response.extracted_code.iloc[i])
+        print("DONE.")
     # 3. Find most common hash result
-    most_common_ans = df_response["hash"].value_counts()[0]
+    print("Find most common hash")
+    most_common_ans = df_response["hash"].value_counts().idxmax()
     # 4. Get the corresponding response
-    response = df_response[df_response["hash"] == most_common_ans]["response"].values[0]
+    print("Find corresponding response")
+    response = df_response[df_response["hash"] == most_common_ans]["response"].iloc[0]
     t1 = time.time()
     print("Most common response: ", response, "Time taken: ", t1-t0)
     df_response.to_csv(output_file, index=False)

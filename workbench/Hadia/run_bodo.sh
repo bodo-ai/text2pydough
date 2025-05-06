@@ -1,4 +1,7 @@
-numranks=10
+export GOOGLE_PROJECT_ID="solid-drive-448717-p8"
+export GOOGLE_REGION="us-central1"
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/solid-drive-448717-p8-757817f0ec29.json"
+numranks=2
 export BODO_NUM_WORKERS="$numranks"
 
 
@@ -8,15 +11,16 @@ do
     python "prompt_evaluation_bodo.py" \
         --pydough_file "data/cheatsheet.md" \
         --database_structure "data/tpch_graph.md" \
+	--questions "./question.txt" \
         --prompt_file "data/prompt.md" \
-        --questions "/bodofs/Users/hadia/LLM/questions_only.csv" \
         --provider google \
         --model_id gemini-2.0-flash-lite \
         --temperature 0.0 \
         --num_threads $numranks \
-        --num_iterations 1 >> "bodo_${numranks}_ranks.txt"
+        --num_iterations $numranks #>> "bodo_${numranks}_ranks.txt"
 done
 
+        #--questions "/bodofs/Users/hadia/LLM/questions_only.csv" \
         #--questions "115_questions_only.csv" \
         #--questions "/bodofs/Users/hadia/LLM/questions_only.csv" \
         #--questions "/bodofs/Users/hadia/LLM/questions_all_bodo_write.pq" \

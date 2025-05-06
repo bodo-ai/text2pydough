@@ -162,24 +162,27 @@ def hash_result(result):
         # Sort columns alphabetically and rows by all column values
         result = result.sort_index(axis=1).sort_values(by=sorted(result.columns)).reset_index(drop=True)
         result = result.to_csv(index=False)
-    elif isinstance(result, str):
-        result = result.encode('utf-8')
     # TODO: Test hashlib.sha256
-    return hashlib.md5(result).hexdigest()
+    return hashlib.md5(result.encode()).hexdigest()
 
 @bodo.wrap_python(bodo.string_type)
-def execute_code_and_extract_resulthash_bodo(extracted_code):
+def execute_code_and_extract_result_hash_bodo(extracted_code):
     """Executes the Python code and returns the result or raises an exception."""
-    try:
-        local_env = {"pydough": pydough, "datetime": datetime}
-        transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
-        exec(transformed_source, {}, local_env)
-        last_variable = list(local_env.values())[-1]
-        #print(last_variable)
-        result_df = convert_to_df(last_variable)
-        return result_df, None  # Return result and no exception
-    except Exception as e:
-        return None, str(e)  # Return None as result and exception message
+    #try:
+    local_env = {"pydough": pydough, "datetime": datetime}
+    print("extracted_code: ", extracted_code)
+    transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
+    exec(transformed_source, {}, local_env)
+    last_variable = list(local_env.values())[-1]
+    print("last_variable: ", last_variable)
+    result_df = convert_to_df(last_variable)
+    print("result_df: ", result_df)
+    hash_val = hash_result(result_df)
+    print("hash_val: ", hash_val)
+    return hash_val # Return result and no exception
+    #except Exception as e:
+    #    print(str(e))
+    #    return str(e)  # Return None as result and exception message
 def execute_code_and_extract_result(extracted_code, local_env):
     """Executes the Python code and returns the result or raises an exception."""
     try:
