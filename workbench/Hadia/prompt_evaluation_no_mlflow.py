@@ -13,7 +13,7 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-from test_data.eval import compare_df, compare_output, execute_code_and_extract_result
+from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, hash_result
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from claude import ClaudeModel, DeepseekModel
 from collections import defaultdict
@@ -205,15 +205,16 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
         else: 
             for i in range(len(dfs_and_responses)):
                 for j in range(i + 1, len(dfs_and_responses)):
-                    df_gold = dfs_and_responses[i][0]
-                    df_gen = dfs_and_responses[j][0]
+                    df_gold = hash_result(dfs_and_responses[i][0])
+                    df_gen = hash_result(dfs_and_responses[j][0])
 
-                    if compare_df(
-                        df_gold=df_gold,
-                        df_gen=df_gen,
-                        query_category="",
-                        question=""
-                    ):
+                    # if compare_df(
+                    #     df_gold=df_gold,
+                    #     df_gen=df_gen,
+                    #     query_category="",
+                    #     question=""
+                    # ):
+                    if df_gold == df_gen:
                         counts[i].append(j)
 
             most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
