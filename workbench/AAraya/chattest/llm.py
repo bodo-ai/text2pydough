@@ -94,13 +94,27 @@ def format_prompt(script_content, prompt, data, question, database_content, defi
     )
 
 def extract_python_code(text):
-    """Extract all Python code between triple backticks."""
+    """Extracts ONLY the final Python code block or last relevant code lines."""
     if not isinstance(text, str):
         return ""
 
+    # Grab all code snippets inside triple backticks
     matches = re.findall(r"```(?:python)?\s*(.*?)```", text, re.DOTALL)
-    combined_code = "\n".join(match.strip() for match in matches)
-    return combined_code
+    if matches:
+        # Take ONLY the last block (final code)
+        return matches[-1].strip()
+
+    # If no triple backticks, grab last matching code-like lines
+    code_lines = []
+    for line in text.splitlines():
+        if (
+            re.match(r"^\s*(\w+\s*=)?\s*(\w+(\.\w+)*\s*\(.*\))", line) or 
+            "CALCULATE" in line or "WHERE" in line
+        ):
+            code_lines.append(line.strip())
+
+    return code_lines[-1] if code_lines else ""
+
 
 def remove_comments_from_code(code):
     """Remove Python-style and inline # comments from code."""
@@ -230,7 +244,7 @@ class LLMClient:
                         self.script,
                         self.prompt,
                         demo_dict,
-                        best_match,  # Most similar key found
+                        best_match,  
                         self.database,
                         self.definitions,
                         self.include_comments
@@ -259,13 +273,19 @@ class LLMClient:
                 {"role": "system", "content": formatted_prompt}, 
                 {"role": "user", "content": f"{question}. Let´s solve the query step by step"}
             ]
-            raw_response, _ = self.client.start_chat(
-                question=f"{question}. Let´s solve the query step by step",
-                prompt=formatted_prompt,
-                temperature=self.temperature,
-                top_p=0,
-                top_k=0
-            )
+            if self.client.chat_session is None:
+                raw_response, _ = self.client.start_chat(
+                    question=f"{question}. Let’s solve the query step by step",
+                    prompt=formatted_prompt,
+                    temperature=self.temperature,
+                    top_p=0,
+                    top_k=0
+                )
+            else:
+                raw_response = self.client.chat(
+                    question=f"{question}. Let’s solve the query step by step"
+                )
+            print("RAW RESPONSE TEXT:\n", raw_response)
             response = "".join(
                 part.text for part in raw_response.candidates[0].content.parts if part.text
             )
@@ -323,4 +343,7 @@ class LLMClient:
             except Exception as e:
                 return Result(original_question=result.original_question, exception=e)
         return result
+    
+    def reset_chat(self):
+        self.client.chat_session = None
 # %%

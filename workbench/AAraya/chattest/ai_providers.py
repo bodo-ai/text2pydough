@@ -145,29 +145,29 @@ class GeminiAIProvider(AIProvider):
         )
         return response.text, response.usage_metadata
     
-    def start_chat(self, question, prompt, chat=None, **kwargs):
-        if not chat:
-            chat = self.client.chats.create(model=self.model_id)
-        response = chat.send_message(
-            question,        
+    def start_chat(self, question, prompt, **kwargs):
+        # Create a new chat session
+        self.chat_session = self.client.chats.create(model=self.model_id)
+        
+        # Send the first message with prompt as system instruction
+        response = self.chat_session.send_message(
+            question,
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
                 **kwargs
             )
         )
-        return response, chat
-    
-    def chat(self, question, prompt=None, **kwargs):
-        if self.chat_session is None:
-            if prompt is None:
-                raise ValueError("No chat session exists. A prompt is required to start a new chat.")
-            self.start_chat(prompt, **kwargs)
+        
+        return response, self.chat_session
 
-        response = self.chat_session.send_message(question)
-        return response
-    
-    def restart_chat(self, prompt, **kwargs):
-         self.start_chat(prompt, **kwargs)
+    def chat(self, question, **kwargs):
+        if self.chat_session is None:
+            raise ValueError("Chat session not initialized. Call start_chat() before using chat().")
+
+        return self.chat_session.send_message(
+            question,
+            config=types.GenerateContentConfig(**kwargs)
+        )
 
 class OtherAIProvider(AIProvider):
     def __init__(self, provider, model_id, config=None):
