@@ -359,7 +359,7 @@ def main():
         data = json.load(json_data)
 
     # Read Questions
-    print("File: ", args.questions, "num_threads: ", args.num_threads)
+    print("File: ", args.questions, "num_threads: ", args.num_threads, "num_iterations: ", args.num_iterations)
     with open(args.questions, "r", encoding="utf-8") as f:
         question = f.read()
 

@@ -2,6 +2,7 @@ import argparse
 import ast
 import json
 import multiprocessing
+from multiprocessing import get_context
 import os
 import re
 import pandas as pd
@@ -180,7 +181,18 @@ def get_azure_response(client, prompt, data, question, database_content, script_
         #print(f"Azure AI error: {e}")
         return None
 
-def ensembling_process(client, updated_question, formatted_prompt, iterations):
+def process_question(i, client, updated_question, formatted_prompt):
+    response = client.ask(updated_question, formatted_prompt)
+    extracted_code = extract_python_code(response)
+    local_env = {"pydough": pydough, "datetime": datetime}
+    result, exception = execute_code_and_extract_result(extracted_code, local_env)
+
+    if result is not None:
+        return (result, response)
+    else:
+        return None
+
+def ensembling_process(client, updated_question, formatted_prompt, iterations, num_threads):
     """
     Performs an ensembling process to generate multiple responses from an AI client.
     Uses a direct comparison approach to identify matching results.
@@ -190,20 +202,16 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
     counts = defaultdict(list)
 
     try:
-        for i in range(iterations):
-            response = client.ask(updated_question, formatted_prompt)
-            extracted_code = extract_python_code(response)
-            local_env = {"pydough": pydough, "datetime": datetime}
-            result, exception = execute_code_and_extract_result(extracted_code, local_env)
+        with multiprocessing.Pool(processes=num_threads) as pool:
+            results = pool.starmap(process_question, [(i, client, updated_question, formatted_prompt) for i in range(iterations)])
 
-            if result is not None:
-                dfs_and_responses.append((result, response))
-            #else:
-            #    print(f"The PyDough code has the exception: {exception}")
+        # Should I filter None?
+        dfs_and_responses = [res for res in results] #if res is not None
         
         if dfs_and_responses == []:
             ans = response
         else: 
+            t_h0 = time.time()
             for i in range(len(dfs_and_responses)):
                 for j in range(i + 1, len(dfs_and_responses)):
                     df_gold = hash_result(dfs_and_responses[i][0])
@@ -227,18 +235,18 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
                 ans = dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
-        #print(f"AI Suite error: {e}")
+        print(f"AI Suite error: {e}")
         return None
     t1 = time.time()
     print("ensemble process time (call, execute, vote): ", t1-t0)
 
-def get_other_provider_response(client, prompt, data, question, database_content,script_content, num_iterations):
+def get_other_provider_response(client, prompt, data, question, database_content,script_content, num_iterations, num_threads):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
    
     try:
         start_time = time.time()
-        response = ensembling_process(client, updated_question,formatted_prompt, num_iterations)
+        response = ensembling_process(client, updated_question,formatted_prompt, num_iterations, num_threads)
         end_time = time.time()
         execution_time = end_time - start_time
         return response, execution_time
@@ -246,18 +254,18 @@ def get_other_provider_response(client, prompt, data, question, database_content
         #print(f"AI Suite error: {e}")
         return "N/A", -1
 
-def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations):
+def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations, num_threads):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
     start_time = time.time()
-    response=ensembling_process(client, updated_question,formatted_prompt, num_iterations)
+    response=ensembling_process(client, updated_question,formatted_prompt, num_iteration, num_threads)
     end_time = time.time()
     execution_time = end_time - start_time
     return response, execution_time
 
 def process_question_wrapper(args):
     """ Wrapper function to handle multiprocessing calls. """
-    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations = args
+    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations, num_threads = args
     # Adding here for consistency with timing with Bodo.
     with open("data/queries_context.json", "r") as json_data:
         data = json.load(json_data)
@@ -267,22 +275,19 @@ def process_question_wrapper(args):
         return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)[0]
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)[0]
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations, num_threads)[0]
     elif provider == "aws-deepseek":
         client = DeepSeekAIProvider(provider, model_id, temperature)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)[0]
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations, num_threads)[0]
     else:
         client = OtherAIProvider(provider, model_id, temperature)
-        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)[0]
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations, num_threads)[0]
 
 def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads,num_iterations):
     """ Processes questions in parallel using multiprocessing. """
-    with multiprocessing.Pool(processes=num_threads) as pool:  # Adjust process count as needed
-        original_responses = pool.map(
-            process_question_wrapper, 
-            [(provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations) for q in questions]
-        )
-    
+    #ctx = get_context("spawn")
+    #with ctx.Pool(processes=num_threads) as pool:  # Adjust process count as needed
+    original_responses = process_question_wrapper([provider, model_id, formatted_prompt, data, questions, temperature, database_content, script_content, num_iterations, num_threads])
     return original_responses
 
 def main():
@@ -319,10 +324,10 @@ def main():
         data = json.load(json_data)
 
     # Read Questions
-    print("File: ", args.questions, "num_threads: ", args.num_threads)
+    print("File: ", args.questions, "num_threads: ", args.num_threads, "num_iterations: ", args.num_iterations)
     t0 = time.time()
     questions_df = pd.read_csv(args.questions, encoding="utf-8")
-    combined_list = questions_df['question'].tolist()
+    combined_list = questions_df['question'].tolist()[0]
 
     responses = process_questions(
         data,
