@@ -185,6 +185,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
     Performs an ensembling process to generate multiple responses from an AI client.
     Uses a direct comparison approach to identify matching results.
     """
+    t0 = time.time()
     dfs_and_responses = []
     counts = defaultdict(list)
 
@@ -201,7 +202,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
             #    print(f"The PyDough code has the exception: {exception}")
         
         if dfs_and_responses == []:
-            return response
+            ans = response
         else: 
             for i in range(len(dfs_and_responses)):
                 for j in range(i + 1, len(dfs_and_responses)):
@@ -220,14 +221,16 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
             most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
 
             if most_common_index is not None:
-                return dfs_and_responses[most_common_index][1]
+                ans = dfs_and_responses[most_common_index][1]
             else:
             #    print("No common result found, returning the first response as fallback.")
-                return dfs_and_responses[0][1] if dfs_and_responses else None
+                ans = dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
         #print(f"AI Suite error: {e}")
         return None
+    t1 = time.time()
+    print("ensemble process time (call, execute, vote): ", t1-t0)
 
 def get_other_provider_response(client, prompt, data, question, database_content,script_content, num_iterations):
     """Generates a response using aisuite."""
