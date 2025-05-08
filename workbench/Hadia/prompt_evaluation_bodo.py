@@ -307,20 +307,15 @@ def run(question, provider, model_id, formatted_prompt, temperature, database_co
                 provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
         # 2. Extract Python code, execute it, and get the dataframe result hash
         # column: extracted_code
-        #print("extract_python_code")
         df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
-        #print("execute_code_and_extract_result_hash_bodo")
         # column: hash
         df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo(df_response.extracted_code.iloc[i])
     # 3. Find most common hash result
-    #print("Find most common hash")
     most_common_ans = df_response["hash"].value_counts().idxmax()
     # 4. Get the corresponding response
-    #print("Find corresponding response")
     response = df_response[df_response["hash"] == most_common_ans]["response"].iloc[0]
     t1 = time.time()
-    #print("Most common response: ", response, "Time taken: ", t1-t0)
-    df_response.to_csv(output_file, index=False)
+    #df_response.to_csv(output_file, index=False)
     return df_response
 
 
@@ -366,8 +361,9 @@ def main():
     t0 = time.time()
     questions_df = run(question, args.provider.lower(), args.model_id, prompt, args.temperature, database_content, script_content, args.num_iterations, output_file)
     t1 = time.time()
-    print("Bodo Total time: ", t1-t0)
-    print("output_file: ", output_file)
+    total_time = t1-t0
+    print(f"[RESULT] mode=bodo threads={args.num_threads} iterations={args.num_iterations} time={total_time:.3f} output_file={output_file}")
+
 
 
     # FIXME: Why Bodo complained here? It's out of JIT function

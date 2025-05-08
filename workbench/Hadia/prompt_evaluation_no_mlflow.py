@@ -210,20 +210,13 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations, n
         dfs_and_responses = [res for res in results] #if res is not None
         
         if dfs_and_responses == []:
-            ans = response
+            ans = None
         else: 
             t_h0 = time.time()
             for i in range(len(dfs_and_responses)):
                 for j in range(i + 1, len(dfs_and_responses)):
                     df_gold = hash_result(dfs_and_responses[i][0])
                     df_gen = hash_result(dfs_and_responses[j][0])
-
-                    # if compare_df(
-                    #     df_gold=df_gold,
-                    #     df_gen=df_gen,
-                    #     query_category="",
-                    #     question=""
-                    # ):
                     if df_gold == df_gen:
                         counts[i].append(j)
 
@@ -234,6 +227,8 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations, n
             else:
                 print("No common result found, returning the first response as fallback.")
                 ans = dfs_and_responses[0][1] if dfs_and_responses else None
+        return ans
+
 
     except Exception as e:
         print(f"AI Suite error: {e}")
@@ -311,7 +306,7 @@ def main():
     args = parser.parse_args()
 
     # Create result directory if not exists
-    folder_path = f"./results/original_eval/{args.provider}/{args.model_id}/"
+    folder_path = f"./results/original_eval/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
     output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
 
@@ -355,11 +350,12 @@ def main():
 
     questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
-    questions_df.to_csv(output_file, index=False, encoding="utf-8")
 
     t1=time.time()
-    print("Multi-processing Total time: ", t1-t0)
-    print("Output filename: ", output_file)
+    total_time = t1-t0
+    #questions_df.to_csv(output_file, index=False, encoding="utf-8")
+    print(f"[RESULT] mode=multiprocessing threads={args.num_threads} iterations={args.num_iterations} time={total_time:.3f} output_file={output_file}")
+
 
 if __name__ == "__main__":
     # import pdb; pdb.set_trace()
