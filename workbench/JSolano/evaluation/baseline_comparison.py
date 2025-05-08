@@ -27,12 +27,13 @@ for i in column_names_old:
 for i in column_names_new:
     df_new_run[i] = df_new_run[i].fillna("NaN")
 
-df_result = pd.concat([df_baseline, df_new_run], axis=1)
+df = pd.concat([df_baseline, df_new_run], axis=1)
 
-df_result['changed'] = (df_result['comparison_result'] == df_result['comparison_result_new'])
+df['changed'] = ((df['comparison_result'] != df['comparison_result_new']) 
+                        | (df['exception'].str.split().str[0] != df['exception_new'].str.split().str[0]))
 
-#equal_rows = df_result[(( df_result.comparison_result) & (df_result.exception))].index
+df['change_reason'] = np.where(df['changed']==True & (df['comparison_result'] != df['comparison_result_new']), 'DataFrame match changed from' + df['comparison_result'] + 'to' + df['comparison_result_new'], '')
 
-df_result.to_csv('comparison_result.csv')
+df.to_csv('comparison_result.csv')
 
 # %%
