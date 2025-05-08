@@ -1,0 +1,3267 @@
+RAG Response for Example 2
+==================================================
+
+Full RAG Results Dictionary:
+{'generated_answer': '# Verifying One-to-Many Relationships in PyDough\n\nThe original question asks about verifying one-to-many relationships between collections based on naming conventions in PyDough. Based on the search results provided, I\'ll explain how these relationships are defined, verified, and used in PyDough.\n\n## PyDough Metadata Structure for Relationships\n\nIn PyDough, one-to-many relationships between collections are defined in the metadata JSON and can be verified through several key indicators:\n\n### 1. Property Type: Simple Join\n\nOne-to-many relationships are primarily defined using the "simple_join" property type [5c77f3e]. This property type has several key attributes that indicate the cardinality of the relationship:\n\n```json\n"accounts_held": {\n  "type": "simple_join",\n  "other_collection_name": "Accounts",\n  "singular": false,\n  "no_collisions": true,\n  "keys": {"id": ["client_id"]},\n  "reverse_relationship_name": "account_holder"\n}\n```\n\nThe key indicators of a one-to-many relationship are:\n\n- **`singular`**: When set to `false`, it indicates that each record in the current collection can have multiple matching records in the subcollection [5c77f3e].\n- **`no_collisions`**: When set to `true`, it indicates that multiple records from this collection cannot match onto the same record from the other collection [5c77f3e].\n\n### 2. Naming Conventions\n\nThe naming convention for one-to-many relationships typically follows these patterns:\n\n1. **Plural subcollection names**: When a collection has a one-to-many relationship with another collection, the property name is typically plural (e.g., `packages`, `accounts_held`, `customers`) [39e4263].\n\n2. **Singular reverse relationship names**: The reverse relationship (from the "many" side to the "one" side) typically has a singular name (e.g., `customer`, `account_holder`) [39e4263].\n\n## Example of One-to-Many Relationship\n\nFrom the example graph [0e3bd07], we can see a clear example of one-to-many relationships:\n\n```\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n```\n\nThis relationship is defined in the metadata where:\n- The `People` collection has a property `packages` that connects to the `Packages` collection\n- The `singular` attribute is `false` (one person can have multiple packages)\n- The `no_collisions` attribute is `true` (each package belongs to exactly one person)\n- The reverse relationship name is `customer` (singular, indicating the "one" side)\n\n## Verifying One-to-Many Relationships in Code\n\nTo verify a one-to-many relationship in PyDough, you can:\n\n### 1. Use the `explain` Function\n\nPyDough provides an `explain` function to examine the metadata of properties [2e54fa8]:\n\n```python\nimport pydough\n\ngraph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")\npydough.explain(graph["nations"]["customers"], verbose=True)\n```\n\nThis would output information about the relationship, including its cardinality:\n\n```\nPyDough property: nations.customers\n\nThis property connects collection nations to customers.\n\nCardinality of connection: One -> Many\n\nIs reversible: yes\n\nReverse property: customers.nation\n\nThe subcollection relationship is defined by the following join conditions:\nnations.key == customers.nation_key\n```\n\n### 2. Examine Collection Access Patterns\n\nWhen working with one-to-many relationships in PyDough code, you can verify the relationship by observing how the collections are accessed [0e3bd07]:\n\n```python\n# Accessing the "many" side from the "one" side (returns multiple records)\nPeople.packages\n\n# Accessing the "one" side from the "many" side (returns a single record)\nPackages.customer\n```\n\n### 3. Check for Aggregation Requirements\n\nWhen working with one-to-many relationships, you\'ll need to use aggregation functions when referencing properties from the "many" side in the context of the "one" side [0e3bd07]:\n\n```python\n# Count how many packages each person has ordered\nPeople.CALCULATE(\n    name=JOIN_STRINGS("", first_name, last_name),\n    n_packages_ordered=COUNT(packages),\n)\n```\n\n## Best Practices for Working with One-to-Many Relationships\n\n1. **Use appropriate naming conventions**: Use plural names for the "many" side of the relationship and singular names for the "one" side [39e4263].\n\n2. **Be aware of cardinality changes**: When traversing from a collection to its subcollection, the cardinality may change if records of the collection have multiple associated records in the subcollection [0e3bd07].\n\n3. **Use aggregation functions**: When accessing properties from the "many" side in the context of the "one" side, use aggregation functions like COUNT, SUM, etc. [0e3bd07].\n\n4. **Use SINGULAR() when appropriate**: If you\'ve filtered a normally plural relationship to ensure it returns at most one record, you can use the SINGULAR() modifier to tell PyDough to treat it as singular [edc4690].\n\n## Conclusion\n\nTo verify a one-to-many relationship between collections in PyDough, you should check:\n\n1. The metadata definition with `singular: false` and `no_collisions: true`\n2. The naming conventions (plural for the "many" side, singular for the "one" side)\n3. The behavior when accessing the relationship (whether it returns multiple records)\n4. The need for aggregation functions when referencing properties from the "many" side\n\nThese indicators together confirm the presence and proper configuration of a one-to-many relationship between collections in PyDough.', 'search_results': AggregateSearchResult(chunk_search_results=[ChunkSearchResult(score=0.078, text=# PyDough DSL Spec
+
+This page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.
+
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+[Example Graph](#example-graph)
+
+[Collections](#collections)
+
+[Sub-Collections](#sub-collections)
+
+[CALCULATE](#calculate)
+
+[Contextless Expressions](#contextless-expressions)
+
+[Expressions](#expressions)
+
+[Down-Streaming](#down-streaming)
+
+[Collection Operators](#collection-operators)
+
+[WHERE](#where)
+
+[ORDER_BY](#order_by)
+
+[TOP_K](#top_k)
+
+[PARTITION](#partition)
+
+[SINGULAR](#singular)
+
+[NEXT / PREV](#next-prev)
+
+[BEST](#best)
+
+[Induced Properties](#induced-properties)
+
+[Induced Scalar Properties](#induced-scalar-properties)
+
+[Induced Subcollection Properties](#induced-subcollection-properties)
+
+[Induced Arbitrary Joins](#induced-arbitrary-joins)
+
+[Larger Examples](#larger-examples)
+
+[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)
+
+[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)
+
+[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)
+
+[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)
+
+[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)
+
+<!-- TOC end -->
+
+<!-- TOC --><a name="example-graph"></a>
+
+## Example Graph
+
+The examples in this document use a metadata graph (named `GRAPH`) with the following collections:
+
+`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.
+
+`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.
+
+`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.
+
+There are also the following sub-collection relationships:
+
+`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.
+
+`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.
+
+`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.
+
+`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.
+
+<!-- TOC --><a name="collections"></a>
+
+## Collections
+
+The simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.
+
+**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.
+
+```py
+
+%%pydough), ChunkSearchResult(score=0.076, text=People
+
+```
+
+**Good Example #2**: Obtain every record of the `Addresses` collection. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output.
+
+```py
+
+%%pydough
+
+GRAPH.Addresses
+
+```
+
+**Good Example #3**: Obtain every record of the `Packages` collection. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`) is automatically included in the output.
+
+```py
+
+%%pydough
+
+Packages
+
+```
+
+**Bad Example #1**: Obtain every record of the `Products` collection (there is no `Products` collection).
+
+```py
+
+%%pydough
+
+Products
+
+```
+
+**Bad Example #2**: Obtain every record of the `Addresses` collection (but the name `Addresses` has been reassigned to a variable).
+
+```py
+
+%%pydough
+
+Addresses = 42
+
+Addresses
+
+```
+
+**Bad Example #3**: Obtain every record of the `Addresses` collection (but the graph name `HELLO` is the wrong graph name for this example).
+
+```py
+
+%%pydough
+
+HELLO.Addresses
+
+```
+
+<!-- TOC --><a name="sub-collections"></a>
+
+### Sub-Collections
+
+The next step in PyDough after accessing a collection is to access its sub-collections. Using the syntax `collection.subcollection`, you can traverse into every record of `subcollection` for each record in `collection`. This operation may change the cardinality if records of `collection` have multiple associated records in `subcollection`. Additionally, duplicate records may appear in the output if records in `subcollection` are linked to multiple records in `collection`.
+
+**Good Example #1**: For every person, obtains their current address. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output. A record from `Addresses` can be included multiple times if multiple different `People` records have it as their current address, or it could be missing entirely if no person has it as their current address.
+
+```py
+
+%%pydough
+
+People.current_addresses
+
+```
+
+**Good Example #2**: For every package, get the person who shipped it. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output. A record from `People` can be included multiple times if multiple packages were ordered by that person, or it could be missing entirely if that person is not the customer who ordered any package.
+
+```py
+
+%%pydough
+
+GRAPH.Packages.customer
+
+```
+
+**Good Example #3**: For every address, get all packages that someone who lives at that address has ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every current occupant has a single address it maps back to, and every package has a single customer it maps back to.
+
+```py
+
+%%pydough
+
+Addresses.current_occupants.packages
+
+```
+
+**Good Example #4**: For every person, get all packages they have ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every package has a single customer it maps back to.
+
+```py
+
+%%pydough
+
+People.packages
+
+```
+
+**Bad Example #1**: For every address, obtains all people who used to live there. This is invalid because the `Addresses` collection does not have a `former_occupants` property.
+
+```py
+
+%%pydough), ChunkSearchResult(score=0.075, text=Unique properties of collection: ['key']
+
+Scalar properties:
+
+comment
+
+key
+
+name
+
+region_key
+
+Subcollection properties:
+
+customers
+
+region
+
+suppliers
+
+Call pydough.explain(graph['nations'][property_name]) to learn more about any of these properties
+
+```
+
+3a. Calling `explain` on a property's metadata (scalar attribute).
+
+```py
+
+import pydough
+
+graph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")
+
+pydough.explain(graph["nations"]["name"], verbose=True)
+
+```
+
+```
+
+PyDough property: nations.name
+
+Column name: main.NATION.n_name
+
+Data type: string
+
+```
+
+3b. Calling `explain` on a property's metadata (sub-collection).
+
+```py
+
+import pydough
+
+graph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")
+
+pydough.explain(graph["nations"]["customers"], verbose=True)
+
+```
+
+```
+
+PyDough property: nations.customers
+
+This property connects collection nations to customers.
+
+Cardinality of connection: One -> Many
+
+Is reversible: yes
+
+Reverse property: customers.nation
+
+The subcollection relationship is defined by the following join conditions:
+
+nations.key == customers.nation_key
+
+```
+
+4a. Calling `explain` on PyDough code for a collection (example 1: entire graph).
+
+```py
+
+%%pydough
+
+result = TPCH
+
+pydough.explain(result, verbose=True)
+
+```
+
+```
+
+PyDough collection representing the following logic:
+
+TPCH
+
+This node is a reference to the global context for the entire graph. An operation must be done onto this node (e.g. a CALCULATE or accessing a collection) before it can be executed.
+
+The collection does not have any terms that can be included in a result if it is executed.
+
+The collection has access to the following collections:
+
+customers, lines, nations, orders, parts, regions, suppliers, supply_records
+
+Call pydough.explain_term(collection, term) to learn more about any of these
+
+expressions or collections that the collection has access to.
+
+```
+
+4b. Calling `explain` on PyDough code for a collection (example 2: single collection).
+
+```py
+
+%%pydough
+
+result = nations
+
+pydough.explain(result, verbose=True)
+
+```
+
+```
+
+PyDough collection representing the following logic:
+
+──┬─ TPCH
+
+└─── TableCollection[nations]
+
+This node, specifically, accesses the collection nations.
+
+Call pydough.explain(graph['nations']) to learn more about this collection.
+
+The following terms will be included in the result if this collection is executed:
+
+comment, key, name, region_key
+
+The collection has access to the following expressions:
+
+comment, key, name, region_key
+
+The collection has access to the following collections:
+
+customers, region, suppliers
+
+Call pydough.explain_term(collection, term) to learn more about any of these
+
+expressions or collections that the collection has access to.
+
+```
+
+4c. Calling `explain` on PyDough code for a collection (example 3: filtering).
+
+```py
+
+%%pydough
+
+result = nations.WHERE(region.name == "EUROPE")
+
+pydough.explain(result, verbose=True)
+
+```
+
+```
+
+PyDough collection representing the following logic:
+
+──┬─ TPCH
+
+├─── TableCollection[nations]
+
+└─┬─ Where[$1.name == 'EUROPE']
+
+└─┬─ AccessChild
+
+└─── SubCollection[region]
+
+This node first derives the following children before doing its main task:
+
+child $1:
+
+└─── SubCollection[region]
+
+The main task of this node is to filter on the following conditions:
+
+$1.name == 'EUROPE', aka region.name == 'EUROPE'
+
+The following terms will be included in the result if this collection is executed:
+
+comment, key, name, region_key
+
+The collection has access to the following expressions:
+
+comment, key, name, region_key
+
+The collection has access to the following collections:
+
+customers, region, suppliers
+
+Call pydough.explain_term(collection, term) to learn more about any of these
+
+expressions or collections that the collection has access to.
+
+```
+
+4d. Calling `explain` on PyDough code for a collection (example 4: CALCULATE).
+
+```py
+
+%%pydough
+
+result = nations.WHERE(region.name == "EUROPE").CALCULATE(name, n_custs=COUNT(customers))
+
+pydough.explain(result, verbose=True)
+
+```
+
+```
+
+PyDough collection representing the following logic:), ChunkSearchResult(score=0.074, text=Addresses.former_occupants
+
+```
+
+**Bad Example #2**: For every package, obtains all addresses it was shipped to. This is invalid because the `Packages` collection does not have a `shipping_addresses` property (it does have a `shipping_address` property).
+
+```py
+
+%%pydough
+
+Packages.shipping_addresses
+
+```
+
+<!-- TOC --><a name="calculate"></a>
+
+### CALCULATE
+
+The examples so far just show selecting all properties from records of a collection. Most of the time, an analytical question will only want a subset of the properties, and may want to derive new properties via calculated expressions. The way to do this is with a `CALCULATE` term. This method contains the expressions that should be derived by the `CALCULATE` operation.
+
+These expressions can be positional arguments or keyword arguments. Keyword arguments use the name of the keyword as the name of the output expression. Positional arguments use the name of the expression, if one exists, otherwise an arbitrary name is chosen.
+
+The value of one of these terms in a `CALCULATE` must be expressions that are singular with regards to the current context. That can mean:
+
+Referencing one of the scalar properties of the current collection.
+
+Creating a literal.
+
+Referencing a singular expression of a sub-collection of the current collection that is singular with regards to the current collection.
+
+Calling a non-aggregation function on more singular expressions.
+
+Calling an aggregation function on a plural expression.
+
+Once a `CALCULATE` clause is created, all terms of the current collection still exist even if they weren't part of the `CALCULATE` and can still be referenced, they just will not be part of the final answer. If there are multiple `CALCULATE` clause, the last one is used to determine what expressions are part of the final answer, so earlier `CALCULATE` clauses can be used to derive intermediary expressions. If a `CALCULATE` includes a term with the same name as an existing property of the collection, the existing name is overridden to include the new term.
+
+Importantly, when a term is defined in a `CALCULATE`, that definition does not take effect until after the `CALCULATE` completes. This means that if a term in a `CALCULATE` uses the definition of a term defined in the same `CALCULATE`, it will not work.
+
+A `CALCULATE` can also be done on the graph itself to create a collection with 1 row and columns corresponding to the properties inside the `CALCULATE`. This is useful when aggregating an entire collection globally instead of with regards to a parent collection.
+
+**Good Example #1**: For every person, fetch just their first name and last name.
+
+```py
+
+%%pydough
+
+People.CALCULATE(first_name, last_name)
+
+```
+
+**Good Example #2**: For every package, fetch the package id, the first and last name of the person who ordered it, and the state that it was shipped to. Also, include a field named `secret_key` that is always equal to the string `"alphabet soup"`.
+
+```py
+
+%%pydough
+
+Packages.CALCULATE(
+
+package_id,
+
+first_name=customer.first_name,
+
+last_name=customer.last_name,
+
+shipping_state=shipping_address.state,
+
+secret_key="alphabet soup",
+
+)
+
+```
+
+**Good Example #3**: For every person, find their full name (without the middle name) and count how many packages they purchased.
+
+```py
+
+%%pydough
+
+People.CALCULATE(
+
+name=JOIN_STRINGS("", first_name, last_name),
+
+n_packages_ordered=COUNT(packages),
+
+)
+
+```
+
+**Good Example #4**: For every person, find their full name including the middle name if one exists, as well as their email. Notice that two CALCs are present, but only the terms from the second one are part of the answer.
+
+```py
+
+%%pydough
+
+People.CALCULATE(), ChunkSearchResult(score=0.066, text="attendances": {
+
+"type": "simple_join",
+
+"other_collection_name": "Attendance",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"p_ssn": ["a_ssn"]
+
+},
+
+"reverse_relationship_name": "person"
+
+},
+
+"schools_attended": {
+
+"type": "compound",
+
+"primary_property": "attendances",
+
+"secondary_property": "school",
+
+"singular": false,
+
+"no_collisions": false,
+
+"inherited_properties": {
+
+"gpa": "gpa",
+
+"graduation_date": "graduation_date",
+
+"degree": "degree"
+
+},
+
+"reverse_relationship_name": "students"
+
+}
+
+}
+
+},
+
+"Schools": {
+
+"type": "simple_table",
+
+"table_path": "education.SCHOOLS",
+
+"unique_properties": ["school_id"],
+
+"properties": {
+
+"school_id": {
+
+"type": "table_column",
+
+"column_name": "s_id",
+
+"data_type": "string"
+
+},
+
+"name": {
+
+"type": "table_column",
+
+"column_name": "s_name",
+
+"data_type": "string"
+
+},
+
+"attendances": {
+
+"type": "simple_join",
+
+"other_collection_name": "Attendance",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"school_id": ["school_id"]
+
+},
+
+"reverse_relationship_name": "school"
+
+}
+
+}
+
+},
+
+"Attendance": {
+
+"type": "simple_table",
+
+"table_path": "education.ATTENDANCE",
+
+"unique_properties": ["person_ssn", "school_id"],
+
+"properties": {
+
+"person_ssn": {
+
+"type": "table_column",
+
+"column_name": "a_ssn",
+
+"data_type": "string"
+
+},
+
+"school_id": {
+
+"type": "table_column",
+
+"column_name": "a_id",
+
+"data_type": "string"
+
+},
+
+"gpa": {
+
+"type": "table_column",
+
+"column_name": "a_gpa",
+
+"data_type": "float64"
+
+},
+
+"graduation_date": {
+
+"type": "table_column",
+
+"column_name": "a_graddate",
+
+"data_type": "date"
+
+},
+
+"degree": {
+
+"type": "table_column",
+
+"column_name": "a_degree",
+
+"data_type": "string"
+
+}
+
+}
+
+}
+
+}
+
+}
+
+```
+
+The PyDough metadata representation shown in this JSON file corresponds to the following set of collections:
+
+`People` (corresponds to `education.PEOPLE`; records are unique per unique value of `ssn`). Has the following properties:
+
+`ssn` (scalar property)
+
+`name` (scalar property)
+
+`attendances` (sub-collection connecting to `Attendances`)
+
+`schools` (sub-collection connecting to `Schools` by going through `Attendances`)
+
+`Schools` (corresponds to `education.SCHOOLS`; records are unique per unique value of `school_id`). Has the following properties:
+
+`school_id` (scalar property)
+
+`school_name` (scalar property)
+
+`attendances` (sub-collection connecting to `Attendances`)
+
+`students` (sub-collection connecting to `People` by going through `Attendances`, reverse of `People.schools`)
+
+`Attendances` (corresponds to `education.ATTENDANCES`; records are unique per unique combination of `person_ssn` & `school_id`). Has the following properties:
+
+`person_ssn` (scalar property)
+
+`school_id` (scalar property)
+
+`gpa` (scalar property)
+
+`graduation_date` (scalar property)
+
+`degree` (scalar property)
+
+`person` (sub-collection connecting to `People`, reverse of `People.attendances`)
+
+`school` (sub-collection connecting to `School`, reverse of `Schools.attendances`)
+
+<!-- TOC --><a name="example-shipping"></a>), ChunkSearchResult(score=0.064, text="Accounts": {
+
+"type": "simple_table",
+
+"table_path": "bank_schema.ACCOUNTS",
+
+"unique_properties": ["account_id"],
+
+"properties": {
+
+"client_id": {...},
+
+"account_type": {...},
+
+"account_balance": {...},
+
+"date_opened": {...}
+
+}
+
+}
+
+```
+
+<!-- TOC --><a name="properties"></a>
+
+## Properties
+
+<!-- TOC --><a name="property-type-table-column"></a>
+
+### Property Type: Table Column
+
+A property with this type is essentially just a view of a column in a table stored in whatever database is being used to execute the queries. Properties of this type are scalar expression attributes of the collection, as opposed to subcollections. Properties of this type have a type string of "table_column" and have the following additional key-value pairs in their metadata JSON object:
+
+`column_name`: a string indicating the name of the column within the table it comes from, which it can be different from the name of the property itself.
+
+`data_type`: a string indicating the PyDough type that this column corresponds to.
+
+Example of the structure of the metadata for a table column property:
+
+```json
+
+"first_name": {
+
+"type": "table_column",
+
+"column_name": "firstname",
+
+"data_type": "string"
+
+}
+
+```
+
+<!-- TOC --><a name="property-type-simple-join"></a>
+
+### Property Type: Simple Join
+
+A property with this type describes a subcollection of the current collection that is derived from performing an equi-join on two tables (e.g. SELECT ... FROM T1 JOIN T2 ON T1.a=T2.x AND T1.b = T2.y). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "simple_join" and have the following additional key-value pairs in their metadata JSON object:
+
+`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports simple_join properties.
+
+`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection, and false otherwise.
+
+`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the other collection, and false otherwise (true if-and-only-if the reverse relationship is singular).
+
+`keys`: a JSON object indicating the combinations of properties from this collection and the other collection that are compared for equality in order to determine join matches. The keys to this JSON object are the names of properties in the current collection, and the values are a list of 1+ strings that. are the names of properties in the other collection that they must be equal to in order to produce a match. All property names invoked in the keys object must correspond to scalar attributes of the collection, as opposed to being names of its subcollections. This object must be non-empty.
+
+`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.
+
+Example of the structure of the metadata for a simple join property (connects a collection `Clients` to a collection `Accounts` by joining `Clients.id` on `Accounts.client_id`):
+
+```json
+
+"accounts_held": {
+
+"type": "simple_join",
+
+"other_collection_name": "Accounts",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {"id": ["client_id"]},
+
+"reverse_relationship_name": "account_holder"
+
+}
+
+```
+
+<!-- TOC --><a name="property-type-cartesian-product"></a>), ChunkSearchResult(score=0.060, text=# PyDough Metadata Spec
+
+This page document the exact format that the JSON files containing PyDough metadata must ascribe to. The specification of this format is for the initial release of PyDough, but is intended to change drastically in the near future.
+
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+[JSON File Structure](#json-file-structure)
+
+[Collections](#collections)
+
+[Collection Type: Simple Table](#collection-type-simple-table)
+
+[Properties](#properties)
+
+[Property Type: Table Column](#property-type-table-column)
+
+[Property Type: Simple Join](#property-type-simple-join)
+
+[Property Type: Cartesian Product](#property-type-cartesian-product)
+
+[Property Type: Compound Relationship](#property-type-compound-relationship)
+
+[PyDough Type Strings](#pydough-type-strings)
+
+[Metadata Samples](#metadata-samples)
+
+[Example: Education](#example-education)
+
+[Example: Shipping](#example-shipping)
+
+<!-- TOC end -->
+
+<!-- TOC --><a name="json-file-structure"></a>
+
+## JSON File Structure
+
+The core components of the JSON file structure are as follows:
+
+Each JSON file for PyDough metadata is a JSON object where the keys are the names of the graphs in the file, and the values are JSON object representing the graphs themselves. The names of the graphs must be valid Python variable names. The graph names should not be duplicated within the file.
+
+Each graph JSON object has keys that are names of collections, and values that are JSON objects for the collections themselves. The collection names should not be duplicated within the file graph, should not be the same names as the graph itself, and must be valid Python variable names.
+
+Each collection JSON object can adhere to one of several different types of Collections, but all of these types have two required key-value pairs:
+
+`type`: a string indicating what kind of collection this is. The value of this string must be one of the known names of types of collections, and informs what additional key-value pairs the JSON object must have.
+
+`properties`: a JSON object of all properties of the collection, where the keys are the names of the properties and the values are JSON objects describing the properties.
+
+Each properties JSON object can adhere to one of several different types of Properties, but all of these types have one required key-value pair:
+
+`type`: a string indicating what kind of property this is. The value of this string must be one of the known names of types of collections, and informs what additional key-value pairs the JSON object must have.
+
+Example of the structure of the metadata for the entire file:
+
+```json
+
+{
+
+"BankerGraph": {
+
+"Accounts": {...},
+
+"Clients": {...},
+
+"Transactions": {...}
+
+},
+
+"GroceryGraph": {
+
+"FoodItems": {...},
+
+"Inventories": {...},
+
+"Stores": {...}
+
+}
+
+}
+
+```
+
+<!-- TOC --><a name="collections"></a>
+
+## Collections
+
+<!-- TOC --><a name="collection-type-simple-table"></a>
+
+### Collection Type: Simple Table
+
+A collection with this type is essentially just a view of a table stored in whatever database is being used to execute the queries. Collections of this type have a type string of "simple_table" and the following additional key-value pairs in their metadata JSON object:
+
+`table_path`: a string indicating the fully-qualified path to reach the table based on where it is stored, e.g. `<db_name>.<schema_name>.<table_name>`. The table_name here does not need to be the same as the name of the collection.
+
+`unique_properties`: a list of JSON values indicating which properties are unique within the collection, meaning that no two rows of the table will have the same values. If a value in this list is a string, it means that property is unique within the collection. If a value in the list is a list of strings, it means that every combination of the properties in that list is unique within the collection.
+
+The following types of properties are supported on this type of collection:
+
+`table_column`
+
+`simple_join`
+
+`cartesian_product`
+
+`compound`
+
+Example of the structure of the metadata for a simple table collection:
+
+```json), ChunkSearchResult(score=0.059, text=### Property Type: Cartesian Product
+
+A property with this type describes a subcollection of the current collection that is derived from performing an cross-join on two collections (e.g. SELECT ... FROM T1, T2). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "cartesian_product" and have the following additional key-value pairs in their metadata JSON object:
+
+`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports cartesian_product properties.
+
+`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.
+
+Example of the structure of the metadata for a cartesian product property (connects every record of a collection `CalendarDates` to every record of collection `InventorySnapshots`):
+
+```json
+
+"snapshots": {
+
+"type": "cartesian_product",
+
+"other_collection_name": "InventorySnapshots",
+
+"reverse_relationship_name": "calendar_dates"
+
+}
+
+```
+
+<!-- TOC --><a name="property-type-compound-relationship"></a>
+
+### Property Type: Compound Relationship
+
+A property with this type describes a subcollection of the current collection that is derived from combining a relationship from this collection to one of its subcollections with a relationship from that subcollection to one of its subcollections. Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship, and the subcollection can inherit additional properties from the middle subcollection. Properties of this type have a type string of "compound" and have the following additional key-value pairs in their metadata JSON object:
+
+`primary_property`: a string indicating the name of a property that connects this collection to a subcollection.
+
+`secondary_property`: a string indicating the name of the property that connects the primary subcollection to one of its subcollections.
+
+`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection’s subcollection, and false otherwise.
+
+`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the subcollection’s subcollection, and false otherwise (true if-and-only-if the reverse relationship is singular).
+
+`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.
+
+`inherited_properties`: a JSON object indicating any properties of the primary subcollection that should be accessible from the secondary subcollection. The keys are the string names that the inherited properties are referred to by, which can be a new alias or the original name, and the values are names of the properties of the collection accessed by the primary property. The names used for the inherited properties cannot overlap with any other names of properties of the secondary subcollection, including other inherited properties it could have from other compound relationships. This JSON object can be empty if there are no inherited properties.), ChunkSearchResult(score=0.058, text="inventory_snapshots": {
+
+"type": "simple_join",
+
+"other_collection_name": "InventorySnapshots",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"_id": ["car_id"]
+
+},
+
+"reverse_relationship_name": "car"
+
+}
+
+}
+
+},
+
+"Salespersons": {
+
+"type": "simple_table",
+
+"table_path": "main.salespersons",
+
+"unique_properties": ["_id"],
+
+"properties": {
+
+"_id": {
+
+"type": "table_column",
+
+"column_name": "_id",
+
+"data_type": "int32"
+
+},
+
+"first_name": {
+
+"type": "table_column",
+
+"column_name": "first_name",
+
+"data_type": "string"
+
+},
+
+"last_name": {
+
+"type": "table_column",
+
+"column_name": "last_name",
+
+"data_type": "string"
+
+},
+
+"email": {
+
+"type": "table_column",
+
+"column_name": "email",
+
+"data_type": "string"
+
+},
+
+"phone": {
+
+"type": "table_column",
+
+"column_name": "phone",
+
+"data_type": "string"
+
+},
+
+"hire_date": {
+
+"type": "table_column",
+
+"column_name": "hire_date",
+
+"data_type": "date"
+
+},
+
+"termination_date": {
+
+"type": "table_column",
+
+"column_name": "termination_date",
+
+"data_type": "date"
+
+},
+
+"crtd_ts": {
+
+"type": "table_column",
+
+"column_name": "crtd_ts",
+
+"data_type": "timestamp[3]"
+
+},
+
+"sales_made": {
+
+"type": "simple_join",
+
+"other_collection_name": "Sales",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"_id": ["salesperson_id"]
+
+},
+
+"reverse_relationship_name": "salesperson"
+
+}
+
+}
+
+},
+
+"Customers": {
+
+"type": "simple_table",
+
+"table_path": "main.customers",
+
+"unique_properties": ["_id"],
+
+"properties": {
+
+"_id": {
+
+"type": "table_column",
+
+"column_name": "_id",
+
+"data_type": "int32"
+
+},
+
+"first_name": {
+
+"type": "table_column",
+
+"column_name": "first_name",
+
+"data_type": "string"
+
+},
+
+"last_name": {
+
+"type": "table_column",
+
+"column_name": "last_name",
+
+"data_type": "string"
+
+},
+
+"email": {
+
+"type": "table_column",
+
+"column_name": "email",
+
+"data_type": "string"
+
+},
+
+"phone": {
+
+"type": "table_column",
+
+"column_name": "phone",
+
+"data_type": "string"
+
+},
+
+"address": {
+
+"type": "table_column",
+
+"column_name": "address",
+
+"data_type": "string"
+
+},
+
+"city": {
+
+"type": "table_column",
+
+"column_name": "city",
+
+"data_type": "string"
+
+},
+
+"state": {
+
+"type": "table_column",
+
+"column_name": "state",
+
+"data_type": "string"
+
+},
+
+"zip_code": {
+
+"type": "table_column",
+
+"column_name": "zip_code",
+
+"data_type": "string"
+
+},
+
+"crtd_ts": {
+
+"type": "table_column",
+
+"column_name": "crtd_ts",
+
+"data_type": "timestamp[3]"
+
+},
+
+"car_purchases": {
+
+"type": "simple_join",
+
+"other_collection_name": "Sales",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"_id": ["customer_id"]
+
+},
+
+"reverse_relationship_name": "customer"
+
+}
+
+}
+
+},
+
+"PaymentsReceived": {
+
+"type": "simple_table",
+
+"table_path": "main.payments_received",
+
+"unique_properties": ["_id"],
+
+"properties": {
+
+"_id": {
+
+"type": "table_column",
+
+"column_name": "_id",
+
+"data_type": "int32"
+
+},
+
+"sale_id": {
+
+"type": "table_column",
+
+"column_name": "sale_id",
+
+"data_type": "int32"
+
+},
+
+"payment_date": {
+
+"type": "table_column",
+
+"column_name": "payment_date",
+
+"data_type": "date"
+
+},
+
+"payment_amount": {
+
+"type": "table_column",
+
+"column_name": "payment_amount",
+
+"data_type": "decimal[10,2]"
+
+},
+
+"payment_method": {
+
+"type": "table_column",
+
+"column_name": "payment_method",
+
+"data_type": "string"
+
+},
+
+"crtd_ts": {
+
+"type": "table_column",
+
+"column_name": "crtd_ts",
+
+"data_type": "timestamp[3]"
+
+}
+
+}
+
+},
+
+"Sales": {
+
+"type": "simple_table",
+
+"table_path": "main.sales",
+
+"unique_properties": ["_id"],
+
+"properties": {
+
+"_id": {
+
+"type": "table_column",
+
+"column_name": "_id",
+
+"data_type": "int32"
+
+},
+
+"car_id": {
+
+"type": "table_column",
+
+"column_name": "car_id",
+
+"data_type": "int32"
+
+},
+
+"salesperson_id": {
+
+"type": "table_column",
+
+"column_name": "salesperson_id",
+
+"data_type": "int32"
+
+},
+
+"customer_id": {
+
+"type": "table_column",
+
+"column_name": "customer_id",
+
+"data_type": "int32"
+
+},
+
+"sale_price": {
+
+"type": "table_column",
+
+"column_name": "sale_price",
+
+"data_type": "decimal[10,2]"
+
+},
+
+"sale_date": {
+
+"type": "table_column",
+
+"column_name": "sale_date",
+
+"data_type": "date"
+
+},), ChunkSearchResult(score=0.057, text=Example of the structure of the metadata for a compound relationship property (connects a collection `Regions` to a collection `Customers` by combining `Regions.nations.customers` into a single property, skipping over a middle collection `Nations` but picking up its property `name` under a new name `nation_name):
+
+```json
+
+"customers": {
+
+"type": "compound",
+
+"primary_property": "nations",
+
+"secondary_property": "customers",
+
+"singular": false,
+
+"no_collisions": true,
+
+"inherited_properties": {
+
+"nation_name": "name"
+
+},
+
+"reverse_relationship_name": "region"
+
+}
+
+```
+
+<!-- TOC --><a name="pydough-type-strings"></a>
+
+## PyDough Type Strings
+
+The strings used in the type field for certain properties must be one of the following:
+
+`int8`: an 8-bit integer.
+
+`int16`: a 16-bit integer.
+
+`int32`: a 32-bit integer.
+
+`int64`: a 64-bit integer.
+
+`float32`: a 32-bit float.
+
+`float64`: a 64-bit float.
+
+`decimal[p,s]`: a fixed-point number with precision p (integer between 1 and 38) indicating the number of digits and scale s (integer between 0 and p, exclusive of p) indicating the number of digits to the right hand side of the decimal point.
+
+`bool`: a boolean.
+
+`string`: a string.
+
+`binary`: a bytes format.
+
+`date`: a date without any time component.
+
+`time[p]`: a time of day with a precision p (integer between 0 and 9) indicating the number of sub-second decimal places it can have (e.g. 9 = nanosecond precision).
+
+`timestamp[p]`: a date with a time of day of a precision p (same rules as time).
+
+`timestamp[p,tz]`: a date with a time of day of a precision p (same rules as time) with the timezone described by tz (e.g. `timestamp[9,America/Los_Angeles]`).
+
+`array[t]`: an array of values of type t (where t is another PyDough type). For example: `array[int32]` or `array[array[string]]`.
+
+`map[t1,t2]`: a map of values with keys of type type t1 and values of type t2 (where t1 and t2 are also PyDough types). For example: `map[string,int64]` or `map[string,array[date]]`.
+
+`struct[field1:t1,field2:t2,...]`: a struct of values with fields named field1, field2, etc. with types t1, t2, etc. (which are also PyDough types). For example: `struct[x:int32,y:int32]` or `struct[name:string,birthday:date,car_accidents:array[struct[ts:timestamp[9],report:string]]`. Each field name must be a valid Python identifier.
+
+`unknown`: an unknown type.
+
+<!-- TOC --><a name="metadata-samples"></a>
+
+## Metadata Samples
+
+<!-- TOC --><a name="example-education"></a>
+
+### Example: Education
+
+The knowledge graph is for the following information about tables in a schema called `education`:
+
+`PEOPLE` is a table referring to each known person. Each row in this table has the following information:
+
+`p_ssn`: the social security number used to uniquely identify the person.
+
+`p_name`: the name of the person.
+
+`SCHOOLS` is a table referring to each known school. Each row in this table has the following information:
+
+`s_id`: the identifying number used to uniquely identify the school.
+
+`s_name`: the name of the school.
+
+`ATTENDANCE` is a table referring to every known instance of a person attending a school (assuming a person could have attended multiple schools, but attended each school at most once). Each row in this table has the following information:
+
+`a_ssn`: the social security number of the person attending the school.
+
+`a_id`: the id of the school being attended.
+
+`a_gpa`: the GPA that the person had while attending the school.
+
+`a_graddate`: the date that the person graduated from the school.
+
+`a_degree`: the degree the person earned from teh school.
+
+Records in `PEOPLE` and `ATTENDANCE` can be joined on the social security number.
+
+Records in `SCHOOLS` and `ATTENDANCE` can be joined on the school id.
+
+```json
+
+{
+
+"Education": {
+
+"People": {
+
+"type": "simple_table",
+
+"table_path": "education.PEOPLE",
+
+"unique_properties": ["p_ssn"],
+
+"properties": {
+
+"ssn": {
+
+"type": "table_column",
+
+"column_name": "p_ssn",
+
+"data_type": "string"
+
+},
+
+"name": {
+
+"type": "table_column",
+
+"column_name": "p_name",
+
+"data_type": "string"
+
+},), ChunkSearchResult(score=0.057, text="user_type": {
+
+"type": "table_column",
+
+"column_name": "user_type",
+
+"data_type": "string"
+
+},
+
+"status": {
+
+"type": "table_column",
+
+"column_name": "status",
+
+"data_type": "string"
+
+},
+
+"country": {
+
+"type": "table_column",
+
+"column_name": "country",
+
+"data_type": "string"
+
+},
+
+"address_billing": {
+
+"type": "table_column",
+
+"column_name": "address_billing",
+
+"data_type": "string"
+
+},
+
+"address_delivery": {
+
+"type": "table_column",
+
+"column_name": "address_delivery",
+
+"data_type": "string"
+
+},
+
+"kyc_status": {
+
+"type": "table_column",
+
+"column_name": "kyc_status",
+
+"data_type": "string"
+
+},
+
+"kyc_verified_at": {
+
+"type": "table_column",
+
+"column_name": "kyc_verified_at",
+
+"data_type": "timestamp[3]"
+
+},
+
+"transactions_sent": {
+
+"type": "simple_join",
+
+"other_collection_name": "Transactions",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"uid": ["sender_id"]
+
+},
+
+"reverse_relationship_name": "sending_user"
+
+},
+
+"transactions_received": {
+
+"type": "simple_join",
+
+"other_collection_name": "Transactions",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"uid": ["receiver_id"]
+
+},
+
+"reverse_relationship_name": "receiving_user"
+
+},
+
+"balances": {
+
+"type": "simple_join",
+
+"other_collection_name": "UserBalances",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"uid": ["user_id"]
+
+},
+
+"reverse_relationship_name": "user"
+
+},
+
+"notifications": {
+
+"type": "simple_join",
+
+"other_collection_name": "Notifications",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"uid": ["user_id"]
+
+},
+
+"reverse_relationship_name": "user"
+
+},
+
+"sessions": {
+
+"type": "simple_join",
+
+"other_collection_name": "UserSessions",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"uid": ["user_id"]
+
+},
+
+"reverse_relationship_name": "user"
+
+},
+
+"setting_snapshots": {
+
+"type": "simple_join",
+
+"other_collection_name": "UserSettingSnapshots",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"uid": ["user_id"]
+
+},
+
+"reverse_relationship_name": "user"
+
+}
+
+}
+
+},
+
+"Merchants": {
+
+"type": "simple_table",
+
+"table_path": "main.merchants",
+
+"unique_properties": ["mid"],
+
+"properties": {
+
+"mid": {
+
+"type": "table_column",
+
+"column_name": "mid",
+
+"data_type": "int64"
+
+},
+
+"name": {
+
+"type": "table_column",
+
+"column_name": "name",
+
+"data_type": "string"
+
+},
+
+"description": {
+
+"type": "table_column",
+
+"column_name": "description",
+
+"data_type": "string"
+
+},
+
+"website_url": {
+
+"type": "table_column",
+
+"column_name": "website_url",
+
+"data_type": "string"
+
+},
+
+"logo_url": {
+
+"type": "table_column",
+
+"column_name": "logo_url",
+
+"data_type": "string"
+
+},
+
+"created_at": {
+
+"type": "table_column",
+
+"column_name": "created_at",
+
+"data_type": "timestamp[3]"
+
+},
+
+"country": {
+
+"type": "table_column",
+
+"column_name": "country",
+
+"data_type": "string"
+
+},
+
+"state": {
+
+"type": "table_column",
+
+"column_name": "state",
+
+"data_type": "string"
+
+},
+
+"city": {
+
+"type": "table_column",
+
+"column_name": "city",
+
+"data_type": "string"
+
+},
+
+"postal_code": {
+
+"type": "table_column",
+
+"column_name": "postal_code",
+
+"data_type": "string"
+
+},
+
+"address": {
+
+"type": "table_column",
+
+"column_name": "address",
+
+"data_type": "string"
+
+},
+
+"status": {
+
+"type": "table_column",
+
+"column_name": "status",
+
+"data_type": "string"
+
+},
+
+"category": {
+
+"type": "table_column",
+
+"column_name": "category",
+
+"data_type": "string"
+
+},
+
+"sub_category": {
+
+"type": "table_column",
+
+"column_name": "sub_category",
+
+"data_type": "string"
+
+},
+
+"mcc": {
+
+"type": "table_column",
+
+"column_name": "mcc",
+
+"data_type": "int32"
+
+},
+
+"contact_name": {
+
+"type": "table_column",
+
+"column_name": "contact_name",
+
+"data_type": "string"
+
+},
+
+"contact_email": {
+
+"type": "table_column",
+
+"column_name": "contact_email",
+
+"data_type": "string"
+
+},
+
+"contact_phone": {
+
+"type": "table_column",
+
+"column_name": "contact_phone",
+
+"data_type": "string"
+
+},
+
+"transactions_sent": {
+
+"type": "simple_join",
+
+"other_collection_name": "Transactions",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"mid": ["sender_id"]
+
+},
+
+"reverse_relationship_name": "sending_merchant"
+
+},), ChunkSearchResult(score=0.055, text=### BEST
+
+> [!IMPORTANT]
+
+> This feature has not yet been implemented in PyDough
+
+PyDough supports identifying a specific record from a sub-collection that is optimal with regards to some metric, per-record of the current collection. This is done by using `BEST` instead of directly accessing the sub-collection. The first argument to `BEST` is the sub-collection to be accessed, and the second is a `by` argument used to find the optimal record of the sub-collection. The rules for the `by` argument are the same as `PREV`, `NEXT`, `TOP_K`, etc.: it must be either a single collation term, or an iterable of 1+ collation terms.
+
+A call to `BEST` can either be done with `.` syntax, to step from a parent collection to a child collection, or can be a freestanding accessor used inside of a collection operator, just like `BACK`, `PREV` or `NEXT`. For example, both `Parent.BEST(child, by=...)` and `Parent(x=BEST(child, by=...).y)` are allowed.
+
+The original ancestry of the sub-collection is intact, so any down-streaming is preserved.
+
+Additional keyword arguments can be supplied to `BEST` that change its behavior:
+
+`allow_ties` (default=False): if True, changes the behavior to keep all records of the sub-collection that share the optimal values of the collation terms. If `allow_ties` is True, the `BEST` clause is no longer singular.
+
+`n_best=True`(defaults=1): if an integer greater than 1, changes the behavior to keep the top `n_best` values of the sub-collection for each record of the parent collection (fewer if `n_best` records of the sub-collection do not exist). If `n_best` is greater than 1, the `BEST` clause is no longer singular. NOTE: `n_best` cannot be greater than 1 at the same time that `allow_ties` is True.
+
+**Good Example #1**: Find the package id & zip code the package was shipped to for every package that was the first-ever purchase for the customer.
+
+```py
+
+%%pydough
+
+Customers.BEST(packages, by=order_date.ASC()).CALCULATE(
+
+package_id,
+
+shipping_address.zip_code
+
+)
+
+```
+
+**Good Example #2**: For each customer, list their ssn and the cost of the most recent package they have purchased.
+
+```py
+
+%%pydough
+
+Customers.CALCULATE(
+
+ssn,
+
+most_recent_cost=BEST(packages, by=order_date.DESC()).package_cost
+
+)
+
+```
+
+**Good Example #3**: Find the address in the state of New York with the most occupants, ties broken by address id. Note: the `GRAPH.` prefix is optional in this case, since it is implied if there is no prefix to the `BEST` call.
+
+```py
+
+%%pydough
+
+addr_info = Addresses.WHERE(
+
+state == "NY"
+
+).CALCULATE(address_id, n_occupants=COUNT(current_occupants))
+
+GRAPH.BEST(addr_info, by=(n_occupants.DESC(), address_id.ASC()))
+
+```
+
+**Good Example #4**: For each customer, find the number of people currently living in the address that they most recently shipped a package to.
+
+```py
+
+%%pydough
+
+most_recent_package = BEST(packages, by=order_date.DESC())
+
+Customers.CALCULATE(
+
+ssn,
+
+n_occ_most_recent_addr=COUNT(most_recent_package.shipping_address.current_occupants)
+
+)
+
+```
+
+**Good Example #5**: For each address that has occupants, list out the first/last name of the person living in that address who has ordered the most packages, breaking ties in favor of the person with the smaller social security number. Also includes the city/state of the address, the number of people who live there, and the number of packages that person ordered.
+
+```py
+
+%%pydough
+
+Addresses.WHERE(HAS(current_occupants)).CALCULATE(
+
+city,
+
+state,
+
+n_occupants=COUNT(current_occupants),
+
+).BEST(
+
+current_occupants.CALCULATE(n_orders=COUNT(packages)),
+
+by=(n_orders.DESC(), ssn.ASC())
+
+).CALCULATE(
+
+first_name,
+
+last_name,
+
+n_orders,
+
+n_living_in_same_addr=n_occupants,
+
+city=city,
+
+state=state,
+
+)
+
+```
+
+**Good Example #6**: For each person, find the total value of the 5 most recent packages they ordered.
+
+```py
+
+%%pydough
+
+five_most_recent = BEST(packages, by=order_date.DESC(), n_best=5)
+
+People.CALCULATE(
+
+ssn,), ChunkSearchResult(score=0.042, text="Customers": {
+
+"type": "simple_table",
+
+"table_path": "amazon.CUSTOMER",
+
+"unique_properties": ["username", "email", "phone_number"],
+
+"properties": {
+
+"username": {"type": "table_column", "column_name": "username", "data_type": "string"},
+
+"first_name": {"type": "table_column", "column_name": "first_name", "data_type": "string"},
+
+"last_name": {"type": "table_column", "column_name": "last_name", "data_type": "string"},
+
+"phone_number": {"type": "table_column", "column_name": "phone_number", "data_type": "string"},
+
+"email": {"type": "table_column", "column_name": "email", "data_type": "string"},
+
+"signup_date": {"type": "table_column", "column_name": "signup_date", "data_type": "timestamp[9]"},
+
+"occupancies": {
+
+"type": "simple_join",
+
+"other_collection_name": "Occupancies",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {"username": ["occupant_username"]},
+
+"reverse_relationship_name": "customer"
+
+},
+
+"packages_ordered": {
+
+"type": "simple_join",
+
+"other_collection_name": "Packages",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {"username": ["customer_username"]},
+
+"reverse_relationship_name": "customer"
+
+},
+
+"addresses": {
+
+"type": "compound",
+
+"primary_property": "occupancies",
+
+"secondary_property": "address",
+
+"singular": false,
+
+"no_collisions": false,
+
+"inherited_properties": {"date_started_occupying": "date_started_occupying", "date_stopped_occupying": "date_stopped_occupying"},
+
+"reverse_relationship_name": "occupants"
+
+},
+
+"products_ordered": {
+
+"type": "compound",
+
+"primary_property": "packages_ordered",
+
+"secondary_property": "contents",
+
+"singular": false,
+
+"no_collisions": false,
+
+"inherited_properties": {"order_timestamp": "order_timestamp", "quantity_ordered": "quantity_ordered"},
+
+"reverse_relationship_name": "purchasers"
+
+}
+
+}
+
+},
+
+"Occupancies": {
+
+"type": "simple_table",
+
+"table_path": "amazon.OCCUPANCY",
+
+"unique_properties": [["occupant_username", "address_id", "date_started_occupying"]],
+
+"properties": {
+
+"occupant_username": {"type": "table_column", "column_name": "occupant_username", "data_type": "string"},
+
+"address_id": {"type": "table_column", "column_name": "address_id", "data_type": "int64"},
+
+"date_started_occupying": {"type": "table_column", "column_name": "date_started_occupying", "data_type": "date"},
+
+"date_stopped_occupying": {"type": "table_column", "column_name": "date_stopped_occupying", "data_type": "date"},
+
+"address": {
+
+"type": "simple_join",
+
+"other_collection_name": "Addresses",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {"address_id": ["id"]},
+
+"reverse_relationship_name": "occupancies"
+
+}
+
+}
+
+},
+
+"Packages": {
+
+"type": "simple_table",
+
+"table_path": "amazon.PACKAGE",
+
+"unique_properties": ["id"],
+
+"properties": {
+
+"id": {"type": "table_column", "column_name": "id", "data_type": "int64"},
+
+"customer_username": {"type": "table_column", "column_name": "customer_username", "data_type": "string"},
+
+"order_timestamp": {"type": "table_column", "column_name": "order_timestamp", "data_type": "timestamp[9]"},
+
+"shipping_address_id": {"type": "table_column", "column_name": "shipping_address_id", "data_type": "int64"},
+
+"billing_address_id": {"type": "table_column", "column_name": "billing_address_id", "data_type": "int64"},
+
+"shipping_address": {
+
+"type": "simple_join",
+
+"other_collection_name": "Addresses",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {"shipping_address_id": ["id"]},
+
+"reverse_relationship_name": "packages_shipped_to"
+
+},
+
+"billing_address": {
+
+"type": "simple_join",
+
+"other_collection_name": "Addresses",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {"billing_address_id": ["id"]},
+
+"reverse_relationship_name": "packages_billed_to"
+
+},
+
+"inventory": {
+
+"type": "simple_join",
+
+"other_collection_name": "PackageContents",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {"id": ["package_id"]},
+
+"reverse_relationship_name": "package"
+
+},), ChunkSearchResult(score=0.040, text=).TOP_K(3, by=total_package_cost.DESC())
+
+```
+
+**Good Example #5**: Find the 1000 people by birth date. This is valid because the collation term is by default ascending based on the `collation_default_asc` config.
+
+```py
+
+%%pydough
+
+People.TOP_K(1000, by=birth_date)
+
+```
+
+**Bad Example #1**: Find the 5 people with the lowest GPAs. This is invalid because the `People` collection does not have a `gpa` property.
+
+```py
+
+%%pydough
+
+People.TOP_K(5, by=gpa.ASC())
+
+```
+
+**Bad Example #2**: Find the 25 addresses with the earliest packages billed to them, by arrival date. This is invalid because `packages_billed` is a plural property of `Addresses`, so `packages_billed.arrival_date` cannot be used as a collation expression for `Addresses`.
+
+```py
+
+%%pydough
+
+Addresses.packages_billed.CALCULATE(25, by=gpa.packages_billed.arrival_date())
+
+```
+
+**Bad Example #3**: Find the top 100 people currently living in the city of San Francisco. This is invalid because the `by` clause is absent.
+
+```py
+
+%%pydough
+
+People.WHERE(
+
+current_address.city == "San Francisco"
+
+).TOP_K(100)
+
+```
+
+**Bad Example #4**: Find the top packages by highest value. This is invalid because there is no `k` value.
+
+```py
+
+%%pydough
+
+Packages.TOP_K(by=package_cost.DESC())
+
+```
+
+**Bad Example #5**: Find the top 300 addresses. This is invalid because the `by` clause is empty
+
+```py
+
+%%pydough
+
+Addresses.TOP_K(300, by=())
+
+```
+
+<!-- TOC --><a name="partition"></a>
+
+### PARTITION
+
+The `PARTITION` operation is used to create a new collection by partitioning the records of another collection based on 1+ partitioning terms. Every unique combination values of those partitioning terms corresponds to a single record in the new collection. The terms of the new collection are the partitioning terms, and a single sub-collection mapping back to the bucketed terms of the original data.
+
+The syntax for this is `PARTITION(data, name="...", by=...)`. The `data` argument is the PyDough collection that is to be partitioned. The `name` argument is a string indicating the name that is to be used when accessing the partitioned data, and the `by` argument is either a single partitioning key, or an iterable of 1+ partitioning keys.
+
+> [!WARNING]
+
+> PyDough currently only supports using references to scalar expressions from the `data` collection itself as partition keys, not an ancestor term, or a term from a child collection, or the result of a function call.
+
+If the partitioned data is accessed, its original ancestry is lost. Instead, it inherits the ancestry from the `PARTITION` clause. The default ancestor of `PARTITION`, if not specified, is the entire graph (just like for table collections). The partitioned data still has access to any of the down-streamed terms from its original ancestry.
+
+The ancestry of the `PARTITION` clause can be changed by prepending it with another collection, separated by a dot. However, this is currently only supported in PyDough when the collection before the dot is just an augmented version of the graph context, as opposed to another collection (e.g. `GRAPH.CALCULATE(x=42).PARTITION(...)` is supported, but `People.PARTITION(...)` is not).
+
+**Good Example #1**: Find every unique state.
+
+```py
+
+%%pydough
+
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(state)
+
+```
+
+**Good Example #2**: For every state, count how many addresses are in that state.
+
+```py
+
+%%pydough
+
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(
+
+state,
+
+n_addr=COUNT(addrs)
+
+)
+
+```
+
+**Good Example #3**: For every city/state, count how many people live in that city/state.
+
+```py
+
+%%pydough
+
+PARTITION(Addresses, name="addrs", by=(city, state)).CALCULATE(
+
+state,
+
+city,
+
+n_people=COUNT(addrs.current_occupants)
+
+)
+
+```
+
+**Good Example #4**: Find the top 5 years with the most people born in that year who have yahoo email accounts, listing the year and the number of people.
+
+```py
+
+%%pydough
+
+yahoo_people = People.CALCULATE(
+
+birth_year=YEAR(birth_date)
+
+).WHERE(ENDSWITH(email, "@yahoo.com"))
+
+PARTITION(yahoo_people, name="yah_ppl", by=birth_year).CALCULATE(
+
+birth_year,), ChunkSearchResult(score=0.040, text=Args:
+
+`property`: the metadata for a PyDough property that is being
+
+added to the collection.
+
+Raises:
+
+`PyDoughMetadataException`: if `property` is unable to be
+
+inserted into the collection.
+
+"""
+
+⋮----
+
+def add_inherited_property(self, property: AbstractMetadata) -> None
+
+⋮----
+
+"""
+
+Inserts a new inherited property into the collection.
+
+Args:
+
+`property`: the metadata for a PyDough property that is being
+
+added to the collection as an inherited property through
+
+a compound relationship.
+
+Raises:
+
+`PyDoughMetadataException`: if `property` is unable to be
+
+inserted into the collection as an inherited property.
+
+"""
+
+⋮----
+
+def get_nouns(self) -> MutableMapping[str, MutableSequence[AbstractMetadata]]
+
+⋮----
+
+nouns: MutableMapping[str, MutableSequence[AbstractMetadata]] = defaultdict(
+
+⋮----
+
+def get_property_names(self) -> MutableSequence[str]
+
+⋮----
+
+"""
+
+Retrieves the names of all properties of the collection, excluding
+
+inherited properties.
+
+"""
+
+⋮----
+
+def get_property(self, property_name: str) -> AbstractMetadata
+
+⋮----
+
+"""
+
+Fetches a property from the collection by name.
+
+Args:
+
+`property_name`: the name of the property being requested.
+
+Returns:
+
+The metadata for the requested property.
+
+Raises:
+
+`PyDoughMetadataException`: if a property with name `name` does not
+
+exist in the collection, or it does but as an inherited property.
+
+"""
+
+⋮----
+
+def __getitem__(self, key: str)
+
+⋮----
+
+"""
+
+Fetches the PropertyType implementation class for a string
+
+representation of the collection type.
+
+Args:
+
+`name`: the string representation of a collection type.
+
+`error_name`: the string used in error messages to describe
+
+the object that `name` came from.
+
+Returns:
+
+The class of the property type corresponding to `name`.
+
+Raises:
+
+`PyDoughMetadataException` if the string does not correspond
+
+to a known class type.
+
+"""
+
+⋮----
+
+"""
+
+Generic verification that the JSON for a collection is well formed.
+
+Args:
+
+`graph`: the metadata for the graph that the collection would
+
+be added to.
+
+`collection_name`: the name of the collection that would be added
+
+to the graph.
+
+`collection_json`: the JSON object that is being verified to ensure
+
+it represents a valid collection.
+
+Raises:
+
+`PyDoughMetadataException`: if the JSON does not meet the necessary
+
+structure properties.
+
+"""
+
+# Check that the collection name is valid string.
+
+⋮----
+
+# Check that the graph argument is indeed a graph metadata, and that the
+
+# name of the graph does not collide with the name of the collection.
+
+⋮----
+
+error_name: str = f"collection {collection_name!r} in {graph.error_name}"
+
+⋮----
+
+# Check that the JSON data contains the required properties `type` and
+
+# `properties`.
+
+⋮----
+
+"""
+
+Parses a JSON object into the metadata for a collection and inserts it
+
+into the graph.
+
+Args:
+
+`graph`: the metadata for the graph that the collection will be
+
+added to.
+
+`collection_name`: the name of the collection that will be added
+
+to the graph.
+
+`collection_json`: the JSON object that is being parsed to create
+
+the new collection.
+
+Raises:
+
+`PyDoughMetadataException`: if the JSON does not meet the necessary
+
+structure properties.
+
+"""
+
+⋮----
+
+# Create the string used to identify the property in error messages.
+
+error_name = f"property {collection_name!r} of {graph.error_name}"
+
+⋮----
+
+# Verify that the JSON is well structured, in terms of generic
+
+# properties.
+
+⋮----
+
+# Dispatch to a specific parsing procedure based on the type of
+
+# collection.
+
+property_class: type[CollectionMetadata] = (
+
+````
+
+## File: pydough/metadata/collections/README.md
+
+````markdown
+
+# Metadata Collections
+
+This subdirectory of the PyDough metadata directory deals with the definition of PyDough metadata collections.
+
+A collection in PyDough is a group of properties that are logically related and can be accessed together. Collections are used to represent structured data within a graph, and they can contain various types of properties, including inherited properties from other collections.), ChunkSearchResult(score=0.039, text="properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_22": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": 0},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_23": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": "int512"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_24": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": "int64", "key": "value"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_25": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": "int64"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+},
+
+"key": "value"
+
+}
+
+},
+
+"REGION_FORMAT_26": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["nations"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": "int64"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"},
+
+"nations": {
+
+"type": "simple_join",
+
+"other_collection_name": "Nations",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {"key": ["region_key"]},
+
+"reverse_relationship_name": "region"
+
+}
+
+}
+
+},
+
+"Nations": {
+
+"type": "simple_table",
+
+"table_path": "tpch.NATION",
+
+"unique_properties": ["key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "n_nationkey", "data_type": "int64"},
+
+"name": {"type": "table_column", "column_name": "n_name", "data_type": "string"},
+
+"region_key": {"type": "table_column", "column_name": "n_regionkey", "data_type": "int64"},
+
+"comment": {"type": "table_column", "column_name": "n_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_27": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["region_key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": "int64"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_28": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": ["key", "name", "key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "r_regionkey", "data_type": "int64"},
+
+"name": {"type": "table_column", "column_name": "r_name", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "r_comment", "data_type": "string"}
+
+}
+
+}
+
+},
+
+"REGION_FORMAT_29": {
+
+"Regions": {
+
+"type": "simple_table",
+
+"table_path": "tpch.REGION",
+
+"unique_properties": [["key", "name"], ["name", "key"]],), ChunkSearchResult(score=0.039, text=People.ORDER_BY(first_name, last_name.DESC(), COUNT(packages))
+
+```
+
+This is valid because the collation term is by default ascending based on the `collation_default_asc` config. Setting the `propagate_collation` config to `True` will cause the collation to be propagated to the `COUNT(packages)` term. Hence its equivalent to:
+
+```py
+
+%%pydough
+
+People.ORDER_BY(first_name.ASC(), last_name.DESC(), COUNT(packages).DESC())
+
+```
+
+`COUNT(packages)` becomes a descending term because `propagate_collation` is `True` and the previous term `last_name.DESC()` is descending.
+
+`first_name` is ascending because `collation_default_asc` is `True` and `first_name` is the first term. The `propagate_collation` config does not affect the collation of the first term.
+
+**Bad Example #1**: Sort each person by their account balance in descending order. This is invalid because the `People` collection does not have an `account_balance` property.
+
+```py
+
+%%pydough
+
+People.ORDER_BY(account_balance.DESC())
+
+```
+
+**Bad Example #2**: Sort each address by the birth date of the people who live there. This is invalid because `current_occupants` is a plural property of `Addresses`, so `current_occupants.birth_date` is plural and cannot be used as an ordering term unless aggregated.
+
+```py
+
+%%pydough
+
+Addresses.ORDER_BY(current_occupants.ASC())
+
+```
+
+**Bad Example #3**: Same as good example #5, but incorrect because `state` and `city` were not made available for down-streaming.
+
+```py
+
+%%pydough
+
+Addresses.WHERE(
+
+state == "OHIO"
+
+).current_occupants.ORDER_BY(
+
+state.ASC(),
+
+city.ASC(),
+
+ssn.ASC(),
+
+)
+
+```
+
+**Bad Example #4**: Sort every person. This is invalid because no collation terms are provided.
+
+```py
+
+%%pydough
+
+People.ORDER_BY()
+
+```
+
+<!-- TOC --><a name="top_k"></a>
+
+### TOP_K
+
+A similar operation to `ORDER_BY` is `TOP_K`. The `TOP_K` operation also sorts a collection, but then uses the ordered results in order to pick the first `k`, values, where `k` is a provided constant.
+
+The syntax for this is `.TOP_K(k, by=...)` where `k` is a positive integer and the `by` clause is either a single collation term (as seen in `ORDER_BY`) or an iterable of collation terms (e.g. a list or tuple). The same restrictions as `ORDER_BY` apply to `TOP_K` regarding their collation terms.
+
+PyDough provides `collation_default_asc` and `propagate_collation` configs to control the default collation and whether to propagate the collation if the current expression is not a collation expression. Please see the [Session Configs](./usage.md#session-configs) documentation for more details.
+
+The terms in the collection are unchanged by the `TOP_K` clause, since the only change is the order of the records and which ones are kept/dropped.
+
+**Good Example #1**: Find the 10 people who have ordered the most packages, including their first/last name, birth date, and the number of packages. If there is a tie, break it by the lowest ssn.
+
+```py
+
+%%pydough
+
+People.CALCULATE(
+
+first_name,
+
+last_name,
+
+birth_date,
+
+n_packages=COUNT(packages)
+
+).TOP_K(10, by=(n_packages.DESC(), ssn.ASC()))
+
+```
+
+**Good Example #2**: Find the 5 most recently shipped packages, with ties broken arbitrarily.
+
+```py
+
+%%pydough
+
+Packages.TOP_K(5, by=order_date.DESC())
+
+```
+
+**Good Example #3**: Find the 100 addresses that have most recently had packages either shipped or billed to them, breaking ties arbitrarily.
+
+```py
+
+%%pydough
+
+default_date = datetime.date(1970, 1, 1)
+
+most_recent_ship = DEFAULT_TO(MAX(packages_shipped.order_date), default_date)
+
+most_recent_bill = DEFAULT_TO(MAX(packages_billed.order_date), default_date)
+
+most_recent_package = IFF(most_recent_ship < most_recent_bill, most_recent_ship, most_recent_bill)
+
+Addresses.TOP_K(10, by=most_recent_package.DESC())
+
+```
+
+**Good Example #4**: Find the top 3 people who have spent the most money on packages, including their first/last name, and the total cost of all of their packages.
+
+```py
+
+%%pydough
+
+People.CALCULATE(
+
+first_name,
+
+last_name,
+
+total_package_cost=SUM(packages.package_cost)), ChunkSearchResult(score=0.027, text=### SINGULAR
+
+In PyDough, it is required that if we are accessing a sub-collection in a collection context, the collection must be singular with regards to the sub-collection. Certain PyDough operations, such as specific filters, can cause plural data to become singular. In this case, PyDough will still ban the plural data from being treated as singular unless the `.SINGULAR()` modifier is used to tell PyDough that the data should be treated as singular. It is very important that this only be used if the user is certain that the data will be singular, since otherwise it can result in undefined behavior when the PyDough code is executed.
+
+**Good Example #1**: Access the package cost of the most recent package ordered by each person. This is valid because even though `.packages` is plural with regards to `People`, the filter done will ensure that there is only one record for each record of `People`, so `.SINGULAR()` is valid.
+
+```py
+
+%%pydough
+
+most_recent_package = packages.WHERE(
+
+RANKING(by=order_date.DESC(), levels=1) == 1
+
+).SINGULAR()
+
+People.CALCULATE(
+
+ssn,
+
+first_name,
+
+middle_name,
+
+last_name,
+
+most_recent_package_cost=most_recent_package.package_cost
+
+)
+
+```
+
+**Good Example #2**: Access the email of the current occupant of each address that has the name `"John Smith"` (no middle name). This is valid if it is safe to assume that each address only has one current occupant named `"John Smith"` without a middle name.
+
+```py
+
+%%pydough
+
+js = current_occupants.WHERE(
+
+(first_name == "John") &
+
+(last_name == "Smith") &
+
+ABSENT(middle_name)
+
+).SINGULAR()
+
+Addresses.CALCULATE(
+
+address_id,
+
+john_smith_email=DEFAULT_TO(js.email, "NO JOHN SMITH LIVING HERE")
+
+)
+
+```
+
+**Bad Example #1**: This is invalid primarily because of two reasons:
+
+1. Each `Addresses` might have multiple `current_occupants` named `John`, therefore the use of `.SINGULAR()`, though it would not raise an exception, is invalid.
+
+2. Even if, `current_occupants` were non-plural after using `SINGULAR`, `packages` is a plural sub-collection of `current_occupants`, therefore, the data being accessed would be plural with regards to `Addresses`.
+
+```py
+
+%%pydough
+
+Addresses.CALCULATE(
+
+package_id=current_occupants.WHERE(
+
+first_name == "John"
+
+).SINGULAR().packages.package_id
+
+)
+
+```
+
+<!-- TOC --><a name="best"></a>), ChunkSearchResult(score=0.027, text=### ORDER_BY
+
+Another operation that can be done onto PyDough collections is sorting them. This is done by appending a collection with `.ORDER_BY(...)` which will order the collection by the collation terms between the parenthesis. The collation terms must be 1+ expressions that can be inside of a `CALCULATE` term (singular expressions with regards to the current context), each decorated with information making it usable as a collation.
+
+An expression becomes a collation expression when it is appended with `.ASC()` (indicating that the expression should be used to sort in ascending order) or `.DESC()` (indicating that the expression should be used to sort in descending order). Both `.ASC()` and `.DESC()` take in an optional argument `na_pos` indicating where to place null values. This keyword argument can be either `"first"` or `"last"`, and the default is `"first"` for `.ASC()` and `"last"` for `.DESC()`. The way the sorting works is that it orders by the first collation term provided, and in cases of ties it moves on to the second collation term, and if there are ties in that it moves on to the third, and so on until there are no more terms to sort by, at which point the ties are broken arbitrarily.
+
+If there are multiple `ORDER_BY` terms, the last one is the one that takes precedence. The terms in the collection are unchanged by the `ORDER_BY` clause, since the only change is the order of the records.
+
+PyDough provides `collation_default_asc` and `propagate_collation` configs to control the default collation and whether to propagate the collation if the current expression is not a collation expression. Please see the [Session Configs](./usage.md#session-configs) documentation for more details.
+
+**Good Example #1**: Order every person alphabetically by last name, then first name, then middle name (people with no middle name going last).
+
+```py
+
+%%pydough
+
+People.ORDER_BY(last_name.ASC(), first_name.ASC(), middle_name.ASC(na_pos="last"))
+
+```
+
+**Good Example #2**: For every person list their SSN & how many packages they have ordered, and order them from highest number of orders to lowest, breaking ties in favor of whoever is oldest.
+
+```py
+
+%%pydough
+
+People.CALCULATE(
+
+ssn, n_packages=COUNT(packages).DESC()
+
+).ORDER_BY(
+
+n_packages.DESC(), birth_date.ASC()
+
+)
+
+```
+
+**Good Example #3**: Find every address that has at least 1 person living in it and sort them highest-to-lowest by number of occupants, with ties broken by address id in ascending order.
+
+```py
+
+%%pydough
+
+Addresses.WHERE(
+
+HAS(current_occupants)
+
+).ORDER_BY(
+
+COUNT(current_occupants).DESC(), address_id.ASC()
+
+)
+
+```
+
+**Good Example #4**: Sort every person alphabetically by the state they live in, then the city they live in, then by their ssn. People without a current address should go last.
+
+```py
+
+%%pydough
+
+People.ORDER_BY(
+
+current_address.state.ASC(na_pos="last"),
+
+current_address.city.ASC(na_pos="last"),
+
+ssn.ASC(),
+
+)
+
+```
+
+**Good Example #5**: Same as good example #4, but written so it only includes people who are current occupants of an address in Ohio, and accesses the state/city via down-streaming.
+
+```py
+
+%%pydough
+
+Addresses.CALCULATE(state, city).WHERE(
+
+state == "OHIO"
+
+).current_occupants.ORDER_BY(
+
+state.ASC(),
+
+city.ASC(),
+
+ssn.ASC(),
+
+)
+
+```
+
+**Good Example #6**: Find all people who are in the top 1% of customers according to number of packages ordered.
+
+```py
+
+%%pydough
+
+People.WHERE(PERCENTILE(by=COUNT(packages).ASC()) == 100)
+
+```
+
+**Good Example #7**: Sort every person by their first name. This is valid because the collation term is by default ascending based on the `collation_default_asc` config.
+
+```py
+
+%%pydough
+
+People.ORDER_BY(first_name)
+
+```
+
+**Good Example #8**: Sort every person by their first name in ascending order, last name in descending order, and the number of packages they have ordered in descending order.
+
+Let's keep the default behavior of `collation_default_asc` and set `propagate_collation` to `True`. We can do this by setting the [Session Configs](./usage.md#session-configs).
+
+```py
+
+%%pydough), ChunkSearchResult(score=0.027, text=## File: tests/test_plan_refsols/count_cust_supplier_nation_combos.txt
+
+````
+
+ROOT(columns=[('year', year), ('customer_nation', customer_nation), ('supplier_nation', supplier_nation), ('num_occurrences', num_occurrences), ('total_value', total_value)], orderings=[])
+
+PROJECT(columns={'customer_nation': customer_nation, 'num_occurrences': DEFAULT_TO(agg_0, 0:int64), 'supplier_nation': supplier_nation, 'total_value': DEFAULT_TO(agg_1, 0:int64), 'year': year})
+
+AGGREGATE(keys={'customer_nation': customer_nation, 'supplier_nation': supplier_nation, 'year': year}, aggregations={'agg_0': COUNT(), 'agg_1': SUM(value)})
+
+PROJECT(columns={'customer_nation': name, 'supplier_nation': name_18, 'value': extended_price, 'year': YEAR(order_date)})
+
+JOIN(conditions=[t0.nation_key_14 == t1.key], types=['inner'], columns={'extended_price': t0.extended_price, 'name': t0.name, 'name_18': t1.name, 'order_date': t0.order_date})
+
+JOIN(conditions=[t0.supplier_key_9 == t1.key], types=['inner'], columns={'extended_price': t0.extended_price, 'name': t0.name, 'nation_key_14': t1.nation_key, 'order_date': t0.order_date})
+
+JOIN(conditions=[t0.part_key == t1.part_key & t0.supplier_key == t1.supplier_key], types=['inner'], columns={'extended_price': t0.extended_price, 'name': t0.name, 'order_date': t0.order_date, 'supplier_key_9': t1.supplier_key})
+
+JOIN(conditions=[t0.key_5 == t1.order_key], types=['inner'], columns={'extended_price': t1.extended_price, 'name': t0.name, 'order_date': t0.order_date, 'part_key': t1.part_key, 'supplier_key': t1.supplier_key})
+
+JOIN(conditions=[t0.key_2 == t1.customer_key], types=['inner'], columns={'key_5': t1.key, 'name': t0.name, 'order_date': t1.order_date})
+
+JOIN(conditions=[t0.key == t1.nation_key], types=['inner'], columns={'key_2': t1.key, 'name': t0.name})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name})
+
+SCAN(table=tpch.CUSTOMER, columns={'key': c_custkey, 'nation_key': c_nationkey})
+
+SCAN(table=tpch.ORDERS, columns={'customer_key': o_custkey, 'key': o_orderkey, 'order_date': o_orderdate})
+
+SCAN(table=tpch.LINEITEM, columns={'extended_price': l_extendedprice, 'order_key': l_orderkey, 'part_key': l_partkey, 'supplier_key': l_suppkey})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'nation_key': s_nationkey})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name})
+
+````
+
+## File: tests/test_plan_refsols/count_multiple_subcollections_alongside_aggs.txt
+
+````
+
+ROOT(columns=[('nation_name', nation_name), ('num_customers', num_customers), ('num_suppliers', num_suppliers), ('customer_to_supplier_wealth_ratio', customer_to_supplier_wealth_ratio)], orderings=[])
+
+PROJECT(columns={'customer_to_supplier_wealth_ratio': DEFAULT_TO(agg_0, 0:int64) / DEFAULT_TO(agg_1, 0:int64), 'nation_name': key, 'num_customers': DEFAULT_TO(agg_2, 0:int64), 'num_suppliers': DEFAULT_TO(agg_3, 0:int64)})
+
+JOIN(conditions=[t0.key == t1.nation_key], types=['left'], columns={'agg_0': t0.agg_0, 'agg_1': t1.agg_1, 'agg_2': t0.agg_2, 'agg_3': t1.agg_3, 'key': t0.key})
+
+JOIN(conditions=[t0.key == t1.nation_key], types=['left'], columns={'agg_0': t1.agg_0, 'agg_2': t1.agg_2, 'key': t0.key})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey})
+
+AGGREGATE(keys={'nation_key': nation_key}, aggregations={'agg_0': SUM(acctbal), 'agg_2': COUNT()})
+
+SCAN(table=tpch.CUSTOMER, columns={'acctbal': c_acctbal, 'nation_key': c_nationkey})
+
+AGGREGATE(keys={'nation_key': nation_key}, aggregations={'agg_1': SUM(account_balance), 'agg_3': COUNT()})
+
+SCAN(table=tpch.SUPPLIER, columns={'account_balance': s_acctbal, 'nation_key': s_nationkey})
+
+````
+
+## File: tests/test_plan_refsols/count_single_subcollection.txt
+
+````
+
+ROOT(columns=[('nation_name', nation_name), ('num_customers', num_customers)], orderings=[])
+
+PROJECT(columns={'nation_name': key, 'num_customers': DEFAULT_TO(agg_0, 0:int64)})
+
+JOIN(conditions=[t0.key == t1.nation_key], types=['left'], columns={'agg_0': t1.agg_0, 'key': t0.key}))], graph_search_results=[], web_search_results=None, document_search_results=None), 'citations': [Citation(id='5c77f3e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '5c77f3ee-3b92-54b0-9292-6a1e87c70af6', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.058595317725752515, 'text': '### Property Type: Cartesian Product\n\nA property with this type describes a subcollection of the current collection that is derived from performing an cross-join on two collections (e.g. SELECT ... FROM T1, T2). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "cartesian_product" and have the following additional key-value pairs in their metadata JSON object:\n\n`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports cartesian_product properties.\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\nExample of the structure of the metadata for a cartesian product property (connects every record of a collection `CalendarDates` to every record of collection `InventorySnapshots`):\n\n```json\n\n"snapshots": {\n\n"type": "cartesian_product",\n\n"other_collection_name": "InventorySnapshots",\n\n"reverse_relationship_name": "calendar_dates"\n\n}\n\n```\n\n<!-- TOC --><a name="property-type-compound-relationship"></a>\n\n### Property Type: Compound Relationship\n\nA property with this type describes a subcollection of the current collection that is derived from combining a relationship from this collection to one of its subcollections with a relationship from that subcollection to one of its subcollections. Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship, and the subcollection can inherit additional properties from the middle subcollection. Properties of this type have a type string of "compound" and have the following additional key-value pairs in their metadata JSON object:\n\n`primary_property`: a string indicating the name of a property that connects this collection to a subcollection.\n\n`secondary_property`: a string indicating the name of the property that connects the primary subcollection to one of its subcollections.\n\n`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection’s subcollection, and false otherwise.\n\n`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the subcollection’s subcollection, and false otherwise (true if-and-only-if the reverse relationship is singular).\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\n`inherited_properties`: a JSON object indicating any properties of the primary subcollection that should be accessible from the secondary subcollection. The keys are the string names that the inherited properties are referred to by, which can be a new alias or the original name, and the values are names of the properties of the collection accessed by the primary property. The names used for the inherited properties cannot overlap with any other names of properties of the secondary subcollection, including other inherited properties it could have from other compound relationships. This JSON object can be empty if there are no inherited properties.', 'metadata': {'version': 'v0', 'chunk_order': 73, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 5, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='5c77f3e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '5c77f3ee-3b92-54b0-9292-6a1e87c70af6', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.058595317725752515, 'text': '### Property Type: Cartesian Product\n\nA property with this type describes a subcollection of the current collection that is derived from performing an cross-join on two collections (e.g. SELECT ... FROM T1, T2). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "cartesian_product" and have the following additional key-value pairs in their metadata JSON object:\n\n`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports cartesian_product properties.\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\nExample of the structure of the metadata for a cartesian product property (connects every record of a collection `CalendarDates` to every record of collection `InventorySnapshots`):\n\n```json\n\n"snapshots": {\n\n"type": "cartesian_product",\n\n"other_collection_name": "InventorySnapshots",\n\n"reverse_relationship_name": "calendar_dates"\n\n}\n\n```\n\n<!-- TOC --><a name="property-type-compound-relationship"></a>\n\n### Property Type: Compound Relationship\n\nA property with this type describes a subcollection of the current collection that is derived from combining a relationship from this collection to one of its subcollections with a relationship from that subcollection to one of its subcollections. Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship, and the subcollection can inherit additional properties from the middle subcollection. Properties of this type have a type string of "compound" and have the following additional key-value pairs in their metadata JSON object:\n\n`primary_property`: a string indicating the name of a property that connects this collection to a subcollection.\n\n`secondary_property`: a string indicating the name of the property that connects the primary subcollection to one of its subcollections.\n\n`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection’s subcollection, and false otherwise.\n\n`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the subcollection’s subcollection, and false otherwise (true if-and-only-if the reverse relationship is singular).\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\n`inherited_properties`: a JSON object indicating any properties of the primary subcollection that should be accessible from the secondary subcollection. The keys are the string names that the inherited properties are referred to by, which can be a new alias or the original name, and the values are names of the properties of the collection accessed by the primary property. The names used for the inherited properties cannot overlap with any other names of properties of the secondary subcollection, including other inherited properties it could have from other compound relationships. This JSON object can be empty if there are no inherited properties.', 'metadata': {'version': 'v0', 'chunk_order': 73, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 5, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='5c77f3e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '5c77f3ee-3b92-54b0-9292-6a1e87c70af6', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.058595317725752515, 'text': '### Property Type: Cartesian Product\n\nA property with this type describes a subcollection of the current collection that is derived from performing an cross-join on two collections (e.g. SELECT ... FROM T1, T2). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "cartesian_product" and have the following additional key-value pairs in their metadata JSON object:\n\n`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports cartesian_product properties.\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\nExample of the structure of the metadata for a cartesian product property (connects every record of a collection `CalendarDates` to every record of collection `InventorySnapshots`):\n\n```json\n\n"snapshots": {\n\n"type": "cartesian_product",\n\n"other_collection_name": "InventorySnapshots",\n\n"reverse_relationship_name": "calendar_dates"\n\n}\n\n```\n\n<!-- TOC --><a name="property-type-compound-relationship"></a>\n\n### Property Type: Compound Relationship\n\nA property with this type describes a subcollection of the current collection that is derived from combining a relationship from this collection to one of its subcollections with a relationship from that subcollection to one of its subcollections. Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship, and the subcollection can inherit additional properties from the middle subcollection. Properties of this type have a type string of "compound" and have the following additional key-value pairs in their metadata JSON object:\n\n`primary_property`: a string indicating the name of a property that connects this collection to a subcollection.\n\n`secondary_property`: a string indicating the name of the property that connects the primary subcollection to one of its subcollections.\n\n`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection’s subcollection, and false otherwise.\n\n`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the subcollection’s subcollection, and false otherwise (true if-and-only-if the reverse relationship is singular).\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\n`inherited_properties`: a JSON object indicating any properties of the primary subcollection that should be accessible from the secondary subcollection. The keys are the string names that the inherited properties are referred to by, which can be a new alias or the original name, and the values are names of the properties of the collection accessed by the primary property. The names used for the inherited properties cannot overlap with any other names of properties of the secondary subcollection, including other inherited properties it could have from other compound relationships. This JSON object can be empty if there are no inherited properties.', 'metadata': {'version': 'v0', 'chunk_order': 73, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 5, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='39e4263', object='citation', is_new=True, span=None, source_type=None, payload={'id': '39e4263d-e24b-5859-b0ac-bd3257022752', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07609445987055095, 'text': 'People\n\n```\n\n**Good Example #2**: Obtain every record of the `Addresses` collection. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output.\n\n```py\n\n%%pydough\n\nGRAPH.Addresses\n\n```\n\n**Good Example #3**: Obtain every record of the `Packages` collection. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`) is automatically included in the output.\n\n```py\n\n%%pydough\n\nPackages\n\n```\n\n**Bad Example #1**: Obtain every record of the `Products` collection (there is no `Products` collection).\n\n```py\n\n%%pydough\n\nProducts\n\n```\n\n**Bad Example #2**: Obtain every record of the `Addresses` collection (but the name `Addresses` has been reassigned to a variable).\n\n```py\n\n%%pydough\n\nAddresses = 42\n\nAddresses\n\n```\n\n**Bad Example #3**: Obtain every record of the `Addresses` collection (but the graph name `HELLO` is the wrong graph name for this example).\n\n```py\n\n%%pydough\n\nHELLO.Addresses\n\n```\n\n<!-- TOC --><a name="sub-collections"></a>\n\n### Sub-Collections\n\nThe next step in PyDough after accessing a collection is to access its sub-collections. Using the syntax `collection.subcollection`, you can traverse into every record of `subcollection` for each record in `collection`. This operation may change the cardinality if records of `collection` have multiple associated records in `subcollection`. Additionally, duplicate records may appear in the output if records in `subcollection` are linked to multiple records in `collection`.\n\n**Good Example #1**: For every person, obtains their current address. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output. A record from `Addresses` can be included multiple times if multiple different `People` records have it as their current address, or it could be missing entirely if no person has it as their current address.\n\n```py\n\n%%pydough\n\nPeople.current_addresses\n\n```\n\n**Good Example #2**: For every package, get the person who shipped it. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output. A record from `People` can be included multiple times if multiple packages were ordered by that person, or it could be missing entirely if that person is not the customer who ordered any package.\n\n```py\n\n%%pydough\n\nGRAPH.Packages.customer\n\n```\n\n**Good Example #3**: For every address, get all packages that someone who lives at that address has ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every current occupant has a single address it maps back to, and every package has a single customer it maps back to.\n\n```py\n\n%%pydough\n\nAddresses.current_occupants.packages\n\n```\n\n**Good Example #4**: For every person, get all packages they have ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every package has a single customer it maps back to.\n\n```py\n\n%%pydough\n\nPeople.packages\n\n```\n\n**Bad Example #1**: For every address, obtains all people who used to live there. This is invalid because the `Addresses` collection does not have a `former_occupants` property.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 42, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 3, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='39e4263', object='citation', is_new=True, span=None, source_type=None, payload={'id': '39e4263d-e24b-5859-b0ac-bd3257022752', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07609445987055095, 'text': 'People\n\n```\n\n**Good Example #2**: Obtain every record of the `Addresses` collection. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output.\n\n```py\n\n%%pydough\n\nGRAPH.Addresses\n\n```\n\n**Good Example #3**: Obtain every record of the `Packages` collection. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`) is automatically included in the output.\n\n```py\n\n%%pydough\n\nPackages\n\n```\n\n**Bad Example #1**: Obtain every record of the `Products` collection (there is no `Products` collection).\n\n```py\n\n%%pydough\n\nProducts\n\n```\n\n**Bad Example #2**: Obtain every record of the `Addresses` collection (but the name `Addresses` has been reassigned to a variable).\n\n```py\n\n%%pydough\n\nAddresses = 42\n\nAddresses\n\n```\n\n**Bad Example #3**: Obtain every record of the `Addresses` collection (but the graph name `HELLO` is the wrong graph name for this example).\n\n```py\n\n%%pydough\n\nHELLO.Addresses\n\n```\n\n<!-- TOC --><a name="sub-collections"></a>\n\n### Sub-Collections\n\nThe next step in PyDough after accessing a collection is to access its sub-collections. Using the syntax `collection.subcollection`, you can traverse into every record of `subcollection` for each record in `collection`. This operation may change the cardinality if records of `collection` have multiple associated records in `subcollection`. Additionally, duplicate records may appear in the output if records in `subcollection` are linked to multiple records in `collection`.\n\n**Good Example #1**: For every person, obtains their current address. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output. A record from `Addresses` can be included multiple times if multiple different `People` records have it as their current address, or it could be missing entirely if no person has it as their current address.\n\n```py\n\n%%pydough\n\nPeople.current_addresses\n\n```\n\n**Good Example #2**: For every package, get the person who shipped it. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output. A record from `People` can be included multiple times if multiple packages were ordered by that person, or it could be missing entirely if that person is not the customer who ordered any package.\n\n```py\n\n%%pydough\n\nGRAPH.Packages.customer\n\n```\n\n**Good Example #3**: For every address, get all packages that someone who lives at that address has ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every current occupant has a single address it maps back to, and every package has a single customer it maps back to.\n\n```py\n\n%%pydough\n\nAddresses.current_occupants.packages\n\n```\n\n**Good Example #4**: For every person, get all packages they have ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every package has a single customer it maps back to.\n\n```py\n\n%%pydough\n\nPeople.packages\n\n```\n\n**Bad Example #1**: For every address, obtains all people who used to live there. This is invalid because the `Addresses` collection does not have a `former_occupants` property.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 42, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 3, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='0e3bd07', object='citation', is_new=True, span=None, source_type=None, payload={'id': '0e3bd071-0c58-50fc-8733-9b7089432c79', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07814826302729529, 'text': '# PyDough DSL Spec\n\nThis page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.\n\n<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->\n\n[Example Graph](#example-graph)\n\n[Collections](#collections)\n\n[Sub-Collections](#sub-collections)\n\n[CALCULATE](#calculate)\n\n[Contextless Expressions](#contextless-expressions)\n\n[Expressions](#expressions)\n\n[Down-Streaming](#down-streaming)\n\n[Collection Operators](#collection-operators)\n\n[WHERE](#where)\n\n[ORDER_BY](#order_by)\n\n[TOP_K](#top_k)\n\n[PARTITION](#partition)\n\n[SINGULAR](#singular)\n\n[NEXT / PREV](#next-prev)\n\n[BEST](#best)\n\n[Induced Properties](#induced-properties)\n\n[Induced Scalar Properties](#induced-scalar-properties)\n\n[Induced Subcollection Properties](#induced-subcollection-properties)\n\n[Induced Arbitrary Joins](#induced-arbitrary-joins)\n\n[Larger Examples](#larger-examples)\n\n[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)\n\n[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)\n\n[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)\n\n[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)\n\n[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)\n\n<!-- TOC end -->\n\n<!-- TOC --><a name="example-graph"></a>\n\n## Example Graph\n\nThe examples in this document use a metadata graph (named `GRAPH`) with the following collections:\n\n`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.\n\n`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.\n\n`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.\n\nThere are also the following sub-collection relationships:\n\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n\n`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.\n\n`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.\n\n`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.\n\n<!-- TOC --><a name="collections"></a>\n\n## Collections\n\nThe simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.\n\n**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 41, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 4, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='2e54fa8', object='citation', is_new=True, span=None, source_type=None, payload={'id': '2e54fa8f-c27e-5b2f-a7c8-ce9d1f587823', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07465318143067504, 'text': 'Unique properties of collection: [\'key\']\n\nScalar properties:\n\ncomment\n\nkey\n\nname\n\nregion_key\n\nSubcollection properties:\n\ncustomers\n\nregion\n\nsuppliers\n\nCall pydough.explain(graph[\'nations\'][property_name]) to learn more about any of these properties\n\n```\n\n3a. Calling `explain` on a property\'s metadata (scalar attribute).\n\n```py\n\nimport pydough\n\ngraph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")\n\npydough.explain(graph["nations"]["name"], verbose=True)\n\n```\n\n```\n\nPyDough property: nations.name\n\nColumn name: main.NATION.n_name\n\nData type: string\n\n```\n\n3b. Calling `explain` on a property\'s metadata (sub-collection).\n\n```py\n\nimport pydough\n\ngraph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")\n\npydough.explain(graph["nations"]["customers"], verbose=True)\n\n```\n\n```\n\nPyDough property: nations.customers\n\nThis property connects collection nations to customers.\n\nCardinality of connection: One -> Many\n\nIs reversible: yes\n\nReverse property: customers.nation\n\nThe subcollection relationship is defined by the following join conditions:\n\nnations.key == customers.nation_key\n\n```\n\n4a. Calling `explain` on PyDough code for a collection (example 1: entire graph).\n\n```py\n\n%%pydough\n\nresult = TPCH\n\npydough.explain(result, verbose=True)\n\n```\n\n```\n\nPyDough collection representing the following logic:\n\nTPCH\n\nThis node is a reference to the global context for the entire graph. An operation must be done onto this node (e.g. a CALCULATE or accessing a collection) before it can be executed.\n\nThe collection does not have any terms that can be included in a result if it is executed.\n\nThe collection has access to the following collections:\n\ncustomers, lines, nations, orders, parts, regions, suppliers, supply_records\n\nCall pydough.explain_term(collection, term) to learn more about any of these\n\nexpressions or collections that the collection has access to.\n\n```\n\n4b. Calling `explain` on PyDough code for a collection (example 2: single collection).\n\n```py\n\n%%pydough\n\nresult = nations\n\npydough.explain(result, verbose=True)\n\n```\n\n```\n\nPyDough collection representing the following logic:\n\n──┬─ TPCH\n\n└─── TableCollection[nations]\n\nThis node, specifically, accesses the collection nations.\n\nCall pydough.explain(graph[\'nations\']) to learn more about this collection.\n\nThe following terms will be included in the result if this collection is executed:\n\ncomment, key, name, region_key\n\nThe collection has access to the following expressions:\n\ncomment, key, name, region_key\n\nThe collection has access to the following collections:\n\ncustomers, region, suppliers\n\nCall pydough.explain_term(collection, term) to learn more about any of these\n\nexpressions or collections that the collection has access to.\n\n```\n\n4c. Calling `explain` on PyDough code for a collection (example 3: filtering).\n\n```py\n\n%%pydough\n\nresult = nations.WHERE(region.name == "EUROPE")\n\npydough.explain(result, verbose=True)\n\n```\n\n```\n\nPyDough collection representing the following logic:\n\n──┬─ TPCH\n\n├─── TableCollection[nations]\n\n└─┬─ Where[$1.name == \'EUROPE\']\n\n└─┬─ AccessChild\n\n└─── SubCollection[region]\n\nThis node first derives the following children before doing its main task:\n\nchild $1:\n\n└─── SubCollection[region]\n\nThe main task of this node is to filter on the following conditions:\n\n$1.name == \'EUROPE\', aka region.name == \'EUROPE\'\n\nThe following terms will be included in the result if this collection is executed:\n\ncomment, key, name, region_key\n\nThe collection has access to the following expressions:\n\ncomment, key, name, region_key\n\nThe collection has access to the following collections:\n\ncustomers, region, suppliers\n\nCall pydough.explain_term(collection, term) to learn more about any of these\n\nexpressions or collections that the collection has access to.\n\n```\n\n4d. Calling `explain` on PyDough code for a collection (example 4: CALCULATE).\n\n```py\n\n%%pydough\n\nresult = nations.WHERE(region.name == "EUROPE").CALCULATE(name, n_custs=COUNT(customers))\n\npydough.explain(result, verbose=True)\n\n```\n\n```\n\nPyDough collection representing the following logic:', 'metadata': {'version': 'v0', 'chunk_order': 85, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 9, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='0e3bd07', object='citation', is_new=True, span=None, source_type=None, payload={'id': '0e3bd071-0c58-50fc-8733-9b7089432c79', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07814826302729529, 'text': '# PyDough DSL Spec\n\nThis page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.\n\n<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->\n\n[Example Graph](#example-graph)\n\n[Collections](#collections)\n\n[Sub-Collections](#sub-collections)\n\n[CALCULATE](#calculate)\n\n[Contextless Expressions](#contextless-expressions)\n\n[Expressions](#expressions)\n\n[Down-Streaming](#down-streaming)\n\n[Collection Operators](#collection-operators)\n\n[WHERE](#where)\n\n[ORDER_BY](#order_by)\n\n[TOP_K](#top_k)\n\n[PARTITION](#partition)\n\n[SINGULAR](#singular)\n\n[NEXT / PREV](#next-prev)\n\n[BEST](#best)\n\n[Induced Properties](#induced-properties)\n\n[Induced Scalar Properties](#induced-scalar-properties)\n\n[Induced Subcollection Properties](#induced-subcollection-properties)\n\n[Induced Arbitrary Joins](#induced-arbitrary-joins)\n\n[Larger Examples](#larger-examples)\n\n[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)\n\n[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)\n\n[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)\n\n[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)\n\n[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)\n\n<!-- TOC end -->\n\n<!-- TOC --><a name="example-graph"></a>\n\n## Example Graph\n\nThe examples in this document use a metadata graph (named `GRAPH`) with the following collections:\n\n`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.\n\n`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.\n\n`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.\n\nThere are also the following sub-collection relationships:\n\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n\n`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.\n\n`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.\n\n`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.\n\n<!-- TOC --><a name="collections"></a>\n\n## Collections\n\nThe simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.\n\n**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 41, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 4, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='0e3bd07', object='citation', is_new=True, span=None, source_type=None, payload={'id': '0e3bd071-0c58-50fc-8733-9b7089432c79', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07814826302729529, 'text': '# PyDough DSL Spec\n\nThis page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.\n\n<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->\n\n[Example Graph](#example-graph)\n\n[Collections](#collections)\n\n[Sub-Collections](#sub-collections)\n\n[CALCULATE](#calculate)\n\n[Contextless Expressions](#contextless-expressions)\n\n[Expressions](#expressions)\n\n[Down-Streaming](#down-streaming)\n\n[Collection Operators](#collection-operators)\n\n[WHERE](#where)\n\n[ORDER_BY](#order_by)\n\n[TOP_K](#top_k)\n\n[PARTITION](#partition)\n\n[SINGULAR](#singular)\n\n[NEXT / PREV](#next-prev)\n\n[BEST](#best)\n\n[Induced Properties](#induced-properties)\n\n[Induced Scalar Properties](#induced-scalar-properties)\n\n[Induced Subcollection Properties](#induced-subcollection-properties)\n\n[Induced Arbitrary Joins](#induced-arbitrary-joins)\n\n[Larger Examples](#larger-examples)\n\n[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)\n\n[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)\n\n[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)\n\n[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)\n\n[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)\n\n<!-- TOC end -->\n\n<!-- TOC --><a name="example-graph"></a>\n\n## Example Graph\n\nThe examples in this document use a metadata graph (named `GRAPH`) with the following collections:\n\n`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.\n\n`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.\n\n`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.\n\nThere are also the following sub-collection relationships:\n\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n\n`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.\n\n`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.\n\n`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.\n\n<!-- TOC --><a name="collections"></a>\n\n## Collections\n\nThe simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.\n\n**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 41, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 4, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='39e4263', object='citation', is_new=True, span=None, source_type=None, payload={'id': '39e4263d-e24b-5859-b0ac-bd3257022752', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07609445987055095, 'text': 'People\n\n```\n\n**Good Example #2**: Obtain every record of the `Addresses` collection. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output.\n\n```py\n\n%%pydough\n\nGRAPH.Addresses\n\n```\n\n**Good Example #3**: Obtain every record of the `Packages` collection. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`) is automatically included in the output.\n\n```py\n\n%%pydough\n\nPackages\n\n```\n\n**Bad Example #1**: Obtain every record of the `Products` collection (there is no `Products` collection).\n\n```py\n\n%%pydough\n\nProducts\n\n```\n\n**Bad Example #2**: Obtain every record of the `Addresses` collection (but the name `Addresses` has been reassigned to a variable).\n\n```py\n\n%%pydough\n\nAddresses = 42\n\nAddresses\n\n```\n\n**Bad Example #3**: Obtain every record of the `Addresses` collection (but the graph name `HELLO` is the wrong graph name for this example).\n\n```py\n\n%%pydough\n\nHELLO.Addresses\n\n```\n\n<!-- TOC --><a name="sub-collections"></a>\n\n### Sub-Collections\n\nThe next step in PyDough after accessing a collection is to access its sub-collections. Using the syntax `collection.subcollection`, you can traverse into every record of `subcollection` for each record in `collection`. This operation may change the cardinality if records of `collection` have multiple associated records in `subcollection`. Additionally, duplicate records may appear in the output if records in `subcollection` are linked to multiple records in `collection`.\n\n**Good Example #1**: For every person, obtains their current address. Every scalar property of `Addresses` (`address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`) is automatically included in the output. A record from `Addresses` can be included multiple times if multiple different `People` records have it as their current address, or it could be missing entirely if no person has it as their current address.\n\n```py\n\n%%pydough\n\nPeople.current_addresses\n\n```\n\n**Good Example #2**: For every package, get the person who shipped it. The `GRAPH.` prefix is optional and implied when the term is a collection name in the graph. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output. A record from `People` can be included multiple times if multiple packages were ordered by that person, or it could be missing entirely if that person is not the customer who ordered any package.\n\n```py\n\n%%pydough\n\nGRAPH.Packages.customer\n\n```\n\n**Good Example #3**: For every address, get all packages that someone who lives at that address has ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every current occupant has a single address it maps back to, and every package has a single customer it maps back to.\n\n```py\n\n%%pydough\n\nAddresses.current_occupants.packages\n\n```\n\n**Good Example #4**: For every person, get all packages they have ordered. Every scalar property of `Packages` (`package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`). Every record from `Packages` should be included at most once since every package has a single customer it maps back to.\n\n```py\n\n%%pydough\n\nPeople.packages\n\n```\n\n**Bad Example #1**: For every address, obtains all people who used to live there. This is invalid because the `Addresses` collection does not have a `former_occupants` property.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 42, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 3, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='0e3bd07', object='citation', is_new=True, span=None, source_type=None, payload={'id': '0e3bd071-0c58-50fc-8733-9b7089432c79', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07814826302729529, 'text': '# PyDough DSL Spec\n\nThis page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.\n\n<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->\n\n[Example Graph](#example-graph)\n\n[Collections](#collections)\n\n[Sub-Collections](#sub-collections)\n\n[CALCULATE](#calculate)\n\n[Contextless Expressions](#contextless-expressions)\n\n[Expressions](#expressions)\n\n[Down-Streaming](#down-streaming)\n\n[Collection Operators](#collection-operators)\n\n[WHERE](#where)\n\n[ORDER_BY](#order_by)\n\n[TOP_K](#top_k)\n\n[PARTITION](#partition)\n\n[SINGULAR](#singular)\n\n[NEXT / PREV](#next-prev)\n\n[BEST](#best)\n\n[Induced Properties](#induced-properties)\n\n[Induced Scalar Properties](#induced-scalar-properties)\n\n[Induced Subcollection Properties](#induced-subcollection-properties)\n\n[Induced Arbitrary Joins](#induced-arbitrary-joins)\n\n[Larger Examples](#larger-examples)\n\n[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)\n\n[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)\n\n[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)\n\n[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)\n\n[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)\n\n<!-- TOC end -->\n\n<!-- TOC --><a name="example-graph"></a>\n\n## Example Graph\n\nThe examples in this document use a metadata graph (named `GRAPH`) with the following collections:\n\n`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.\n\n`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.\n\n`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.\n\nThere are also the following sub-collection relationships:\n\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n\n`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.\n\n`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.\n\n`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.\n\n<!-- TOC --><a name="collections"></a>\n\n## Collections\n\nThe simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.\n\n**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 41, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 4, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='0e3bd07', object='citation', is_new=True, span=None, source_type=None, payload={'id': '0e3bd071-0c58-50fc-8733-9b7089432c79', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07814826302729529, 'text': '# PyDough DSL Spec\n\nThis page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.\n\n<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->\n\n[Example Graph](#example-graph)\n\n[Collections](#collections)\n\n[Sub-Collections](#sub-collections)\n\n[CALCULATE](#calculate)\n\n[Contextless Expressions](#contextless-expressions)\n\n[Expressions](#expressions)\n\n[Down-Streaming](#down-streaming)\n\n[Collection Operators](#collection-operators)\n\n[WHERE](#where)\n\n[ORDER_BY](#order_by)\n\n[TOP_K](#top_k)\n\n[PARTITION](#partition)\n\n[SINGULAR](#singular)\n\n[NEXT / PREV](#next-prev)\n\n[BEST](#best)\n\n[Induced Properties](#induced-properties)\n\n[Induced Scalar Properties](#induced-scalar-properties)\n\n[Induced Subcollection Properties](#induced-subcollection-properties)\n\n[Induced Arbitrary Joins](#induced-arbitrary-joins)\n\n[Larger Examples](#larger-examples)\n\n[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)\n\n[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)\n\n[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)\n\n[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)\n\n[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)\n\n<!-- TOC end -->\n\n<!-- TOC --><a name="example-graph"></a>\n\n## Example Graph\n\nThe examples in this document use a metadata graph (named `GRAPH`) with the following collections:\n\n`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.\n\n`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.\n\n`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.\n\nThere are also the following sub-collection relationships:\n\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n\n`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.\n\n`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.\n\n`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.\n\n<!-- TOC --><a name="collections"></a>\n\n## Collections\n\nThe simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.\n\n**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.\n\n```py\n\n%%pydough', 'metadata': {'version': 'v0', 'chunk_order': 41, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 4, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}}), Citation(id='edc4690', object='citation', is_new=True, span=None, source_type=None, payload={'id': 'edc4690e-81c5-5589-927b-4e0d6a319568', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.027417840375586856, 'text': '### SINGULAR\n\nIn PyDough, it is required that if we are accessing a sub-collection in a collection context, the collection must be singular with regards to the sub-collection. Certain PyDough operations, such as specific filters, can cause plural data to become singular. In this case, PyDough will still ban the plural data from being treated as singular unless the `.SINGULAR()` modifier is used to tell PyDough that the data should be treated as singular. It is very important that this only be used if the user is certain that the data will be singular, since otherwise it can result in undefined behavior when the PyDough code is executed.\n\n**Good Example #1**: Access the package cost of the most recent package ordered by each person. This is valid because even though `.packages` is plural with regards to `People`, the filter done will ensure that there is only one record for each record of `People`, so `.SINGULAR()` is valid.\n\n```py\n\n%%pydough\n\nmost_recent_package = packages.WHERE(\n\nRANKING(by=order_date.DESC(), levels=1) == 1\n\n).SINGULAR()\n\nPeople.CALCULATE(\n\nssn,\n\nfirst_name,\n\nmiddle_name,\n\nlast_name,\n\nmost_recent_package_cost=most_recent_package.package_cost\n\n)\n\n```\n\n**Good Example #2**: Access the email of the current occupant of each address that has the name `"John Smith"` (no middle name). This is valid if it is safe to assume that each address only has one current occupant named `"John Smith"` without a middle name.\n\n```py\n\n%%pydough\n\njs = current_occupants.WHERE(\n\n(first_name == "John") &\n\n(last_name == "Smith") &\n\nABSENT(middle_name)\n\n).SINGULAR()\n\nAddresses.CALCULATE(\n\naddress_id,\n\njohn_smith_email=DEFAULT_TO(js.email, "NO JOHN SMITH LIVING HERE")\n\n)\n\n```\n\n**Bad Example #1**: This is invalid primarily because of two reasons:\n\n1. Each `Addresses` might have multiple `current_occupants` named `John`, therefore the use of `.SINGULAR()`, though it would not raise an exception, is invalid.\n\n2. Even if, `current_occupants` were non-plural after using `SINGULAR`, `packages` is a plural sub-collection of `current_occupants`, therefore, the data being accessed would be plural with regards to `Addresses`.\n\n```py\n\n%%pydough\n\nAddresses.CALCULATE(\n\npackage_id=current_occupants.WHERE(\n\nfirst_name == "John"\n\n).SINGULAR().packages.package_id\n\n)\n\n```\n\n<!-- TOC --><a name="best"></a>', 'metadata': {'version': 'v0', 'chunk_order': 54, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 11, 'full_text_rank': 200, 'associated_query': '4. How can the naming convention be used to verify a one-to-many relationship between collections?'}})], 'metadata': {'id': 'msg_01PqdhXdWAiD7HpTPm8xdUgs', 'choices': [{'finish_reason': 'stop', 'index': 0, 'message': {'refusal': None, 'role': 'assistant', 'function_call': None, 'tool_calls': None, 'structured_content': None}}], 'created': 1746213183, 'model': 'claude-3-7-sonnet-20250219', 'object': 'chat.completion', 'service_tier': None, 'system_fingerprint': None, 'usage': {'prompt_tokens': 23107, 'completion_tokens': 1407, 'total_tokens': 24514}}, 'completion': '# Verifying One-to-Many Relationships in PyDough\n\nThe original question asks about verifying one-to-many relationships between collections based on naming conventions in PyDough. Based on the search results provided, I\'ll explain how these relationships are defined, verified, and used in PyDough.\n\n## PyDough Metadata Structure for Relationships\n\nIn PyDough, one-to-many relationships between collections are defined in the metadata JSON and can be verified through several key indicators:\n\n### 1. Property Type: Simple Join\n\nOne-to-many relationships are primarily defined using the "simple_join" property type [5c77f3e]. This property type has several key attributes that indicate the cardinality of the relationship:\n\n```json\n"accounts_held": {\n  "type": "simple_join",\n  "other_collection_name": "Accounts",\n  "singular": false,\n  "no_collisions": true,\n  "keys": {"id": ["client_id"]},\n  "reverse_relationship_name": "account_holder"\n}\n```\n\nThe key indicators of a one-to-many relationship are:\n\n- **`singular`**: When set to `false`, it indicates that each record in the current collection can have multiple matching records in the subcollection [5c77f3e].\n- **`no_collisions`**: When set to `true`, it indicates that multiple records from this collection cannot match onto the same record from the other collection [5c77f3e].\n\n### 2. Naming Conventions\n\nThe naming convention for one-to-many relationships typically follows these patterns:\n\n1. **Plural subcollection names**: When a collection has a one-to-many relationship with another collection, the property name is typically plural (e.g., `packages`, `accounts_held`, `customers`) [39e4263].\n\n2. **Singular reverse relationship names**: The reverse relationship (from the "many" side to the "one" side) typically has a singular name (e.g., `customer`, `account_holder`) [39e4263].\n\n## Example of One-to-Many Relationship\n\nFrom the example graph [0e3bd07], we can see a clear example of one-to-many relationships:\n\n```\n`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.\n```\n\nThis relationship is defined in the metadata where:\n- The `People` collection has a property `packages` that connects to the `Packages` collection\n- The `singular` attribute is `false` (one person can have multiple packages)\n- The `no_collisions` attribute is `true` (each package belongs to exactly one person)\n- The reverse relationship name is `customer` (singular, indicating the "one" side)\n\n## Verifying One-to-Many Relationships in Code\n\nTo verify a one-to-many relationship in PyDough, you can:\n\n### 1. Use the `explain` Function\n\nPyDough provides an `explain` function to examine the metadata of properties [2e54fa8]:\n\n```python\nimport pydough\n\ngraph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")\npydough.explain(graph["nations"]["customers"], verbose=True)\n```\n\nThis would output information about the relationship, including its cardinality:\n\n```\nPyDough property: nations.customers\n\nThis property connects collection nations to customers.\n\nCardinality of connection: One -> Many\n\nIs reversible: yes\n\nReverse property: customers.nation\n\nThe subcollection relationship is defined by the following join conditions:\nnations.key == customers.nation_key\n```\n\n### 2. Examine Collection Access Patterns\n\nWhen working with one-to-many relationships in PyDough code, you can verify the relationship by observing how the collections are accessed [0e3bd07]:\n\n```python\n# Accessing the "many" side from the "one" side (returns multiple records)\nPeople.packages\n\n# Accessing the "one" side from the "many" side (returns a single record)\nPackages.customer\n```\n\n### 3. Check for Aggregation Requirements\n\nWhen working with one-to-many relationships, you\'ll need to use aggregation functions when referencing properties from the "many" side in the context of the "one" side [0e3bd07]:\n\n```python\n# Count how many packages each person has ordered\nPeople.CALCULATE(\n    name=JOIN_STRINGS("", first_name, last_name),\n    n_packages_ordered=COUNT(packages),\n)\n```\n\n## Best Practices for Working with One-to-Many Relationships\n\n1. **Use appropriate naming conventions**: Use plural names for the "many" side of the relationship and singular names for the "one" side [39e4263].\n\n2. **Be aware of cardinality changes**: When traversing from a collection to its subcollection, the cardinality may change if records of the collection have multiple associated records in the subcollection [0e3bd07].\n\n3. **Use aggregation functions**: When accessing properties from the "many" side in the context of the "one" side, use aggregation functions like COUNT, SUM, etc. [0e3bd07].\n\n4. **Use SINGULAR() when appropriate**: If you\'ve filtered a normally plural relationship to ensure it returns at most one record, you can use the SINGULAR() modifier to tell PyDough to treat it as singular [edc4690].\n\n## Conclusion\n\nTo verify a one-to-many relationship between collections in PyDough, you should check:\n\n1. The metadata definition with `singular: false` and `no_collisions: true`\n2. The naming conventions (plural for the "many" side, singular for the "one" side)\n3. The behavior when accessing the relationship (whether it returns multiple records)\n4. The need for aggregation functions when referencing properties from the "many" side\n\nThese indicators together confirm the presence and proper configuration of a one-to-many relationship between collections in PyDough.'}
