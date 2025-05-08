@@ -215,11 +215,14 @@ def generate_metadata(engine: Engine, graph_name: str) -> Dict[str, Any]:
             child_prop = {
                 "type": "simple_join",
                 "other_collection_name": normalized_parent,
-                "singular": True,  # child row → 1 parent
+                "singular": True,  
                 "no_collisions": False,
                 "keys": {k: [v] for k, v in col_map.items()},
                 "reverse_relationship_name": parent_to_child_prop,
             }
+            existing_props = graph[graph_name][normalized_child]["properties"].keys()
+            if child_to_parent_prop in existing_props:
+                child_to_parent_prop = f"{child_to_parent_prop}_join"
             graph[graph_name][normalized_child]["properties"][child_to_parent_prop] = child_prop
 
             # --------------- parent --> children ---------------------------
