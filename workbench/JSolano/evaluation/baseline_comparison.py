@@ -32,7 +32,7 @@ df = pd.concat([df_baseline, df_new_run], axis=1)
 df['changed'] = ((df['comparison_result'] != df['comparison_result_new']) 
                         | (df['exception'].str.split().str[0] != df['exception_new'].str.split().str[0]))
 
-df['change_reason'] = np.where(df['changed']==True & (df['comparison_result'] != df['comparison_result_new']), 'DataFrame match changed from' + df['comparison_result'] + 'to' + df['comparison_result_new'], '')
+df['change_reason'] = np.where((df['changed']==True) & (df['comparison_result'] != df['comparison_result_new']), 'DataFrame match changed from' + df['comparison_result'] + 'to' + df['comparison_result_new'], '')
 
 df.to_csv('comparison_result.csv')
 
