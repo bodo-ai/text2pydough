@@ -59,7 +59,7 @@ class AzureAIProvider(AIProvider):
             response = [chunk.choices[0]["delta"]["content"] for chunk in completion if chunk.choices]
             return "".join(response)
         except Exception as e:
-            #print(f"Azure AI error: {e}")
+            print(f"Azure AI error: {e}")
             return None
 
 class DeepSeekAIProvider(AIProvider):
@@ -117,7 +117,7 @@ class OtherAIProvider(AIProvider):
             )
             return response.choices[0].message.content
         except Exception as e:
-            #print(f"AI Suite error: {e}")
+            print(f"AI Suite error: {e}")
             return None, None 
 
 def read_file(file_path):
@@ -178,7 +178,7 @@ def get_azure_response(client, prompt, data, question, database_content, script_
         corrected_response= correct(client,question,response, formatted_prompt)
         return corrected_response, None
     except Exception as e:
-        #print(f"Azure AI error: {e}")
+        print(f"Azure AI error: {e}")
         return None
 
 def process_question(i, client, updated_question, formatted_prompt):
@@ -202,8 +202,9 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations, n
     counts = defaultdict(list)
 
     try:
-        with multiprocessing.Pool(processes=num_threads) as pool:
-            results = pool.starmap(process_question, [(i, client, updated_question, formatted_prompt) for i in range(iterations)])
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            args = [(i, client, updated_question, formatted_prompt) for i in range(iterations)]
+            results = list(executor.map(lambda p: process_question(*p), args))
 
         # Should I filter None?
         dfs_and_responses = [res for res in results] #if res is not None
@@ -231,7 +232,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations, n
             if most_common_index is not None:
                 ans = dfs_and_responses[most_common_index][1]
             else:
-            #    print("No common result found, returning the first response as fallback.")
+                print("No common result found, returning the first response as fallback.")
                 ans = dfs_and_responses[0][1] if dfs_and_responses else None
 
     except Exception as e:
@@ -251,7 +252,7 @@ def get_other_provider_response(client, prompt, data, question, database_content
         execution_time = end_time - start_time
         return response, execution_time
     except Exception as e:
-        #print(f"AI Suite error: {e}")
+        print(f"AI Suite error: {e}")
         return "N/A", -1
 
 def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations, num_threads):
@@ -283,12 +284,16 @@ def process_question_wrapper(args):
         client = OtherAIProvider(provider, model_id, temperature)
         return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations, num_threads)[0]
 
-def process_questions(data, provider, model_id, formatted_prompt, questions, temperature, database_content, script_content, num_threads,num_iterations):
+def process_questions(data, provider, model_id, formatted_prompt, questions_df, temperature, database_content, script_content, num_threads,num_iterations):
     """ Processes questions in parallel using multiprocessing. """
-    #ctx = get_context("spawn")
-    #with ctx.Pool(processes=num_threads) as pool:  # Adjust process count as needed
-    original_responses = process_question_wrapper([provider, model_id, formatted_prompt, data, questions, temperature, database_content, script_content, num_iterations, num_threads])
-    return original_responses
+    def thread_wrapper(question):
+        client = OtherAIProvider(provider, model_id, temperature)
+        return get_other_provider_response(client, formatted_prompt, data, question, database_content, script_content, num_iterations, num_threads)[0]
+
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        results = list(executor.map(thread_wrapper, questions_df['question'].tolist()))
+
+    return results
 
 def main():
     # Argument Parser
@@ -327,14 +332,13 @@ def main():
     print("File: ", args.questions, "num_threads: ", args.num_threads, "num_iterations: ", args.num_iterations)
     t0 = time.time()
     questions_df = pd.read_csv(args.questions, encoding="utf-8")
-    combined_list = questions_df['question'].tolist()[0]
 
     responses = process_questions(
         data,
         args.provider.lower(),
         args.model_id,
         prompt,
-        combined_list,
+        questions_df,
         args.temperature,
         database_content,
         script_content,
@@ -355,6 +359,7 @@ def main():
 
     t1=time.time()
     print("Multi-processing Total time: ", t1-t0)
+    print("Output filename: ", output_file)
 
 if __name__ == "__main__":
     # import pdb; pdb.set_trace()
