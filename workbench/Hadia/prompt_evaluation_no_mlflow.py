@@ -206,8 +206,7 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations, n
             args = [(i, client, updated_question, formatted_prompt) for i in range(iterations)]
             results = list(executor.map(lambda p: process_question(*p), args))
 
-        # Should I filter None?
-        dfs_and_responses = [res for res in results] #if res is not None
+        dfs_and_responses = [res for res in results if res is not None]
         
         if dfs_and_responses == []:
             ans = None
