@@ -161,11 +161,6 @@ python pydough_query_processor.py
   python pydough_query_processor.py --query "..." --execute --review
   ```
 
-- **Execute an existing generated Python file:**
-  ```
-  python pydough_query_processor.py --run-file results/broker_query_...py
-  ```
-
 ### 4. Results and Artifacts
 
 All generated files are saved in the `results/` directory:
