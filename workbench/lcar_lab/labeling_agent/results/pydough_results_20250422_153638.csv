@@ -1,0 +1,108 @@
+question_id,question,ground_truth_sql,generated_response,generated_pydough,evaluation_match,evaluation_explanation,error
+1,List the total number of customers and suppliers in each nation. Order by nation name,"SELECT n_name AS nation_name, COUNT(DISTINCT c_custkey) AS total_customers, COUNT(DISTINCT s_suppkey) AS total_suppliers FROM nation LEFT JOIN customer ON n_nationkey = c_nationkey LEFT JOIN supplier ON n_nationkey = s_nationkey GROUP BY n_name;","1. **Analysis of the question**
+The question asks for the total number of customers and suppliers in each nation. This requires grouping by nation and counting the number of customers and suppliers within each nation. The final result should be ordered by nation name.
+
+2. **Step-by-step explanation of the solution**
+- Start with the `nations` collection.
+- Use `CALCULATE` to count the number of customers and suppliers for each nation.
+- Use `ORDER_BY` to order the results by nation name.
+
+3. **The PyDough code in a Python code block**
+```python
+nation_summary = nations.CALCULATE(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    num_suppliers=COUNT(suppliers)
+).ORDER_BY(nation_name.ASC())
+```
+
+4. **Explanation of how the code works**
+- `nations.CALCULATE(...)`: This starts with the `nations` collection and uses the `CALCULATE` function to create new fields.
+- `nation_name=name`: This renames the `name` field to `nation_name`.
+- `num_customers=COUNT(customers)`: This counts the number of customers associated with each nation and assigns it to the `num_customers` field.
+- `num_suppliers=COUNT(suppliers)`: This counts the number of suppliers associated with each nation and assigns it to the `num_suppliers` field.
+- `.ORDER_BY(nation_name.ASC())`: This orders the results by the `nation_name` field in ascending order.","nation_summary = nations.CALCULATE(
+    nation_name=name,
+    num_customers=COUNT(customers),
+    num_suppliers=COUNT(suppliers)
+).ORDER_BY(nation_name.ASC())",True,True,
+2,Find the top 5 nations with the highest number of orders placed by their customers in 1995.,"SELECT n_name AS nation_name, COUNT(o_orderkey) AS total_orders FROM nation JOIN customer ON n_nationkey = c_nationkey JOIN orders ON c_custkey = o_custkey WHERE o_orderdate >= '1995-01-01' AND o_orderdate <= '1995-12-31' GROUP BY n_name ORDER BY total_orders DESC LIMIT 5;","```text
+1. Analysis of the question:
+The question asks to find the top 5 nations with the highest number of orders placed by their customers in 1995. This requires filtering orders by year 1995, counting the number of orders for each nation, and then selecting the top 5 nations based on the order count.
+
+2. Step-by-step explanation of the solution:
+a. Filter the orders collection to include only orders placed in 1995.
+b. Access the nations collection.
+c. Calculate the number of orders placed by customers of each nation in 1995.
+d. Select the top 5 nations based on the calculated order count.
+
+3. The PyDough code in a Python code block:
+```python
+top_nations = nations.CALCULATE(
+    nation_name=name,
+    num_orders=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).TOP_K(5, by=num_orders.DESC())
+```
+
+4. Explanation of how the code works:
+a. `nations.CALCULATE(...)`: This starts with the `nations` collection and uses the `CALCULATE` function to create new fields.
+b. `nation_name=name`: This creates a new field `nation_name` and assigns the value of the `name` field from the `nations` collection to it.
+c. `num_orders=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))`: This calculates the number of orders placed by customers of each nation in 1995. It first filters the `orders` collection to include only orders placed in 1995 using `WHERE(YEAR(order_date) == 1995)`. Then, it counts the number of orders for each nation using `COUNT(...)`.
+d. `.TOP_K(5, by=num_orders.DESC())`: This selects the top 5 nations based on the calculated `num_orders` in descending order.
+```","top_nations = nations.CALCULATE(
+    nation_name=name,
+    num_orders=COUNT(customers.orders.WHERE(YEAR(order_date) == 1995))
+).TOP_K(5, by=num_orders.DESC())",True,True,
+3,"Find the region name with the highest total order value in 1996. The total order value is defined as potential revenue, defined as the sum of extended_price * (1 - discount)","SELECT r_name AS region_name, SUM(l_extendedprice * (1 - l_discount)) AS total_order_value FROM region JOIN nation ON r_regionkey = n_regionkey JOIN customer ON n_nationkey = c_nationkey JOIN orders ON c_custkey = o_custkey JOIN lineitem ON o_orderkey = l_orderkey WHERE o_orderdate >= '1996-01-01' AND o_orderdate <= '1996-12-31' GROUP BY r_name ORDER BY total_order_value DESC LIMIT 1;","```text
+1. Analysis of the question:
+The question asks to find the region with the highest total order value in 1996. The total order value is defined as the sum of extended_price * (1 - discount). This requires calculating the total order value for each region in 1996 and then finding the region with the maximum value.
+
+2. Step-by-step explanation of the solution:
+a. Calculate the total order value for each order in 1996. This involves filtering the orders for the year 1996 and calculating the extended price multiplied by (1 - discount) for each line item in those orders.
+b. Aggregate the total order values by region. This involves grouping the orders by region and summing the total order values calculated in the previous step.
+c. Find the region with the highest total order value. This involves sorting the regions by their total order value in descending order and selecting the top region.
+
+3. The PyDough code in a Python code block:
+```python
+region_order_values_1996 = regions.WHERE(
+  HAS(nations.customers.orders) == 1
+).CALCULATE(
+    region_name=name,
+    total_order_value=SUM(nations.customers.orders.lines.WHERE(YEAR(order.order_date) == 1996).CALCULATE(order_value = extended_price * (1 - discount)).order_value)
+).TOP_K(1, by=total_order_value.DESC())
+```
+
+4. Explanation of how the code works:
+a. `regions.WHERE(HAS(nations.customers.orders) == 1)`: This selects regions that have customers and orders.
+b. `.CALCULATE(region_name=name, total_order_value=SUM(nations.customers.orders.lines.WHERE(YEAR(order.order_date) == 1996).CALCULATE(order_value = extended_price * (1 - discount)).order_value))`: This calculates the total order value for each region in 1996. It first filters the orders for the year 1996 using `WHERE(YEAR(order.order_date) == 1996)`. Then, for each line item in those orders, it calculates the order value as `extended_price * (1 - discount)`. Finally, it sums up these order values for each region.
+c. `.TOP_K(1, by=total_order_value.DESC())`: This selects the region with the highest total order value by sorting the regions by their total order value in descending order and selecting the top region.
+```","region_order_values_1996 = regions.WHERE(
+  HAS(nations.customers.orders) == 1
+).CALCULATE(
+    region_name=name,
+    total_order_value=SUM(nations.customers.orders.lines.WHERE(YEAR(order.order_date) == 1996).CALCULATE(order_value = extended_price * (1 - discount)).order_value)
+).TOP_K(1, by=total_order_value.DESC())",True,True,
+4,Find the top 3 regions with the most distinct customers,"SELECT r_name AS region_name, COUNT(DISTINCT c_custkey) AS distinct_customers FROM region JOIN nation ON r_regionkey = n_regionkey JOIN customer ON n_nationkey = c_nationkey GROUP BY r_name ORDER BY distinct_customers DESC LIMIT 3;","```text
+1. Analysis of the question:
+The question asks to find the top 3 regions with the most distinct customers. This requires counting the distinct customers for each region and then selecting the top 3 based on that count.
+
+2. Step-by-step explanation of the solution:
+First, we need to start with the `regions` collection. Then, we need to count the distinct customers for each region using the `NDISTINCT` function. Finally, we select the top 3 regions based on the count of distinct customers using the `TOP_K` function.
+
+3. The PyDough code in a Python code block:
+```python
+top_regions = regions.CALCULATE(
+    region_name=name,
+    num_distinct_customers=NDISTINCT(nations.customers.key)
+).TOP_K(3, by=num_distinct_customers.DESC())
+```
+
+4. Explanation of how the code works:
+- `regions.CALCULATE(...)`: This starts with the `regions` collection and uses the `CALCULATE` function to create new fields.
+- `region_name=name`: This assigns the name of the region to the new field `region_name`.
+- `num_distinct_customers=NDISTINCT(nations.customers.key)`: This counts the number of distinct customers in each region and assigns the count to the new field `num_distinct_customers`.
+- `.TOP_K(3, by=num_distinct_customers.DESC())`: This selects the top 3 regions based on the `num_distinct_customers` field in descending order.
+```","top_regions = regions.CALCULATE(
+    region_name=name,
+    num_distinct_customers=NDISTINCT(nations.customers.key)
+).TOP_K(3, by=num_distinct_customers.DESC())",True,True,

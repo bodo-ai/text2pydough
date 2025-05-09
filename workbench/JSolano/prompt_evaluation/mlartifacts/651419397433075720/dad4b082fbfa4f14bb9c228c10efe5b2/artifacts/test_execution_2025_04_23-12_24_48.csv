@@ -1,0 +1,78 @@
+question,sql,db_name,response,extracted_python_code,comparison_result,exception
+"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;",Broker,"```python
+customer_success_rates = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=(
+        100.0 * COUNT(transactions_made.WHERE(status == 'COMPLETED')) / COUNT(transactions_made)
+    )
+).ORDER_BY(success_rate.ASC())
+```
+
+**Explanation:**
+
+1.  **`Customers.WHERE(COUNT(transactions_made) >= 5)`**: This starts with the `Customers` collection and filters it to include only those customers who have made 5 or more transactions in total. `COUNT(transactions_made)` counts the number of records in the `transactions_made` sub-collection for each customer.
+2.  **`.CALCULATE(...)`**: This step calculates the required output fields for the filtered customers.
+    *   **`customer_name=name`**: Selects the customer's name.
+    *   **`success_rate=(...)`**: Calculates the success rate as a percentage.
+        *   `COUNT(transactions_made.WHERE(status == 'COMPLETED'))`: Counts the number of transactions for the customer where the `status` is 'COMPLETED'.
+        *   `COUNT(transactions_made)`: Counts the total number of transactions for the customer (we already know this is >= 5 from the `WHERE` clause).
+        *   The division gives the proportion of successful transactions, and multiplying by `100.0` converts it to a percentage (using `100.0` ensures floating-point division).
+3.  **`.ORDER_BY(success_rate.ASC())`**: This sorts the resulting records in ascending order based on the calculated `success_rate`, from lowest to highest.
+4.  **`customer_success_rates = ...`**: The final result set, containing customer names and their success rates (for those with >= 5 transactions) sorted by success rate, is assigned to the variable `customer_success_rates`.","customer_success_rates = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=(
+        100.0 * COUNT(transactions_made.WHERE(status == 'COMPLETED')) / COUNT(transactions_made)
+    )
+).ORDER_BY(success_rate.ASC())",No Match,
+"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,Broker,"```python
+# Define the list of FAANG ticker symbols for clarity and reusability
+faang_symbols = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+
+# Filter customers based on the two criteria:
+# 1. Email ends with '.com'
+# 2. Has at least one transaction involving a FAANG stock ticker symbol
+filtered_customers = Customers.WHERE(
+    (ENDSWITH(email, "".com"")) &
+    (HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_symbols))) == 1)
+)
+
+# Count the number of distinct customers that satisfy both conditions.
+# We use Broker.CALCULATE as we need a single aggregated result (the count).
+result = Broker.CALCULATE(
+    distinct_customer_count = COUNT(filtered_customers)
+)
+```
+
+**Explanation:**
+
+1.  **`faang_symbols = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')`**: A contextless expression (a Python tuple) is defined to hold the FAANG ticker symbols. This improves readability and makes the list easy to modify if needed.
+2.  **`filtered_customers = Customers.WHERE(...)`**: We start with the `Customers` collection and apply filters using the `WHERE` clause.
+3.  **`(ENDSWITH(email, "".com""))`**: This condition filters customers whose `email` field ends with the string "".com"".
+4.  **`&`**: The logical AND operator combines the two filtering conditions. A customer must satisfy *both* to be included.
+5.  **`(HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_symbols))) == 1)`**: This is the second condition:
+    *   `transactions_made`: Accesses the list of transactions associated with each customer.
+    *   `.WHERE(ISIN(ticker.symbol, faang_symbols))`: Filters these transactions, keeping only those where the `ticker.symbol` (accessed by navigating from the transaction to its linked ticker) is present in the `faang_symbols` tuple.
+    *   `HAS(...) == 1`: Checks if the filtered list of transactions (i.e., FAANG stock transactions) is not empty for the customer. It returns `True` (or 1) if the customer has made at least one transaction involving a FAANG stock.
+6.  **`result = Broker.CALCULATE(distinct_customer_count = COUNT(filtered_customers))`**:
+    *   `Broker.CALCULATE`: We perform a calculation at the top level of the graph (`Broker`) because we want a single, aggregated result (the total count).
+    *   `COUNT(filtered_customers)`: Counts the number of distinct customer records remaining in the `filtered_customers` collection after applying the `WHERE` clause.
+    *   `distinct_customer_count = ...`: Assigns the calculated count to the field `distinct_customer_count` in the final result.","# Define the list of FAANG ticker symbols for clarity and reusability
+faang_symbols = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+
+# Filter customers based on the two criteria:
+# 1. Email ends with '.com'
+# 2. HAS at least one transaction involving a FAANG stock ticker symbol
+filtered_customers = Customers.WHERE(
+    (ENDSWITH(email, "".com"")) &
+    (HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_symbols))) == 1)
+)
+
+# Count the number of distinct customers that satisfy both conditions.
+# We use Broker.CALCULATE as we need a single aggregated result (the count).
+result = Broker.CALCULATE(
+    distinct_customer_count = COUNT(filtered_customers)
+)",Match,

@@ -1,0 +1,619 @@
+question,generated_answer,key_terms
+"According to the general rules, what is the specific purpose of the `HAS` function in relation to table relationships?","# Documentation on the `HAS` Function in PyDough
+
+Based on the provided search results, I can explain the purpose and implementation of the `HAS` function in PyDough, particularly in relation to table relationships.
+
+## Purpose of the `HAS` Function
+
+The `HAS` function in PyDough is specifically designed to check for the existence of records in a related table or subcollection. It returns a boolean value indicating whether a relationship contains any records (true if records exist, false otherwise).
+
+## Implementation Details
+
+According to the search results [620de93], the `HAS` function is implemented as a rewrite transformation in PyDough:
+
+```python
+# Will be rewritten to `Customers.CALCULATE(name, has_orders=COUNT(orders) > 0)`
+Customers.CALCULATE(name, has_orders=HAS(orders))
+
+# Will be rewritten to `Customers.CALCULATE(name, never_made_order=COUNT(orders) == 0)`
+Customers.CALCULATE(name, never_made_order=HASNOT(orders))
+```
+
+This shows that `HAS(x)` is internally rewritten as `COUNT(X) > 0` and `HASNOT(X)` is rewritten as `COUNT(X) == 0`, except in specific contexts like the conjunction of a `WHERE` clause.
+
+## Special Handling in WHERE Clauses
+
+The documentation [620de93] indicates that `HAS` and `HASNOT` have special handling in WHERE clauses:
+
+```python
+# Will not be rewritten
+Customers.WHERE(HAS(orders) & (nation.region.name == ""EUROPE""))
+
+# Will not be rewritten
+Customers.WHERE(HASNOT(orders))
+
+# Will be rewritten to
+# `Customers.WHERE((COUNT(orders) > 0) | (nation.region.name == ""EUROPE""))`
+Customers.WHERE(HAS(orders) | (nation.region.name == ""EUROPE""))
+
+# Will be rewritten to
+# `Customers.WHERE((COUNT(orders) == 0) | (acct_bal < 0))`
+Customers.WHERE(HASNOT(orders) | (acct_bal < 0))
+```
+
+This shows that when `HAS` or `HASNOT` is used in a conjunction (`&`) within a WHERE clause, it is not rewritten, but when used in a disjunction (`|`), it is rewritten to use COUNT.
+
+## Relationship to JOIN Operations
+
+The search results show that `HAS` is related to semi-join operations in SQL. In [524ab2a], we can see examples of JOIN operations with 'semi' types, which correspond to existence checks:
+
+```
+JOIN(conditions=[t0.key == t1.part_key], types=['semi'], columns={'name': t0.name})
+```
+
+This is a semi-join that only returns records from the first table where there's a matching record in the second table - similar to what `HAS` checks for.
+
+## SQL Implementation
+
+When translated to SQL, the `HAS` function typically becomes an `EXISTS` subquery. This can be seen in several SQL reference solutions:
+
+From [9d68832]:
+```sql
+SELECT
+  _t0.uid AS user_id
+FROM _t0_2 AS _t0
+WHERE
+  EXISTS(
+    SELECT
+      1 AS ""1""
+    FROM _t1 AS _t1
+    WHERE
+      _t0.uid = _t1.user_id
+  )
+```
+
+From [1e6aa14]:
+```sql
+SELECT
+  _t0._id AS _id,
+  _t0.symbol AS symbol
+FROM _t0 AS _t0
+WHERE
+  NOT EXISTS(
+    SELECT
+      1 AS ""1""
+    FROM _t1 AS _t1
+    WHERE
+      _t0._id = _t1.ticker_id
+  )
+```
+
+## Relationship to Property Types
+
+The `HAS` function is particularly useful with the property types defined in PyDough [53ed32c], such as:
+
+1. Simple Join properties - where records from one collection are joined with another
+2. Cartesian Product properties - cross-joins between collections
+3. Compound Relationship properties - multi-level relationships
+
+The `HAS` function allows checking for the existence of related records across these relationship types.
+
+## Summary
+
+The `HAS` function in PyDough serves the specific purpose of checking for the existence of records in related tables or subcollections. It is implemented as a transformation to `COUNT(X) > 0` in most contexts, except in conjunctions within WHERE clauses. When translated to SQL, it typically becomes an EXISTS subquery, making it an efficient way to check for relationships between tables without retrieving all the related records.",HAS
+How should one verify a one-to-many relationship between collections based on the naming convention described?,"I'll provide documentation and explanation for the question about verifying one-to-many relationships in PyDough, based on the search results provided.
+
+# Verifying One-to-Many Relationships in PyDough
+
+## Understanding One-to-Many Relationships in PyDough
+
+In PyDough, one-to-many relationships are represented through subcollections, where one record in a parent collection can be associated with multiple records in a child collection. These relationships are defined in the metadata and can be verified through both metadata inspection and query execution.
+
+### Metadata Structure for One-to-Many Relationships
+
+According to the PyDough metadata specification [bf826ad], one-to-many relationships are defined in the metadata JSON with specific properties:
+
+```json
+""accounts_held"": {
+  ""type"": ""simple_join"",
+  ""other_collection_name"": ""Accounts"",
+  ""singular"": false,
+  ""no_collisions"": true,
+  ""keys"": {""id"": [""client_id""]},
+  ""reverse_relationship_name"": ""account_holder""
+}
+```
+
+The key properties that indicate a one-to-many relationship are:
+
+1. `""singular"": false` - This indicates that each record in the parent collection can have multiple matching records in the subcollection [bf826ad].
+2. `""no_collisions"": true` - This indicates that multiple records from the parent collection cannot match onto the same record from the child collection [bf826ad].
+
+## Verifying One-to-Many Relationships
+
+### 1. Using the `explain` Function
+
+The `pydough.explain` function can be used to examine the metadata of a collection or subcollection property [2e54fa8]:
+
+```python
+import pydough
+
+graph = pydough.parse_json_metadata_from_file(""insert_path_here.json"", ""TPCH"")
+pydough.explain(graph[""nations""][""customers""], verbose=True)
+```
+
+This would produce output like:
+```
+PyDough property: nations.customers
+This property connects collection nations to customers.
+Cardinality of connection: One -> Many
+Is reversible: yes
+Reverse property: customers.nation
+The subcollection relationship is defined by the following join conditions:
+nations.key == customers.nation_key
+```
+
+The ""Cardinality of connection: One -> Many"" explicitly tells you this is a one-to-many relationship [2e54fa8].
+
+### 2. Using `explain_term` on a Subcollection
+
+You can also use `pydough.explain_term` to examine a subcollection within a PyDough query [2d92a7e]:
+
+```python
+%%pydough
+european_countries = nations.WHERE(region.name == ""EUROPE"")
+term = customers
+pydough.explain_term(european_countries, term, verbose=True)
+```
+
+This would produce output that indicates whether the subcollection is plural with respect to the parent collection:
+
+```
+The term is the following child of the collection:
+└─┬─ AccessChild
+  └─── SubCollection[customers]
+This child is plural with regards to the collection, meaning its scalar terms can only be accessed by the collection if they are aggregated.
+```
+
+The ""plural with regards to the collection"" indicates a one-to-many relationship [2d92a7e].
+
+### 3. Examining Collection Examples
+
+In the example graph provided [0e3bd07], we can see one-to-many relationships described:
+
+```
+`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.
+```
+
+This description clearly indicates a one-to-many relationship from People to Packages [0e3bd07].
+
+### 4. Checking Behavior in Queries
+
+The behavior of one-to-many relationships can be verified in PyDough queries:
+
+1. **Aggregation Required**: When accessing properties of a one-to-many subcollection, you must use aggregation functions like COUNT [0e3bd07]:
+
+```python
+%%pydough
+People.CALCULATE(
+  name=JOIN_STRINGS("""", first_name, last_name),
+  n_packages_ordered=COUNT(packages),
+)
+```
+
+2. **SINGULAR Operator**: If you try to access a property directly from a plural subcollection without aggregation, you'll need to use the SINGULAR operator, which confirms the relationship is one-to-many [edc4690]:
+
+```python
+%%pydough
+most_recent_package = packages.WHERE(
+  RANKING(by=order_date.DESC(), levels=1) == 1
+).SINGULAR()
+
+People.CALCULATE(
+  ssn,
+  first_name,
+  middle_name,
+  last_name,
+  most_recent_package_cost=most_recent_package.package_cost
+)
+```
+
+## Best Practices for Working with One-to-Many Relationships
+
+1. **Use Aggregation Functions**: When accessing properties of a one-to-many subcollection from the parent collection, use aggregation functions like COUNT, SUM, AVG, etc. [0e3bd07]
+
+2. **Use SINGULAR Carefully**: Only use the SINGULAR operator when you're certain that filtering has reduced the subcollection to at most one record per parent record [edc4690]
+
+3. **Verify Cardinality in Metadata**: Check the `singular` and `no_collisions` properties in the metadata to confirm the relationship type [bf826ad]
+
+4. **Use PARTITION for Analysis**: For analyzing data across a one-to-many relationship, consider using PARTITION to group records [0e3bd07]:
+
+```python
+%%pydough
+PARTITION(Addresses, name=""addrs"", by=state).CALCULATE(
+  state,
+  n_addr=COUNT(addrs)
+)
+```
+
+## Conclusion
+
+To verify a one-to-many relationship between collections in PyDough, you should:
+
+1. Examine the metadata using `pydough.explain` to check the cardinality
+2. Look for `""singular"": false` in the metadata JSON definition
+3. Observe the behavior in queries (requiring aggregation functions)
+4. Use `explain_term` to confirm that a subcollection is plural with respect to its parent
+
+These methods provide multiple ways to confirm that a relationship follows the one-to-many pattern as described in the PyDough documentation.",
+Explain the fundamental difference highlighted between PyDough and SQL regarding syntax and behavior assumptions.,"# Fundamental Differences Between PyDough and SQL
+
+Based on the provided documentation, I'll explain the fundamental differences between PyDough and SQL regarding syntax and behavior assumptions.
+
+## Key Differences Highlighted in Documentation
+
+### 1. Mental Model and Abstraction Approach
+
+PyDough uses a hierarchical thinking model that's closer to human linguistics, while SQL uses a relational model:
+
+> ""PyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as [MongoDB](https://www.mongodb.com/docs/manual/data-modeling/), since that mental model is closer to human linguistics than a relational model."" [988171e]
+
+PyDough only uses a logical document model for abstractly explaining and interacting with data, rather than physically storing data in that format:
+
+> ""Unlike MongoDB, PyDough only uses a logical document model for abstractly explaining & interacting with data, rather than a physical document model to store the data."" [988171e]
+
+### 2. Join Handling and Relationship Representation
+
+One of the most significant differences is how joins are handled:
+
+> ""PyDough abstracts away joins in favor of thinking about logical relationships between collections & sub-collections."" [7ea5a7b]
+
+> ""The complex semantics of aggregation keys, different types of joins, and aggregating before vs after joining are all abstracted away by PyDough."" [7ea5a7b]
+
+In PyDough, join information is encoded in the metadata rather than explicitly in queries:
+
+> ""In constrast, PyDough has a simpler representation, avoiding some of the redundancy in the SQL code and the join information is encoded entirely in the metadata."" [8e03891]
+
+### 3. Code Complexity and Verbosity
+
+PyDough code is typically more compact and closer to the natural language question:
+
+> ""When a question is being asked, the PyDough code to answer it will look more similar to the text of the question than the SQL text would."" [7ea5a7b]
+
+> ""Often, PyDough code will be significantly more compact than equivalent SQL text, and therefore easier for a human to verify for logical correctness."" [7ea5a7b]
+
+## Concrete Example Comparing PyDough and SQL
+
+The documentation provides a clear example demonstrating these differences [988171e]:
+
+**Problem statement**: For every person, find their name & the total income they've made from all jobs minus the total tuition paid to all schools. Include people who have never had a job or never attended schools, and account for people with multiple jobs or schools.
+
+**PyDough solution**:
+```py
+result = People.CALCULATE(
+  name,
+  net_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)
+)
+pydough.to_df(result)
+```
+
+**Equivalent SQL solution**:
+```sql
+SELECT
+  P.name AS name,
+  COALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income
+FROM PEOPLE AS P
+LEFT JOIN (
+  SELECT person_ssn, SUM(income_earned) AS total_income_earned
+  FROM EMPLOYMENT_RECORDS
+  GROUP BY person_ssn
+) AS J
+ON P.ssn = J.person_ssn
+LEFT JOIN (
+  SELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid
+  FROM EDUCATION_RECORDS
+) AS S
+ON P.ssn = S.person_ssn
+```
+
+Another example comparing PyDough and SQL [8e03891]:
+
+**SQL**:
+```SQL
+Select
+ (L_EXTENDED_PRICE * (1 - L_DISCOUNT)) / order_total as revenue_ratio,
+ orderkey,
+ l_linenumber as line_number
+from lines
+inner join (
+ select
+ o_orderkey as order_key,
+ SUM(L_EXTENDED_PRICE * (1 - L_DISCOUNT)) as order_total
+ from orders
+ inner join lines
+ on l_orderkey = o_orderkey
+ group by o_orderkey
+)
+on l_orderkey = order_key
+order by revenue_ratio ASC, order_key DESC, line_number DESC
+LIMIT 5
+```
+
+**PyDough**:
+```python
+revenue_def = extended_price*(1-discount)
+orders.CALCULATE(total_line_price=SUM(lines.CALCULATE(line_price=revenue_def).line_price)).lines.CALCULATE(
+ revenue_ratio=revenue_def / total_line_price, 
+ order_key=order_key, 
+ line_number=line_number
+).TOP_K(5, by=(revenue_ratio.ASC(), order_key.DESC(), line_number.DESC()))
+```
+
+The documentation explains why this difference matters [8e03891]:
+> ""The example SQL requires a nested subquery to answer, which can easily become complicated and unmanagable as questions scale in size. It also requires explicitly representing the join information where a decision like **LEFT** vs **INNER** join impacts correctness and is a function of the data.""
+
+## PyDough-Specific Functions and Patterns
+
+Key PyDough functions and patterns demonstrated in these examples include:
+
+1. **CALCULATE**: Used to define new properties or select existing ones from a collection
+2. **SUM**: An aggregation function that works across subcollections
+3. **WHERE**: Filters collections based on conditions
+4. **TOP_K**: Limits results to top K records based on specified criteria
+5. **ASC()/DESC()**: Used for sorting criteria
+6. Contextless expressions: Defining expressions like `revenue_def = extended_price*(1-discount)` that can be reused
+
+## Data Flow and Transformations
+
+PyDough follows a more intuitive data flow that mirrors how humans think about data relationships:
+
+1. Start with a collection (e.g., People, Orders)
+2. Navigate to related subcollections using dot notation (e.g., `jobs`, `schools`, `lines`)
+3. Apply calculations and transformations using the CALCULATE operator
+4. Filter, sort, and limit results as needed
+
+This contrasts with SQL's approach of starting with tables and explicitly joining them together.
+
+## Best Practices Demonstrated
+
+The documentation highlights several PyDough best practices:
+
+1. **Building components incrementally**: Define reusable expressions before using them in calculations
+2. **Using metadata for relationships**: Let the metadata handle join logic rather than explicitly coding it
+3. **Thinking hierarchically**: Approach problems in terms of parent-child relationships
+4. **Focusing on business questions**: Structure code around the business question rather than database structure
+
+## How This Addresses the Original Question
+
+The original question asked about fundamental differences between PyDough and SQL regarding syntax and behavior assumptions. The documentation clearly shows that:
+
+1. PyDough assumes a hierarchical, document-based mental model while SQL assumes a relational model
+2. PyDough abstracts away join complexity through metadata while SQL requires explicit join specifications
+3. PyDough code tends to be more compact and closer to natural language questions
+4. PyDough handles relationships through subcollections rather than explicit joins
+5. PyDough allows for more incremental and composable query building
+
+These differences make PyDough potentially easier to learn and use for complex analytical questions, especially for those who find SQL's join semantics and aggregation rules challenging.",Explain the fundamental difference highlighted between PyDough and SQL regarding syntax and behavior assumptions
+Under what specific circumstances must `TOP_K` be used instead of `ORDER_BY`?,"# When to Use TOP_K Instead of ORDER_BY in Pydough
+
+Based on the documentation provided, I'll explain when `TOP_K` must be used instead of `ORDER_BY` in Pydough.
+
+## Key Difference Between TOP_K and ORDER_BY
+
+The fundamental difference is that:
+
+- `ORDER_BY` only sorts a collection [9c4448e]
+- `TOP_K` sorts a collection AND limits the results to the first `k` values [efa530c]
+
+## When TOP_K Must Be Used
+
+You must use `TOP_K` instead of `ORDER_BY` when you need to:
+
+1. **Limit the number of results**: When you need only a specific number of records after sorting [efa530c]
+2. **Perform ranking operations**: When you need to select top N records based on some criteria [efa530c]
+
+From the documentation [efa530c]:
+> ""The `TOP_K` operation also sorts a collection, but then uses the ordered results in order to pick the first `k` values, where `k` is a provided constant.""
+
+## TOP_K Syntax and Usage
+
+The syntax for `TOP_K` is:
+```python
+.TOP_K(k, by=...)
+```
+where:
+- `k` is a positive integer
+- `by` is either a single collation term or an iterable of collation terms [efa530c]
+
+## Examples Where TOP_K is Necessary
+
+### Example 1: Finding Top Performers
+When you need to find the top N records by some metric:
+
+```python
+People.CALCULATE(
+    first_name,
+    last_name,
+    birth_date,
+    n_packages=COUNT(packages)
+).TOP_K(10, by=(n_packages.DESC(), ssn.ASC()))
+```
+This finds the 10 people who ordered the most packages, with ties broken by SSN [efa530c].
+
+### Example 2: Most Recent Items
+When you need the most recent N items:
+
+```python
+Packages.TOP_K(5, by=order_date.DESC())
+```
+This finds the 5 most recently shipped packages [efa530c].
+
+### Example 3: Top Spenders
+When you need to find the top N records by a calculated value:
+
+```python
+People.CALCULATE(
+    first_name,
+    last_name,
+    total_package_cost=SUM(packages.package_cost)
+).TOP_K(3, by=total_package_cost.DESC())
+```
+This finds the top 3 people who spent the most money on packages [efa530c, 2ba30a5].
+
+## Configuration Options
+
+Both `TOP_K` and `ORDER_BY` support these configuration options [efa530c]:
+- `collation_default_asc` (default=True): Controls default sort direction
+- `propagate_collation` (default=False): Controls whether to propagate collation
+
+## Invalid TOP_K Examples
+
+The documentation also shows invalid examples [efa530c]:
+- Missing `by` clause: `People.TOP_K(100)`
+- Missing `k` value: `Packages.TOP_K(by=package_cost.DESC())`
+- Empty `by` clause: `Addresses.TOP_K(300, by=())`
+
+## Practical Implementation Differences
+
+Looking at the test files, we can see that `TOP_K` is implemented as a `LIMIT` operation in the execution plan [ef32cf7], confirming that it combines sorting with limiting results.
+
+## Conclusion
+
+You must use `TOP_K` instead of `ORDER_BY` when you need to not only sort data but also limit the number of results returned. While `ORDER_BY` only changes the order of records, `TOP_K` both orders and restricts the output to the first `k` values according to that ordering.","TOP_K, ORDER_BY"
+"If a query requests a calculation 'year over year' without specifying years, how should the calculation be performed according to the rules?","# Pydough Year-over-Year Calculation Documentation
+
+Based on the search results provided, I'll explain how year-over-year calculations are performed in Pydough according to the available documentation.
+
+## 1. Pydough-specific Functions and Patterns for Year-over-Year Calculations
+
+The key Pydough function for year-over-year calculations appears to be the `PREV()` function, which allows access to values from previous rows in a sorted dataset. This is essential for comparing current values with values from previous periods.
+
+From the search results [ea1072d], we can see an example of a year-over-year calculation pattern:
+
+```python
+def yoy_change_in_num_orders()
+    # For every year, counts the number of orders made in that year and the
+    # percentage change from the previous year.
+    years = PARTITION(
+        current_year_orders = COUNT(orders_in_year)
+        prev_year_orders = PREV(COUNT(orders_in_year), by=year.ASC())
+```
+
+This pattern shows that year-over-year calculations typically involve:
+1. Partitioning data by year
+2. Calculating metrics for the current year
+3. Using PREV() to access the same metric from the previous year
+4. Computing the percentage change or difference between years
+
+## 2. Data Flow and Transformations
+
+The data flow for year-over-year calculations typically follows this pattern:
+
+1. Extract the year from date fields using the `YEAR()` function [31fbfad]
+2. Group/partition data by year
+3. Calculate aggregations within each year group
+4. Use window functions (like PREV) to access previous year's values
+5. Calculate the year-over-year change
+
+From [e4db7e6], we can see a concrete implementation:
+
+```
+PROJECT(columns={'current_year_orders': DEFAULT_TO(agg_0, 0:int64), 'pct_change': 100.0:float64 * DEFAULT_TO(agg_0, 0:int64) - PREV(args=[DEFAULT_TO(agg_0, 0:int64)], partition=[], order=[(year):asc_last]) / PREV(args=[DEFAULT_TO(agg_0, 0:int64)], partition=[], order=[(year):asc_last]), 'year': year})
+
+AGGREGATE(keys={'year': year}, aggregations={'agg_0': COUNT()})
+
+PROJECT(columns={'year': YEAR(order_date)})
+
+SCAN(table=tpch.ORDERS, columns={'order_date': o_orderdate})
+```
+
+This shows the transformation pipeline:
+- Extract year from order_date
+- Aggregate counts by year
+- Calculate percentage change using current year value and previous year value
+
+## 3. Important Pydough Best Practices
+
+From the examples, several best practices for year-over-year calculations emerge:
+
+1. Use the `YEAR()` function to extract year components from dates [31fbfad]
+2. Use `PARTITION()` to group data by year before calculating metrics [ea1072d]
+3. Use `PREV()` with appropriate sorting (typically `by=year.ASC()`) to access previous year's values [ea1072d]
+4. Handle potential null values with `DEFAULT_TO()` or `COALESCE()` to avoid division by zero errors [e4db7e6]
+5. For percentage calculations, multiply by 100.0 to get proper percentage values [e4db7e6]
+
+## 4. Pydough Conventions
+
+The examples follow these Pydough conventions:
+
+1. Using declarative expressions rather than imperative code
+2. Chaining operations in a logical sequence
+3. Using descriptive variable names (e.g., `current_year_orders`, `prev_year_orders`)
+4. Using built-in functions for date manipulation and window operations
+
+## 5. Addressing the Original Question
+
+Based on the search results, when a query requests a ""year over year"" calculation without specifying years, the calculation should:
+
+1. Extract the year component from relevant date fields
+2. Group data by year
+3. Calculate the desired metric for each year
+4. Calculate the percentage change between consecutive years using the formula:
+   ```
+   pct_change = 100.0 * (current_year_value - previous_year_value) / previous_year_value
+   ```
+
+This approach is demonstrated in [e4db7e6] and [ea1072d].
+
+## 6. Key Examples
+
+A clear example of year-over-year calculation is shown in [ea1072d]:
+
+```python
+def yoy_change_in_num_orders()
+    # For every year, counts the number of orders made in that year and the
+    # percentage change from the previous year.
+    years = PARTITION(
+        current_year_orders = COUNT(orders_in_year)
+        prev_year_orders = PREV(COUNT(orders_in_year), by=year.ASC())
+```
+
+Another implementation example from [e4db7e6]:
+
+```
+PROJECT(columns={'current_year_orders': DEFAULT_TO(agg_0, 0:int64), 'pct_change': 100.0:float64 * DEFAULT_TO(agg_0, 0:int64) - PREV(args=[DEFAULT_TO(agg_0, 0:int64)], partition=[], order=[(year):asc_last]) / PREV(args=[DEFAULT_TO(agg_0, 0:int64)], partition=[], order=[(year):asc_last]), 'year': year})
+```
+
+This shows the percentage change calculation as:
+```
+pct_change = 100.0 * (current_year_value - previous_year_value) / previous_year_value
+```
+
+## 7. Key Functions and Definitions
+
+From the search results, these are the key functions used in year-over-year calculations:
+
+1. **YEAR()** - Extracts the year component from a date/timestamp [31fbfad]:
+   ```python
+   # Calling `YEAR` on a date/timestamp extracts the year it belongs to:
+   Orders.WHERE(YEAR(order_date) == 1995)
+   ```
+
+2. **PREV()** - Accesses values from previous rows in a sorted dataset [ea1072d]:
+   ```python
+   prev_year_orders = PREV(COUNT(orders_in_year), by=year.ASC())
+   ```
+
+3. **PARTITION()** - Groups data by specified columns [ea1072d]:
+   ```python
+   years = PARTITION(
+       # data and calculations within partition
+   )
+   ```
+
+4. **DEFAULT_TO()** or **COALESCE()** - Provides default values for null values [e4db7e6]:
+   ```
+   DEFAULT_TO(agg_0, 0:int64)
+   ```
+
+These functions together enable the implementation of year-over-year calculations in Pydough.",
