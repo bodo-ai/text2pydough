@@ -1,3 +1,5 @@
+## The whole graph is called 'TPCH' 
+
 ### The `customers` collection contains the following columns:
 - **acctbal**: The account balance of the customer.
 - **address**: The address of the customer.

@@ -88,7 +88,7 @@ def format_prompt(script_content, prompt, data, question, database_content, defi
         script_content=script_content,
         database_content=database_content,
         similar_queries="",
-        definitions=definitions,
+        definitions="\n".join(definitions),
         recomendation=f"{prompt_string}. {comment_note}"
     )
 
