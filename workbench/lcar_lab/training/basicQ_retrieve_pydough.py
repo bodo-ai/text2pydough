@@ -34,10 +34,8 @@ CONFIG = {
 
 def initialize_r2r_client() -> R2RClient:
     """Initialize the R2R client using the API key from .env."""
-    api_key = os.getenv('R2R_API_KEY')
-    if not api_key:
-        raise ValueError("R2R_API_KEY not found in .env file")
-    return R2RClient()
+    url = "http://localhost:7272"
+    return R2RClient(base_url=url)
 
 def extract_key_terms_from_code(code: str) -> List[str]:
     """Extract key Pydough-specific terms and syntax from code."""
@@ -45,7 +43,7 @@ def extract_key_terms_from_code(code: str) -> List[str]:
     
     # Pydough-specific functions and methods
     pydough_functions = [
-        'CALCULATE', 'WHERE', 'ORDER_BY', 'TOP_K', 'PARTITION',
+        'CALCULATE', 'WHERE', 'ORDER_BY', 'TOP_K', '.PARTITION',
         'HAS', 'HASNOT', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'NDISTINCT',
         'ASC', 'DESC', 'JOIN_STRINGS', 'YEAR', 'MONTH'
     ]
@@ -223,9 +221,10 @@ async def process_pydough_questions(
     # Initialize R2R client
     client = initialize_r2r_client()
     
-    # Create timestamped directory for output
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = os.path.join("/mnt/c/Users/david/bodo/text2pydough/training/training_data/labeled_data/basicQ/processed", timestamp)
+    base_dir = os.path.dirname(os.path.abspath(__file__))  
+    relative_path = os.path.join(base_dir, "training_data/labeled_data/basicQ/processed")
+    output_dir = os.path.join(relative_path, timestamp)
     os.makedirs(output_dir, exist_ok=True)
     
     # Initialize list to store results
