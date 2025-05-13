@@ -10,10 +10,8 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dir
 
 def initialize_r2r_client() -> R2RClient:
     """Initialize the R2R client using the API key from .env."""
-    api_key = os.getenv('R2R_API_KEY')
-    if not api_key:
-        raise ValueError("R2R_API_KEY not found in .env file")
-    return R2RClient()
+    url = "http://localhost:7272"
+    return R2RClient(base_url=url)
 
 def extract_key_terms_from_code(code: str) -> List[str]:
     """Extract key Pydough-specific terms and syntax from code."""
@@ -108,7 +106,7 @@ def perform_rag_retrieval(
         - full_results: The complete RAG results dictionary
     """
     default_settings = {
-        "filters": {"document_id": {"$eq": "4376f3de-092f-5691-84d5-66c8bb3ba69c"}},
+        "filters": {"document_id": {"$eq": "6b2793be-adcb-5fa2-91e6-fd91b331d695"}},
         "search_mode": "advanced",
         "graph_settings": {"enabled": True},
         "search_strategy": "rag_fusion",

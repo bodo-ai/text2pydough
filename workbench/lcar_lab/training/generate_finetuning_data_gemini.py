@@ -26,7 +26,8 @@ import random
 load_dotenv()
 
 # Get the workspace root directory
-WORKSPACE_ROOT = Path("/mnt/c/Users/david/bodo")
+WORKSPACE_ROOT = Path("/home/gerald8525/repositories")
+
 DATASET = 'kaggledbqa'
 
 # Global resources
@@ -38,9 +39,9 @@ _request_lock = asyncio.Lock()  # Lock for request tracking
 
 # Configuration
 CONFIG = {
-    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_with_schema.csv'),
+    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_with_schema_20250509_135110.csv'),
     'output_file': 'sample_training_data.jsonl',
-    'default_sample_size': 3,
+    'default_sample_size': 200,
     'filter_field': 'dataframe_match',
     'filter_value': True,
     'question_field': 'question',

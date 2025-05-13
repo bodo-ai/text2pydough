@@ -1,0 +1,209 @@
+# Metadata Overview: TPCH (Graph Name)
+**Version**: V2
+
+### The `regions` collection contains the following columns:
+- **key**: Unique identifier id for the region
+  - Synonyms: id
+  - Sample values: 0, 1, 2, 3, 4
+- **name**: Uppercase name of the region
+  - Sample values: 'AFRICA', 'AMERICA', 'ASIA', 'EUROPE', 'MIDDLE EAST'
+- **comment**: Comment/remark on the region
+- **nations**: The nations contained within a region
+  - Synonyms: countries
+
+### The `nations` collection contains the following columns:
+- **key**: Unique identifier id for the nation
+  - Synonyms: id
+  - Sample values: 0, 1, 10, 13, 24
+- **region_key**: Key from the region that the nation belongs to
+  - Sample values: 0, 1, 2, 3, 4
+- **name**: Uppercase name of the nation
+  - Sample values: 'KENYA', 'PERU', 'JAPAN', 'INDIA', 'GERMANY'
+- **comment**: Comment/remark on the nation
+- **suppliers**: The suppliers belonging to a nation
+  - Synonyms: companies, producers, businesses
+- **customers**: The customers belonging to a nation
+  - Synonyms: citizens, residents, inhabitants, consumers, users, buyers, occupants
+- **region**: The region that a nation is part of (reverse of `regions.region`)
+  - Synonyms: continent, segment of the world
+
+### The `parts` collection contains the following columns:
+- **key**: Unique identifier id for the part
+  - Synonyms: id
+  - Sample values: 0, 103719, 114994, 64760, 2440
+- **name**: Name of the part, consisting of multiple lowercase colors
+  - Synonyms: colors, description
+  - Sample values: 'chiffon plum white linen firebrick', 'chocolate steel antique green lavender', 'sky frosted cream light blush'
+- **manufacturer**: Name of the manufacturer of the part (not the same as the suppliers). The manufacturer number is the same as the first digit of the part's brand number.
+  - Sample values: 'Manufacturer#1', 'Manufacturer#2', 'Manufacturer#3', 'Manufacturer#4', 'Manufacturer#5'
+- **brand**: The production brand that the part belongs to. The brand contains two digits where the first digit is the same as the manufacturer number (e.g. Brand#32 is from Manufacturer #3).
+  - Sample values: 'Brand#11', 'Brand#23', 'Brand#34', 'Brand#45', 'Brand#55'
+- **part_type**: The type of the part, consisting of three uppercase descriptors where the first is a category (e.g. 'STANDARD' or 'PROMO'), the second is a processing state (e.g. 'ANODIZED' or 'PLATED') and the third is a material (e.g. 'STEEL' or 'BRASS').
+  - Synonyms: category, descriptor, processing, material
+  - Sample values: 'ECONOMY ANODIZED NICKEL', 'PROMO BURNISHED COPPER', 'STANDARD BRUSHED STEEL', 'SMALL PLATED TIN', 'LARGE POLISHED BRASS', 'MEDIUM PLATED NICKEL'
+- **size**: The size of the part
+  - Synonyms: dimension, measurement, length, width, height, volume
+  - Sample values: 1, 10, 31, 46, 50
+- **container**: The container that the part is stored in. The container consists of two uppercase descriptors where the first is a size (e.g. 'SM' or 'JUMBO') and the second is a type of container (e.g. 'BOX' or 'JAR').
+  - Synonyms: vessel, packaging, receptacle
+  - Sample values: 'SM CASE', 'LG BOX', 'MED BAG', 'JUMBO JAR', 'WRAP PKG', 'SM PACK', 'LG CAN', 'MED DRUM'
+- **retail_price**: The retail price of the part, which it is intended to be sold for before accounting for the price the supplier charges, in US dollars. The price is rounded to the nearest cent, and most of the values are between $900 and $2000.
+  - Synonyms: listed selling price, wholesale value
+  - Sample values: 901.0, 2098.99, 14499.5, 2080.99, 2050.96, 1476.41
+- **comment**: Description/commentary on the part
+- **supply_records**: The records indicating which companies supply the part
+  - Synonyms: producers, vendors, suppliers of part
+- **lines**: The line items for shipments of the part
+  - Synonyms: shipments, packages, purchases, deliveries, sales
+
+### The `suppliers` collection contains the following columns:
+- **key**: Unique identifier id for the supplier
+  - Synonyms: id
+  - Sample values: 2452, 8063, 1, 10000, 5053
+- **name**: Name of the supplier, which is always Supplier#<number> where the number is the same as the supplier's key, prepended with zeros until it is 9 digits
+  - Sample values: 'Supplier#000008427', 'Supplier#000001917', 'Supplier#000000001', 'Supplier#000010000', 'Supplier#000000893'
+- **address**: Address of the supplier as a cryptographically encrypted string to anonymize the data.
+  - Synonyms: location, street address, corporate address, headquarters
+  - Sample values: 'aSYD1SvrdIGV8LxRL QDp5m9dV', 'ydl44utgudl6CP46TF7kliIcF5sC8K9,WH,Tj', 'J1Vd3lqn1UvN2|4|14-632-452-6847'
+- **nation_key**: Key from the nation that the supplier belongs to
+  - Synonyms: nation id
+  - Sample values: 0, 1, 10, 13, 24
+- **phone**: Phone number of the supplier in the format 'CC-XXX-XXX-XXXX' where CC is the country code (each nation has a unique country code).
+  - Synonyms: contact number, telephone number
+  - Sample values: '25-995-176-6622', '18-132-649-2520', '30-505-249-4504', '10-132-649-2520', '27-599-541-3605'
+- **account_balance**: The account balance of the supplier in US dollars. The balance is rounded to the nearest cent and most of the values are between -$1,000 and +$10,000.
+  - Synonyms: balance, credit, wealth, debt, surplus, cash on hand, money in bank
+  - Sample values: -998.22, 9999.72, 4510.35, 9125.21, -0.92, 58.93
+- **comment**: Commentary/remark on the supplier
+- **supply_records**: The records indicating which parts the supplier supplies
+  - Synonyms: product catalog, inventory, components supplied
+- **lines**: The line items for shipments from the supplier, e.g. all purchases made from the supplier
+  - Synonyms: shipments, packages, purchases, deliveries, sales
+- **nation**: The nation that a supplier belongs to (reverse of `nations.nation`)
+  - Synonyms: country, state
+
+### The `lines` collection contains the following columns:
+- **order_key**: Key from the order that the line item belongs to
+  - Synonyms: order id
+  - Sample values: 5294597, 19010, 68581, 2710114, 2462791
+- **part_key**: Key from the part that the lineitem describes a purchase/shipment of
+  - Synonyms: part id
+  - Sample values: 1, 103719, 114994, 64760, 2440
+- **supplier_key**: Key from the supplier that the lineitem describes a purchase/shipment from
+  - Synonyms: supplier id
+  - Sample values: 2452, 8063, 1, 10000, 5053
+- **line_number**: The line number of the lineitem within the order. Each lineitem within an order has its own line number, and represents a purchase of a part from a supplier within the order.
+  - Synonyms: line id, shipment index within order
+  - Sample values: 1, 2, 3, 4, 5, 6, 7
+- **quantity**: The number of units of the part that is being purchased in the lineitem, as a number between 1 and 50
+  - Synonyms: amount, purchase volume, units, count, number of items, shipment size
+  - Sample values: 1, 10, 13, 25, 48, 50
+- **extended_price**: The extended price of the line item, which is the retail price of the part multiplied by the quantity purchased (before any discounts/taxes are applied). The price is rounded to the nearest cent and most of the values are between $900 and $100,000.
+  - Synonyms: raw price, gross cost, total value before discount/tax
+  - Sample values: 901.0, 36036.0, 57657.6, 50450.4, 39097.8
+- **discount**: The discount applied to the line item, which is a ratio between 0 and 1 representing percentage of the extended price. The percentage is always between 0% (0.00) and 10% (0.10)
+  - Synonyms: markdown, price reduction
+  - Sample values: 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1
+- **tax**: The sales tax applied to the line item, which is a ratio between 0 and 1 representing percentage of the extended price. The percentage is always between 0% (0.00) and 8% (0.08)
+  - Synonyms: levy, duty, tariff
+  - Sample values: 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08
+- **status**: The status of the line item, which is always 'O' (for orders that have been placed but not yet filled, e.g. pending shipment) or 'F' (for orders that have been filled, e.g. already shipped)
+  - Synonyms: pending shipment, shipment state, fulfilled
+  - Sample values: 'O', 'F'
+- **ship_date**: The date that the line item was shipped from the supplier/warehouse. The date is always between 1992-01-01 and 1998-12-31
+- **commit_date**: The date that the line item was committed to be shipped from the supplier/warehouse. The date is always between 1992-01-01 and 1998-12-31. The ship date is ideally before or on the actual commit date, but can be after it if the shipment was delayed.
+- **receipt_date**: The date that the line item was received by the customer. The date is always between 1992-01-01 and 1998-12-31. The receipt date is after the ship date due to the time to ship the package.
+- **ship_instruct**: The shipping instructions for the line item, which is always 'DELIVER IN PERSON', 'TAKE BACK RETURN', 'COLLECT COD' or 'NONE'
+  - Synonyms: shipping instructions, delivery instructions
+  - Sample values: 'DELIVER IN PERSON', 'TAKE BACK RETURN', 'COLLECT COD', 'NONE'
+- **ship_mode**: The shipping mode for the line item, which is always 'AIR', 'AIR REG', 'FOB', 'MAIL' or 'SHIP'
+  - Synonyms: shipping method, delivery method
+  - Sample values: 'AIR', 'AIR REG', 'FOB', 'MAIL', 'SHIP'
+- **return_flag**: The return flag for the line item, which is always 'R' (for returned items) or 'N' (for non-returned items)
+  - Synonyms: return status
+  - Sample values: 'R', 'N'
+- **comment**: Commentary/remark on the line item
+- **part_and_supplier**: The corresponding entry in the supply records detailing more information about the supplier of the purchase and the part that was purchased
+  - Synonyms: supply records, supplier part information, partsupp info
+- **order**: The order that the line item belongs to
+- **part**: The part that a line item contains, e.g. what part is being shipped as part of an order (reverse of `parts.part`)
+  - Synonyms: product, item, component
+- **supplier**: The supplier that a line item contains, e.g. what supplier is the part being purchased from as part of an order (reverse of `suppliers.supplier`)
+  - Synonyms: company, producer, business
+
+### The `supply_records` collection contains the following columns:
+- **part_key**: Key from the part that the supply record belongs to
+  - Synonyms: part id
+  - Sample values: 1, 103719, 114994, 64760, 2440
+- **supplier_key**: Key from the supplier that the supply record belongs to
+  - Synonyms: supplier id
+  - Sample values: 2452, 8063, 1, 10000, 5053
+- **available_quantity**: The number of units of the part that the supplier has available to supply. The quantity is usually between 1 and 1,000
+  - Synonyms: available stock, inventory, supply, quantity remaining
+  - Sample values: 4620, 3100, 6547, 3337, 76
+- **supply_cost**: The cost that it takes for the supplier to produce a single unit of the part. The cost is rounded to the nearest cent and most of the values are between $1 and $1,000.
+  - Synonyms: production cost, manufacturing cost, cost of goods sold
+  - Sample values: 144.43, 772.21, 285.9, 50.12, 983.998
+- **comment**: Commentary/remark on the supply record
+- **part**: The part that a supply record belongs to (reverse of `parts.part`)
+  - Synonyms: product, item, component
+- **supplier**: The supplier that a supply record belongs to (reverse of `suppliers.supplier`)
+  - Synonyms: company, producer, business
+- **lines**: The line item instances of a part/supplier combination being purchased by a customer (reverse of `lines.lines`)
+
+### The `orders` collection contains the following columns:
+- **key**: Unique identifier id for the order
+  - Synonyms: id
+  - Sample values: 317728, 1096707, 5522855, 2624837, 1866566
+- **customer_key**: Key from the customer that placed the order
+  - Synonyms: customer id
+  - Sample values: 93721, 65251, 81379, 20663, 42247
+- **order_status**: The status of the order, which is always 'O' for orders where all line items of the order have status 'O', 'F' for orders where all line items of the order have status 'F', and 'P' otherwise
+  - Synonyms: order state, fulfillment status
+  - Sample values: 'O', 'F', 'P'
+- **total_price**: The total price of the order after any discounts/taxes are applied, which is the sum of the extended price * (1 - discount) * (1 - tax) for all line items in the order. The price is rounded to the nearest cent and most of the values are between $800 and $600,000.
+  - Synonyms: total cost, total value
+  - Sample values: 857.71, 555285.16, 3618.2, 277554.58, 52737.18
+- **order_date**: The date that the order was placed. The date is always between 1992-01-01 and 1998-12-31
+  - Synonyms: order placed date, order creation date, purchase date
+- **order_priority**: The priority of the order, which is always '1-URGENT', '2-HIGH', '3-MEDIUM', '4-NOT SPECIFIED' or '5-LOW'
+  - Synonyms: urgency, priority level
+  - Sample values: '1-URGENT', '2-HIGH', '3-MEDIUM', '4-NOT SPECIFIED', '5-LOW'
+- **clerk**: The clerk that processed the order, which is always 'Clerk#<number>' where the number is prepended with zeros until it is 9 digits
+  - Synonyms: salesperson, representative, agent, notary, officiant, registrar, overseer
+  - Sample values: 'Clerk#000000001', 'Clerk#000000090', 'Clerk#000000635', 'Clerk#000000892', 'Clerk#000000073'
+- **ship_priority**: The priority of the order for shipping, which is always 0
+  - Synonyms: shipping priority, shipment urgency
+  - Sample values: 0
+- **comment**: Commentary/remark on the order
+- **customer**: The customer that placed the order
+  - Synonyms: buyer, consumer, user, client
+- **lines**: The line items that belong to an order, each representing the purchase of a specific part from a specific supplier (reverse of `lines.lines`)
+  - Synonyms: items, order contents, entries, line items
+
+### The `customers` collection contains the following columns:
+- **key**: Unique identifier id for the customer
+  - Synonyms: id
+  - Sample values: 93721, 65251, 81379, 20663, 42247
+- **name**: Name of the customer, which is always Customer#<number> where the number is the same as the customer's key, prepended with zeros until it is 9 digits
+  - Sample values: 'Customer#000000001', 'Customer#000000090', 'Customer#000000635', 'Customer#000000892', 'Customer#000000073'
+- **address**: Address of the customer as a cryptographically encrypted string to anonymize the data.
+  - Synonyms: location, residence, home address
+  - Sample values: 'ZCWMiIFUwRZWX7Vr7BjZ,,BZbGeGOBe7n', 'HcpYT5Ag 2I2QY,nSoP5F1LI'
+- **nation_key**: Key from the nation that the customer belongs to
+  - Synonyms: nation id
+  - Sample values: 0, 1, 10, 13, 24
+- **phone**: Phone number of the customer in the format 'CC-XXX-XXX-XXXX' where CC is the country code (each nation has a unique country code).
+  - Synonyms: contact number, telephone number
+  - Sample values: '19-962-391-7546', '24-413-105-9570', '31-703-857-4846', '34-591-761-1886'
+- **account_balance**: The account balance of the customer in US dollars. The balance is rounded to the nearest cent and most of the values are between -$1,000 and +$10,000.
+  - Synonyms: balance, credit, wealth, debt, surplus, cash on hand, money in bank
+  - Sample values: -998.22, 9999.72, 4510.35, 9125.21, -0.92, 58.93
+- **market_segment**: The market segment that the customer belongs to, which is always 'BUILDING', 'FURNITURE', 'AUTOMOBILE', 'MACHINERY' or 'HOUSEHOLD'
+  - Synonyms: customer segment, customer category, market, industry, sector, vertical
+  - Sample values: 'BUILDING', 'FURNITURE', 'AUTOMOBILE', 'MACHINERY', 'HOUSEHOLD'
+- **comment**: Commentary/remark on the customer
+- **nation**: The nation that a customer belongs to (reverse of `nations.nation`)
+  - Synonyms: country, state, home
+- **orders**: The orders that a customer has placed, each of which contains one or more line items (reverse of `orders.orders`)
+  - Synonyms: transactions, purchases
