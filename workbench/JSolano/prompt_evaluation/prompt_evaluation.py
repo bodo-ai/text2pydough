@@ -161,7 +161,7 @@ def main(git_hash):
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
 
-    mlflow.set_tracking_uri("http://127.0.0.1:5001")
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
