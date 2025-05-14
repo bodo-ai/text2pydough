@@ -12,12 +12,17 @@ This file contains the core concepts, functions, and syntax of the PyDough langu
 
 {script_content}
 
-2. **Examples for Context**  
+2. **Database Structure Reference File**  
+This file outlines the database schema, collections, fields, and relationships. It provides information about the underlying data structure and organization.
+
+{database_content}
+
+3. **Examples for Context**  
 Here are some examples of PyDough code snippets along with their corresponding natural language questions. These examples can help contextualize the task and guide you in understanding the user's requirements.
 
 {similar_queries}
 
-3. **Query definitions**
+4. **Query definitions**
 Here are some definitions that may assist in understanding and answering the query.
 
 [
