@@ -63,7 +63,7 @@ def read_file(path):
 
 def extract_python_code(text):
     if not isinstance(text, str): return ""
-    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
+    matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
 def prepare_db_markdown_map(df, base_path="test_data"):
