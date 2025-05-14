@@ -55,14 +55,6 @@ To generate the PyDough code snippet, follow these steps:
    - If you need to use the high-level top collection, use the appropriate name as defined in the Database Structure Reference File don't use the high-level collection provided in the examples.
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
 
-3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
-   
-4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
-
-5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
-
-6. The examples shown are not from the current database schema; just treat them as examples and make sure to use the right high top level collection.
-
 {recomendation}
 </instructions>
 
