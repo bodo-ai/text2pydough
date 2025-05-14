@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import json
 from pathlib import Path
-from datetime import datetime
 
 def print_database_stats(df, title, id_col='db_name'):
     """Print statistics about database names in the DataFrame."""
@@ -99,9 +98,9 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
     
     # Convert to DataFrame
     merged_df = pd.DataFrame(merged_data)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
     # Save the merged data
-    output_file = output_dir / f'training_data_with_schema_{timestamp}.csv'
+    output_file = output_dir / 'training_data_with_schema.csv'
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
     
@@ -117,11 +116,11 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
     return merged_df
 
 def main():
-    DATASET = "spider"
+    DATASET = "kaggledbqa"
     # Define paths
-    base_path = Path("/home/arami/bodo/text2pydough/workbench/lcar_lab/training/training_data/labeled_data/" + DATASET)
+    base_path = Path("/mnt/c/Users/david/bodo/text2pydough/training/training_data/labeled_data/" + DATASET)
     
-    processed_data_path = base_path / "processed" / (DATASET + "_without_schema_20250513_085755.csv")
+    processed_data_path = base_path / "processed" / ("combined_" + DATASET + "_data.csv")
     questions_path = base_path / "questions" / (DATASET + "_data_full.csv")
     schema_dir = base_path / "metadata"
     output_dir = base_path / "training_ready"
