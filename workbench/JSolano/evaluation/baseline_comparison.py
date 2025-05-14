@@ -7,8 +7,8 @@ column_names_old = ['question','sql','db_name','response','execution_time','extr
 column_names_new = ['question_new','sql_new','db_name_new','response_new','execution_time_new','extracted_python_code_new','usage_new','comparison_result_new','exception_new']
 
 #load the comparison results and transform them into pandas DataFrames
-baseline = pd.read_csv('test_execution_2025_05_02-13_56_18.csv')
-new_run = pd.read_csv('test_execution_2025_05_12-10_23_08.csv')
+baseline = pd.read_csv('test_execution_2025_05_13-21_40_46.csv')
+new_run = pd.read_csv('test_execution_2025_05_14-09_32_21.csv')
 
 baseline_array = np.array(baseline)
 new_array = np.array(new_run)
@@ -40,5 +40,4 @@ df['change_reason'] = np.where((df['changed']==True) & (df['comparison_result'] 
                                'DataFrame match changed from "' + df['comparison_result'] + '" to "' + df['comparison_result_new'] + '"', '')
 
 df.to_csv('comparison_result.csv')
-
 # %%
