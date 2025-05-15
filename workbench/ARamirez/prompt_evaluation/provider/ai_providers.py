@@ -180,7 +180,7 @@ class MistralAIProvider(AIProvider):
     def __init__(self, model_id):
         self.api_key = os.environ["MISTRAL_API_KEY"]  
         self.model_id = model_id
-        self.client= Mistral(api_key=api_key)
+        self.client= Mistral(api_key=self.api_key)
     
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
