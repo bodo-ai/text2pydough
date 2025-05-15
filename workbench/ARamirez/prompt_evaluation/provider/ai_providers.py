@@ -176,3 +176,5 @@ class OtherAIProvider(AIProvider):
         except Exception as e:
             print(f"AI Suite error: {e}")
             return None
+
+model= GeminiAIProvider("gemini-2.0-flash-001")
