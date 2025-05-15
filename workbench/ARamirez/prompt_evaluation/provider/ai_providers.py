@@ -185,7 +185,7 @@ class MistralAIProvider(AIProvider):
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.chat.completion.create(
                 model=f"{self.provider}:{self.model_id}",
                 messages=messages,
                 **kwargs
