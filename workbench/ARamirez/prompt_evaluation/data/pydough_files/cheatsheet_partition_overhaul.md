@@ -673,7 +673,7 @@ region_order_values_1997 = regions.WHERE(
     total_order_value=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1997).total_price)
 ).TOP_K(1, by=total_order_value.DESC())
 
-result = TPCH.CALCULATE(
+result = GRAPH.CALCULATE(
     year_1996=region_order_values_1996.SINGULAR().total_order_value,
     year_1997=region_order_values_1997.SINGULAR().total_order_value
 )
@@ -828,7 +828,7 @@ Customers(country\_code = phone\[:3\])
   # 3. Exactly 12 hours from now
   # 4. The last day of the previous year
   # 5. The current day, at midnight
-  TPCH.CALCULATE(
+  GRAPH.CALCULATE(
     ts_1=DATETIME('now'),
     ts_2=DATETIME('NoW', 'start of month'),
     ts_3=DATETIME(' CURRENT_DATE ', '12 hours'),
@@ -841,7 +841,7 @@ Customers(country\_code = phone\[:3\])
 
   # Get the orders made in the past 70 days
   orders_in_70_days= Orders.WHERE((DATEDIFF("days",date, 'now') <= 70))
-  result= TPCH.CALCULATE(total_orders=COUNT(orders_in_70_days))
+  result= GRAPH.CALCULATE(total_orders=COUNT(orders_in_70_days))
   ```
 
 * DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time:     years, months, days, hours, minutes, or seconds.
@@ -1066,7 +1066,7 @@ Customers(country\_code = phone\[:3\])
   ```
   combo_groups = Parts.PARTITION(name="groups", by=(size, part_type, container))
   size_groups = combo_groups.PARTITION(name="sizes", by=size).CALCULATE(n_combos=COUNT(groups))
-  TPCH.CALCULATE(avg_n_combo=AVG(size_groups.n_combos)).CALCULATE(
+  GRAPH.CALCULATE(avg_n_combo=AVG(size_groups.n_combos)).CALCULATE(
         n_sizes=COUNT(size_groups.WHERE(n_combos > avg_n_combo)),
   )
   ```
