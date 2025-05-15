@@ -186,7 +186,7 @@ class MistralAIProvider(AIProvider):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
             response = self.client.chat.complete(
-                model=f"{self.provider}:{self.model_id}",
+                model=f"{self.model_id}",
                 messages=messages,
                 **kwargs
             )
