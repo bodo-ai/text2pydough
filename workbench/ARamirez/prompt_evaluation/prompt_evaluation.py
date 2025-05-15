@@ -49,6 +49,8 @@ def get_provider(provider, model_id, config=None):
         return DeepSeekAIProvider(model_id)
     elif provider == "google":
         return GeminiAIProvider(model_id)
+    elif provider == "mistral":
+        return MistralAIProvider(model_id)
     else:
         return OtherAIProvider(provider, model_id, config)
     

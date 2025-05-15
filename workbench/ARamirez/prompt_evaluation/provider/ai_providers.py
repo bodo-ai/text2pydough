@@ -11,6 +11,7 @@ from botocore.config import Config
 from google import genai
 from google.genai import types
 import aisuite as ai
+from mistralai import Mistral
 
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
@@ -161,6 +162,25 @@ class OtherAIProvider(AIProvider):
         self.client = ai.Client(config) if config else ai.Client()
         self.provider = provider
         self.model_id = model_id
+    
+    def ask(self, question, prompt, **kwargs):
+        messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
+        try:
+            response = self.client.chat.completions.create(
+                model=f"{self.provider}:{self.model_id}",
+                messages=messages,
+                **kwargs
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"AI Suite error: {e}")
+            return None
+
+class MistralAIProvider(AIProvider):
+    def __init__(self, model_id):
+        self.api_key = os.environ["MISTRAL_API_KEY"]  
+        self.model_id = model_id
+        self.client= Mistral(api_key=api_key)
     
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
