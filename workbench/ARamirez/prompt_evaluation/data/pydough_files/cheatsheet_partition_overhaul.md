@@ -1,5 +1,5 @@
 ## **PYDOUGH CHEAT SHEET**  
-The examples shown are not from the current database schema; just treat them as examples nad make sure to use the right schema.
+The examples shown are not from the current database schema; just treat them as examples and make sure to use the right schema. EXAMPLE_GRAPH is just an example of a high level graph.
 
 ### **GENERAL RULES**: 
 
@@ -277,7 +277,7 @@ PARTITION(name='group_name', by=(key1, key2))
 
   - **Good Example #4**: Identify the states whose current occupants account for at least 1% of all packages purchased. List the state and the percentage. Notice how `total_packages` is down-streamed from the graph-level `CALCULATE`.
   ```
-  GRAPH.CALCULATE(
+  EXAMPLE_GRAPH.CALCULATE(
       total_packages=COUNT(Packages)
   ).Addresses.WHERE(
     HAS(current_occupants.package) == 1
@@ -293,7 +293,7 @@ PARTITION(name='group_name', by=(key1, key2))
   month_info = pack_info.PARTITION(name="months", by=order_month).CALCULATE(
       n_packages=COUNT(Packages)
   )
-  GRAPH.CALCULATE(
+  EXAMPLE_GRAPH.CALCULATE(
       avg_packages_per_month=AVG(month_info.n_packages)
   ).PARTITION(pack_info, name="months", by=order_month).CALCULATE(
       month,
@@ -343,7 +343,7 @@ PARTITION(name='group_name', by=(key1, key2))
 
   - **Good Example #9**: Find all packages that meet the following criteria: they were ordered in the last year that any package in the database was ordered, their cost was below the average of all packages ever ordered, and the state it was shipped to received at least 10,000 packages that year.
   ```
-  GRAPH.CALCULATE(
+  EXAMPLE_GRAPH.CALCULATE(
       avg_cost=AVG(Packages.package_cost),
       final_year=MAX(Packages.order_year),
   ).Packages.CALCULATE(
@@ -673,7 +673,7 @@ region_order_values_1997 = regions.WHERE(
     total_order_value=SUM(nations.customers.orders.WHERE(YEAR(order_date) == 1997).total_price)
 ).TOP_K(1, by=total_order_value.DESC())
 
-result = GRAPH.CALCULATE(
+result = EXAMPLE_GRAPH.CALCULATE(
     year_1996=region_order_values_1996.SINGULAR().total_order_value,
     year_1997=region_order_values_1997.SINGULAR().total_order_value
 )
@@ -789,17 +789,63 @@ Customers(country\_code = phone\[:3\])
 
 ## **DATETIME FUNCTIONS**
 
-*   YEAR(dt): Extracts year.Example: YEAR(order\_date) == 1995.
-    
-*   MONTH(dt): Extracts month (1-12).Example: MONTH(order\_date) >= 6.
-    
-*   DAY(dt): Extracts day (1-31).Example: DAY(order\_date) == 1.
-    
-*   HOUR(dt): Extracts hour (0-23).Example: HOUR(order\_date) == 12.
-    
-*   MINUTE(dt): Extracts minute (0-59).Example: MINUTE(order\_date) == 30.
-    
-*   SECOND(dt): Extracts second (0-59).Example: SECOND(order\_date) < 30.
+### YEAR
+
+Calling `YEAR` on a date/timestamp extracts the year it belongs to:
+
+```
+Orders.WHERE(YEAR(order_date) == 1995)
+```
+
+### QUARTER
+
+Calling `QUARTER` on a date/timestamp extracts the quarter of the year it belongs to. The range of output is from 1-4. Months 1-3 are part of quarter 1, months 4-6 are part of quarter 2, months 7-9 are part of quarter 3, and months 10-12 are part of quarter 4.
+
+```
+Orders.WHERE(QUARTER(order_date) == 1)
+```
+
+### MONTH
+
+Calling `MONTH` on a date/timestamp extracts the month of the year it belongs to:
+
+```
+Orders.CALCULATE(is_summer = (MONTH(order_date) >= 6) & (MONTH(order_date) <= 8))
+```
+
+### DAY
+
+Calling `DAY` on a date/timestamp extracts the day of the month it belongs to:
+
+```
+Orders.CALCULATE(is_first_of_month = DAY(order_date) == 1)
+```
+
+### HOUR
+
+Calling `HOUR` on a date/timestamp extracts the hour it belongs to. The range of output
+is from 0-23:
+
+```
+Orders.CALCULATE(is_12pm = HOUR(order_date) == 12)
+```
+
+### MINUTE
+
+Calling `MINUTE` on a date/timestamp extracts the minute. The range of output
+is from 0-59:
+
+```
+Orders.CALCULATE(is_half_hour = MINUTE(order_date) == 30)
+```
+
+### SECOND
+
+Calling `SECOND` on a date/timestamp extracts the second. The range of output
+is from 0-59:
+```
+Orders.CALCULATE(is_lt_30_seconds = SECOND(order_date) < 30)
+```
 
 * DATETIME: The DATETIME function is used to build/augment date/timestamp values. The first argument is the base date/timestamp, and it can optionally take in a variable number of modifier arguments.
   
@@ -810,6 +856,7 @@ Customers(country\_code = phone\[:3\])
 
   - A string literal in the format `start of <UNIT>` indicating to truncate the datetime value to a certain unit, which can be the following:
    - **Years**: Supported aliases are `"years"`, `"year"`, and `"y"`.
+   - **Quarters**: Supported aliases are `"quarters"`, `"quarter"`, and `"q"`.
    - **Months**: Supported aliases are `"months"`, `"month"`, and `"mm"`.
    - **Days**: Supported aliases are `"days"`, `"day"`, and `"d"`.
    - **Weeks**: Supported aliases are `"weeks"`, `"week"`, and `"w"`.
@@ -828,28 +875,33 @@ Customers(country\_code = phone\[:3\])
   # 3. Exactly 12 hours from now
   # 4. The last day of the previous year
   # 5. The current day, at midnight
-  GRAPH.CALCULATE(
+  # 6. The first day after the start of the current quarter
+  # 7. The current week
+  EXAMPLE_GRAPH.CALCULATE(
     ts_1=DATETIME('now'),
     ts_2=DATETIME('NoW', 'start of month'),
     ts_3=DATETIME(' CURRENT_DATE ', '12 hours'),
     ts_4=DATETIME('Current Timestamp', 'start of y', '- 1 D'),
     ts_5=DATETIME('NOW', '  Start  of  Day  '),
+    ts_6=DATETIME('now', 'start of quarter', '+1 d'),
+    ts_7=DATETIME('now', "start of week"),
   )
 
   # For each order, truncates the order date to the first day of the year
   Orders.CALCULATE(order_year=DATETIME(order_year, 'START OF Y'))
-
+  
   # Get the orders made in the past 70 days
   orders_in_70_days= Orders.WHERE((DATEDIFF("days",date, 'now') <= 70))
-  result= GRAPH.CALCULATE(total_orders=COUNT(orders_in_70_days))
+  result= EXAMPLE_GRAPH.CALCULATE(total_orders=COUNT(orders_in_70_days))
   ```
 
-* DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time:     years, months, days, hours, minutes, or seconds.
+* DATEDIFF: Calling DATEDIFF between 2 timestamps returns the difference in one of the following units of time: years, months, quarters, days, hours, minutes, or seconds.
 
   - `DATEDIFF("years", x, y)`: Returns the **number of full years since x that y occurred**. For example, if **x** is December 31, 2009, and **y** is January 1, 2010, it counts as **1 year apart**, even though they are only 1 day apart.
+  - `DATEDIFF("quarters", x, y)`: Returns the **number of full quarters since x that y occurred**. For example, if **x** is March 31, 2014, and **y** is April 1, 2014, it counts as **1 quarter apart**, even though they are only 1 day apart.
   - `DATEDIFF("months", x, y)`: Returns the **number of full months since x that y occurred**. For example, if **x** is January 31, 2014, and **y** is February 1, 2014, it counts as **1 month apart**, even though they are only 1 day apart.
   - `DATEDIFF("weeks", x, y)`: Returns the **number of full weeks since x that y occurred**. The dates x and y are first truncated to the start of week (as specified by the `start_of_week` config), then the difference in number of full weeks is calculated (a week is defined as 7 days). For example, if `start_of_week` is set to Saturday:
-    ```python
+    ```
     # If x is "2025-03-18" (Tuesday) and y is "2025-03-31" (Monday)
     DATEDIFF("weeks", x, y) returns 2
     ```
@@ -1066,7 +1118,7 @@ Customers(country\_code = phone\[:3\])
   ```
   combo_groups = Parts.PARTITION(name="groups", by=(size, part_type, container))
   size_groups = combo_groups.PARTITION(name="sizes", by=size).CALCULATE(n_combos=COUNT(groups))
-  GRAPH.CALCULATE(avg_n_combo=AVG(size_groups.n_combos)).CALCULATE(
+  EXAMPLE_GRAPH.CALCULATE(avg_n_combo=AVG(size_groups.n_combos)).CALCULATE(
         n_sizes=COUNT(size_groups.WHERE(n_combos > avg_n_combo)),
   )
   ```
