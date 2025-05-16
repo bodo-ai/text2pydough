@@ -99,10 +99,10 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    print(json_to_markdown(db_content))
+    
     return "".join([question]), prompt.format(
         script_content=script,
-        database_content=str(db_content),
+        database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -125,7 +125,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     db_name = row.get("db_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
-    response1 = client.ask(f"{formatted_prompt}\n<question>{formatted_q}</question>", "You are an analytics expert and a proficient Pydough generator that creates Python code based on natural language descriptions.", **kwargs)
+    response1 = client.ask(formatted_q,formatted_prompt, **kwargs)
     duration = time.time() - start
     if isinstance(response1, tuple):  # Gemini returns (text, usage)
         #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
