@@ -102,7 +102,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     print(json_to_markdown(db_content))
     return "".join([question]), prompt.format(
         script_content=script,
-        database_content=json_to_markdown(db_content),
+        database_content=str(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
