@@ -36,7 +36,7 @@ def run_in_process(func, *args, **kwargs):
 # max number of rows used by evaluator to provide feedback. 
 MAX_ROWS = 20 
 # max number of feedback loops between generator and evaluator
-MAX_FEEDBACK_LOOPS = 3
+MAX_FEEDBACK_LOOPS = 7
 # Number of concurrent questions to process
 MAX_CONCURRENT_QUESTIONS = 3
 
@@ -76,7 +76,7 @@ async def process_single_question(
     
     try:
         generator_agent = PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path)
-        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}")
+        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}", cheatsheet_path)
 
         # Execute the ground truth SQL query once
         sql_result = await run_in_thread(evaluator_agent._convert_sql_to_dataframe, sql_query)
