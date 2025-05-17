@@ -1,0 +1,3225 @@
+RAG Response for Example 3
+==================================================
+
+Full RAG Results Dictionary:
+{'generated_answer': 'I\'ll explain the fundamental difference highlighted between PyDough and SQL regarding syntax and behavior assumptions based on the provided search results.\n\n## Fundamental Differences Between PyDough and SQL\n\n### 1. Mental Model and Thinking Approach\n\nPyDough uses a hierarchical thinking model that\'s closer to human linguistics, while SQL uses a relational model:\n\n[988171e] "PyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as MongoDB, since that mental model is closer to human linguistics than a relational model."\n\nThis fundamental difference in mental models affects how users approach data problems:\n- PyDough: Think in terms of collections, sub-collections, and relationships\n- SQL: Think in terms of tables, joins, and relational algebra\n\n### 2. Abstraction of Complex SQL Semantics\n\n[7ea5a7b] "The complex semantics of aggregation keys, different types of joins, and aggregating before vs after joining are all abstracted away by PyDough. These details require much deeper understanding of SQL semantics than most have time to learn how to do correctly, meaning that PyDough can have a lower learning curve to write correct code for complex questions."\n\nPyDough abstracts away many SQL complexities:\n- Join logic is hidden in metadata\n- Aggregation timing is handled automatically\n- Relationships are simplified to parent-child connections\n\n### 3. Code Structure and Verbosity\n\nPyDough code is typically more compact and resembles the natural language question more closely:\n\n[988171e] "Often, PyDough code will be significantly more compact than equivalent SQL text, and therefore easier for a human to verify for logical correctness."\n\nThis is demonstrated in the example comparing PyDough and SQL for the same problem:\n\n**PyDough solution:**\n```py\nresult = People.CALCULATE(\n  name,\n  net_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)\n)\npydough.to_df(result)\n```\n\n**Equivalent SQL solution:**\n```sql\nSELECT\n  P.name AS name,\n  COALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income\nFROM PEOPLE AS P\nLEFT JOIN (\n  SELECT person_ssn, SUM(income_earned) AS total_income_earned\n  FROM EMPLOYMENT_RECORDS\n  GROUP BY person_ssn\n) AS J\nON P.ssn = J.person_ssn\nLEFT JOIN (\n  SELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid\n  FROM EDUCATION_RECORDS\n) AS S\nON P.ssn = S.person_ssn\n```\n\n### 4. Behavior Assumptions and Join Handling\n\n[8e03891] "The example SQL requires a nested subquery to answer, which can easily become complicated and unmanagable as questions scale in size. It also requires explicitly representing the join information where a decision like **LEFT** vs **INNER** join impacts correctness and is a function of the data."\n\nPyDough handles join behavior differently:\n- SQL: Requires explicit join type specification (LEFT, INNER, etc.)\n- PyDough: Join information is encoded in metadata, abstracting away these decisions\n\n### 5. Incremental Development and Composability\n\n[8e03891] "PyDough has a simpler representation, avoiding some of the redundancy in the SQL code and the join information is encoded entirely in the metadata."\n\n[0e98bac] "PyDough can be written incrementally via expressions that are meaningless until the final context."\n\nThis composability allows for:\n- Building expressions that can be reused\n- Incremental development of complex queries\n- More natural "what-if" analysis\n\n### 6. Execution Model\n\n[988171e] "PyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested."\n\n[988171e] "PyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database."\n\nThis means PyDough:\n- Uses lazy evaluation (only executes when needed)\n- Ultimately translates to SQL for execution\n- Can work with various database backends\n\nIn summary, PyDough fundamentally differs from SQL by providing a more intuitive hierarchical thinking model that\'s closer to human language, abstracting away complex SQL semantics like joins and aggregation timing, offering more compact and readable code, handling join behavior through metadata, enabling incremental development, and using a lazy evaluation scheme that translates to SQL only when execution is requested.', 'search_results': AggregateSearchResult(chunk_search_results=[ChunkSearchResult(score=0.082, text=## What Is PyDough
+
+PyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as [MongoDB](https://www.mongodb.com/docs/manual/data-modeling/), since that mental model is closer to human linguistics than a relational model.
+
+Unlike MongoDB, PyDough only uses a logical document model for abstractly explaining & interacting with data, rather than a physical document model to store the data.
+
+PyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested.
+
+PyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database.
+
+Consider the following information represented by the tables in a database:
+
+There are people; each person has a name, ssn, birth date, records of jobs they have had, and records of schools they have attended.
+
+There are employment records; each job record has the ssn of the person being employed, the name of the company, and the total income they made from the job.
+
+There are education records; each education record has the ssn of the person attending the school, the name of the school, and the total tuition they paid to that school.
+
+Suppose I want to know for every person their name & the total income they've made from all jobs minus the total tuition paid to all schools. However, I want to include people who have never had a job or never attended any schools, and I need to account for people who could have had multiple jobs or attended multiple schools.
+
+The following PyDough snippet solves this problem:
+
+```py
+
+result = People.CALCULATE(
+
+name,
+
+net_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)
+
+)
+
+pydough.to_df(result)
+
+```
+
+However, if answering the question with SQL, I would need to write the following less-intuitive SQL query:
+
+```sql
+
+SELECT
+
+P.name AS name,
+
+COALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income
+
+FROM PEOPLE AS P
+
+LEFT JOIN (
+
+SELECT person_ssn, SUM(income_earned) AS total_income_earned
+
+FROM EMPLOYMENT_RECORDS
+
+GROUP BY person_ssn
+
+) AS J
+
+ON P.ssn = J.person_ssn
+
+LEFT JOIN (
+
+SELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid
+
+FROM EDUCATION_RECORDS
+
+) AS S
+
+ON P.ssn = S.person_ssn
+
+```
+
+Internally, PyDough solves the question by translating the much simpler logical document model logic into SQL, which can be directly executed on a database. Even if the same SQL is generated by PyDough as the example above, all a user needs to worry about is writing the much smaller PyDough code snippet in Python.
+
+Currently, the main mechanism to execute PyDough code is via Jupyter notebooks with a special cell magic. See the usage guide and demo notebooks for more details.), ChunkSearchResult(score=0.081, text=## Why Build PyDough?
+
+PyDough as a DSL has several benefits over other solutions, both for human use and LLM generation:
+
+ORMs still require understanding & writing SQL, including dealing directly with joins. If a human or AI is bad at writing SQL, they will be just as bad at writing ORM-based code. PyDough, on the other hand, abstracts away joins in favor of thinking about logical relationships between collections & sub-collections.
+
+The complex semantics of aggregation keys, different types of joins, and aggregating before vs after joining are all abstracted away by PyDough. These details require much deeper understanding of SQL semantics than most have time to learn how to do correctly, meaning that PyDough can have a lower learning curve to write correct code for complex questions.
+
+When a question is being asked, the PyDough code to answer it will look more similar to the text of the question than the SQL text would. This makes LLM generation of PyDough code simpler since there is a stronger correlation between a question asked and the PyDough code to answer it.
+
+Often, PyDough code will be significantly more compact than equivalent SQL text, and therefore easier for a human to verify for logical correctness.
+
+PyDough is portable between various database execution solutions, so you are not locked into one data storage solution while using PyDough.
+
+## Learning About PyDough
+
+Refer to these documents to learn how to use PyDough:
+
+[Spec for the PyDough DSL](https://github.com/bodo-ai/PyDough/blob/main/documentation/dsl.md)
+
+[Spec for the PyDough metadata](https://github.com/bodo-ai/PyDough/blob/main/documentation/metadata.md)
+
+[List of builtin PyDough functions](https://github.com/bodo-ai/PyDough/blob/main/documentation/functions.md)
+
+[Usage guide for PyDough](https://github.com/bodo-ai/PyDough/blob/main/documentation/usage.md)
+
+## Installing or Developing PyDough
+
+PyDough releases are [available on PyPI](https://pypi.org/project/pydough/) and can be installed via pip:
+
+```
+
+pip install pydough
+
+```
+
+For local development, PyDough uses `uv` as a package manager.
+
+Please refer to their docs for [installation](https://docs.astral.sh/uv/getting-started/).
+
+To run testing commands after installing `uv`, run the following command:
+
+```bash
+
+uv run pytest <pytest_arguments>
+
+```
+
+If you want to skip tests that execute runtime results because they are slower,
+
+make sure to include `-m "not execute"` in the pytest arguments.
+
+Note: some tests may require an additional setup to run successfully.
+
+The [demos](https://github.com/bodo-ai/PyDough/blob/main/demos/README.md) directory
+
+contains more information on how to setup the TPC-H sqlite database. For
+
+testing, the `tpch.db` file must be located in the `tests` directory.
+
+Additionally, the [`setup_defog.sh`](https://github.com/bodo-ai/PyDough/blob/main/tests/setup_defog.sh)
+
+script must be run so that the `defog.db` file is located in the `tests` directory.
+
+## Running CI Tests
+
+To run our CI tests on your PR, you must include the flag `[run CI]` in latest
+
+commit message.
+
+## Runtime Dependencies
+
+PyDough requires having the following Python modules installed to use
+
+the library:
+
+pytz, pandas, sqlglot
+
+The full list of dependencies can be found in the `pyproject.toml` file.
+
+## Demo Notebooks
+
+The `demo` folder contains a series of example Jupyter Notebooks
+
+that can be used to understand PyDough's capabilities. We recommend any new user start
+
+with the [demo readme](https://github.com/bodo-ai/PyDough/blob/main/demos/README.md) and then walk through the example Juypter notebooks.
+
+````), ChunkSearchResult(score=0.078, text="reverse_relationship_name": "shipped_packages"
+
+},
+
+"billing_address": {
+
+"type": "simple_join",
+
+"other_collection_name": "Addresses",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {
+
+"billing_address_id": ["aid"]
+
+},
+
+"reverse_relationship_name": "billed_packages"
+
+}
+
+}
+
+},
+
+"Addresses": {
+
+"type": "simple_table",
+
+"table_path": "shipping.ADDRESSES",
+
+"unique_properties": ["aid"],
+
+"properties": {
+
+"address_id": {
+
+"type": "table_column",
+
+"column_name": "aid",
+
+"data_type": "string"
+
+},
+
+"street_number": {
+
+"type": "table_column",
+
+"column_name": "street_number",
+
+"data_type": "string"
+
+},
+
+"street_name": {
+
+"type": "table_column",
+
+"column_name": "street_name",
+
+"data_type": "string"
+
+},
+
+"apartment": {
+
+"type": "table_column",
+
+"column_name": "apartment",
+
+"data_type": "string"
+
+},
+
+"zip_code": {
+
+"type": "table_column",
+
+"column_name": "zip",
+
+"data_type": "string"
+
+},
+
+"city": {
+
+"type": "table_column",
+
+"column_name": "city",
+
+"data_type": "string"
+
+},
+
+"state": {
+
+"type": "table_column",
+
+"column_name": "state",
+
+"data_type": "string"
+
+}
+
+}
+
+}
+
+}
+
+}
+
+```
+
+The PyDough metadata representation shown in this JSON file corresponds to the following set of collections:
+
+`People` (corresponds to `shipping.PEOPLE`; records are unique per unique value of `ssn`). Has the following properties:
+
+`ssn` (scalar property)
+
+`first_name` (scalar property)
+
+`middle_name` (scalar property)
+
+`last_name` (scalar property)
+
+`birth_date` (scalar property)
+
+`email` (scalar property)
+
+`current_address_id` (scalar property)
+
+`current_address` (sub-collection connecting to `Addresses`)
+
+`packages_ordered` (sub-collection connecting to `Packages`)
+
+`Packages` (corresponds to `shipping.PACKAGES`; records are unique per unique value of `pid`). Has the following properties:
+
+`package_id` (scalar property)
+
+`customer_ssn` (scalar property)
+
+`shipping_address_id` (scalar property)
+
+`billing_address_id` (scalar property)
+
+`order_date` (scalar property)
+
+`arrival_date` (scalar property)
+
+`cost` (scalar property)
+
+`shipping_address` (sub-collection connecting to `Addresses`)
+
+`billing_address` (sub-collection connecting to `Addresses`)
+
+`Addresses` (corresponds to `shipping.ADDRESSES`; records are unique per unique value of `aid`). Has the following properties:
+
+`address_id` (scalar property)
+
+`street_number` (scalar property)
+
+`street_name` (scalar property)
+
+`apartment` (scalar property)
+
+`zip_code` (scalar property)
+
+`city` (scalar property)
+
+`state` (scalar property)
+
+`current_occupants` (sub-collection connecting to `People`)
+
+`shipped_packages` (sub-collection connecting to `Packages`)
+
+`billed_packages` (sub-collection connecting to `Packages`)
+
+````
+
+## File: documentation/usage.md
+
+````markdown
+
+# PyDough Usage Guide
+
+This document describes how to set up & interact with PyDough. For instructions on how to write PyDough code, see the [PyDough DSL](dsl.md) or the [list of PyDough builtin functions](functions.md).
+
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+[Setting Up in Jupyter Notebooks](#setting-up-in-jupyter-notebooks)
+
+[Session APIs](#session-apis)
+
+[PyDough Session](#pydough-session)
+
+[Session Configs](#session-configs)
+
+[Session Database](#session-database)
+
+[Session Knowledge Graph](#session-knowledge-graph)
+
+[Evaluation APIs](#evaluation-apis)
+
+[`pydough.to_sql`](#pydoughto_sql)
+
+[`pydough.to_df`](#pydoughto_df)
+
+[Exploration APIs](#exploration-apis)
+
+[`pydough.explain_structure`](#pydoughexplain_structure)
+
+[`pydough.explain`](#pydoughexplain)
+
+[`pydough.explain_term`](#pydoughexplain_term)
+
+[Logging] (#logging)
+
+<!-- TOC end -->
+
+<!-- TOC --><a name="setting-up-in-jupyter-notebooks"></a>), ChunkSearchResult(score=0.077, text=## Unary Operators
+
+Below is each unary operator currently supported in PyDough.
+
+<!-- TOC --><a name="negation"></a>
+
+### Negation
+
+A numerical expression's sign can be flipped by prefixing it with the `-` operator:
+
+```py
+
+Lineitems.CALCULATE(lost_value = extended_price * (-discount))
+
+```
+
+<!-- TOC --><a name="other-operators"></a>
+
+## Other Operators
+
+Below are all other operators currently supported in PyDough that use other syntax besides function calls:
+
+<!-- TOC --><a name="slicing"></a>
+
+### Slicing
+
+A string expression can have a substring extracted with Python string slicing syntax `s[a:b:c]`.
+
+The implementation is based on Python slicing semantics. PyDough supports negative slicing, but currently, it does not support providing step values other than 1.
+
+```py
+
+Customers.CALCULATE(
+
+country_code = phone[:3],
+
+name_without_first_char = name[1:],
+
+last_digit = phone[-1:],
+
+name_without_start_and_end_char = name[1:-1]
+
+phone_without_last_5_chars = phone[:-5]
+
+name_second_to_last_char = name[-2:-1]
+
+)
+
+```
+
+> [!WARNING]
+
+> PyDough currently only supports combinations of `string[start:stop:step]` where `step` is either 1 or omitted, and both `start` and `stop` are either non-negative values or omitted.
+
+<!-- TOC --><a name="string-functions"></a>
+
+## String Functions
+
+Below is each function currently supported in PyDough that operates on strings.
+
+<!-- TOC --><a name="lower"></a>
+
+### LOWER
+
+Calling `LOWER` on a string converts its characters to lowercase:
+
+```py
+
+Customers.CALCULATE(lowercase_name = LOWER(name))
+
+```
+
+<!-- TOC --><a name="upper"></a>
+
+### UPPER
+
+Calling `UPPER` on a string converts its characters to uppercase:
+
+```py
+
+Customers.CALCULATE(uppercase_name = UPPER(name))
+
+```
+
+<!-- TOC --><a name="length"></a>
+
+### LENGTH
+
+Calling `length` on a string returns the number of characters it contains:
+
+```py
+
+Suppliers.CALCULATE(n_chars_in_comment = LENGTH(comment))
+
+```
+
+<!-- TOC --><a name="startswith"></a>
+
+### STARTSWITH
+
+The `STARTSWITH` function checks if its first argument begins with its second argument as a string prefix:
+
+```py
+
+Parts.CALCULATE(begins_with_yellow = STARTSWITH(name, "yellow"))
+
+```
+
+<!-- TOC --><a name="endswith"></a>
+
+### ENDSWITH
+
+The `ENDSWITH` function checks if its first argument ends with its second argument as a string suffix:
+
+```py
+
+Parts.CALCULATE(ends_with_chocolate = ENDSWITH(name, "chocolate"))
+
+```
+
+<!-- TOC --><a name="contains"></a>
+
+### CONTAINS
+
+The `CONTAINS` function checks if its first argument contains its second argument as a substring:
+
+```py
+
+Parts.CALCULATE(is_green = CONTAINS(name, "green"))
+
+```
+
+<!-- TOC --><a name="like"></a>
+
+### LIKE
+
+The `LIKE` function checks if the first argument matches the SQL pattern text of the second argument, where `_` is a 1 character wildcard and `%` is an 0+ character wildcard.
+
+```py
+
+Orders.CALCULATE(is_special_request = LIKE(comment, "%special%requests%"))
+
+```
+
+[This link](https://www.w3schools.com/sql/sql_like.asp) explains how these SQL pattern strings work and provides some examples.
+
+<!-- TOC --><a name="join_strings"></a>
+
+### JOIN_STRINGS
+
+The `JOIN_STRINGS` function concatenates all its string arguments, using the first argument as a delimiter between each of the following arguments (like the `.join` method in Python):
+
+```py
+
+Regions.CALCULATE(
+
+region_name=name
+
+).nations.CALCULATE(
+
+nation_name=name
+
+).customers.CALCULATE(
+
+fully_qualified_name = JOIN_STRINGS("-", region_name, nation_name, name)
+
+)
+
+```
+
+For instance, `JOIN_STRINGS("; ", "Alpha", "Beta", "Gamma)` returns `"Alpha; Beta; Gamma"`.
+
+<!-- TOC --><a name="lpad"></a>), ChunkSearchResult(score=0.077, text="source": [
+
+"### SQL\n",
+
+"\n",
+
+"```SQL\n",
+
+"Select\n",
+
+" (L_EXTENDED_PRICE * (1 - L_DISCOUNT)) / order_total as revenue_ratio,\n",
+
+" orderkey,\n",
+
+" l_linenumber as line_number\n",
+
+"from lines\n",
+
+"inner join (\n",
+
+" select\n",
+
+" o_orderkey as order_key,\n",
+
+" SUM(L_EXTENDED_PRICE * (1 - L_DISCOUNT)) as order_total\n",
+
+" from orders\n",
+
+" inner join lines\n",
+
+" on l_orderkey = o_orderkey\n",
+
+" group by o_orderkey\n",
+
+")\n",
+
+"on l_orderkey = order_key\n",
+
+"order by revenue_ratio ASC, order_key DESC, line_number DESC\n",
+
+"LIMIT 5\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "4e81ec40-f82c-42e6-9656-7f36e619a52a",
+
+"metadata": {},
+
+"source": [
+
+"### PyDough\n",
+
+"\n",
+
+"```python\n",
+
+"revenue_def = extended_price*(1-discount)\n",
+
+"orders.CALCULATE(total_line_price=SUM(lines.CALCULATE(line_price=revenue_def).line_price)).lines.CALCULATE(\n",
+
+" revenue_ratio=revenue_def / total_line_price, \n",
+
+" order_key=order_key, \n",
+
+" line_number=line_number\n",
+
+").TOP_K(5, by=(revenue_ratio.ASC(), order_key.DESC(), line_number.DESC()))\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "efca5340-6acc-48dd-9287-f3baaabe5239",
+
+"metadata": {},
+
+"source": [
+
+"The example SQL requires a nested subquery to answer, which can easily become complicated and unmanagable as questions scale in size. It also requires explicitly representing the join information where a decision like **LEFT** vs **INNER** join impacts correctness and is a function of the data.\n",
+
+"\n",
+
+"In constrast, PyDough has a simpler representation, avoiding some of the redundancy in the SQL code and the join information is encoded entirely in the metadata."
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "3228b465-a356-4d5e-9b61-a13b437a8c7f",
+
+"metadata": {},
+
+"source": [
+
+"## PyDough Solution\n",
+
+"\n",
+
+"While we can just execute the PyDough example above, we are going to take a different approach to show how one might generate this query in a \"WHAT-IF\" manner. This approach will be a longer solution, but will be helpful to enable faster iteration once we modify the question.\n",
+
+"\n",
+
+"We are opting to demonstrate this because:\n",
+
+"1. We believe this is a good representation for how PyDough can be leveraged to gradually handle increasing question complexity.\n",
+
+"2. We believe this reflects an investigative approach to query generation, where someone may understand at a high-level what needs to be done, but not necessary that \"path\" to get there.\n",
+
+"\n",
+
+"To do this we will first need to define revenue. Here we will say that the revenue is the price information after removing any discounts."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "90f77e14-4540-42af-a62e-2ba4e9ae40b9",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"revenue_def = extended_price*(1-discount)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "c250943d-f018-4b53-b3b0-423c35db5004",
+
+"metadata": {},
+
+"source": [
+
+"This might seem shocking. We have defined `revenue_def` out of nowhere using an `extended_price` and `discount`. What has actually happened here is that we have generated what is called a `Contextless Expression`. This fundamental building block is the key to PyDough's composability.\n",
+
+"\n",
+
+"On its own this expression doesn't mean anything. In fact if we inspect this object in regular PyDough we will see that PyDough itself has a lot of questions."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "3dc2af81-baa9-45df-9624-a6afca0101b7",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"revenue_def"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "576f9203-35c0-458a-8860-88615bcade4f",
+
+"metadata": {},), ChunkSearchResult(score=0.074, text="source": [
+
+"%%pydough\n",
+
+"\n",
+
+"highest_ratios = filtered_ratios.TOP_K(\n",
+
+" 5, by=(revenue_ratio.DESC(), order_key.DESC(), line_number.DESC())\n",
+
+")\n",
+
+"pydough.to_df(highest_ratios)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "1895880e-ddc5-4266-a57e-0a0ee93311fd",
+
+"metadata": {},
+
+"source": [
+
+"We have now successfully started extending our exploration and are free to tackle any number of followup questions, such as diving into the parts that fulfill these orders or considering different order sizes. Contrast this with the approach we would need to take with a SQL query would requires either modifying our past work or copying the results and repeating the logic, which may evolve over time.\n",
+
+"\n",
+
+"We encourage you to explore extending this notebook to examine additional ways in which PyDough can facilitate rapid \"WHAT-IF\" analysis."
+
+]
+
+}
+
+],
+
+"metadata": {
+
+"kernelspec": {
+
+"display_name": "Python 3 (ipykernel)",
+
+"language": "python",
+
+"name": "python3"
+
+},
+
+"language_info": {
+
+"codemirror_mode": {
+
+"name": "ipython",
+
+"version": 3
+
+},
+
+"file_extension": ".py",
+
+"mimetype": "text/x-python",
+
+"name": "python",
+
+"nbconvert_exporter": "python",
+
+"pygments_lexer": "ipython3",
+
+"version": "3.11.9"
+
+}
+
+},
+
+"nbformat": 4,
+
+"nbformat_minor": 5
+
+}
+
+````
+
+## File: demos/README.md
+
+````markdown
+
+The PyDough demos are a series of notebooks to introduce PyDough. PyDough is a Python compatible
+
+DSL designed to leverage a logical document model to simplify analytics. We believe that a mature PyDough
+
+will represent a simpler analytics experience than writing SQL or equivalent analytics libraries because:
+
+1. PyDough can be written incrementally via expressions that are meaningless until the final context.
+
+2. PyDough abstracts away join logic into the metadata and understanding relationships can be simplified to parent + child relationships.
+
+3. Unlike many ORM alternatives, PyDough is not a thin 1:1 wrapper around underlying SQL syntax and instead is focus on primitive operators that answer underlying business questions.
+
+We believe that these advantages, as well as the flexibility of a metadata layer to hide unnecessary
+
+complexity of one's analytics universe and ability to define semantically significant names means that
+
+PyDough simplicity will also be advantageous for LLM analytics generation.
+
+The `notebooks` folder provides a series of Demos that one can engage with to understand PyDough's
+
+capabilities and ultimately the experience of using PyDough. We strongly recommend starting with
+
+[1_introduction.ipynb](notebooks/1_introduction.ipynb), as this notebook is intended to explain a high-level overview of the components
+
+of a PyDough notebook and what each step is doing. This notebook will then also explain how each
+
+subsequent demo notebook is structured to provide insight into some aspect of PyDough.
+
+> [!IMPORTANT]
+
+> Before running any notebooks, you will need to run the script to set up the TPC-H database as a local sqlite database file. You must ensure the file is located in the root directory of PyDough and is named `tpch.db`. If using `bash`, this means running the following command from the root directory of PyDough: `bash demos/setup_tpch.sh tpch.db`
+
+Once the introduction notebook is complete, you can explore the other notebooks:
+
+[2_pydough_operations.ipynb](notebooks/2_pydough_operations.ipynb) demonstrates all the core operations in PyDough
+
+[3_exploration.ipynb](notebooks/3_exploration.ipynb) shows how to use several user APIs for exploring PyDough.
+
+[4_tpch.ipynb](notebooks/4_tpch.ipynb) provides PyDough translations for most of the TPC-H benchmark queries.
+
+[5_what_if.ipynb](notebooks/5_what_if.ipynb) demonstrates how to do WHAT-IF analysis with PyDough.
+
+````
+
+## File: demos/setup_tpch.sh
+
+````bash
+
+#!/bin/bash
+
+set -eo pipefail
+
+if [ -e $1 ]; then
+
+echo "FOUND"
+
+exit 0
+
+else
+
+wget https://github.com/lovasoa/TPCH-sqlite/releases/download/v1.0/TPC-H.db -O $1
+
+fi
+
+````
+
+## File: documentation/dsl.md
+
+````markdown), ChunkSearchResult(score=0.073, text=### `pydough.to_sql`
+
+The `to_sql` API takes in PyDough code and transforms it into SQL query text without executing it on a database. The first argument it takes in is the PyDough node for the collection being converted to SQL. It can optionally take in the following keyword arguments:
+
+`columns`: which columns to include in the answer if what names to call them by (if omitted, uses the names/ordering from the last `CALCULATE` clause). This can either be a non-empty list of column name strings, or a non-empty dictionary where the values are column name strings, and the keys are the strings of the aliases they should be named as.
+
+`metadata`: the PyDough knowledge graph to use for the conversion (if omitted, `pydough.active_session.metadata` is used instead).
+
+`config`: the PyDough configuration settings to use for the conversion (if omitted, `pydough.active_session.config` is used instead).
+
+`database`: the database context to use for the conversion (if omitted, `pydough.active_session.database` is used instead). The database context matters because it controls which SQL dialect is used for the translation.
+
+Below is an example of using `pydough.to_sql` and the output (the SQL output may be outdated if PyDough's SQL conversion process has been updated):
+
+```py
+
+%%pydough
+
+european_countries = nations.WHERE(region.name == "EUROPE")
+
+result = european_countries.CALCULATE(name, n_custs=COUNT(customers))
+
+pydough.to_sql(result, columns=["name", "n_custs"])
+
+```
+
+```sql
+
+SELECT name, COALESCE(agg_0, 0) AS n_custs
+
+FROM (
+
+SELECT name, agg_0
+
+FROM (
+
+SELECT name, key
+
+FROM (
+
+SELECT _table_alias_0.name AS name, _table_alias_0.key AS key, _table_alias_1.name AS name_3
+
+FROM (
+
+SELECT n_name AS name, n_nationkey AS key, n_regionkey AS region_key FROM main.NATION
+
+) AS _table_alias_0
+
+LEFT JOIN (
+
+SELECT r_name AS name, r_regionkey AS key
+
+FROM main.REGION
+
+) AS _table_alias_1
+
+ON region_key = _table_alias_1.key
+
+)
+
+WHERE name_3 = 'EUROPE'
+
+)
+
+LEFT JOIN (
+
+SELECT nation_key, COUNT() AS agg_0
+
+FROM (
+
+SELECT c_nationkey AS nation_key
+
+FROM main.CUSTOMER
+
+)
+
+GROUP BY nation_key
+
+)
+
+ON key = nation_key
+
+)
+
+```
+
+See the [demo notebooks](../demos/README.md) for more instances of how to use the `to_sql` API.
+
+<!-- TOC --><a name="pydoughto_df"></a>
+
+### `pydough.to_df`
+
+The `to_df` API does all the same steps as the [`to_sql` API](#pydoughto_sql), but goes a step further and executes the query using the provided database connection, returning the result as a pandas DataFrame. The first argument it takes in is the PyDough node for the collection being converted to SQL. It can optionally take in the following keyword arguments:
+
+`columns`: which columns to include in the answer if what names to call them by (if omitted, uses the names/ordering from the last `CALCULATE` clause). This can either be a non-empty list of column name strings, or a non-empty dictionary where the values are column name strings, and the keys are the strings of the aliases they should be named as.
+
+`metadata`: the PyDough knowledge graph to use for the conversion (if omitted, `pydough.active_session.metadata` is used instead).
+
+`config`: the PyDough configuration settings to use for the conversion (if omitted, `pydough.active_session.config` is used instead).
+
+`database`: the database context to use for the conversion (if omitted, `pydough.active_session.database` is used instead). The database context matters because it controls which SQL dialect is used for the translation.
+
+`display_sql`: displays the sql before executing in a logger.
+
+Below is an example of using `pydough.to_df` and the output, attached to a sqlite database containing data for the TPC-H schema:
+
+```py
+
+%%pydough
+
+european_countries = nations.WHERE(region.name == "EUROPE")
+
+result = european_countries.CALCULATE(n=COUNT(customers))
+
+pydough.to_df(result, columns={"name": "name", "n_custs": "n"})
+
+```
+
+<div>
+
+<table border="1">
+
+<thead>
+
+<tr style="text-align: right;">
+
+<th></th>
+
+<th>name</th>
+
+<th>n_custs</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<th>0</th>
+
+<td>FRANCE</td>
+
+<td>6100</td>
+
+</tr>), ChunkSearchResult(score=0.072, text=pydough.active_session.config = old_configs
+
+```
+
+Each `PyDoughConfigs` currently encapsulates the following configurations:
+
+1. `sum_default_zero` (default=True): if True, then `SUM` will always return `0` instead of `NULL` when there are no records to be summed (e.g. summing over an empty sub-collection). If False, then the behavior will depend on the database being used to execute (though this nearly always means returning `NULL`).
+
+2. `avg_default_zero` (default=False): if True, then `AVG` will always return `0` instead of `NULL` when there are no records to be summed (e.g. taking the average from an empty sub-collection). If False, then the behavior will depend on the database being used to execute (though this nearly always means returning `NULL`).
+
+For example, consider this PyDough snippet:
+
+```py
+
+%%pydough
+
+selected_customers = customers.WHERE(CONTAINS(name, '2468'))
+
+result = Nations.CALCULATE(
+
+name,
+
+total_bal=SUM(selected_customers.acctbal),
+
+average_bal=AVG(selected_customers.acctbal),
+
+)
+
+pydough.to_df(result)
+
+```
+
+Not every nation has at least 1 customer with a name containing the substring `2468`. For these rows in the result, the value of `total_bal` and `average_bal` will depend on whether `sum_default_zero` and `avg_default_zero` are True or not. Below is an example of accessing & switching out these values.
+
+```py
+
+import pydough
+
+# Capture the configs of the active session
+
+configs = pydough.active_session.config
+
+# Access the original value of sum_default_zero (which should be True)
+
+old_sum_behavior = configs.sum_default_zero
+
+# Toggle the value of sum_default_zero to False
+
+configs.sum_default_zero = False
+
+```
+
+The following configs are used in the behavior of `PERCENTILE`, `RANKING`, `ORDER_BY` and `TOP_K` where a collation(`ASC` or `DESC`) is not explicitly specified:
+
+3. `collation_default_asc` (default=True): if True, then the default collation is ascending. If False, then the default collation is descending.
+
+4. `propagate_collation` (default=False): if True, then the collation of the current expression, which does not have a collation, uses the most recent available collation in the nodes of the term. If there is no recent available collation, then the default collation is used as specified by `collation_default_asc`. If False, the expression uses the default collation as specified by `collation_default_asc`.
+
+For example, consider the following PyDough code:
+
+```py
+
+%%pydough
+
+import pydough
+
+# The configs of the active session
+
+configs = pydough.active_session.config
+
+# The collations are not explicitly specified for few of the terms.
+
+Suppliers.ORDER_BY(
+
+COUNT(lines),
+
+nation.name.ASC(),
+
+COUNT(supply_records),
+
+account_balance.DESC(),
+
+key,
+
+)
+
+# Let's see the behavior of the terms with different configurations
+
+# With the default settings (collation_default_asc=True and propagate_collation=False)
+
+Suppliers.ORDER_BY(
+
+COUNT(lines).ASC(),
+
+nation.name.ASC(),
+
+COUNT(supply_records).ASC(),
+
+account_balance.DESC(),
+
+key.ASC(),
+
+)
+
+# With collation_default_asc=False and propagate_collation=True
+
+configs.collation_default_asc = False
+
+configs.propagate_collation = True
+
+Suppliers.ORDER_BY(
+
+COUNT(lines).DESC(),
+
+nation.name.ASC(),
+
+COUNT(supply_records).DESC(),
+
+account_balance.DESC(),
+
+key.DESC(),
+
+)
+
+# With collation_default_asc=False and propagate_collation=False
+
+configs.collation_default_asc = False
+
+configs.propagate_collation = False
+
+Suppliers.ORDER_BY(
+
+COUNT(lines).DESC(),
+
+nation.name.ASC(),
+
+COUNT(supply_records).DESC(),
+
+account_balance.DESC(),
+
+key.DESC(),
+
+)
+
+# With collation_default_asc=True and propagate_collation=True
+
+configs.collation_default_asc = True
+
+configs.propagate_collation = True), ChunkSearchResult(score=0.070, text=### RELCOUNT
+
+The `RELCOUNT` function returns the number of non-null records in multiple rows of a singular expression within the same collection, e.g. the count of all non-null rows, or the number of non-null rows per an ancestor of a sub-collection. The arguments:
+
+`expression`: the singular expression to count the number of non-null entries across multiple rows.
+
+`levels` (optional): optional argument (default `None`) for the same `levels` argument as all other window functions.
+
+```py
+
+# Divides each customer's account balance by the total number of positive
+
+# account balances globally.
+
+Customers.CALCULATE(ratio = acctbal / RELCOUNT(KEEP_IF(acctbal, acctbal > 0.0)))
+
+# Divides each customer's account balance by the total number of positive
+
+# account balances in the same nation.
+
+Nations.customers.CALCULATE(ratio = acctbal / RELCOUNT(KEEP_IF(acctbal, acctbal > 0.0), levels=1))
+
+```
+
+<!-- TOC --><a name="relsize"></a>
+
+### RELSIZE
+
+The `RELSIZE` function returns the number of total records, either globally or the number of sub-collection rows per some ancestor collection. The arguments:
+
+`levels` (optional): optional argument (default `None`) for the same `levels` argument as all other window functions.
+
+```py
+
+# Divides each customer's account balance by the number of total customers.
+
+Customers.CALCULATE(ratio = acctbal / RELSIZE())
+
+# Divides each customer's account balance by the number of total customers in
+
+# that nation.
+
+Nations.customers.CALCULATE(ratio = acctbal / RELSIZE(levels=1))
+
+```
+
+## Banned Python Logic
+
+Below is a list of banned python logic (magic methods,etc.) that are not supported in PyDough. Calling these methods will result in an Exception.
+
+<!-- TOC --><a name="__bool__"></a>
+
+### \_\_bool\_\_
+
+The `__bool__` magic method is not supported in PyDough. PyDough code cannot be treated as booleans.
+
+```py
+
+# Not allowed - will raise PyDoughUnqualifiedException
+
+if Customer and Order:
+
+print("Available")
+
+Customers.WHERE((acctbal > 0) and (nation.name == "GERMANY"))
+
+# Use &`instead of `and`:
+
+# Customers.WHERE((acctbal > 0) & (nation.name == "GERMANY"))
+
+Orders.WHERE((discount > 0.05) or (tax > 0.08))
+
+# Use `|` instead of `or`
+
+# Orders.WHERE((discount > 0.05) | (tax > 0.08))
+
+Parts.WHERE(not(retail_price > 1000))
+
+# Use `~` instead of `not`
+
+# Parts.WHERE(~(retail_price > 1000))
+
+```
+
+<!-- TOC --><a name="__call__"></a>
+
+### \_\_call\_\_
+
+The `__call__` magic method is not supported in PyDough as it calls PyDough code as if it were a function.
+
+```py
+
+# Not allowed - calls PyDough code as if it were a function
+
+(1 - discount)(extended_price * 0.5)
+
+```
+
+<!-- TOC --><a name="__floor__"></a>
+
+### \_\_floor\_\_
+
+The `math.floor` function calls the `__floor__` magic method, which is currently not supported in PyDough.
+
+```py
+
+Customer(age=math.floor(order.total_price))
+
+```
+
+<!-- TOC --><a name="__ceil__"></a>
+
+### \_\_ceil\_\_
+
+The `math.ceil` function calls the `__ceil__` magic method, which is currently not supported in PyDough.
+
+```py
+
+# Not allowed currently- will raise PyDoughUnqualifiedException
+
+Customer(age=math.ceil(order.total_price))
+
+```
+
+<!-- TOC --><a name="__trunc__"></a>
+
+### \_\_trunc\_\_
+
+The `math.trunc` function calls the `__trunc__` magic method, which is currently not supported in PyDough.
+
+```py
+
+# Not allowed currently- will raise PyDoughUnqualifiedException
+
+Customer(age=math.trunc(order.total_price))
+
+```
+
+<!-- TOC --><a name="__reversed__"></a>
+
+### \_\_reversed\_\_
+
+The `reversed` function calls the `__reversed__` magic method, which is currently not supported in PyDough.
+
+```py
+
+# Not allowed currently- will raise PyDoughUnqualifiedException
+
+Regions(backwards_name=reversed(name))
+
+```
+
+<!-- TOC --><a name="__int__"></a>
+
+### \_\_int\_\_
+
+Casting to `int` calls the `__int__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return an integer instead of a PyDough object.
+
+```py
+
+# Not allowed currently as it would need to return an int instead of a PyDough object), ChunkSearchResult(score=0.070, text=alias = table.alias
+
+if len(alias) != 0: # alias exists for the table
+
+# Remove cases like `..FROM t1 as t1..` or `..FROM t1 as t2..`
+
+# to get `..FROM t1..`.
+
+⋮----
+
+# "Scope" represents the current context of a Select statement.
+
+# For example, if we have a SELECT statement with a FROM clause
+
+# that contains a subquery, there are two scopes:
+
+# 1. The scope of the subquery.
+
+# 2. The scope of the outer query.
+
+# This loop is used to find all the columns in the scope of
+
+# the outer query and replace the qualified column names with
+
+# the unqualified column names.
+
+⋮----
+
+skip: bool = False
+
+# Skip if the table alias is not present in the qualified
+
+# column name(check correl_11).
+
+⋮----
+
+skip = True
+
+⋮----
+
+# Remove aliases from the SELECT expressions if the alias is the same
+
+# as the column name.
+
+⋮----
+
+cur_expr = expr.expressions[i]
+
+⋮----
+
+# Recursively visit the AST.
+
+⋮----
+
+def convert_dialect_to_sqlglot(dialect: DatabaseDialect) -> SQLGlotDialect
+
+⋮----
+
+"""
+
+Convert the given DatabaseDialect to the corresponding SQLGlotDialect.
+
+Args:
+
+dialect (DatabaseDialect): The dialect to convert.
+
+Returns:
+
+SQLGlotDialect: The corresponding SQLGlot dialect.
+
+"""
+
+⋮----
+
+# Note: ANSI is the base dialect for SQLGlot.
+
+⋮----
+
+"""
+
+Execute the given relational tree on the given database access
+
+context and return the result.
+
+Args:
+
+`relational`: The relational tree to execute.
+
+`ctx`: The database context to execute the query in.
+
+`display_sql`: if True, prints out the SQL that will be run before
+
+it is executed.
+
+Returns:
+
+The result of the query as a Pandas DataFrame
+
+"""
+
+sql: str = convert_relation_to_sql(relational, ctx.dialect, config)
+
+⋮----
+
+pyd_logger = get_logger(__name__)
+
+````
+
+## File: pydough/sqlglot/README.md
+
+````markdown
+
+# SQLGlot Module
+
+This module handles the conversion of PyDough relational trees to SQL using SQLGlot. It includes utilities for transforming PyDough operators into SQLGlot expressions, executing SQL queries, and managing SQLGlot expressions.
+
+## Available APIs
+
+The SQLGlot module provides the following notable APIs:
+
+`convert_relation_to_sql`: Converts a PyDough relational tree to a SQL string using a specified SQL dialect.
+
+`execute_df`: Executes a PyDough relational tree on a given database context and returns the result as a Pandas DataFrame.
+
+`convert_dialect_to_sqlglot`: Converts a PyDough `DatabaseDialect` to the corresponding SQLGlot dialect.
+
+`SQLGlotRelationalVisitor`: Visitor pattern for creating SQLGlot expressions from the relational tree.
+
+`SQLGlotRelationalExpressionVisitor`: Visitor pattern for creating SQLGlot expressions from relational expressions.
+
+`find_identifiers`: Finds all unique identifiers in a SQLGlot expression.
+
+`find_identifiers_in_list`: Finds all unique identifiers in a list of SQLGlot expressions.
+
+`get_glot_name`: Gets the name of a SQLGlot expression.
+
+`set_glot_alias`: Sets an alias for a SQLGlot expression.
+
+`unwrap_alias`: Unwraps an alias from a SQLGlot expression.
+
+## Usage
+
+### Converting a Relational Tree to SQL, vs Executing It
+
+To convert a PyDough relational tree to a SQL string, use the `convert_relation_to_sql` function. For example:
+
+```python
+
+import pydough
+
+from pydough.relational import RelationalRoot
+
+from pydough.database_connectors import DatabaseDialect
+
+from sqlglot.dialects import Dialect
+
+config = pydough.active_session.config
+
+# Define the relational tree
+
+relational_tree = RelationalRoot(...)
+
+# Convert the relational tree to SQL using the dialect from the context.
+
+sql = convert_relation_to_sql(relational_tree, ctx.dialect, config)
+
+ctx = DatabaseContext(...)
+
+print(sql)
+
+# Execute the relational tree and get the result as a DataFrame
+
+df = execute_df(relational_tree, ctx, config)
+
+print(df)
+
+```
+
+### Finding Identifiers in SQLGlot Expressions
+
+To find all unique identifiers in a SQLGlot expression, use the `find_identifiers` function. For example:
+
+```python
+
+from pydough.sqlglot import find_identifiers
+
+from sqlglot.expressions import Identifier
+
+# Define a SQLGlot expression
+
+expr = Identifier(this="column_name")), ChunkSearchResult(score=0.069, text=(5, DATETIME('now', '-2 days'), DATETIME('now', '-2 days', '+15 minute'), 'web_app', 'web_8902wknz');
+
+INSERT INTO user_setting_snapshot (user_id, snapshot_date, tx_limit_daily, tx_limit_monthly, membership_status, password_hash, api_key, verified_devices, verified_ips, mfa_enabled, marketing_opt_in, created_at) VALUES
+
+(1, '2023-06-07', 1000.00, 5000.00, 2, 'bcryptHash($2yz9!&ka1)', '9d61c49b-8977-4914-a36b-80d1445e38fa', 'mobile_8fh2k1', '192.168.0.1', TRUE, FALSE, '2023-06-07 00:00:00'),
+
+(2, '2023-06-07', 500.00, 2500.00, 1, 'bcryptHash(qpwo9874zyGk!)', NULL, 'mobile_yjp08q, mobile_1av8p0', '198.51.100.233, 70.121.39.25', FALSE, TRUE, '2023-06-07 00:00:00'),
+
+(3, '2023-06-07', 2000.00, 10000.00, 3, 'bcryptHash(Fr3nchPa1n!@98zy)', 'e785f611-fdd8-4c2d-a870-e104358712e5', 'web_k29qjd, mobile_x28qlj', '216.58.195.68, 92.110.51.150', TRUE, FALSE, '2023-06-07 00:00:00'),
+
+(4, '2023-06-07', 5000.00, 20000.00, 4, 'bcryptHash(Vacay2023*&!Rm)', NULL, 'mobile_34jdkl', '143.92.64.138', FALSE, TRUE, '2023-06-07 00:00:00'),
+
+(5, '2023-06-07', 100.00, 500.00, 0, 'bcryptHash(cRaf7yCr8zy)', NULL, 'web_8902wknz', '192.64.112.188', FALSE, FALSE, '2023-06-07 00:00:00'),
+
+(6, '2023-06-07', 50.00, 500.00, 1, 'bcryptHash(C0d3Rul3z!99)', '6c03c175-9ac9-4854-b064-a3fff2c62e31', 'web_zz91p44l', '4.14.15.90', TRUE, TRUE, '2023-06-07 00:00:00'),
+
+(7, '2023-06-07', 250.00, 1000.00, 2, 'bcryptHash(zEnH0me&Pw7)', NULL, NULL, NULL, FALSE, TRUE, '2023-06-07 00:00:00'),
+
+(8, '2023-06-07', 200.00, 1000.00, 0, 'bcryptHash(K1dzPlay!&Rt8)', NULL, 'web_d8180kaf, mobile_q3mz8n', '8.26.53.165, 68.85.32.201', FALSE, FALSE, '2023-06-07 00:00:00'),
+
+(9, '2023-06-07', 150.00, 1000.00, 2, 'bcryptHash(Gl0wUp7!9zy)', NULL, 'mobile_g3mjfz', '203.96.81.36', TRUE, TRUE, '2023-06-07 00:00:00'),
+
+(10, '2023-06-07', 300.00, 2000.00, 1, 'bcryptHash(GamzRu1ez*&99!)', NULL, 'web_d8180kaf', '8.26.53.165', FALSE, TRUE, '2023-06-07 00:00:00'),
+
+(1, '2023-06-01', 502.00, 1000.00, 2, 'bcryptHash($2yz9!&ka1)', '9d61c49b-8977-4914-a36b-80d1445e38fa', 'mobile_8fh2k1', '192.168.0.1', FALSE, TRUE, '2023-06-01 06:00:00'),
+
+(2, '2023-06-01', 500.00, 2500.00, 1, 'bcryptHash(qpwo9874zyGk!)', NULL, 'mobile_yjp08q', '198.51.100.233, 70.121.39.25', TRUE, FALSE, '2023-06-01 09:00:00');
+
+````
+
+## File: tests/README.md
+
+````markdown
+
+# PyDough Testing Module
+
+This module contains the tests for PyDough, including unit tests, integration tests, and utility functions used in testing.
+
+## Planner Tests
+
+Many of the tests in files such as `test_qdag_conversion.py` and `test_pipeline.py` test the relational plan string generated by a PyDough query. The refsols for these tests are stored in the `test_plan_refsols` directory as text files. When these tests are run normally, the refsol is extracted from the files. However, if the environment variable `PYDOUGH_UPDATE_TESTS` is set to 1, then instead of checking against these files, the generated output is manually written to them.
+
+Set `PYDOUGH_UPDATE_TESTS` to 1 when updating or creating new tests. Once the tests are updated, immediately unset it to avoid unintentionally overriding correct answers with incorrect data, which may give a false impression of passing tests.
+
+## TestInfo Classes
+
+The `TestInfo` classes are used to specify information about a QDAG (Qualified Directed Acyclic Graph) node before it can be created. These classes help in building and testing QDAG nodes for unit tests.), ChunkSearchResult(score=0.067, text=# PyDough DSL Spec
+
+This page describes the specification of the PyDough DSL. The specification includes rules of how PyDough code should be structured and the semantics that are used when evaluating PyDough code. Not every feature in the spec is implemented in PyDough as of this time.
+
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+[Example Graph](#example-graph)
+
+[Collections](#collections)
+
+[Sub-Collections](#sub-collections)
+
+[CALCULATE](#calculate)
+
+[Contextless Expressions](#contextless-expressions)
+
+[Expressions](#expressions)
+
+[Down-Streaming](#down-streaming)
+
+[Collection Operators](#collection-operators)
+
+[WHERE](#where)
+
+[ORDER_BY](#order_by)
+
+[TOP_K](#top_k)
+
+[PARTITION](#partition)
+
+[SINGULAR](#singular)
+
+[NEXT / PREV](#next-prev)
+
+[BEST](#best)
+
+[Induced Properties](#induced-properties)
+
+[Induced Scalar Properties](#induced-scalar-properties)
+
+[Induced Subcollection Properties](#induced-subcollection-properties)
+
+[Induced Arbitrary Joins](#induced-arbitrary-joins)
+
+[Larger Examples](#larger-examples)
+
+[Example 1: Highest Residency Density States](#example-1-highest-residency-density-states)
+
+[Example 2: Yearly Trans-Coastal Shipments](#example-2-yearly-trans-coastal-shipments)
+
+[Example 3: Email of Oldest Non-Customer Resident](#example-3-email-of-oldest-non-customer-resident)
+
+[Example 4: Outlier Packages Per Month Of 2017](#example-4-outlier-packages-per-month-of-2017)
+
+[Example 5: Regression Prediction Of Packages Quantity](#example-5-regression-prediction-of-packages-quantity)
+
+<!-- TOC end -->
+
+<!-- TOC --><a name="example-graph"></a>
+
+## Example Graph
+
+The examples in this document use a metadata graph (named `GRAPH`) with the following collections:
+
+`People`: records of every known person. Scalar properties: `first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`.
+
+`Addresses`: records of every known address. Scalar properties: `address_id`, `street_number`, `street_name`, `apartment`, `zip_code`, `city`, `state`.
+
+`Packages`: records of every known package. Scalar properties: `package_id`, `customer_ssn`, `shipping_address_id`, `billing_address_id`, `order_date`, `arrival_date`, `package_cost`.
+
+There are also the following sub-collection relationships:
+
+`People.packages`: every package ordered by each person (reverse is `Packages.customer`). There can be 0, 1 or multiple packages ordered by a single person, but each package has exactly one person who ordered it.
+
+`People.current_address`: the current address of each person, if one exists (reverse is `Addresses.current_occupants`). Each person has at most 1 current address (which can be missing), but each address can have 0, 1, or multiple people currently occupying it.
+
+`Packages.shipping_address`: the address that the package is shipped to (reverse is `Addresses.packages_shipped`). Every package has exactly one shipping address, but each address can have 0, 1 or multiple packages shipped to it.
+
+`Packages.billing_address`: the address that the package is billed to (reverse is `Addresses.packages_billed`). Every package has exactly one billing address, but each address can have 0, 1 or multiple packages billed to it.
+
+<!-- TOC --><a name="collections"></a>
+
+## Collections
+
+The simplest PyDough code is scanning an entire collection. This is done by providing the name of the collection in the metadata. However, if that name is already used as a variable, then PyDough will not know to replace the name with the corresponding PyDough object.
+
+**Good Example #1**: Obtain every record of the `People` collection. Every scalar property of `People` (`first_name`, `middle_name`, `last_name`, `ssn`, `birth_date`, `email`, `current_address_id`) is automatically included in the output.
+
+```py
+
+%%pydough), ChunkSearchResult(score=0.057, text=## File: pydough/database_connectors/database_connector.py
+
+````python
+
+"""
+
+PyDough implementation of a generic connection to database
+
+by leveraging PEP 249 (Python Database API Specification v2.0).
+
+https://peps.python.org/pep-0249/
+
+"""
+
+# Copyright (C) 2024 Bodo Inc. All rights reserved.
+
+⋮----
+
+__all__ = ["DatabaseConnection", "DatabaseContext", "DatabaseDialect"]
+
+⋮----
+
+class DatabaseConnection
+
+⋮----
+
+"""
+
+Class that manages a generic DB API 2.0 connection. This basically
+
+dispatches to the DB API 2.0 API on the underlying object and represents
+
+storing the state of the active connection.
+
+"""
+
+⋮----
+
+# Database connection that follows DB API 2.0 specification.
+
+# sqlite3 contains the connection specification and is packaged
+
+# with Python.
+
+_connection: sqlite3.Connection
+
+⋮----
+
+def __init__(self, connection: sqlite3.Connection) -> None
+
+⋮----
+
+def execute_query_df(self, sql: str) -> pd.DataFrame
+
+⋮----
+
+"""Create a cursor object using the connection and execute the query,
+
+returning the entire result as a Pandas DataFrame.
+
+TODO: (gh #173) Support parameters. Dependent on knowing which Python
+
+types are in scope and how we need to test them.
+
+Args:
+
+sql (str): The SQL query to execute.
+
+Returns:
+
+list[pt.Any]: A list of rows returned by the query.
+
+"""
+
+cursor: sqlite3.Cursor = self._connection.cursor()
+
+⋮----
+
+column_names: list[str] = [description[0] for description in cursor.description]
+
+# No need to close the cursor, as its closed by del.
+
+# TODO: (gh #174) Cache the cursor?
+
+# TODO: (gh #175) enable typed DataFrames.
+
+data = cursor.fetchall()
+
+⋮----
+
+# TODO: Consider adding a streaming API for large queries. It's not yet clear
+
+# how this will be available at a user API level.
+
+⋮----
+
+@property
+
+def connection(self) -> sqlite3.Connection
+
+⋮----
+
+"""
+
+Get the database connection. This API may be removed if all
+
+the functionality can be encapsulated in the DatabaseConnection.
+
+Returns:
+
+sqlite3.Connection: The connection PyDough is managing.
+
+"""
+
+⋮----
+
+class DatabaseDialect(Enum)
+
+⋮----
+
+"""Enum for the supported database dialects.
+
+In general the dialects should"""
+
+⋮----
+
+ANSI = "ansi"
+
+SQLITE = "sqlite"
+
+⋮----
+
+@staticmethod
+
+def from_string(dialect: str) -> "DatabaseDialect"
+
+⋮----
+
+"""Convert a string to a DatabaseDialect enum.
+
+Args:
+
+dialect (str): The string representation of the dialect.
+
+Returns:
+
+DatabaseDialect: The dialect enum.
+
+"""
+
+⋮----
+
+@dataclass
+
+class DatabaseContext
+
+⋮----
+
+"""
+
+Simple dataclass wrapper to manage the database connection and
+
+the required corresponding dialect.
+
+"""
+
+⋮----
+
+connection: DatabaseConnection
+
+dialect: DatabaseDialect
+
+````
+
+## File: pydough/database_connectors/empty_connection.py
+
+````python
+
+"""
+
+Class to represent an "empty" connection that should error if any SQL
+
+execution is attempted. This is configured to enable creating a default
+
+session with no active backend, but which can still be used to generate
+
+ANSI SQL.
+
+"""
+
+⋮----
+
+__all__ = ["empty_connection"]
+
+⋮----
+
+class EmptyConnection(Connection)
+
+⋮----
+
+"""
+
+An empty connection class that raises an error if any SQL defined
+
+connection method is execution.
+
+"""
+
+⋮----
+
+def __init__(self)
+
+⋮----
+
+def commit(self)
+
+⋮----
+
+def close(self)
+
+⋮----
+
+def rollback(self)
+
+⋮----
+
+def cursor(self, *args, **kwargs)
+
+⋮----
+
+empty_connection: DatabaseConnection = DatabaseConnection(EmptyConnection())
+
+````
+
+## File: pydough/database_connectors/README.md
+
+````markdown
+
+# Database Connectors
+
+This subdirectory of the PyDough directory deals with the connection to various databases and the execution of SQL queries.
+
+The database connectors module provides functionality to manage database connections, execute queries, and handle different database dialects.
+
+## Available APIs), ChunkSearchResult(score=0.056, text=# PyDough Functions List
+
+Below is the list of every function/operator currently supported in PyDough as a builtin.
+
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+[Binary Operators](#binary-operators)
+
+[Arithmetic](#arithmetic)
+
+[Comparisons](#comparisons)
+
+[Logical](#logical)
+
+[Unary Operators](#unary-operators)
+
+[Negation](#negation)
+
+[Other Operators](#other-operators)
+
+[Slicing](#slicing)
+
+[String Functions](#string-functions)
+
+[LOWER](#lower)
+
+[UPPER](#upper)
+
+[LENGTH](#length)
+
+[STARTSWITH](#startswith)
+
+[ENDSWITH](#endswith)
+
+[CONTAINS](#contains)
+
+[LIKE](#like)
+
+[JOIN_STRINGS](#join_strings)
+
+[LPAD](#lpad)
+
+[RPAD](#rpad)
+
+[FIND](#find)
+
+[STRIP](#strip)
+
+[Datetime Functions](#datetime-functions)
+
+[DATETIME](#datetime)
+
+[YEAR](#year)
+
+[MONTH](#month)
+
+[DAY](#day)
+
+[HOUR](#hour)
+
+[MINUTE](#minute)
+
+[SECOND](#second)
+
+[DATEDIFF](#datediff)
+
+[DAYOFWEEK](#dayofweek)
+
+[DAYNAME](#dayname)
+
+[Conditional Functions](#conditional-functions)
+
+[IFF](#iff)
+
+[ISIN](#isin)
+
+[DEFAULT_TO](#default_to)
+
+[PRESENT](#present)
+
+[ABSENT](#absent)
+
+[KEEP_IF](#keep_if)
+
+[MONOTONIC](#monotonic)
+
+[Numerical Functions](#numerical-functions)
+
+[ABS](#abs)
+
+[ROUND](#round)
+
+[POWER](#power)
+
+[SQRT](#sqrt)
+
+[SIGN](#sign)
+
+[Aggregation Functions](#aggregation-functions)
+
+[SUM](#sum)
+
+[AVG](#avg)
+
+[MEDIAN](#median)
+
+[MIN](#min)
+
+[MAX](#max)
+
+[ANYTHING](#anything)
+
+[COUNT](#count)
+
+[NDISTINCT](#ndistinct)
+
+[HAS](#has)
+
+[HASNOT](#hasnot)
+
+[Window Functions](#window-functions)
+
+[RANKING](#ranking)
+
+[PERCENTILE](#percentile)
+
+[PREV](#prev)
+
+[NEXT](#next)
+
+[RELSUM](#relsum)
+
+[RELAVG](#relavg)
+
+[RELCOUNT](#relcount)
+
+[RELSIZE](#relsize)
+
+[Banned Python Logic](#banned-python-logic)
+
+[\_\_bool\_\_](#__bool__)
+
+[\_\_call\_\_](#call_banned)
+
+[\_\_floor\_\_](#floor_banned)
+
+[\_\_ceil\_\_](#ceil_banned)
+
+[\_\_trunc\_\_](#trunc_banned)
+
+[\_\_reversed\_\_](#reversed_banned)
+
+[\_\_int\_\_](#int_banned)
+
+[\_\_float\_\_](#float_banned)
+
+[\_\_complex\_\_](#complex_banned)
+
+[\_\_index\_\_](#index_banned)
+
+[\_\_len\_\_](#len_banned)
+
+[\_\_contains\_\_](#contains_banned)
+
+[\_\_setitem\_\_](#setitem_banned)
+
+<!-- TOC end -->
+
+<!-- TOC --><a name="binary-operators"></a>
+
+## Binary Operators
+
+Below is each binary operator currently supported in PyDough.
+
+<!-- TOC --><a name="arithmetic"></a>
+
+### Arithmetic
+
+Supported mathematical operations: addition (`+`), subtraction (`-`), multiplication (`*`), division (`/`), exponentiation (`**`).
+
+```py
+
+Lineitems.CALCULATE(value = (extended_price * (1 - (discount ** 2)) + 1.0) / part.retail_price)
+
+```
+
+> [!WARNING]
+
+> The behavior when the denominator is `0` depends on the database being used to evaluate the expression.
+
+<!-- TOC --><a name="comparisons"></a>
+
+### Comparisons
+
+Expression values can be compared using standard comparison operators: `<=`, `<`, `==`, `!=`, `>` and `>=`:
+
+```py
+
+Customers.CALCULATE(
+
+in_debt = acctbal < 0,
+
+at_most_12_orders = COUNT(orders) <= 12,
+
+is_european = nation.region.name == "EUROPE",
+
+non_german = nation.name != "GERMANY",
+
+non_empty_acct = acctbal > 0,
+
+at_least_5_orders = COUNT(orders) >= 5,
+
+)
+
+```
+
+> [!WARNING]
+
+> Chained inequalities, like `a <= b <= c`, can cause undefined/incorrect behavior in PyDough. Instead, use expressions like `(a <= b) & (b <= c)`, or the [MONOTONIC](#monotonic) function.
+
+<!-- TOC --><a name="logical"></a>
+
+### Logical
+
+Multiple boolean expression values can be logically combined with `&`, `|` and `~` being used as logical AND, OR and NOT, respectively:
+
+```py
+
+is_asian = nation.region.name == "ASIA"
+
+is_european = nation.region.name == "EUROPE"
+
+in_debt = acctbal < 0
+
+Customers.CALCULATE(
+
+is_eurasian = is_asian | is_european,
+
+is_not_eurasian = ~(is_asian | is_european),
+
+is_european_in_debt = is_european & in_debt
+
+)
+
+```
+
+> [!WARNING]
+
+> Do **NOT** use the builtin Python syntax `and`, `or`, or `not` on PyDough node. Using these instead of `&`, `|` or `~` can result in undefined incorrect results.
+
+<!-- TOC --><a name="unary-operators"></a>), ChunkSearchResult(score=0.056, text=configs.start_of_week = DayOfWeek.Thursday
+
+# This would return 1, as the difference between March 20, 2025 (Thursday)
+
+# and March 17, 2025 (Monday) is 1 week when the start of week is considered
+
+# to be Thursday. This is because March 17, 2025 belongs to the week starting
+
+# from March 13, 2025 (the recent Thursday for it) and March 20, 2025 belongs
+
+# to the week starting from March 20, 2025 (the recent Thursday).
+
+TPCH.calculate(diff = DATEDIFF("2025-03-17", "2025-03-20", "week")) # diff = 1
+
+# Note: DATEDIFF function related to week does not depend on the
+
+# `start_week_as_zero` config.
+
+```
+
+<!-- TOC --><a name="session-database"></a>
+
+### Session Database
+
+The final core piece encapsulated by the session is the database context. A database context currently includes a connection to an actual database and an enum indicating which dialect to use.
+
+By default, the database context contains an empty connection (which cannot be used to execute queries, but can be used to translate to SQL) and the ANSI dialect.
+
+Just like the knowledge graph & miscellaneous configurations, the database context can also be accessed from the session and/or swapped out for another value. The APIs for creating a new database context currently take in the name of which database to use, as well as keyword arguments used by that database connector API's connection method.
+
+Below is a list of all supported values for the database name:
+
+`sqlite`: uses a SQLite database. [See here](https://docs.python.org/3/library/sqlite3.html#sqlite3.connect) for details on the connection API and what keyword arguments can be passed in.
+
+Below are examples of how to access the context and switch it out for a newly created one, either by manually setting it or by using `session.load_database`. These examples assume that there are two different sqlite database files located at `db_files/education.db` and `db_files/shakespeare.db`.
+
+```py
+
+import pydough
+
+from pydough.database_connectors import load_database_context
+
+# Capture the original context of the active session (empty)
+
+old_context = pydough.active_session.database
+
+# Create a new sqlite context & set it as the database of the active session
+
+education_context = load_database_context("sqlite", database="db_files/education.db")
+
+pydough.active_session.database = education_context
+
+# Same but for another database & with a different method
+
+shakespeare_context = pydough.active_session.load_database("sqlite", database="db_files/education.db")
+
+```
+
+Notice that both APIs `load_database_context` and `sesion.load_database` take in the name of the databse type first and all the connection keyword arguments, and also return the context object.
+
+It is important to ensure that the correct database context is being used for several reasons:
+
+It controls what SQL dialect is used when translating from PyDough to SQL.
+
+The context's database connection is used to execute queries once translated to SQL.
+
+<!-- TOC --><a name="evaluation-apis"></a>
+
+## Evaluation APIs
+
+This sections describes various APIs you can use to execute PyDough code.
+
+<!-- TOC --><a name="pydoughto_sql"></a>), ChunkSearchResult(score=0.054, text="source": [
+
+"# Overview\n",
+
+"\n",
+
+"This notebook walks through how PyDough can be leveraged to perform \"WHAT-IF\" analysis. At its core, we are typically looking for insights on questions that are much too complex or abstract, such as \"How can we improve sales in Q2?\" As a result, this approach incentivizes faster iteration to rapidly explore various scenarios in the hope of uncovering insights that can resolve our abstract problem. \n",
+
+"\n",
+
+"We believe that PyDough is ideal for these types of questions because PyDough can be used to solve common intermediate problems and quickly iterate betwen alterantive versions. Rather than focusing on a single query to answer a question at hand, building components allows more proportional scaling and more easily modifying the scenario. The PyDough team is optimistic that such an approach can make humans more productive and LLMs more accurate.\n",
+
+"\n",
+
+"In this notebook we will focus on addressing a single question, but we will illustrate the principles that make such a question convenient for rapid iteration. Towards the end of this notebook, we will then modify this base question in the spirit of \"WHAT-IF\", but this will not be a complete what if analysis. We encourage you to explore new ways to extend this investigation by consulting the [PyDough documentation](../../documentation/usage.md)."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "7849d55d-cf82-4fb4-acb9-4a6f257926c9",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%load_ext pydough.jupyter_extensions"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "32294532-eaba-4a3f-8fd0-acfd5410ea52",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"import pydough\n",
+
+"import pandas as pd"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "3fa62d04-d363-414b-bed8-d0f0e289e606",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"# Setup demo metadata\n",
+
+"pydough.active_session.load_metadata_graph(\"../metadata/tpch_demo_graph.json\", \"TPCH\");\n",
+
+"pydough.active_session.connect_database(\"sqlite\", database=\"../../tpch.db\");\n",
+
+"# Avoid scientific notation\n",
+
+"pd.options.display.float_format = '{:.6f}'.format"
+
+]
+
+},
+
+{
+
+"attachments": {},
+
+"cell_type": "markdown",
+
+"id": "f0ab9cff-2549-43b4-b044-4ae1029fae97",
+
+"metadata": {},
+
+"source": [
+
+"## Schema Setup\n",
+
+"\n",
+
+"For this demo we will be working in TPC-H benchmark schema. The actual data for this benchmark is generated in SQLite using the standard TPC-H data generation tools. The underlying schema of this data matches this example image from [TPC Benchmark H Standard Specification](https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf). For this example we will only be using the **LINEITEM** and **ORDERS** tables.\n",
+
+"\n",
+
+"![TPC-H schema from the Specification Document as of December 12, 2024](../images/tpc_h_schema.png)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "a6b19eac-d793-40a9-b294-bb17bba1fc77",
+
+"metadata": {},
+
+"source": [
+
+"## Problem Statement\n",
+
+"\n",
+
+"Let's say that we are focused on identifying **ways to increase revenue in the next calendar year**. One idea that we might have is to explore items that are a very small percentage of a total order price as changes to these items may not have a meaningful impact on the customer but could result in larger revenue aggregate. \n",
+
+"\n",
+
+"As a first scenario, we are going to **identify the 5 lines in our entire order sheet that represent the smallest percentage of their corresponding order's revenue**. \n",
+
+"\n",
+
+"Here is a possible SQL query that could we be used to answer this question and in constrast here is the corresponding PyDough."
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "8e8cf3e6-0658-43b3-a560-83a107c1b9c5",
+
+"metadata": {},), ChunkSearchResult(score=0.053, text="source": [
+
+"Here, we learn that `customers.orders` invokes a child of the current context (`nations.WHERE(region.name == 'ASIA')`) by accessing the `customers` subcollection, then accessing its `orders` collection, then filtering it on the conedition `YEAR(order_date) == 1995`. \n",
+
+"\n",
+
+"We also know that this resulting child is plural with regards to the context, meaning that `asian_countries.CALCULATE(asian_countries.order_date)` would be illegal, but `asian_countries.CALCULATE(MAX(asian_countries.order_date))` is legal.\n",
+
+"\n",
+
+"More combinations of `pydough.explain` and `pydough.explain_terms` can be done to learn more about what each of these components does."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "f2017556-2f87-45f6-aed1-2e3019efc3b1",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": []
+
+}
+
+],
+
+"metadata": {
+
+"kernelspec": {
+
+"display_name": "Python 3 (ipykernel)",
+
+"language": "python",
+
+"name": "python3"
+
+},
+
+"language_info": {
+
+"codemirror_mode": {
+
+"name": "ipython",
+
+"version": 3
+
+},
+
+"file_extension": ".py",
+
+"mimetype": "text/x-python",
+
+"name": "python",
+
+"nbconvert_exporter": "python",
+
+"pygments_lexer": "ipython3",
+
+"version": "3.11.9"
+
+}
+
+},
+
+"nbformat": 4,
+
+"nbformat_minor": 5
+
+}
+
+````
+
+## File: demos/notebooks/4_tpch.ipynb
+
+````
+
+{
+
+"cells": [
+
+{
+
+"cell_type": "markdown",
+
+"id": "ff83342c-3b61-4475-ae5e-519daaf6923e",
+
+"metadata": {},
+
+"source": [
+
+"# PyDough TPC-H\n",
+
+"\n",
+
+"This notebook provides PyDough translations for 19 out of the 22 TPC-H benchmark queries. For each query we will reproduce the business context, borrowing from the defintion provided in the specification, the corresponding SQL query, and finally a valid PyDough implementation. The underlying schema of this data matches this example image from [TPC Benchmark H Standard Specification](https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf).\n",
+
+"\n",
+
+"![TPC-H schema from the Specification Document as of December 12, 2024](../images/tpc_h_schema.png)\n",
+
+"\n",
+
+"In several places we have updated the names in our metadata to be more human readable. It should also be noted that the TPC-H benchmark does not necessarily constitute the \"simplest\" way to express the SQL for each of these statements, but this comparison is still useful for understanding how to construct PyDough statements.\n",
+
+"\n",
+
+"In addition, since the demo consists of running the PyDough statements on SQLite, an OLTP database, some of these statements are significantly slower to complete than they would be if run instead on an OLAP database."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "ec6b6ac7-e59a-41aa-b46a-0ff43f55369c",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%load_ext pydough.jupyter_extensions"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "539536e2-21b0-412d-9114-9ef9a1a277f4",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"import pydough\n",
+
+"import datetime\n",
+
+"import pandas as pd"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "a8a35558-ba91-445b-8141-2ad0e72029dd",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"# Setup demo metadata\n",
+
+"pydough.active_session.load_metadata_graph(\"../metadata/tpch_demo_graph.json\", \"TPCH\");\n",
+
+"pydough.active_session.connect_database(\"sqlite\", database=\"../../tpch.db\");\n",
+
+"# Avoid scientific notation\n",
+
+"pd.options.display.float_format = '{:.6f}'.format"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "18f1c949-5e3c-4bbf-9d3d-2f1c12ec3195",
+
+"metadata": {},), ChunkSearchResult(score=0.052, text=collection.
+
+"""
+
+````
+
+## File: pydough/pydough_operators/__init__.py
+
+````python
+
+"""
+
+Module of PyDough dealing with operators used for function calls, including
+
+binary operations.
+
+"""
+
+⋮----
+
+__all__ = [
+
+````
+
+## File: pydough/pydough_operators/base_operator.py
+
+````python
+
+"""
+
+Base definition of PyDough operators.
+
+"""
+
+⋮----
+
+__all__ = ["PyDoughOperator"]
+
+⋮----
+
+class PyDoughOperator
+
+⋮----
+
+"""
+
+The abstract base class for all PyDough operators used to describe
+
+operations such as arithmetic or function calls, whether they return
+
+an expression or a collection.
+
+"""
+
+⋮----
+
+def __init__(self, verifier: TypeVerifier)
+
+⋮----
+
+@property
+
+def verifier(self) -> TypeVerifier
+
+⋮----
+
+"""
+
+The type verification function used by the operator
+
+"""
+
+⋮----
+
+def __repr__(self)
+
+⋮----
+
+@property
+
+@abstractmethod
+
+def is_aggregation(self) -> bool
+
+⋮----
+
+"""
+
+Returns whether the operator corresponds to an aggregation that
+
+can collapse multiple records into a scalar value.
+
+"""
+
+⋮----
+
+@property
+
+@abstractmethod
+
+def standalone_string(self) -> str
+
+⋮----
+
+"""
+
+The string representation used to identify the operator, devoid
+
+of any arguments.
+
+"""
+
+⋮----
+
+def verify_allows_args(self, args: list[Any]) -> None
+
+⋮----
+
+"""
+
+Verifies that an operator is allowed to be called with a certain
+
+set of arguments.
+
+Raises:
+
+`PyDoughQDAGException` if the operator does not accept the
+
+provided arguments.
+
+"""
+
+⋮----
+
+# If the verifier failed, raise the error with the same traceback
+
+# but prepend it with information about the operator and args
+
+# that caused the failure.
+
+arg_strings: list[str] = [str(arg) for arg in args]
+
+msg = f"Invalid operator invocation {self.to_string(arg_strings)!r}: {e}"
+
+⋮----
+
+@abstractmethod
+
+def to_string(self, arg_strings: list[str]) -> str
+
+⋮----
+
+"""
+
+Returns the string representation of the operator when called on
+
+its arguments, which have already been converted to a string.
+
+Args:
+
+`arg_strings`: the string representations of the arguments to the
+
+operator.
+
+Returns:
+
+The string representation of the operator called on its arguments.
+
+"""
+
+⋮----
+
+@abstractmethod
+
+def equals(self, other: object) -> bool
+
+⋮----
+
+"""
+
+Returns whether this operator is equal to another operator.
+
+"""
+
+⋮----
+
+def __eq__(self, other: object) -> bool
+
+⋮----
+
+def __hash__(self) -> int
+
+````
+
+## File: pydough/pydough_operators/operator_registry.py
+
+````python
+
+"""
+
+Suite where all registered operators are accessible as a combined unit.
+
+"""
+
+⋮----
+
+__all__ = ["builtin_registered_operators"]
+
+⋮----
+
+def builtin_registered_operators() -> MutableMapping[str, PyDoughOperator]
+
+⋮----
+
+"""
+
+A dictionary of all registered operators pre-built from the PyDough source,
+
+where the key is the operator name and the value is the operator object.
+
+"""
+
+operators: MutableMapping[str, PyDoughOperator] = {}
+
+````
+
+## File: pydough/pydough_operators/README.md
+
+````markdown
+
+# PyDough Operators
+
+This module defines the operators used in PyDough for various operations such as arithmetic, logical, and aggregation functions. The operators are registered and made available for use in PyDough code.
+
+## Available APIs
+
+The PyDough operators module provides the following notable APIs:
+
+`builtin_registered_operators`: A function that returns a dictionary of all built-in registered operators.
+
+## Usage
+
+The registered operators are used in PyDough code without needing to directly import them. Instead, they are automatically available for use in PyDough expressions. For example:
+
+### Arithmetic Operators
+
+You can use arithmetic operators such as `+`, `-`, `*`, `/`, `%`, and `**` directly in PyDough expressions:
+
+```python
+
+result = extended_price * (1 - discount)
+
+```
+
+### Logical Operators
+
+You can use logical operators such as `&`, `|`, and `^` directly in PyDough expressions:
+
+```python
+
+result = (region.name == "ASIA") & (COUNT(suppliers) > 100)
+
+```
+
+### Aggregation Functions
+
+You can use aggregation functions such as `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX` directly in PyDough expressions:
+
+```python
+
+result = COUNT(customers)
+
+```), ChunkSearchResult(score=0.040, text=Orders(limit=int(order.total_price))
+
+```
+
+<!-- TOC --><a name="__float__"></a>
+
+### \_\_float\_\_
+
+Casting to `float` calls the `__float__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return a float instead of a PyDough object.
+
+```py
+
+# Not allowed currently as it would need to return a float instead of a PyDough object
+
+Orders(limit=float(order.quantity))
+
+```
+
+<!-- TOC --><a name="__complex__"></a>
+
+### \_\_complex\_\_
+
+Casting to `complex` calls the `__complex__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return a complex instead of a PyDough object.
+
+```py
+
+# Not allowed currently as it would need to return a complex instead of a PyDough object
+
+Orders(limit=complex(order.total_price))
+
+```
+
+<!-- TOC --><a name="__index__"></a>
+
+### \_\_index\_\_
+
+Using an object as an index calls the `__index__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return an integer instead of a PyDough object.
+
+```py
+
+# Not allowed currently as it would need to return an int instead of a PyDough object
+
+Orders(s="ABCDE"[:order_priority])
+
+```
+
+<!-- TOC --><a name="__nonzero__"></a>
+
+### \_\_nonzero\_\_
+
+Using an object in a boolean context calls the `__nonzero__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return an integer instead of a PyDough object.
+
+```py
+
+# Not allowed currently as it would need to return an int instead of a PyDough object
+
+Lineitems(is_taxed=bool(tax))
+
+```
+
+<!-- TOC --><a name="__len__"></a>
+
+### \_\_len\_\_
+
+The `len` function calls the `__len__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return an integer instead of a PyDough object. Instead, usage of [LENGTH](#length) function is recommended.
+
+```py
+
+# Not allowed currently as it would need to return an int instead of a PyDough object
+
+Customers(len(customer.name))
+
+```
+
+<!-- TOC --><a name="__contains__"></a>
+
+### \_\_contains\_\_
+
+Using the `in` operator calls the `__contains__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return a boolean instead of a PyDough object. Instead, If you need to check if a string is inside another substring, use [CONTAINS](#contains). If you need to check if an expression is a member of a list of literals, use [ISIN](#isin).
+
+```py
+
+# Not allowed currently as it would need to return a boolean instead of a PyDough object
+
+Orders('discount' in order.details)
+
+```
+
+<!-- TOC --><a name="__setitem__"></a>
+
+### \_\_setitem\_\_
+
+Assigning to an index calls the `__setitem__` magic method, which is not supported in PyDough. This operation is not allowed.
+
+```py
+
+# Not allowed currently as PyDough objects cannot support item assignment.
+
+Order.details['discount'] = True
+
+```
+
+<!-- TOC --><a name="__iter__"></a>
+
+### \_\_iter\_\_
+
+Iterating over an object calls the `__iter__` magic method, which is not supported in PyDough. This operation is not allowed because the implementation has to return an iterator instead of a PyDough object.
+
+```py
+
+# Not allowed currently as implementation has to return an iterator instead of a PyDough object.
+
+for item in customer:
+
+print(item)
+
+[item for item in customer]
+
+list(customer)
+
+tuple(customer)
+
+```
+
+````
+
+## File: documentation/metadata.md
+
+````markdown), ChunkSearchResult(score=0.027, text=<tr>
+
+<th>1</th>
+
+<td>ROMANIA</td>
+
+<td>6100</td>
+
+</tr>
+
+<tr>
+
+<th>2</th>
+
+<td>RUSSIA</td>
+
+<td>6078</td>
+
+</tr>
+
+<tr>
+
+<th>3</th>
+
+<td>UNITED KINGDOM</td>
+
+<td>6011</td>
+
+</tr>
+
+<tr>
+
+<th>4</th>
+
+<td>GERMANY</td>
+
+<td>5908</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+See the [demo notebooks](../demos/notebooks/1_introduction.ipynb) for more instances of how to use the `to_df` API.
+
+<!-- TOC --><a name="exploration-apis"></a>
+
+## Exploration APIs
+
+This sections describes various APIs you can use to explore PyDough code and figure out what each component is doing without having PyDough fully evaluate it. The following APIs take an optional `config` argument which can be used to specify the PyDough configuration settings to use for the exploration.
+
+See the [demo notebooks](../demos/notebooks/2_exploration.ipynb) for more instances of how to use the exploration APIs.
+
+<!-- TOC --><a name="pydoughexplain_structure"></a>
+
+### `pydough.explain_structure`
+
+The `explain_structure` API can be called on a PyDough knowledge graph object returned from `load_metadata_graph` or `parse_json_metadata_from_file`. It displays information about a the metadata graph, including the names of each collection in the graph, the names of all scalar and sub-collection properties for each collection, and some details of the sub-collection properties.
+
+Below is an example that displays information about the TPC-H schema, truncated to only include nations, regions and customers.
+
+```py
+
+import pydough
+
+graph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")
+
+pydough.explain_structure(graph)
+
+```
+
+```
+
+Structure of PyDough graph: TPCH
+
+customers
+
+├── acctbal
+
+├── address
+
+├── comment
+
+├── key
+
+├── mktsegment
+
+├── name
+
+├── nation_key
+
+├── phone
+
+├── nation [one member of nations] (reverse of nations.customers)
+
+└── orders [multiple orders] (reverse of orders.customer)
+
+nations
+
+├── comment
+
+├── key
+
+├── name
+
+├── region_key
+
+├── customers [multiple customers] (reverse of customers.nation)
+
+├── region [one member of regions] (reverse of regions.nations)
+
+└── suppliers [multiple suppliers] (reverse of suppliers.nation)
+
+regions
+
+├── comment
+
+├── key
+
+├── name
+
+└── nations [multiple nations] (reverse of nations.region)
+
+...
+
+```
+
+Notice how for each collection, the scalar properties are listed first without any information, followed by the sub-collections which include information about the sub-collection they connect to, the cardinality of the connection, and the reverse property.
+
+<!-- TOC --><a name="pydoughexplain"></a>
+
+### `pydough.explain`
+
+The `explain` API is a more generic explanation interface that can be called on different things to display different information:
+
+A metadata graph object
+
+A specific collection within a metadata graph object (can be accessed as `graph["collection_name"]`)
+
+A specific property within a specific collection within a metadata graph object (can be accessed as `graph["collection_name"]["property_name"]`)
+
+The PyDough code for a collection that could have `to_sql` or `to_df` called on it.
+
+The `explain` API also has an optional `verbose` argument (default=False) that enables displaying additional information.
+
+Below are examples of each of these behaviors, using a knowledge graph for the TPCH schema.
+
+1. Calling `explain` on the graph metadata.
+
+```py
+
+import pydough
+
+graph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")
+
+pydough.explain(graph, verbose=True)
+
+```
+
+```
+
+PyDough graph: TPCH
+
+Collections:
+
+customers
+
+lines
+
+nations
+
+orders
+
+parts
+
+regions
+
+suppliers
+
+supply_records
+
+Call pydough.explain(graph[collection_name]) to learn more about any of these collections.
+
+Call pydough.explain_structure(graph) to see how all of the collections in the graph are connected.
+
+```
+
+2. Calling `explain` on a collection's metadata.
+
+```py
+
+import pydough
+
+graph = pydough.parse_json_metadata_from_file("insert_path_here.json", "TPCH")
+
+pydough.explain(graph["nations"], verbose=True)
+
+```
+
+```
+
+PyDough collection: nations
+
+Table path: main.NATION)], graph_search_results=[], web_search_results=None, document_search_results=None), 'citations': [Citation(id='988171e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '988171e1-8325-51ae-9003-94186fae385b', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.0819672131147541, 'text': "## What Is PyDough\n\nPyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as [MongoDB](https://www.mongodb.com/docs/manual/data-modeling/), since that mental model is closer to human linguistics than a relational model.\n\nUnlike MongoDB, PyDough only uses a logical document model for abstractly explaining & interacting with data, rather than a physical document model to store the data.\n\nPyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested.\n\nPyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database.\n\nConsider the following information represented by the tables in a database:\n\nThere are people; each person has a name, ssn, birth date, records of jobs they have had, and records of schools they have attended.\n\nThere are employment records; each job record has the ssn of the person being employed, the name of the company, and the total income they made from the job.\n\nThere are education records; each education record has the ssn of the person attending the school, the name of the school, and the total tuition they paid to that school.\n\nSuppose I want to know for every person their name & the total income they've made from all jobs minus the total tuition paid to all schools. However, I want to include people who have never had a job or never attended any schools, and I need to account for people who could have had multiple jobs or attended multiple schools.\n\nThe following PyDough snippet solves this problem:\n\n```py\n\nresult = People.CALCULATE(\n\nname,\n\nnet_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)\n\n)\n\npydough.to_df(result)\n\n```\n\nHowever, if answering the question with SQL, I would need to write the following less-intuitive SQL query:\n\n```sql\n\nSELECT\n\nP.name AS name,\n\nCOALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income\n\nFROM PEOPLE AS P\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(income_earned) AS total_income_earned\n\nFROM EMPLOYMENT_RECORDS\n\nGROUP BY person_ssn\n\n) AS J\n\nON P.ssn = J.person_ssn\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid\n\nFROM EDUCATION_RECORDS\n\n) AS S\n\nON P.ssn = S.person_ssn\n\n```\n\nInternally, PyDough solves the question by translating the much simpler logical document model logic into SQL, which can be directly executed on a database. Even if the same SQL is generated by PyDough as the example above, all a user needs to worry about is writing the much smaller PyDough code snippet in Python.\n\nCurrently, the main mechanism to execute PyDough code is via Jupyter notebooks with a special cell magic. See the usage guide and demo notebooks for more details.", 'metadata': {'version': 'v0', 'chunk_order': 443, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 1, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='7ea5a7b', object='citation', is_new=True, span=None, source_type=None, payload={'id': '7ea5a7b8-e4f4-5c15-9ed4-6e100a8a759c', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.08064516129032258, 'text': '## Why Build PyDough?\n\nPyDough as a DSL has several benefits over other solutions, both for human use and LLM generation:\n\nORMs still require understanding & writing SQL, including dealing directly with joins. If a human or AI is bad at writing SQL, they will be just as bad at writing ORM-based code. PyDough, on the other hand, abstracts away joins in favor of thinking about logical relationships between collections & sub-collections.\n\nThe complex semantics of aggregation keys, different types of joins, and aggregating before vs after joining are all abstracted away by PyDough. These details require much deeper understanding of SQL semantics than most have time to learn how to do correctly, meaning that PyDough can have a lower learning curve to write correct code for complex questions.\n\nWhen a question is being asked, the PyDough code to answer it will look more similar to the text of the question than the SQL text would. This makes LLM generation of PyDough code simpler since there is a stronger correlation between a question asked and the PyDough code to answer it.\n\nOften, PyDough code will be significantly more compact than equivalent SQL text, and therefore easier for a human to verify for logical correctness.\n\nPyDough is portable between various database execution solutions, so you are not locked into one data storage solution while using PyDough.\n\n## Learning About PyDough\n\nRefer to these documents to learn how to use PyDough:\n\n[Spec for the PyDough DSL](https://github.com/bodo-ai/PyDough/blob/main/documentation/dsl.md)\n\n[Spec for the PyDough metadata](https://github.com/bodo-ai/PyDough/blob/main/documentation/metadata.md)\n\n[List of builtin PyDough functions](https://github.com/bodo-ai/PyDough/blob/main/documentation/functions.md)\n\n[Usage guide for PyDough](https://github.com/bodo-ai/PyDough/blob/main/documentation/usage.md)\n\n## Installing or Developing PyDough\n\nPyDough releases are [available on PyPI](https://pypi.org/project/pydough/) and can be installed via pip:\n\n```\n\npip install pydough\n\n```\n\nFor local development, PyDough uses `uv` as a package manager.\n\nPlease refer to their docs for [installation](https://docs.astral.sh/uv/getting-started/).\n\nTo run testing commands after installing `uv`, run the following command:\n\n```bash\n\nuv run pytest <pytest_arguments>\n\n```\n\nIf you want to skip tests that execute runtime results because they are slower,\n\nmake sure to include `-m "not execute"` in the pytest arguments.\n\nNote: some tests may require an additional setup to run successfully.\n\nThe [demos](https://github.com/bodo-ai/PyDough/blob/main/demos/README.md) directory\n\ncontains more information on how to setup the TPC-H sqlite database. For\n\ntesting, the `tpch.db` file must be located in the `tests` directory.\n\nAdditionally, the [`setup_defog.sh`](https://github.com/bodo-ai/PyDough/blob/main/tests/setup_defog.sh)\n\nscript must be run so that the `defog.db` file is located in the `tests` directory.\n\n## Running CI Tests\n\nTo run our CI tests on your PR, you must include the flag `[run CI]` in latest\n\ncommit message.\n\n## Runtime Dependencies\n\nPyDough requires having the following Python modules installed to use\n\nthe library:\n\npytz, pandas, sqlglot\n\nThe full list of dependencies can be found in the `pyproject.toml` file.\n\n## Demo Notebooks\n\nThe `demo` folder contains a series of example Jupyter Notebooks\n\nthat can be used to understand PyDough\'s capabilities. We recommend any new user start\n\nwith the [demo readme](https://github.com/bodo-ai/PyDough/blob/main/demos/README.md) and then walk through the example Juypter notebooks.\n\n````', 'metadata': {'version': 'v0', 'chunk_order': 444, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 2, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='988171e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '988171e1-8325-51ae-9003-94186fae385b', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.0819672131147541, 'text': "## What Is PyDough\n\nPyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as [MongoDB](https://www.mongodb.com/docs/manual/data-modeling/), since that mental model is closer to human linguistics than a relational model.\n\nUnlike MongoDB, PyDough only uses a logical document model for abstractly explaining & interacting with data, rather than a physical document model to store the data.\n\nPyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested.\n\nPyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database.\n\nConsider the following information represented by the tables in a database:\n\nThere are people; each person has a name, ssn, birth date, records of jobs they have had, and records of schools they have attended.\n\nThere are employment records; each job record has the ssn of the person being employed, the name of the company, and the total income they made from the job.\n\nThere are education records; each education record has the ssn of the person attending the school, the name of the school, and the total tuition they paid to that school.\n\nSuppose I want to know for every person their name & the total income they've made from all jobs minus the total tuition paid to all schools. However, I want to include people who have never had a job or never attended any schools, and I need to account for people who could have had multiple jobs or attended multiple schools.\n\nThe following PyDough snippet solves this problem:\n\n```py\n\nresult = People.CALCULATE(\n\nname,\n\nnet_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)\n\n)\n\npydough.to_df(result)\n\n```\n\nHowever, if answering the question with SQL, I would need to write the following less-intuitive SQL query:\n\n```sql\n\nSELECT\n\nP.name AS name,\n\nCOALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income\n\nFROM PEOPLE AS P\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(income_earned) AS total_income_earned\n\nFROM EMPLOYMENT_RECORDS\n\nGROUP BY person_ssn\n\n) AS J\n\nON P.ssn = J.person_ssn\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid\n\nFROM EDUCATION_RECORDS\n\n) AS S\n\nON P.ssn = S.person_ssn\n\n```\n\nInternally, PyDough solves the question by translating the much simpler logical document model logic into SQL, which can be directly executed on a database. Even if the same SQL is generated by PyDough as the example above, all a user needs to worry about is writing the much smaller PyDough code snippet in Python.\n\nCurrently, the main mechanism to execute PyDough code is via Jupyter notebooks with a special cell magic. See the usage guide and demo notebooks for more details.", 'metadata': {'version': 'v0', 'chunk_order': 443, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 1, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='8e03891', object='citation', is_new=True, span=None, source_type=None, payload={'id': '8e038912-15ed-576f-9ffe-3b05a8dece5e', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07673337752628798, 'text': '"source": [\n\n"### SQL\\n",\n\n"\\n",\n\n"```SQL\\n",\n\n"Select\\n",\n\n" (L_EXTENDED_PRICE * (1 - L_DISCOUNT)) / order_total as revenue_ratio,\\n",\n\n" orderkey,\\n",\n\n" l_linenumber as line_number\\n",\n\n"from lines\\n",\n\n"inner join (\\n",\n\n" select\\n",\n\n" o_orderkey as order_key,\\n",\n\n" SUM(L_EXTENDED_PRICE * (1 - L_DISCOUNT)) as order_total\\n",\n\n" from orders\\n",\n\n" inner join lines\\n",\n\n" on l_orderkey = o_orderkey\\n",\n\n" group by o_orderkey\\n",\n\n")\\n",\n\n"on l_orderkey = order_key\\n",\n\n"order by revenue_ratio ASC, order_key DESC, line_number DESC\\n",\n\n"LIMIT 5\\n",\n\n"```"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "4e81ec40-f82c-42e6-9656-7f36e619a52a",\n\n"metadata": {},\n\n"source": [\n\n"### PyDough\\n",\n\n"\\n",\n\n"```python\\n",\n\n"revenue_def = extended_price*(1-discount)\\n",\n\n"orders.CALCULATE(total_line_price=SUM(lines.CALCULATE(line_price=revenue_def).line_price)).lines.CALCULATE(\\n",\n\n" revenue_ratio=revenue_def / total_line_price, \\n",\n\n" order_key=order_key, \\n",\n\n" line_number=line_number\\n",\n\n").TOP_K(5, by=(revenue_ratio.ASC(), order_key.DESC(), line_number.DESC()))\\n",\n\n"```"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "efca5340-6acc-48dd-9287-f3baaabe5239",\n\n"metadata": {},\n\n"source": [\n\n"The example SQL requires a nested subquery to answer, which can easily become complicated and unmanagable as questions scale in size. It also requires explicitly representing the join information where a decision like **LEFT** vs **INNER** join impacts correctness and is a function of the data.\\n",\n\n"\\n",\n\n"In constrast, PyDough has a simpler representation, avoiding some of the redundancy in the SQL code and the join information is encoded entirely in the metadata."\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "3228b465-a356-4d5e-9b61-a13b437a8c7f",\n\n"metadata": {},\n\n"source": [\n\n"## PyDough Solution\\n",\n\n"\\n",\n\n"While we can just execute the PyDough example above, we are going to take a different approach to show how one might generate this query in a \\"WHAT-IF\\" manner. This approach will be a longer solution, but will be helpful to enable faster iteration once we modify the question.\\n",\n\n"\\n",\n\n"We are opting to demonstrate this because:\\n",\n\n"1. We believe this is a good representation for how PyDough can be leveraged to gradually handle increasing question complexity.\\n",\n\n"2. We believe this reflects an investigative approach to query generation, where someone may understand at a high-level what needs to be done, but not necessary that \\"path\\" to get there.\\n",\n\n"\\n",\n\n"To do this we will first need to define revenue. Here we will say that the revenue is the price information after removing any discounts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "90f77e14-4540-42af-a62e-2ba4e9ae40b9",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"revenue_def = extended_price*(1-discount)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "c250943d-f018-4b53-b3b0-423c35db5004",\n\n"metadata": {},\n\n"source": [\n\n"This might seem shocking. We have defined `revenue_def` out of nowhere using an `extended_price` and `discount`. What has actually happened here is that we have generated what is called a `Contextless Expression`. This fundamental building block is the key to PyDough\'s composability.\\n",\n\n"\\n",\n\n"On its own this expression doesn\'t mean anything. In fact if we inspect this object in regular PyDough we will see that PyDough itself has a lot of questions."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "3dc2af81-baa9-45df-9624-a6afca0101b7",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"revenue_def"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "576f9203-35c0-458a-8860-88615bcade4f",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 37, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 7, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='8e03891', object='citation', is_new=True, span=None, source_type=None, payload={'id': '8e038912-15ed-576f-9ffe-3b05a8dece5e', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.07673337752628798, 'text': '"source": [\n\n"### SQL\\n",\n\n"\\n",\n\n"```SQL\\n",\n\n"Select\\n",\n\n" (L_EXTENDED_PRICE * (1 - L_DISCOUNT)) / order_total as revenue_ratio,\\n",\n\n" orderkey,\\n",\n\n" l_linenumber as line_number\\n",\n\n"from lines\\n",\n\n"inner join (\\n",\n\n" select\\n",\n\n" o_orderkey as order_key,\\n",\n\n" SUM(L_EXTENDED_PRICE * (1 - L_DISCOUNT)) as order_total\\n",\n\n" from orders\\n",\n\n" inner join lines\\n",\n\n" on l_orderkey = o_orderkey\\n",\n\n" group by o_orderkey\\n",\n\n")\\n",\n\n"on l_orderkey = order_key\\n",\n\n"order by revenue_ratio ASC, order_key DESC, line_number DESC\\n",\n\n"LIMIT 5\\n",\n\n"```"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "4e81ec40-f82c-42e6-9656-7f36e619a52a",\n\n"metadata": {},\n\n"source": [\n\n"### PyDough\\n",\n\n"\\n",\n\n"```python\\n",\n\n"revenue_def = extended_price*(1-discount)\\n",\n\n"orders.CALCULATE(total_line_price=SUM(lines.CALCULATE(line_price=revenue_def).line_price)).lines.CALCULATE(\\n",\n\n" revenue_ratio=revenue_def / total_line_price, \\n",\n\n" order_key=order_key, \\n",\n\n" line_number=line_number\\n",\n\n").TOP_K(5, by=(revenue_ratio.ASC(), order_key.DESC(), line_number.DESC()))\\n",\n\n"```"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "efca5340-6acc-48dd-9287-f3baaabe5239",\n\n"metadata": {},\n\n"source": [\n\n"The example SQL requires a nested subquery to answer, which can easily become complicated and unmanagable as questions scale in size. It also requires explicitly representing the join information where a decision like **LEFT** vs **INNER** join impacts correctness and is a function of the data.\\n",\n\n"\\n",\n\n"In constrast, PyDough has a simpler representation, avoiding some of the redundancy in the SQL code and the join information is encoded entirely in the metadata."\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "3228b465-a356-4d5e-9b61-a13b437a8c7f",\n\n"metadata": {},\n\n"source": [\n\n"## PyDough Solution\\n",\n\n"\\n",\n\n"While we can just execute the PyDough example above, we are going to take a different approach to show how one might generate this query in a \\"WHAT-IF\\" manner. This approach will be a longer solution, but will be helpful to enable faster iteration once we modify the question.\\n",\n\n"\\n",\n\n"We are opting to demonstrate this because:\\n",\n\n"1. We believe this is a good representation for how PyDough can be leveraged to gradually handle increasing question complexity.\\n",\n\n"2. We believe this reflects an investigative approach to query generation, where someone may understand at a high-level what needs to be done, but not necessary that \\"path\\" to get there.\\n",\n\n"\\n",\n\n"To do this we will first need to define revenue. Here we will say that the revenue is the price information after removing any discounts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "90f77e14-4540-42af-a62e-2ba4e9ae40b9",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"revenue_def = extended_price*(1-discount)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "c250943d-f018-4b53-b3b0-423c35db5004",\n\n"metadata": {},\n\n"source": [\n\n"This might seem shocking. We have defined `revenue_def` out of nowhere using an `extended_price` and `discount`. What has actually happened here is that we have generated what is called a `Contextless Expression`. This fundamental building block is the key to PyDough\'s composability.\\n",\n\n"\\n",\n\n"On its own this expression doesn\'t mean anything. In fact if we inspect this object in regular PyDough we will see that PyDough itself has a lot of questions."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "3dc2af81-baa9-45df-9624-a6afca0101b7",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"revenue_def"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "576f9203-35c0-458a-8860-88615bcade4f",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 37, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 7, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='0e98bac', object='citation', is_new=True, span=None, source_type=None, payload={'id': '0e98bac0-89ce-54af-8af5-899a5135e577', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.053745719454674684, 'text': '"source": [\n\n"# Overview\\n",\n\n"\\n",\n\n"This notebook walks through how PyDough can be leveraged to perform \\"WHAT-IF\\" analysis. At its core, we are typically looking for insights on questions that are much too complex or abstract, such as \\"How can we improve sales in Q2?\\" As a result, this approach incentivizes faster iteration to rapidly explore various scenarios in the hope of uncovering insights that can resolve our abstract problem. \\n",\n\n"\\n",\n\n"We believe that PyDough is ideal for these types of questions because PyDough can be used to solve common intermediate problems and quickly iterate betwen alterantive versions. Rather than focusing on a single query to answer a question at hand, building components allows more proportional scaling and more easily modifying the scenario. The PyDough team is optimistic that such an approach can make humans more productive and LLMs more accurate.\\n",\n\n"\\n",\n\n"In this notebook we will focus on addressing a single question, but we will illustrate the principles that make such a question convenient for rapid iteration. Towards the end of this notebook, we will then modify this base question in the spirit of \\"WHAT-IF\\", but this will not be a complete what if analysis. We encourage you to explore new ways to extend this investigation by consulting the [PyDough documentation](../../documentation/usage.md)."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "7849d55d-cf82-4fb4-acb9-4a6f257926c9",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%load_ext pydough.jupyter_extensions"\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "32294532-eaba-4a3f-8fd0-acfd5410ea52",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"import pydough\\n",\n\n"import pandas as pd"\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "3fa62d04-d363-414b-bed8-d0f0e289e606",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"# Setup demo metadata\\n",\n\n"pydough.active_session.load_metadata_graph(\\"../metadata/tpch_demo_graph.json\\", \\"TPCH\\");\\n",\n\n"pydough.active_session.connect_database(\\"sqlite\\", database=\\"../../tpch.db\\");\\n",\n\n"# Avoid scientific notation\\n",\n\n"pd.options.display.float_format = \'{:.6f}\'.format"\n\n]\n\n},\n\n{\n\n"attachments": {},\n\n"cell_type": "markdown",\n\n"id": "f0ab9cff-2549-43b4-b044-4ae1029fae97",\n\n"metadata": {},\n\n"source": [\n\n"## Schema Setup\\n",\n\n"\\n",\n\n"For this demo we will be working in TPC-H benchmark schema. The actual data for this benchmark is generated in SQLite using the standard TPC-H data generation tools. The underlying schema of this data matches this example image from [TPC Benchmark H Standard Specification](https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-h_v2.17.1.pdf). For this example we will only be using the **LINEITEM** and **ORDERS** tables.\\n",\n\n"\\n",\n\n"![TPC-H schema from the Specification Document as of December 12, 2024](../images/tpc_h_schema.png)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "a6b19eac-d793-40a9-b294-bb17bba1fc77",\n\n"metadata": {},\n\n"source": [\n\n"## Problem Statement\\n",\n\n"\\n",\n\n"Let\'s say that we are focused on identifying **ways to increase revenue in the next calendar year**. One idea that we might have is to explore items that are a very small percentage of a total order price as changes to these items may not have a meaningful impact on the customer but could result in larger revenue aggregate. \\n",\n\n"\\n",\n\n"As a first scenario, we are going to **identify the 5 lines in our entire order sheet that represent the smallest percentage of their corresponding order\'s revenue**. \\n",\n\n"\\n",\n\n"Here is a possible SQL query that could we be used to answer this question and in constrast here is the corresponding PyDough."\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "8e8cf3e6-0658-43b3-a560-83a107c1b9c5",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 36, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 20, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='988171e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '988171e1-8325-51ae-9003-94186fae385b', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.0819672131147541, 'text': "## What Is PyDough\n\nPyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as [MongoDB](https://www.mongodb.com/docs/manual/data-modeling/), since that mental model is closer to human linguistics than a relational model.\n\nUnlike MongoDB, PyDough only uses a logical document model for abstractly explaining & interacting with data, rather than a physical document model to store the data.\n\nPyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested.\n\nPyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database.\n\nConsider the following information represented by the tables in a database:\n\nThere are people; each person has a name, ssn, birth date, records of jobs they have had, and records of schools they have attended.\n\nThere are employment records; each job record has the ssn of the person being employed, the name of the company, and the total income they made from the job.\n\nThere are education records; each education record has the ssn of the person attending the school, the name of the school, and the total tuition they paid to that school.\n\nSuppose I want to know for every person their name & the total income they've made from all jobs minus the total tuition paid to all schools. However, I want to include people who have never had a job or never attended any schools, and I need to account for people who could have had multiple jobs or attended multiple schools.\n\nThe following PyDough snippet solves this problem:\n\n```py\n\nresult = People.CALCULATE(\n\nname,\n\nnet_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)\n\n)\n\npydough.to_df(result)\n\n```\n\nHowever, if answering the question with SQL, I would need to write the following less-intuitive SQL query:\n\n```sql\n\nSELECT\n\nP.name AS name,\n\nCOALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income\n\nFROM PEOPLE AS P\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(income_earned) AS total_income_earned\n\nFROM EMPLOYMENT_RECORDS\n\nGROUP BY person_ssn\n\n) AS J\n\nON P.ssn = J.person_ssn\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid\n\nFROM EDUCATION_RECORDS\n\n) AS S\n\nON P.ssn = S.person_ssn\n\n```\n\nInternally, PyDough solves the question by translating the much simpler logical document model logic into SQL, which can be directly executed on a database. Even if the same SQL is generated by PyDough as the example above, all a user needs to worry about is writing the much smaller PyDough code snippet in Python.\n\nCurrently, the main mechanism to execute PyDough code is via Jupyter notebooks with a special cell magic. See the usage guide and demo notebooks for more details.", 'metadata': {'version': 'v0', 'chunk_order': 443, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 1, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}}), Citation(id='988171e', object='citation', is_new=True, span=None, source_type=None, payload={'id': '988171e1-8325-51ae-9003-94186fae385b', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.0819672131147541, 'text': "## What Is PyDough\n\nPyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as [MongoDB](https://www.mongodb.com/docs/manual/data-modeling/), since that mental model is closer to human linguistics than a relational model.\n\nUnlike MongoDB, PyDough only uses a logical document model for abstractly explaining & interacting with data, rather than a physical document model to store the data.\n\nPyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested.\n\nPyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database.\n\nConsider the following information represented by the tables in a database:\n\nThere are people; each person has a name, ssn, birth date, records of jobs they have had, and records of schools they have attended.\n\nThere are employment records; each job record has the ssn of the person being employed, the name of the company, and the total income they made from the job.\n\nThere are education records; each education record has the ssn of the person attending the school, the name of the school, and the total tuition they paid to that school.\n\nSuppose I want to know for every person their name & the total income they've made from all jobs minus the total tuition paid to all schools. However, I want to include people who have never had a job or never attended any schools, and I need to account for people who could have had multiple jobs or attended multiple schools.\n\nThe following PyDough snippet solves this problem:\n\n```py\n\nresult = People.CALCULATE(\n\nname,\n\nnet_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)\n\n)\n\npydough.to_df(result)\n\n```\n\nHowever, if answering the question with SQL, I would need to write the following less-intuitive SQL query:\n\n```sql\n\nSELECT\n\nP.name AS name,\n\nCOALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income\n\nFROM PEOPLE AS P\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(income_earned) AS total_income_earned\n\nFROM EMPLOYMENT_RECORDS\n\nGROUP BY person_ssn\n\n) AS J\n\nON P.ssn = J.person_ssn\n\nLEFT JOIN (\n\nSELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid\n\nFROM EDUCATION_RECORDS\n\n) AS S\n\nON P.ssn = S.person_ssn\n\n```\n\nInternally, PyDough solves the question by translating the much simpler logical document model logic into SQL, which can be directly executed on a database. Even if the same SQL is generated by PyDough as the example above, all a user needs to worry about is writing the much smaller PyDough code snippet in Python.\n\nCurrently, the main mechanism to execute PyDough code is via Jupyter notebooks with a special cell magic. See the usage guide and demo notebooks for more details.", 'metadata': {'version': 'v0', 'chunk_order': 443, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 1, 'full_text_rank': 200, 'associated_query': '4. Highlight the essential differences in syntax and behavior between PyDough and SQL based on the provided documentation.'}})], 'metadata': {'id': 'msg_01BtNcLqAn5vRYpZPEhge9Nx', 'choices': [{'finish_reason': 'stop', 'index': 0, 'message': {'refusal': None, 'role': 'assistant', 'function_call': None, 'tool_calls': None, 'structured_content': None}}], 'created': 1746213211, 'model': 'claude-3-7-sonnet-20250219', 'object': 'chat.completion', 'service_tier': None, 'system_fingerprint': None, 'usage': {'prompt_tokens': 22891, 'completion_tokens': 1060, 'total_tokens': 23951}}, 'completion': 'I\'ll explain the fundamental difference highlighted between PyDough and SQL regarding syntax and behavior assumptions based on the provided search results.\n\n## Fundamental Differences Between PyDough and SQL\n\n### 1. Mental Model and Thinking Approach\n\nPyDough uses a hierarchical thinking model that\'s closer to human linguistics, while SQL uses a relational model:\n\n[988171e] "PyDough allows expressing analytical questions with hierarchical thinking, as seen in models such as MongoDB, since that mental model is closer to human linguistics than a relational model."\n\nThis fundamental difference in mental models affects how users approach data problems:\n- PyDough: Think in terms of collections, sub-collections, and relationships\n- SQL: Think in terms of tables, joins, and relational algebra\n\n### 2. Abstraction of Complex SQL Semantics\n\n[7ea5a7b] "The complex semantics of aggregation keys, different types of joins, and aggregating before vs after joining are all abstracted away by PyDough. These details require much deeper understanding of SQL semantics than most have time to learn how to do correctly, meaning that PyDough can have a lower learning curve to write correct code for complex questions."\n\nPyDough abstracts away many SQL complexities:\n- Join logic is hidden in metadata\n- Aggregation timing is handled automatically\n- Relationships are simplified to parent-child connections\n\n### 3. Code Structure and Verbosity\n\nPyDough code is typically more compact and resembles the natural language question more closely:\n\n[988171e] "Often, PyDough code will be significantly more compact than equivalent SQL text, and therefore easier for a human to verify for logical correctness."\n\nThis is demonstrated in the example comparing PyDough and SQL for the same problem:\n\n**PyDough solution:**\n```py\nresult = People.CALCULATE(\n  name,\n  net_income = SUM(jobs.income_earned) - SUM(schools.tuition_paid)\n)\npydough.to_df(result)\n```\n\n**Equivalent SQL solution:**\n```sql\nSELECT\n  P.name AS name,\n  COALESCE(T1.total_income_earned, 0) - COALESCE(T2.total_tuition_paid, 0) AS net_income\nFROM PEOPLE AS P\nLEFT JOIN (\n  SELECT person_ssn, SUM(income_earned) AS total_income_earned\n  FROM EMPLOYMENT_RECORDS\n  GROUP BY person_ssn\n) AS J\nON P.ssn = J.person_ssn\nLEFT JOIN (\n  SELECT person_ssn, SUM(tuition_paid) AS total_tuition_paid\n  FROM EDUCATION_RECORDS\n) AS S\nON P.ssn = S.person_ssn\n```\n\n### 4. Behavior Assumptions and Join Handling\n\n[8e03891] "The example SQL requires a nested subquery to answer, which can easily become complicated and unmanagable as questions scale in size. It also requires explicitly representing the join information where a decision like **LEFT** vs **INNER** join impacts correctness and is a function of the data."\n\nPyDough handles join behavior differently:\n- SQL: Requires explicit join type specification (LEFT, INNER, etc.)\n- PyDough: Join information is encoded in metadata, abstracting away these decisions\n\n### 5. Incremental Development and Composability\n\n[8e03891] "PyDough has a simpler representation, avoiding some of the redundancy in the SQL code and the join information is encoded entirely in the metadata."\n\n[0e98bac] "PyDough can be written incrementally via expressions that are meaningless until the final context."\n\nThis composability allows for:\n- Building expressions that can be reused\n- Incremental development of complex queries\n- More natural "what-if" analysis\n\n### 6. Execution Model\n\n[988171e] "PyDough code can be written in and interleaved with Python code, and practices a lazy evaluation scheme that does not qualify or execute any logic until requested."\n\n[988171e] "PyDough executes by translating its logic into SQL which it can directly executing in an arbitrary database."\n\nThis means PyDough:\n- Uses lazy evaluation (only executes when needed)\n- Ultimately translates to SQL for execution\n- Can work with various database backends\n\nIn summary, PyDough fundamentally differs from SQL by providing a more intuitive hierarchical thinking model that\'s closer to human language, abstracting away complex SQL semantics like joins and aggregation timing, offering more compact and readable code, handling join behavior through metadata, enabling incremental development, and using a lazy evaluation scheme that translates to SQL only when execution is requested.'}

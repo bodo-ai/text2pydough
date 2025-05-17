@@ -16,12 +16,36 @@ import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
+import boto3
+from botocore.config import Config
 
 pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"./test_data/tpch.db",  check_same_thread=False)
 
 with open('./demo_queries.json', "r") as json_file:
     demo_dict = json.load(json_file)
+
+class DeepseekModel:
+    def __init__(self, temperature ):
+        # Initialize AWS SDK and load necessary files
+        self.temperature= temperature
+        config = Config(read_timeout=500)
+        self.brt = boto3.client(service_name='bedrock-runtime', config= config)
+
+    def ask(self, question, prompt, model):
+        system_messages= [{"text": prompt}]
+        messages= [
+                {
+                    "role": "user",  # Wrap "string" in quotes to make it a valid string
+                    "content":[{"text": question}]
+                }
+            ]
+        modelId = model
+        response = self.brt.converse(modelId= modelId,inferenceConfig= {"maxTokens": 30000,"temperature":self.temperature}, system=system_messages, messages= messages)
+        response_text = response["output"]["message"]["content"][0]["text"]
+
+
+        return response_text
 
 WORDS_MAP = {
     "partition": "PARTITION",
@@ -88,7 +112,7 @@ def format_prompt(script_content,prompt, data, question, database_content):
     #)
     
     prompt_string = ' '.join(ids)
-    return prompt.format(script_content=script_content, database_content=database_content, recomendation=prompt_string )
+    return prompt.format(script_content=script_content, database_content=database_content, similar_queries="", recomendation=prompt_string )
 
 def extract_python_code(text):
     """Extracts all Python code from triple backticks in the given text and combines them."""
@@ -125,18 +149,21 @@ def read_file(file_path):
         return file.read()
     
 class LLMClient:
-    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt4.md', script_file="./cheatsheet_v4_examples.md", temperature= 0.00001):
+    def __init__(self, database_file='./tcph_graph.md', prompt_file='./prompt3.md', script_file="./cheatsheet_v6.md", temperature= 1.0):
         """
         Initializes the LLMClient with the provider and model.
         """
-        default_provider = "aws"
-        default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+        #default_provider = "aws"
+        #default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         #default_provider = "google"
         #default_model = "gemini-2.0-flash-thinking-exp-01-21"
+        
+        default_provider = "aws-deepseek"
+        default_model = "us.deepseek.r1-v1:0"
     
         self.provider = default_provider
         self.model = default_model
-        self.client = ai.Client()
+        self.client = DeepseekModel(temperature=1.0)
         self.prompt = read_file(prompt_file)
         self.script = read_file(script_file)
         self.database = read_file(database_file)
@@ -192,20 +219,12 @@ class LLMClient:
                 )
             else:
                 # If not in dict, use the standard prompt.
-                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,recomendation= "")
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,similar_queries="", recomendation= "")
             
             if isinstance(question, tuple):  # Soporte para (result, follow_up)
                 question = self.discourse(*question)  
                 
-            messages = [{"role": "system", "content": formatted_prompt}, {"role": "user", "content": question}]
-            completion = self.client.chat.completions.create(
-                model=f"{self.provider}:{self.model}",
-                messages=messages,
-                temperature=self.temperature
-            )
-            
-            # Extract and process the response
-            response = completion.choices[0].message.content
+            response = self.client.ask(question, formatted_prompt, self.model)
             extracted_code = extract_python_code(response)
             extracted_code = replace_with_upper(extracted_code)
             
@@ -215,7 +234,6 @@ class LLMClient:
             result.base_prompt = self.prompt
             result.cheat_sheet = self.script
             result.knowledge_graph = self.database
-            print(extracted_code)
             pydough_sql = self.get_pydough_sql(extracted_code)
             pydough_df = self.get_pydough_code(extracted_code)
             
@@ -243,13 +261,12 @@ class LLMClient:
         """Try to correct a Result object if an exception exists."""
         if result.exception:
             try:
-                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database,recomendation="")
+                formatted_prompt = self.prompt.format(script_content=self.script, database_content=self.database, similar_queries="", recomendation="")
                 # create base prompt to request error fix
                 corrective_question = (f"An error occurred while processing this code: {result.code}. "
                                        f"The error is: '{result.exception}'. "
                                        f"The original question was: '{result.original_question}'. "
                                        f"Can you help me fix the issue? Take in account the context: '{formatted_prompt}'. ")
-
                 # Generate and return a new result
                 corrected_result = self.ask(corrective_question)
                 return corrected_result
@@ -259,6 +276,7 @@ class LLMClient:
                 return Result(original_question=result.original_question, exception=e)
 
         else:
+            print("not what i expexted")
             # If no exception, return the original result
             return result
 
