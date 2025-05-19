@@ -3,6 +3,7 @@ from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import Tool, BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 from langchain.memory import ConversationBufferMemory
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
@@ -354,6 +355,15 @@ class PydoughGeneratorAgent:
             model="gemini-2.0-flash",
             temperature=0
         )
+
+        # gemini-2.5-flash-preview-04-17
+        # gemini-2.0-flash
+
+        """ self.llm = ChatAnthropicVertex(
+            model_name="claude-3-7-sonnet@20250219",
+            project="solid-drive-448717-p8",
+            location="us-east5",
+        ) """
         
         # Create PyDough execution tool
         self.pydough_tool = PyDoughExecutionTool(

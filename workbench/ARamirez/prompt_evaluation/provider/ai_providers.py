@@ -11,6 +11,7 @@ from botocore.config import Config
 from google import genai
 from google.genai import types
 import aisuite as ai
+from mistralai import Mistral
 
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
@@ -130,7 +131,7 @@ class GeminiAIProvider(AIProvider):
             self.model_id = model_id
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        self.client = genai.Client(api_key=self.api_key)
+        self.client = genai.Client(vertexai= True,  project=self.project, location=self.location)
     
     def ask(self, question, prompt, **kwargs):
         response = self.client.models.generate_content(
@@ -167,6 +168,25 @@ class OtherAIProvider(AIProvider):
         try:
             response = self.client.chat.completions.create(
                 model=f"{self.provider}:{self.model_id}",
+                messages=messages,
+                **kwargs
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"AI Suite error: {e}")
+            return None
+
+class MistralAIProvider(AIProvider):
+    def __init__(self, model_id):
+        self.api_key = os.environ["MISTRAL_API_KEY"]  
+        self.model_id = model_id
+        self.client= Mistral(api_key=self.api_key)
+    
+    def ask(self, question, prompt, **kwargs):
+        messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
+        try:
+            response = self.client.chat.complete(
+                model=f"{self.model_id}",
                 messages=messages,
                 **kwargs
             )

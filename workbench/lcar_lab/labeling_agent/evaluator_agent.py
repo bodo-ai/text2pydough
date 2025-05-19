@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional, Tuple
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 from langchain_community.utilities import SQLDatabase
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
@@ -127,16 +128,10 @@ def compare_df(
     """
     # drop duplicates to ensure equivalence
     try:
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
+        if df_gold.equals(df_gen):
             return True
     except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
+        pass
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
@@ -155,13 +150,25 @@ def compare_df(
         return is_equal
     
 class SQLEvaluatorAgent:
-    def __init__(self, db_connection_string: str):
+    def __init__(self, db_connection_string: str, cheatsheet_path: str):
         """Initialize the SQL evaluator agent with a database connection."""
         self.db = SQLDatabase.from_uri(db_connection_string)
+
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash",
             temperature=0
         )
+
+        # gemini-2.5-flash-preview-04-17
+        # gemini-2.0-flash
+
+        """ self.llm = ChatAnthropicVertex(
+            model_name="claude-3-7-sonnet@20250219",
+            project="solid-drive-448717-p8",
+            location="us-east5",
+        ) """
+
+        self.cheatsheet_path = cheatsheet_path
         
         # Create a simple tool that returns the precomputed match
         self.match_tool = Tool(
@@ -318,6 +325,9 @@ Final Answer:
         # Convert SQL result to DataFrame JSON
         ground_truth_json = self._convert_sql_to_dataframe(ground_truth_sql)
         
+        with open(self.cheatsheet_path, 'r', encoding='utf-8') as f:
+            cheatsheet_content = f.read()
+
         # If generated_df_json is provided, use it directly
         if generated_df_json:
             generated_json = generated_df_json
@@ -350,6 +360,8 @@ Response Guidelines:
 5. Do not generate any code. Provide feedback only in plain english when applicable.
 6. Provided dataframes can be samples if sized 50 rows as original are too large.
 7. Provide sufficient information in the final answer to be actionable and generate better responses from the Pydough generator. 
+8. 5. If this is a Pydough issue, please check the cheatsheet below for Pydough syntax and provide feedback on how to fix it.
+{cheatsheet_content}
 """
         
         # Run the ReAct agent

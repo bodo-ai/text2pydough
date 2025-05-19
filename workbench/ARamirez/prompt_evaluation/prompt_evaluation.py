@@ -49,6 +49,8 @@ def get_provider(provider, model_id, config=None):
         return DeepSeekAIProvider(model_id)
     elif provider == "google":
         return GeminiAIProvider(model_id)
+    elif provider == "mistral":
+        return MistralAIProvider(model_id)
     else:
         return OtherAIProvider(provider, model_id, config)
     
@@ -63,7 +65,7 @@ def read_file(path):
 
 def extract_python_code(text):
     if not isinstance(text, str): return ""
-    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
+    matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
 def prepare_db_markdown_map(df, base_path="test_data"):
@@ -97,10 +99,10 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-
-    return question, prompt.format(
+    print(json_to_markdown(db_content))
+    return "".join([question]), prompt.format(
         script_content=script,
-        database_content=db_content,
+        database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -123,7 +125,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     db_name = row.get("db_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
-    response1 = client.ask(formatted_q, formatted_prompt, **kwargs)
+    response1 = client.ask(formatted_q,formatted_prompt, **kwargs)
     duration = time.time() - start
     if isinstance(response1, tuple):  # Gemini returns (text, usage)
         #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
@@ -177,8 +179,10 @@ def main(git_hash):
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
+    MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
+    MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"] 
 
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
