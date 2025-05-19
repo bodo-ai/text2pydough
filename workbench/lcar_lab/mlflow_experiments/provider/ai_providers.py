@@ -12,7 +12,7 @@ import google.genai as genai
 from google.genai import types
 import aisuite as ai
 from mistralai import Mistral
-
+import mlflow
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
     @abstractmethod
@@ -133,6 +133,7 @@ class GeminiAIProvider(AIProvider):
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
         self.client = genai.Client(vertexai= True,  project=self.project, location=self.location)
     
+    @mlflow.trace
     def ask(self, question, prompt, **kwargs):
         response = self.client.models.generate_content(
             model=self.model_id,
