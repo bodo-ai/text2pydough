@@ -36,7 +36,7 @@ def run_in_process(func, *args, **kwargs):
 # max number of rows used by evaluator to provide feedback. 
 MAX_ROWS = 20 
 # max number of feedback loops between generator and evaluator
-MAX_FEEDBACK_LOOPS = 3
+MAX_FEEDBACK_LOOPS = 7
 # Number of concurrent questions to process
 MAX_CONCURRENT_QUESTIONS = 3
 
@@ -46,6 +46,8 @@ async def process_single_question(
     db_path: str,
     metadata_path: str,
     cheatsheet_path: str,
+    dataset_name: str,
+    db_name: str,
     question_id: int,
     pbar: tqdm
 ) -> Dict[str, Any]:
@@ -74,7 +76,7 @@ async def process_single_question(
     
     try:
         generator_agent = PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path)
-        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}")
+        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}", cheatsheet_path)
 
         # Execute the ground truth SQL query once
         sql_result = await run_in_thread(evaluator_agent._convert_sql_to_dataframe, sql_query)
@@ -135,7 +137,8 @@ async def process_single_question(
                 ground_truth_sql=sql_query,
                 generated_response=generated_response,
                 generated_df_json=generated_df_json,
-                precomputed_match=dataframe_comparison_boolean
+                precomputed_match=dataframe_comparison_boolean,
+
             )
             
             feedback = evaluation['explanation'] + "\n\n Previous Agent Response:\n" + evaluation['generated_response']
@@ -155,7 +158,9 @@ async def process_single_question(
             'evaluation_explanation': evaluation['explanation'],
             'feedback_loops': feedback_loop_count,
             'dataframe_match': dataframe_comparison_boolean,
-            'error': str(e)
+            'error': str(e),
+            'dataset_name': dataset_name,
+            'db_name': db_name
         }
         return result
     
@@ -170,7 +175,9 @@ async def process_single_question(
         'evaluation_explanation': evaluation['explanation'],
         'feedback_loops': feedback_loop_count,
         'dataframe_match': dataframe_comparison_boolean,
-        'error': None
+        'error': None,
+        'dataset_name': dataset_name,
+        'db_name': db_name
     }
     
     return result
@@ -235,6 +242,8 @@ async def process_questions(
                 db_path=db_path,
                 metadata_path=metadata_path,
                 cheatsheet_path=cheatsheet_path,
+                dataset_name=dataset_name,
+                db_name=db_name,
                 question_id=idx + 1,
                 pbar=pbar
             )
@@ -283,7 +292,6 @@ async def main():
                       help='Path to the questions CSV file')
     args = parser.parse_args()
     
-    
     # Update the global constant
     MAX_CONCURRENT_QUESTIONS = args.concurrent_questions
         
@@ -296,6 +304,9 @@ async def main():
     # Create output filename with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_csv_path = os.path.join(output_dir, f"pydough_results_{timestamp}.csv")
+
+    # Output for reprocessed csv´s
+    reprocessed_questions_output = os.path.join(output_dir, f"reprocessed_pydough_results_{timestamp}.csv")
         
     # Verify all required files exist
     required_files = {
@@ -313,24 +324,49 @@ async def main():
         
         # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
+    
+    df_questions = pd.read_csv(args.questions_csv_path)
+
+    if 'dataframe_match' in df_questions.columns:
+         # Filter rows where dataframe_match is False
+        filtered_df = df_questions[df_questions['dataframe_match'] == False]
+
+        # Reformat to original question structure
+        reformatted_questions = filtered_df[['question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
+            .rename(columns={'ground_truth_sql': 'sql'}) \
+            .to_dict(orient='records')
         
+        new_csv = pd.DataFrame(reformatted_questions)
+
+        # Save to CSV
+        new_csv.to_csv(reprocessed_questions_output, index=False)
+
         # Process questions
-    await process_questions(
-            questions_csv_path=args.questions_csv_path,
-            output_csv_path=output_csv_path,
-            db_base_path=args.db_base_path,
-            metadata_base_path=args.metadata_base_path,
-            cheatsheet_path=args.cheatsheet_path,
-            num_questions=args.num_questions,
-            start_row=args.start_row
-        )
+        await process_questions(
+                questions_csv_path=reprocessed_questions_output,
+                output_csv_path=output_csv_path,
+                db_base_path=args.db_base_path,
+                metadata_base_path=args.metadata_base_path,
+                cheatsheet_path=args.cheatsheet_path,
+                num_questions=args.num_questions,
+                start_row=args.start_row
+            )
+    else:
+        #Process question
+        await process_questions(
+                questions_csv_path=args.questions_csv_path,
+                output_csv_path=output_csv_path,
+                db_base_path=args.db_base_path,
+                metadata_base_path=args.metadata_base_path,
+                cheatsheet_path=args.cheatsheet_path,
+                num_questions=args.num_questions,
+                start_row=args.start_row
+            )
         
     print(f"\nProcessing complete! Results saved to: {output_csv_path}")
 
 if __name__ == "__main__":
     
     with mlflow.start_run(description="Testing langchain autolog", run_name="Langchain test", experiment_id=experiment.experiment_id):
-        mlflow.langchain.autolog(
-            log_models=True
-        )
+        mlflow.langchain.autolog()
         asyncio.run(main()) 

@@ -1,20 +1,15 @@
 # main.py
 
 import argparse
-import io
 import json
 import os
 import re
-import tempfile
 import textwrap
 import time
-from typing import List
 import pandas as pd
 from datetime import datetime
 import multiprocessing
 import mlflow
-import mlflow.pyfunc
-from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
@@ -22,24 +17,10 @@ from test_data.eval import compare_output, execute_code_and_extract_result
 from claude import ClaudeModel, DeepseekModel, GeminiModel
 import aisuite as ai
 from provider.ai_providers import *
+from dynamic_prompt.generate_pydough_metadata import generate_metadata
+from dynamic_prompt.mdgen import json_to_markdown
+from sqlalchemy import create_engine, inspect, text
 
-class GeminiWrapper(mlflow.pyfunc.PythonModel):
-    def __init__(self, model_id):
-        super().__init__()
-        self.model_id = model_id
-
-    def load_context(self, context):
-        # Initialize client on load
-        self.client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-
-    def predict(self, context, model_input):
-        # Generate with the Gemini API
-        response = self.client.models.generate_content(
-            model=self.model_id,
-            contents=model_input
-        )
-        return [response.text]
-    
 # === Helper Functions ===
 
 def get_provider(provider, model_id, config=None):
@@ -68,49 +49,81 @@ def extract_python_code(text):
     matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
-def format_prompt(prompt, data, question, script, db_name=None):
-    if db_name:
-        db_content = read_file(f"{os.path.dirname(__file__)}/data/database/{db_name}_graph.md")
+def prepare_db_markdown_map(df, base_path="test_data"):
+    db_names = df["db_name"].dropna().unique()
+    db_markdown_map = {}
+
+    for db_name in db_names:
+        json_file = os.path.join(base_path, f"{db_name}_graph.json")
+        
+        # Only generate if missing
+        if not os.path.exists(json_file):
+            print(f"[INFO] Generating JSON for: {db_name}")
+            url = f"sqlite:///{os.path.join(base_path, f"{db_name}.db")}"
+            engine = create_engine(url)
+            md= generate_metadata(engine,db_name)
+            with open(json_file, "w") as f:
+                json.dump(md, f, indent=2)
+
+        if db_name not in db_markdown_map:
+            with open(json_file, "r") as f:
+                data = json.load(f)
+                db_markdown_map[db_name] = json_to_markdown(data)
+
+    return db_markdown_map
+
+def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=None):
+    db_content = ""
+    if db_name and db_markdown_map and db_name in db_markdown_map:
+        db_content = db_markdown_map[db_name]
+
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return question, prompt.format(script_content=script, database_content=db_content,
-                                   similar_queries=similar_code, recomendation=recommendation)
 
-def correct(client, question, code, prompt, db_name=None):
+    return question, prompt.format(
+        script_content=script,
+        database_content=db_content,
+        similar_queries=similar_code,
+        recomendation=recommendation
+    )
+
+def correct(client, question, code, prompt, db_name):
     extracted_code = extract_python_code(code)
-    result, error = execute_code_and_extract_result(extracted_code, {"pydough": pydough, "datetime": datetime}, db_name)
+    env= {"pydough": pydough, "datetime": datetime}
+    print(extracted_code)
+    result, error = execute_code_and_extract_result(extracted_code, env, db_name)
     if result is None:
         q = f"""Fix this Pydough code: {code}. Error: {error}. Question: {question}."""
         response = client.ask(q, prompt)
+        if isinstance(response, tuple):  # Gemini returns (text, usage)
+            return  "".join([code, response[0]])
         return "".join([code, response])
     return code
 
-def get_response(client, prompt, data, row, script, **kwargs):
+def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwargs):
     question = row["question"]
     db_name = row.get("db_name", None)
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name)
+    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
-    response = client.ask(formatted_q, formatted_prompt, **kwargs)
+    response1 = client.ask(formatted_q, formatted_prompt, **kwargs)
     duration = time.time() - start
+    if isinstance(response1, tuple):  # Gemini returns (text, usage)
+        #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
+        return response1[0], duration, response1[1]
+    #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
+    return response1, duration, None
 
-    if isinstance(response, tuple):  # Gemini returns (text, usage)
-        return response[0], duration, response[1]
-    return response, duration, None
-
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, **kwargs):
     def thread_wrapper(row):
         client = get_provider(provider, model_id)
-
-        return get_response(client, prompt, data, row, script, **kwargs)
+        return get_response(client, prompt, data, row, script, db_markdown_map=db_markdown_map, **kwargs)
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
     return results
 
-
-# === CLI Parser ===
 def parse_extra_args(extra_args):
     kwargs = {}
     if extra_args:
@@ -132,7 +145,20 @@ def parse_extra_args(extra_args):
                 key = None
     return kwargs
 
+def categorize_error(exception, result):
+    if pd.isna(exception) and result != "Match":
+        return "None/Empty Error"
+    if isinstance(exception, str):
+        if "Unrecognized term" in exception or "is not callable" in exception:
+            return "Unqualified"
+        if "only execute one statement" in exception:
+            return "SQL Syntax Error"
+        if "Unsupported DATETIME modifier" in exception:
+            return "Datetime Modifier"
+    return "Other"
+
 # === Entry Point ===
+
 def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
@@ -150,16 +176,24 @@ def main(git_hash):
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
+
         prompt = read_file(args.prompt_file)
         script = read_file(args.pydough_file)
-        with open("./queries_context.json") as f: data = json.load(f)
+
+        with open("./queries_context.json") as f:
+            data = json.load(f)
+
         df = pd.read_csv(args.questions)
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, **kwargs)
+        db_markdown_map = prepare_db_markdown_map(df)
+
+        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
 
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
+        df["error_category"] = df.apply(lambda row: categorize_error(row["exception"], row["comparison_result"]), axis=1)
+
 
         output_path = f"./results/{args.provider}/{args.model_id}"
         os.makedirs(output_path, exist_ok=True)
@@ -173,32 +207,16 @@ def main(git_hash):
 
         counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
+        error_counts = df["error_category"].value_counts(normalize=True)
         filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
-        mlflow.log_metrics(
-            percentages,
-        )
+        mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", len(tested_df))
+        for error_type, frac in error_counts.items():
+            mlflow.log_metric(f"error_{error_type}", frac)
         mlflow.log_artifact(tested_file)
-
-        percentages_dict = percentages.to_dict()
-        metrics_json = json.dumps(percentages_dict, indent=4)
-
-        metrics_path = "./metrics.json"
-        with open(metrics_path, "w") as metrics_file:
-            metrics_file.write(metrics_json)
-
-        mlflow.pyfunc.log_model(
-            artifact_path="Gemini Model",
-            python_model=GeminiWrapper(model_id=args.model_id),
-            artifacts={
-                "prompt_file": args.prompt_file,
-                "pydough_file": args.pydough_file,
-                "metrics.json": metrics_path
-            }
-        )
 
 if __name__ == "__main__":
     cwd = os.getcwd()
@@ -207,5 +225,3 @@ if __name__ == "__main__":
     if untracked_files(cwd) or modified_files(cwd):
         autocommit(cwd)
     main(get_git_commit(cwd))
-
-# %%
