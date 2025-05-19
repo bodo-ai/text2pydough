@@ -25,6 +25,7 @@ from sqlalchemy import create_engine, inspect, text
 
 class GeminiWrapper(PythonModel):
     def __init__(self, model_id):
+        import pydough
         self.model_id = model_id
 
     def load_context(self, context):
