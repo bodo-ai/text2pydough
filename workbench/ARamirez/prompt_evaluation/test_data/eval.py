@@ -120,16 +120,10 @@ def compare_df(
     """
     # drop duplicates to ensure equivalence
     try:
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
+        if df_gold.equals(df_gen):
             return True
     except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
+        pass
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
@@ -140,6 +134,7 @@ def compare_df(
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
+    
     is_equal = df_gold.values == df_gen.values
     try:
         return is_equal.all()
