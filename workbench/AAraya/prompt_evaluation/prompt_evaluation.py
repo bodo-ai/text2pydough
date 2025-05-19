@@ -209,9 +209,7 @@ def main(git_hash):
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
-        df["error_category"] = df.apply(lambda row: categorize_error(row["exception"], row["comparison_result"]), axis=1)
-
-
+        
         output_path = f"./results/{args.provider}/{args.model_id}"
         os.makedirs(output_path, exist_ok=True)
         output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
@@ -220,6 +218,7 @@ def main(git_hash):
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
         tested_file, tested_df = compare_output(test_path, output_file)
+        tested_df["error_category"] = tested_df.apply(lambda row: categorize_error(row["exception"], row["comparison_result"]), axis=1)
         total_rows = len(tested_df)
 
         counts = tested_df['comparison_result'].value_counts()
@@ -231,8 +230,9 @@ def main(git_hash):
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", len(tested_df))
+        error_counts = tested_df["error_category"].value_counts()
         for error_type, frac in error_counts.items():
-            mlflow.log_metric(f"error_{error_type}", frac)
+            mlflow.log_metric(f"errors_{error_type.replace(' ', '_')}", frac)
         mlflow.log_artifact(tested_file)
 
 if __name__ == "__main__":
