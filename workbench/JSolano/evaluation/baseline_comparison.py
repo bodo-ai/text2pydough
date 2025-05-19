@@ -40,4 +40,7 @@ df['change_reason'] = np.where((df['changed']==True) & (df['comparison_result'] 
                                'DataFrame match changed from "' + df['comparison_result'] + '" to "' + df['comparison_result_new'] + '"', '')
 
 df.to_csv('comparison_result.csv')
+
+changed_indexes = df.index[df['changed']==True].to_list()
+print (changed_indexes)
 # %%
