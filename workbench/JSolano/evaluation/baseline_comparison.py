@@ -7,8 +7,8 @@ column_names_old = ['question','sql','db_name','response','execution_time','extr
 column_names_new = ['question_new','sql_new','db_name_new','response_new','execution_time_new','extracted_python_code_new','usage_new','comparison_result_new','exception_new']
 
 #load the comparison results and transform them into pandas DataFrames
-baseline = pd.read_csv('test_execution_2025_05_14-09_32_21.csv')
-new_run = pd.read_csv('test_execution_2025_05_14-10_12_42.csv')
+baseline = pd.read_csv('test_execution_2025_05_19-08_50_18.csv')
+new_run = pd.read_csv('test_execution_2025_05_19-08_59_14.csv')
 
 baseline_array = np.array(baseline)
 new_array = np.array(new_run)
