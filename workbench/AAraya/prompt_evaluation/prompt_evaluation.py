@@ -146,15 +146,32 @@ def parse_extra_args(extra_args):
     return kwargs
 
 def categorize_error(exception, result):
-    if pd.isna(exception) and result != "Match":
-        return "None/Empty Error"
-    if isinstance(exception, str):
-        if "Unrecognized term" in exception or "is not callable" in exception:
-            return "Unqualified"
-        if "only execute one statement" in exception:
-            return "SQL Syntax Error"
-        if "Unsupported DATETIME modifier" in exception:
-            return "Datetime Modifier"
+    if pd.isna(exception):
+        return "No Exception" if result != "Match" else "No Error"
+
+    exc = str(exception)
+
+    if "Unrecognized term of graph" in exc:
+        return "Unknown Graph Term"
+    if "Unrecognized term of simple table collection" in exc:
+        return "Unknown Table Term"
+    if "Unrecognized term:" in exc:
+        return "Unknown Collection"
+    if "is not callable" in exc or "not callable" in exc:
+        return "Invalid Function"
+    if "unexpected indent" in exc:
+        return "Unexpected Indent"
+    if "unsupported operand type" in exc:
+        return "Invalid Operation"
+    if "Expected an expression, but received a collection" in exc:
+        return "Invalid Expression Use"
+    if "Unsupported DATETIME modifier" in exc:
+        return "Unsupported Datetime Modifier"
+    if "You can only execute one statement at a time" in exc:
+        return "SQLite Multi-Statement"
+    if exc.startswith("$0.") or "$0." in exc:
+        return "Malformed Name or Symbol"
+
     return "Other"
 
 # === Entry Point ===
@@ -173,7 +190,7 @@ def main(git_hash):
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
 
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri("http://127.0.0.1:5002")
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
