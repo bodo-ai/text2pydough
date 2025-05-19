@@ -136,7 +136,7 @@ class GeminiAIProvider(AIProvider):
         max_output_tokensv = 8192
         if self.model_id == "gemini-2.0-flash-001":
             max_output_tokensv = 8192
-        if self.model_id == "gemini-2.5-pro-preview-03-25":
+        if self.model_id == "gemini-2.5-pro-preview-05-06":
             max_output_tokensv = 65000
         response = self.client.models.generate_content(
             model=self.model_id,
