@@ -145,35 +145,6 @@ def parse_extra_args(extra_args):
                 key = None
     return kwargs
 
-def categorize_error(exception, result):
-    if pd.isna(exception):
-        return "No Exception" if result != "Match" else "No Error"
-
-    exc = str(exception)
-
-    if "Unrecognized term of graph" in exc:
-        return "Unknown Graph Term"
-    if "Unrecognized term of simple table collection" in exc:
-        return "Unknown Table Term"
-    if "Unrecognized term:" in exc:
-        return "Unknown Collection"
-    if "is not callable" in exc or "not callable" in exc:
-        return "Invalid Function"
-    if "unexpected indent" in exc:
-        return "Unexpected Indent"
-    if "unsupported operand type" in exc:
-        return "Invalid Operation"
-    if "Expected an expression, but received a collection" in exc:
-        return "Invalid Expression Use"
-    if "Unsupported DATETIME modifier" in exc:
-        return "Unsupported Datetime Modifier"
-    if "You can only execute one statement at a time" in exc:
-        return "SQLite Multi-Statement"
-    if exc.startswith("$0.") or "$0." in exc:
-        return "Malformed Name or Symbol"
-
-    return "Other"
-
 # === Entry Point ===
 
 def main(git_hash):
@@ -190,7 +161,7 @@ def main(git_hash):
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
 
-    mlflow.set_tracking_uri("http://127.0.0.1:5002")
+    mlflow.set_tracking_uri("http://127.0.0.1:5001")
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
@@ -209,7 +180,7 @@ def main(git_hash):
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
-        
+
         output_path = f"./results/{args.provider}/{args.model_id}"
         os.makedirs(output_path, exist_ok=True)
         output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
@@ -218,7 +189,6 @@ def main(git_hash):
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
         tested_file, tested_df = compare_output(test_path, output_file)
-        tested_df["error_category"] = tested_df.apply(lambda row: categorize_error(row["exception"], row["comparison_result"]), axis=1)
         total_rows = len(tested_df)
 
         counts = tested_df['comparison_result'].value_counts()
@@ -229,9 +199,6 @@ def main(git_hash):
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", len(tested_df))
-        error_counts = tested_df["error_category"].value_counts()
-        for error_type, frac in error_counts.items():
-            mlflow.log_metric(f"errors_{error_type.replace(' ', '_')}", frac)
         mlflow.log_artifact(tested_file)
 
 if __name__ == "__main__":
