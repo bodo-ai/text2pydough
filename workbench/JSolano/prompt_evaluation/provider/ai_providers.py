@@ -133,14 +133,19 @@ class GeminiAIProvider(AIProvider):
         self.client = genai.Client(api_key=self.api_key)
     
     def ask(self, question, prompt, **kwargs):
+        max_output_tokensv = 8192
+        if self.model_id == "gemini-2.0-flash-001":
+            max_output_tokensv = 8192
+        if self.model_id == "gemini-2.5-pro-preview-05-06":
+            max_output_tokensv = 65000
         response = self.client.models.generate_content(
             model=self.model_id,
             contents=question,
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
-                **kwargs
+                **kwargs,
+                max_output_tokens = max_output_tokensv,
             ),
-        
         )
         return response.text, response.usage_metadata
     
