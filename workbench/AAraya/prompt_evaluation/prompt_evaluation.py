@@ -223,7 +223,6 @@ def main(git_hash):
 
         counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
-        error_counts = df["error_category"].value_counts(normalize=True)
         filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
         mlflow.log_params(filtered_args)
