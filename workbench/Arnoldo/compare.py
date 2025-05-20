@@ -14,19 +14,22 @@ if dfA.shape[0] != dfB.shape[0]:
 
 
 visited = set()
-# iterate over the columns of dfA
+# iterate over the co lumns of dfA
 for col in dfA.columns:
     for colB in dfB.columns:
         # check if the column names are similar
         if colB in visited:
             continue
-        if not match(dfA[col], dfB[colB]):
+        if match(dfA[col], dfB[colB]):
+            visited.add(colB)
+        else:
             return False
-        visited.add(colB)
+            
     return False
+return true
 
 
-def match(seriesA, seriesB, threshold = 0.00001):
+def match(seriesA, seriesB, threshold = 0.00001, sorted=True):
     # check if the series are the same
     if seriesA.shape[0] != seriesB.shape[0]:
         return False
