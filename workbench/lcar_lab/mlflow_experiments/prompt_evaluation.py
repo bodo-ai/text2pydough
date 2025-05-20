@@ -99,7 +99,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([question]), prompt.format(
+    return "".join([script, f"\nQuestion: {question}", "\nDatabase schema:\n", str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
