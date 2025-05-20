@@ -9,9 +9,6 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/tpch.db",  check_same_thread=False)
-
 
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -123,16 +120,10 @@ def compare_df(
     """
     # drop duplicates to ensure equivalence
     try:
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
+        if df_gold.equals(df_gen):
             return True
     except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
+        pass
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
@@ -143,6 +134,7 @@ def compare_df(
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
+    
     is_equal = df_gold.values == df_gen.values
     try:
         return is_equal.all()
@@ -152,21 +144,23 @@ def compare_df(
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
-def execute_code_and_extract_result(extracted_code, local_env):
+def execute_code_and_extract_result(extracted_code, local_env, db_name):
     """Executes the Python code and returns the result or raises an exception."""
     try:
+        pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/{db_name}_graph.json", db_name)
+        pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/{db_name}.db",  check_same_thread=False)
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
-        print(last_variable)
         result_df = convert_to_df(last_variable)
+        
         return result_df, None  # Return result and no exception
     except Exception as e:
-        return None, str(e)  # Return None as result and exception message
+        return None, e  # Return None as result and exception message
 
 def query_sqlite_db(
     query: str,
-    db_creds: str = None,
+    db_name: str = None,
     decimal_points: int = None,
 ) -> pd.DataFrame:
     """
@@ -183,7 +177,7 @@ def query_sqlite_db(
     cur = None
     try:
       
-        conn = sqlite3.connect(db_creds)
+        conn = sqlite3.connect(f"{os.path.dirname(__file__)}/{db_name}.db")
         cur = conn.cursor()
         cur.execute(query)
         results = cur.fetchall()
@@ -204,28 +198,30 @@ def query_sqlite_db(
             conn.close()
         return None, str(e)
     
-def process_row(row, db_path):
+def process_row(row):
     extracted_code = row.get('extracted_python_code')
     question= row.get('question')
     
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
-        
-        result, exception = execute_code_and_extract_result(extracted_code, local_env)
+        db_name= row["db_name"]
+        print(question, db_name)
+
+        result, exception = execute_code_and_extract_result(extracted_code, local_env, db_name)
         
         if result is not None:
-            extracted_sql, db_exception = query_sqlite_db(row["sql"], db_path)
+            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_name )
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
-            comparison_result = compare_df(result, extracted_sql,query_category="a", question="a")
+            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
             return 'Query Error', exception
     return 'Unknown', None  
 
-def compare_output(folder_path, csv_file_path, db_path):
+def compare_output(folder_path, csv_file_path):
     """
     Extracts and returns the value of a specific variable from Python code in a CSV file.
     Returns:
@@ -235,7 +231,7 @@ def compare_output(folder_path, csv_file_path, db_path):
     df = pd.read_csv(csv_file_path)
 
     def process_and_return(row):
-        return process_row(row, db_path)
+        return process_row(row)
 
     with ThreadPoolExecutor() as executor:
         results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
@@ -249,7 +245,3 @@ def compare_output(folder_path, csv_file_path, db_path):
     df.to_csv(output_file, index=False)
 
     return output_file, df
-
-# %%
-#compare_output("../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/test", "../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/responses_2025_03_11-09_47_42.csv","./tpch.db")
-# %%
