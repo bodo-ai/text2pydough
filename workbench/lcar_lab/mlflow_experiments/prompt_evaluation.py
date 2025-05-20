@@ -99,7 +99,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([script, f"\nQuestion: {question}", "\nDatabase schema:\n", str(db_content)]), prompt.format(
+    return "".join([f"Guide of pydough dsl methods: \n\n{script}\n\n", f"\n\n\nQuestion: {question}", "\nDatabase schema:\n", str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -169,6 +169,11 @@ def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
+    parser.add_argument("--experiment_name", type=str)
+    parser.add_argument('--db-base-path', type=str, required=True,
+                      help='Path to the SQLite database file')
+    parser.add_argument('--metadata-base-path', type=str, required=True,
+                      help='Path to the metadata graph JSON file')
     parser.add_argument("--pydough_file", type=str)
     parser.add_argument("--prompt_file", type=str)
     parser.add_argument("--questions", type=str)
@@ -208,7 +213,7 @@ def main(git_hash):
 
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
-        tested_file, tested_df = compare_output(test_path, output_file)
+        tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
         total_rows = len(tested_df)
 
         counts = tested_df['comparison_result'].value_counts()
