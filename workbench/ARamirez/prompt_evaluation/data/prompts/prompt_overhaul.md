@@ -48,7 +48,6 @@ To generate the PyDough code snippet, follow these steps:
    - Adheres to the syntax and structure outlined in the PyDough Reference File.
    - Compares values using the equality operator (==) when necessary.
    - Ensures variable names are different from the field names in the Database Structure Reference File.
-   Here’s the corrected version:
    - Ensure you start with the appropriate collection.
    - Returns only the exact data requested, without adding additional fields or information.
    - If you need to use the high-level top collection, use the appropriate name as defined in the Database Structure Reference File.
@@ -59,8 +58,6 @@ To generate the PyDough code snippet, follow these steps:
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
-
-6. The examples shown are not from the current database schema; just treat them as examples and make sure to use the right high top level collection.
 
 {recomendation}
 

@@ -120,16 +120,10 @@ def compare_df(
     """
     # drop duplicates to ensure equivalence
     try:
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
+        if df_gold.equals(df_gen):
             return True
     except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
+        pass
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
@@ -140,6 +134,7 @@ def compare_df(
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
+    
     is_equal = df_gold.values == df_gen.values
     try:
         return is_equal.all()
@@ -152,16 +147,16 @@ def convert_to_df(last_variable):
 def execute_code_and_extract_result(extracted_code, local_env, db_name):
     """Executes the Python code and returns the result or raises an exception."""
     try:
-        print(db_name)
         pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/{db_name}_graph.json", db_name)
         pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/{db_name}.db",  check_same_thread=False)
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
         result_df = convert_to_df(last_variable)
+        
         return result_df, None  # Return result and no exception
     except Exception as e:
-        return None, str(e)  # Return None as result and exception message
+        return None, e  # Return None as result and exception message
 
 def query_sqlite_db(
     query: str,

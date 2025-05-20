@@ -6,181 +6,143 @@ import os
 import re
 import textwrap
 import time
+from typing import List
 import pandas as pd
 from datetime import datetime
 import multiprocessing
 import mlflow
-
+import mlflow.pyfunc
+from mlflow.pyfunc import PythonModel
+from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from test_data.eval import compare_output, execute_code_and_extract_result
 from claude import ClaudeModel, DeepseekModel, GeminiModel
 import aisuite as ai
+from provider.ai_providers import *
+from dynamic_prompt.generate_pydough_metadata import generate_metadata
+from dynamic_prompt.mdgen import json_to_markdown
+from sqlalchemy import create_engine, inspect, text
 
-from azure.ai.inference import ChatCompletionsClient
-from azure.ai.inference.models import UserMessage, SystemMessage
-from azure.core.credentials import AzureKeyCredential
-from abc import ABC, abstractmethod
-
-# === Abstract Class for AI Providers ===
-class AIProvider(ABC):
-    @abstractmethod
-    def ask(self, question, prompt, **kwargs):
-        pass
-
-# === Azure Provider ===
-class AzureAIProvider(AIProvider):
+class GeminiWrapper(PythonModel):
     def __init__(self, model_id):
-        self.client = self.setup_azure_client()
         self.model_id = model_id
 
-    def setup_azure_client(self):
-        endpoint = os.getenv("AZURE_BASE_URL")
-        key = os.getenv("AZURE_API_KEY")
-        if not endpoint or not key:
-            raise ValueError("Azure environment variables are not set.")
-        return ChatCompletionsClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+    def load_context(self, context):
+        self.client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
-    def ask(self, question, prompt, **kwargs):
-        messages = [SystemMessage(prompt), UserMessage(question)]
-        try:
-            completion = self.client.complete(messages=messages, max_tokens=kwargs.get("max_tokens", 20000),
-                                              model=self.model_id, stream=True)
-            return "".join([chunk.choices[0]["delta"]["content"] for chunk in completion if chunk.choices])
-        except Exception as e:
-            print(f"Azure error: {e}")
-            return None
-
-# === Claude, Deepseek, Gemini, AI Suite Providers ===
-class ClaudeAIProvider(AIProvider):
-    def __init__(self, provider, model_id):
-        self.client = ClaudeModel()
-        self.provider = provider
-        self.model_id = model_id
-
-    def ask(self, question, prompt, **kwargs):
-        return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider, **kwargs)
-
-class DeepSeekAIProvider(AIProvider):
-    def __init__(self, provider, model_id):
-        self.client = DeepseekModel()
-        self.provider = provider
-        self.model_id = model_id
-
-    def ask(self, question, prompt, **kwargs):
-        return self.client.ask_claude_with_stream(question, prompt, self.model_id, self.provider, **kwargs)
-
-class GeminiAIProvider(AIProvider):
-    def __init__(self, provider, model_id):
-        self.client = GeminiModel()
-        self.provider = provider
-        self.model_id = model_id
-
-    def ask(self, question, prompt, **kwargs):
-        response = self.client.generate_content(question, prompt, self.model_id, self.provider, **kwargs)
-        return response.text, response.usage_metadata
-
-class OtherAIProvider(AIProvider):
-    def __init__(self, provider, model_id, config=None):
-        self.client = ai.Client(config) if config else ai.Client()
-        self.provider = provider
-        self.model_id = model_id
-    
-    def ask(self, question, prompt, **kwargs):
-        messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
-        try:
-            response = self.client.chat.completions.create(
-                model=f"{self.provider}:{self.model_id}",
-                messages=messages,
-                **kwargs
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"AI Suite error: {e}")
-            return None
+    def predict(self, context, model_input: List[str]) -> List[str]:
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=model_input
+        )
+        return [response.text]
 
 # === Helper Functions ===
+
+def get_provider(provider, model_id, config=None):
+    if provider == "azure":
+        return AzureAIProvider(model_id)
+    elif provider == "aws-thinking":
+        return ClaudeAIProvider(model_id)
+    elif provider == "aws-deepseek":
+        return DeepSeekAIProvider(model_id)
+    elif provider == "google":
+        return GeminiAIProvider(model_id)
+    elif provider == "mistral":
+        return MistralAIProvider(model_id)
+    else:
+        return OtherAIProvider(provider, model_id, config)
+    
 def read_file(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"File not found: {path}")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        raise IOError(f"Failed to read file {path}: {e}")
 
 def extract_python_code(text):
     if not isinstance(text, str): return ""
-    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
+    matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
-def format_prompt(prompt, data, question, db_content, script, db_name=None):
-    if db_name:
-        db_content = read_file(f"{os.path.dirname(__file__)}/data/database/{db_name}_graph.md")
+def prepare_db_markdown_map(df, base_path="test_data"):
+    db_names = df["db_name"].dropna().unique()
+    db_markdown_map = {}
+
+    for db_name in db_names:
+        json_file = os.path.join(base_path, f"{db_name}_graph.json")
+        
+        # Only generate if missing
+        if not os.path.exists(json_file):
+            print(f"[INFO] Generating JSON for: {db_name}")
+            url = f"sqlite:///{os.path.join(base_path, f"{db_name}.db")}"
+            engine = create_engine(url)
+            md= generate_metadata(engine,db_name)
+            with open(json_file, "w") as f:
+                json.dump(md, f, indent=2)
+
+        if db_name not in db_markdown_map:
+            with open(json_file, "r") as f:
+                data = json.load(f)
+                db_markdown_map[db_name] = data
+
+    return db_markdown_map
+
+def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=None):
+    db_content = ""
+    if db_name and db_markdown_map and db_name in db_markdown_map:
+        db_content = db_markdown_map[db_name]
+
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return question, prompt.format(script_content=script, database_content=db_content,
-                                   similar_queries=similar_code, recomendation=recommendation)
+    print(json_to_markdown(db_content))
+    return "".join([question]), prompt.format(
+        script_content=script,
+        database_content=json_to_markdown(db_content),
+        similar_queries=similar_code,
+        recomendation=recommendation
+    )
 
-def correct(client, question, code, prompt, db_name=None):
+def correct(client, question, code, prompt, db_name):
     extracted_code = extract_python_code(code)
-    result, error = execute_code_and_extract_result(extracted_code, {"pydough": pydough, "datetime": datetime}, db_name)
+    env= {"pydough": pydough, "datetime": datetime}
+    print(extracted_code)
+    result, error = execute_code_and_extract_result(extracted_code, env, db_name)
     if result is None:
         q = f"""Fix this Pydough code: {code}. Error: {error}. Question: {question}."""
         response = client.ask(q, prompt)
+        if isinstance(response, tuple):  # Gemini returns (text, usage)
+            return  "".join([code, response[0]])
         return "".join([code, response])
     return code
 
-# === Model Response Helpers ===
-def get_azure_response(client, prompt, data, question, db, script, **kwargs):
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, db, script)
-    response = client.ask(formatted_q, formatted_prompt, **kwargs)
-    return correct(client, formatted_q, response, formatted_prompt), None
-
-def get_claude_response(client, prompt, data, question, db, script, **kwargs):
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, db, script)
+def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwargs):
+    question = row["question"]
+    db_name = row.get("db_name", None)
+    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
-    response = client.ask(formatted_q, formatted_prompt, **kwargs)
-    return correct(client, formatted_q, response, formatted_prompt), time.time() - start
+    response1 = client.ask(formatted_q,formatted_prompt, **kwargs)
+    duration = time.time() - start
+    if isinstance(response1, tuple):  # Gemini returns (text, usage)
+        #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
+        return response1[0], duration, response1[1]
+    #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
+    return response1, duration, None
 
-def get_gemini_response(client, prompt, data, df, db, script, **kwargs):
-    question = df["question"]
-    db_name = df["db_name"]
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, db, script, db_name)
-    start = time.time()
-    response, usage = client.ask(formatted_q, formatted_prompt, **kwargs)
-    return response, time.time() - start, usage
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, **kwargs):
+    def thread_wrapper(row):
+        client = get_provider(provider, model_id)
+        return get_response(client, prompt, data, row, script, db_markdown_map=db_markdown_map, **kwargs)
 
-def get_other_provider_response(client, prompt, data, question, db, script, **kwargs):
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, db, script)
-    start = time.time()
-    response = client.ask(formatted_q, formatted_prompt, **kwargs)
-    return correct(client, formatted_q, response, formatted_prompt), time.time() - start
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
-# === Processor Wrapper ===
-def process_question_wrapper(args):
-    provider, model_id, prompt, data, q, db, script, kwargs = args
-    client = {
-        "azure": AzureAIProvider(model_id),
-        "aws-thinking": ClaudeAIProvider(provider, model_id),
-        "aws-deepseek": DeepSeekAIProvider(provider, model_id),
-        "google": GeminiAIProvider(provider, model_id)
-    }.get(provider, OtherAIProvider(provider, model_id))
+    return results
 
-    func_map = {
-        "azure": get_azure_response,
-        "aws-thinking": get_claude_response,
-        "aws-deepseek": get_claude_response,
-        "google": get_gemini_response
-    }
-
-    handler = func_map.get(provider, get_other_provider_response)
-    return handler(client, prompt, data, q, db, script, **kwargs)
-
-def process_questions(data, provider, model_id, prompt, questions_df, db, script, threads, **kwargs):
-    with multiprocessing.Pool(threads) as pool:
-        return pool.map(process_question_wrapper, [
-            (provider, model_id, prompt, data, row, db, script, kwargs)
-            for _, row in questions_df.iterrows()
-        ])
-
-# === CLI Parser ===
 def parse_extra_args(extra_args):
     kwargs = {}
     if extra_args:
@@ -203,12 +165,12 @@ def parse_extra_args(extra_args):
     return kwargs
 
 # === Entry Point ===
+
 def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
     parser.add_argument("--pydough_file", type=str)
-    parser.add_argument("--database_structure", type=str)
     parser.add_argument("--prompt_file", type=str)
     parser.add_argument("--questions", type=str)
     parser.add_argument("--provider", type=str)
@@ -217,16 +179,23 @@ def main(git_hash):
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
+    MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
+    MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"] 
 
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
+
         prompt = read_file(args.prompt_file)
         script = read_file(args.pydough_file)
-        db_content = read_file(args.database_structure)
-        with open("./queries_context.json") as f: data = json.load(f)
+
+        with open("./queries_context.json") as f:
+            data = json.load(f)
+
         df = pd.read_csv(args.questions)
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, db_content, script, args.num_threads, **kwargs)
+        db_markdown_map = prepare_db_markdown_map(df)
+
+        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
 
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
@@ -243,17 +212,32 @@ def main(git_hash):
         tested_file, tested_df = compare_output(test_path, output_file)
         total_rows = len(tested_df)
 
-        counts = tested_df['comparison_result'].dropna().value_counts()
+        counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
         filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
-        mlflow.log_metrics(
-            percentages,
-        )
+        mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
+
+        percentages_dict = percentages.to_dict()
+        metrics_json = json.dumps(percentages_dict, indent=4)
+
+        metrics_path = "./metrics.json"
+        with open(metrics_path, "w") as metrics_file:
+            metrics_file.write(metrics_json)
+
+        mlflow.pyfunc.log_model(
+            artifact_path="Gemini Model",
+            python_model=GeminiWrapper(model_id=args.model_id),
+            artifacts={
+                "prompt_file": args.prompt_file,
+                "pydough_file": args.pydough_file,
+                "metrics.json": metrics_path
+            }
+        )
 
 if __name__ == "__main__":
     cwd = os.getcwd()
@@ -262,5 +246,3 @@ if __name__ == "__main__":
     if untracked_files(cwd) or modified_files(cwd):
         autocommit(cwd)
     main(get_git_commit(cwd))
-
-# %%

@@ -1,0 +1,600 @@
+question,sql,db_name,response,execution_time,extracted_python_code,usage,comparison_result,exception
+"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;",Broker,"```python
+# Filter customers who have made at least 5 transactions
+customers_with_min_transactions = Customers.WHERE(COUNT(transactions_made) >= 5)
+
+# Calculate the success rate for these customers
+# Assumption: A transaction is considered successful if its status is 'Completed'.
+customer_success_rates = customers_with_min_transactions.CALCULATE(
+    customer_name=name,
+    # Calculate the success rate as (count of completed transactions) / (total transactions)
+    # Multiply by 1.0 to ensure floating-point division
+    success_rate=(
+        1.0 * COUNT(transactions_made.WHERE(status == 'Completed')) / COUNT(transactions_made)
+    )
+)
+
+# Order the results by success rate in ascending order (lowest first)
+ordered_success_rates = customer_success_rates.ORDER_BY(success_rate.ASC())
+
+# Assign the final result to a variable
+result = ordered_success_rates
+```
+
+**Explanation:**
+
+1.  **`Customers.WHERE(COUNT(transactions_made) >= 5)`**: This line starts with the `Customers` collection and filters it to include only those customers who have a total transaction count (`COUNT(transactions_made)`) of 5 or more.
+2.  **`.CALCULATE(...)`**: For the filtered customers, this step calculates the required output fields:
+    *   `customer_name=name`: Selects the customer's name.
+    *   `success_rate=...`: Calculates the success rate. It does this by:
+        *   Counting the number of transactions associated with the customer where the `status` field is exactly 'Completed' (`COUNT(transactions_made.WHERE(status == 'Completed'))`). *Note: This assumes 'Completed' signifies a successful transaction.*
+        *   Counting the total number of transactions for the customer (`COUNT(transactions_made)`).
+        *   Dividing the count of successful transactions by the total count. Multiplying by `1.0` ensures the result is a floating-point number representing the rate.
+3.  **`.ORDER_BY(success_rate.ASC())`**: This sorts the resulting collection of customers and their success rates based on the calculated `success_rate` in ascending order (from lowest success rate to highest).
+4.  **`result = ordered_success_rates`**: The final ordered result is assigned to the variable `result`.",20.797606706619263,"# Filter customers who have made at least 5 transactions
+customers_with_min_transactions = Customers.WHERE(COUNT(transactions_made) >= 5)
+
+# Calculate the success rate for these customers
+# Assumption: A transaction is considered successful if its status is 'Completed'.
+customer_success_rates = customers_with_min_transactions.CALCULATE(
+    customer_name=name,
+    # Calculate the success rate as (count of completed transactions) / (total transactions)
+    # Multiply by 1.0 to ensure floating-point division
+    success_rate=(
+        1.0 * COUNT(transactions_made.WHERE(status == 'Completed')) / COUNT(transactions_made)
+    )
+)
+
+# Order the results by success rate in ascending order (lowest first)
+ordered_success_rates = customer_success_rates.ORDER_BY(success_rate.ASC())
+
+# Assign the final result to a variable
+result = ordered_success_rates","cache_tokens_details=None cached_content_token_count=None candidates_token_count=530 candidates_tokens_details=None prompt_token_count=18414 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18414)] thoughts_token_count=1370 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20314 traffic_type=None",No Match,
+"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,Broker,"```python
+# Define the list of FAANG ticker symbols for clarity and reusability
+faang_tickers = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+
+# Filter customers based on two conditions:
+# 1. Their email address ends with "".com"" (using ENDSWITH).
+# 2. They have made at least one transaction (using HAS) where the associated ticker's symbol is in the faang_tickers list (using ISIN).
+filtered_customers = Customers.WHERE(
+    ENDSWITH(email, "".com"") &
+    HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_tickers))) == 1
+)
+
+# Count the number of distinct customers that satisfy the conditions.
+# We use Broker.CALCULATE to return a single row with the final count.
+result = Broker.CALCULATE(
+    distinct_faang_buyers_count = COUNT(filtered_customers)
+)
+```
+
+**Explanation:**
+
+1.  **`faang_tickers = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')`**: This line defines a tuple containing the ticker symbols for the FAANG companies. This makes the query easier to read and maintain.
+2.  **`filtered_customers = Customers.WHERE(...)`**: This starts by accessing the `Customers` collection and applies filters using the `WHERE` clause.
+3.  **`ENDSWITH(email, "".com"")`**: This condition filters customers whose `email` field ends with the string "".com"".
+4.  **`HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_tickers))) == 1`**: This condition checks if a customer has at least one (`== 1`) transaction (`transactions_made`) that meets a sub-condition.
+5.  **`transactions_made.WHERE(ISIN(ticker.symbol, faang_tickers))`**: This sub-condition filters the customer's transactions, keeping only those where the `symbol` of the associated `ticker` is present (`ISIN`) in the `faang_tickers` list.
+6.  **`&`**: The logical AND operator combines the email filter and the transaction filter, ensuring customers meet *both* criteria.
+7.  **`result = Broker.CALCULATE(distinct_faang_buyers_count = COUNT(filtered_customers))`**: This takes the `filtered_customers` collection (which contains only the unique customers meeting the criteria) and calculates the total count using `COUNT`. The result is assigned to a field named `distinct_faang_buyers_count` within a `Broker.CALCULATE` call, producing a final result with a single row and column containing the count.",19.53992509841919,"# Define the list of FAANG ticker symbols for clarity and reusability
+faang_tickers = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+
+# Filter customers based on two conditions:
+# 1. Their email address ends with "".com"" (using ENDSWITH).
+# 2. They have made at least one transaction (using HAS) where the associated ticker's symbol is in the faang_tickers list (using ISIN).
+filtered_customers = Customers.WHERE(
+    ENDSWITH(email, "".com"") &
+    HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_tickers))) == 1
+)
+
+# Count the number of distinct customers that satisfy the conditions.
+# We use Broker.CALCULATE to return a single row with the final count.
+result = Broker.CALCULATE(
+    distinct_faang_buyers_count = COUNT(filtered_customers)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=603 candidates_tokens_details=None prompt_token_count=18445 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18445)] thoughts_token_count=1282 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20330 traffic_type=None",Match,
+"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;",Broker,"```python
+# Filter customers who joined on or after January 1, 2023, and are active
+filtered_customers = Customers.WHERE(
+    (join_date >= '2023-01-01') & (status == 'Active')
+)
+
+# Partition the filtered customers by country and count them
+tac_by_country = filtered_customers.PARTITION(
+    name=""country_groups"", by=(country)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers) # Count the active customers (TAC) within each country group
+)
+```
+
+**Explanation:**
+
+1.  **`filtered_customers = Customers.WHERE(...)`**: This line starts with the `Customers` collection and filters it based on two conditions combined with `&` (AND):
+    *   `join_date >= '2023-01-01'`: Selects customers whose `join_date` is on or after January 1, 2023.
+    *   `status == 'Active'`: Selects customers whose `status` is 'Active'.
+    *   The result `filtered_customers` contains only the Total Active Customers (TAC) as defined in the request.
+2.  **`tac_by_country = filtered_customers.PARTITION(...)`**: This takes the `filtered_customers` and partitions them into groups based on their `country`. The `name=""country_groups""` assigns a temporary name to these groups.
+3.  **`.CALCULATE(country=country, tac_count=COUNT(Customers))`**: For each group created by the `PARTITION`:
+    *   `country=country`: Selects the `country` (which is the partition key).
+    *   `tac_count=COUNT(Customers)`: Counts the number of `Customers` records within that specific country group. Since we started with already filtered customers, this count represents the number of TAC for that country.
+4.  The final result `tac_by_country` contains one record per country, listing the country and the corresponding count of Total Active Customers (TAC) who joined on or after January 1, 2023.",17.613490104675293,"# Filter customers who joined on or after January 1, 2023, and are active
+filtered_customers = Customers.WHERE(
+    (join_date >= '2023-01-01') & (status == 'Active')
+)
+
+# Partition the filtered customers by country and count them
+tac_by_country = filtered_customers.PARTITION(
+    name=""country_groups"", by=(country)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers) # Count the active customers (TAC) within each country group
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=480 candidates_tokens_details=None prompt_token_count=18433 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18433)] thoughts_token_count=1218 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20131 traffic_type=None",Match,
+How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday.,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Broker,"```python
+# Define the start of the current week and the start of the week 8 weeks prior
+current_week_start_date = DATETIME('now', 'start of week')
+eight_weeks_ago_start_date = DATETIME('now', 'start of week', '-8 weeks')
+
+# Filter transactions to include only stocks within the specified date range
+# Calculate the start date of the week and the day name for each transaction
+transactions_in_period = Transactions.WHERE(
+    (ticker.ticker_type == 'stock') &  # Filter for stock transactions
+    (DATETIME(date_time, 'start of week') >= eight_weeks_ago_start_date) &  # Start date is 8 weeks ago or later
+    (DATETIME(date_time, 'start of week') < current_week_start_date)  # End date is before the current week starts
+).CALCULATE(
+    week_start = DATETIME(date_time, 'start of week'),
+    day_name = DAYNAME(date_time)
+)
+
+# Partition the filtered transactions by the start date of the week
+# Calculate the total transactions and weekend transactions for each week
+weekly_transaction_summary = transactions_in_period.PARTITION(
+    name=""weekly_groups"", by=week_start
+).CALCULATE(
+    week_starting = week_start,
+    total_stock_transactions = COUNT(transactions_in_period),
+    # Count transactions where the day name is Saturday or Sunday
+    weekend_stock_transactions = COUNT(transactions_in_period.WHERE(ISIN(day_name, (""Saturday"", ""Sunday""))))
+).ORDER_BY(week_starting.ASC()) # Order by week start date ascending
+
+result = weekly_transaction_summary
+```
+
+**Explanation:**
+
+1.  **Define Date Boundaries:** We first establish the date range using `DATETIME`. `current_week_start_date` marks the beginning of the current week, and `eight_weeks_ago_start_date` marks the beginning of the week 8 weeks prior to the current week's start.
+2.  **Filter Transactions:** We start with the `Transactions` collection and apply filters:
+    *   `ticker.ticker_type == 'stock'`: Ensures we only consider transactions related to stocks by checking the `ticker_type` of the associated `ticker`.
+    *   `DATETIME(date_time, 'start of week') >= eight_weeks_ago_start_date`: Includes transactions from the week starting 8 weeks ago onwards.
+    *   `DATETIME(date_time, 'start of week') < current_week_start_date`: Excludes transactions from the current week.
+3.  **Calculate Week Info:** Within the filtered set (`transactions_in_period`), we use `CALCULATE` to determine:
+    *   `week_start`: The starting date of the week for each transaction using `DATETIME(date_time, 'start of week')`.
+    *   `day_name`: The name of the day (e.g., ""Saturday"") for each transaction using `DAYNAME(date_time)`.
+4.  **Partition by Week:** We use `PARTITION` to group the `transactions_in_period` data by the calculated `week_start` date. Each group (`weekly_groups`) represents a unique week within our 8-week timeframe.
+5.  **Aggregate Weekly Counts:** Inside the `CALCULATE` following the `PARTITION`, we compute the required counts for each week:
+    *   `week_starting`: Selects the `week_start` date for identification.
+    *   `total_stock_transactions`: Counts all transactions within that specific week's group using `COUNT(transactions_in_period)`.
+    *   `weekend_stock_transactions`: Counts only the transactions within that week's group where the `day_name` is either ""Saturday"" or ""Sunday"" using `COUNT(transactions_in_period.WHERE(ISIN(day_name, (""Saturday"", ""Sunday""))))`.
+6.  **Order Results:** The `ORDER_BY(week_starting.ASC())` clause sorts the final results chronologically by the week's starting date.
+7.  **Assign Result:** The final result set is assigned to the `result` variable.",38.36280655860901,"# Define the start of the current week and the start of the week 8 weeks prior
+current_week_start_date = DATETIME('now', 'start of week')
+eight_weeks_ago_start_date = DATETIME('now', 'start of week', '-8 weeks')
+
+# Filter transactions to include only stocks within the specified date range
+# Calculate the start date of the week and the day name for each transaction
+transactions_in_period = Transactions.WHERE(
+    (ticker.ticker_type == 'stock') &  # Filter for stock transactions
+    (DATETIME(date_time, 'start of week') >= eight_weeks_ago_start_date) &  # Start date is 8 weeks ago or later
+    (DATETIME(date_time, 'start of week') < current_week_start_date)  # End date is before the current week starts
+).CALCULATE(
+    week_start = DATETIME(date_time, 'start of week'),
+    day_name = DAYNAME(date_time)
+)
+
+# Partition the filtered transactions by the start date of the week
+# Calculate the total transactions and weekend transactions for each week
+weekly_transaction_summary = transactions_in_period.PARTITION(
+    name=""weekly_groups"", by=week_start
+).CALCULATE(
+    week_starting = week_start,
+    total_stock_transactions = COUNT(transactions_in_period),
+    # Count transactions where the day name is Saturday or Sunday
+    weekend_stock_transactions = COUNT(transactions_in_period.WHERE(ISIN(day_name, (""Saturday"", ""Sunday""))))
+).ORDER_BY(week_starting.ASC()) # Order by week start date ascending
+
+result = weekly_transaction_summary","cache_tokens_details=None cached_content_token_count=None candidates_token_count=955 candidates_tokens_details=None prompt_token_count=18416 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18416)] thoughts_token_count=2747 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22118 traffic_type=None",Match,
+How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount.,"SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');",Broker,"```python
+# Define the start of the current week and the start of the previous week
+date_boundaries = Broker.CALCULATE(
+    start_of_current_week=DATETIME('now', 'start of week'),
+    start_of_last_week=DATETIME('now', 'start of week', '-7 days')
+)
+
+# Filter transactions made by customers from the USA within the calculated last week's date range
+last_week_usa_transactions = date_boundaries.Transactions.WHERE(
+    (customer.country == ""USA"") &
+    (date_time >= start_of_last_week) &
+    (date_time < start_of_current_week)
+)
+
+# Calculate the total number of these transactions and their total amount
+result = date_boundaries.CALCULATE(
+    num_transactions=COUNT(last_week_usa_transactions),
+    total_transaction_amount=SUM(last_week_usa_transactions.amount)
+)
+```
+
+**Explanation:**
+
+1.  **`date_boundaries = Broker.CALCULATE(...)`**: We start at the top-level `Broker` collection to define two date boundaries using the `DATETIME` function:
+    *   `start_of_current_week`: Calculates the timestamp for the beginning of the current week (e.g., last Sunday or Monday at 00:00:00, depending on system configuration).
+    *   `start_of_last_week`: Calculates the timestamp for the beginning of the *previous* week by subtracting 7 days from the start of the current week.
+2.  **`last_week_usa_transactions = date_boundaries.Transactions.WHERE(...)`**: We access the `Transactions` collection from the context where the date boundaries are defined. We then apply a `WHERE` filter to select transactions that meet two conditions:
+    *   `customer.country == ""USA""`: Filters for transactions where the associated customer's country is ""USA"".
+    *   `(date_time >= start_of_last_week) & (date_time < start_of_current_week)`: Filters for transactions whose `date_time` falls within the calculated range for last week (from the start of last week up to, but not including, the start of the current week).
+3.  **`result = date_boundaries.CALCULATE(...)`**: Finally, we perform another `CALCULATE` at the `Broker` level to aggregate the results from the filtered `last_week_usa_transactions`:
+    *   `num_transactions=COUNT(last_week_usa_transactions)`: Counts the total number of transactions in the filtered set.
+    *   `total_transaction_amount=SUM(last_week_usa_transactions.amount)`: Calculates the sum of the `amount` field for all transactions in the filtered set.
+
+This query returns a single row containing the total count and total amount of transactions made by US customers during the previous week.",22.40437173843384,"# Define the start of the current week and the start of the previous week
+date_boundaries = Broker.CALCULATE(
+    start_of_current_week=DATETIME('now', 'start of week'),
+    start_of_last_week=DATETIME('now', 'start of week', '-7 days')
+)
+
+# Filter transactions made by customers from the USA within the calculated last week's date range
+last_week_usa_transactions = date_boundaries.Transactions.WHERE(
+    (customer.country == ""USA"") &
+    (date_time >= start_of_last_week) &
+    (date_time < start_of_current_week)
+)
+
+# Calculate the total number of these transactions and their total amount
+result = date_boundaries.CALCULATE(
+    num_transactions=COUNT(last_week_usa_transactions),
+    total_transaction_amount=SUM(last_week_usa_transactions.amount)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=652 candidates_tokens_details=None prompt_token_count=18410 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18410)] thoughts_token_count=1521 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20583 traffic_type=None",Query Error,Unrecognized term of graph 'Broker': 'Broker'
+"Return the customer name, number of transactions, total transaction amount, and CR for all customersCR = customer rank by total transaction amount, with rank 1 being the customer with the highest total transaction amount","WITH cust_tx_counts AS (SELECT sbTxCustId, COUNT(*) AS num_tx, SUM(sbTxAmount) AS total_amount FROM sbTransaction GROUP BY sbTxCustId) SELECT c.sbCustName, ct.num_tx, ct.total_amount, RANK() OVER (ORDER BY CASE WHEN ct.total_amount IS NULL THEN 1 ELSE 0 END DESC, ct.total_amount DESC) AS cust_rank FROM cust_tx_counts AS ct JOIN sbCustomer AS c ON ct.sbTxCustId = c.sbCustId;",Broker,"```python
+# Step 1: Calculate the number of transactions and total transaction amount for each customer.
+customer_aggregates = Customers.CALCULATE(
+    customer_name=name,
+    num_transactions=COUNT(transactions_made),
+    total_trans_amount=SUM(transactions_made.amount)
+)
+
+# Step 2: Calculate the rank (CR) for each customer based on their total transaction amount.
+# Rank 1 is assigned to the customer with the highest total transaction amount (descending order).
+# Keep the previously calculated fields.
+result = customer_aggregates.CALCULATE(
+    customer_name=customer_name,
+    num_transactions=num_transactions,
+    total_trans_amount=total_trans_amount,
+    CR=RANKING(by=total_trans_amount.DESC())
+)
+```
+
+**Explanation:**
+
+1.  **`customer_aggregates = Customers.CALCULATE(...)`**: This line starts with the `Customers` collection. It calculates three new fields for each customer:
+    *   `customer_name`: Renames the `name` field.
+    *   `num_transactions`: Counts the number of associated transactions using `COUNT(transactions_made)`.
+    *   `total_trans_amount`: Sums the `amount` of all associated transactions using `SUM(transactions_made.amount)`.
+2.  **`result = customer_aggregates.CALCULATE(...)`**: This line takes the results from the previous step (`customer_aggregates`). It performs another `CALCULATE` operation to:
+    *   Keep the `customer_name`, `num_transactions`, and `total_trans_amount` fields.
+    *   Calculate `CR` (Customer Rank) using the `RANKING` window function. `RANKING(by=total_trans_amount.DESC())` ranks the customers based on the `total_trans_amount` calculated in the previous step, in descending order (highest amount gets rank 1). Since no `per` argument is specified, the ranking is performed across all customers globally.",21.399255514144897,"# Step 1: Calculate the number of transactions and total transaction amount for each customer.
+customer_aggregates = Customers.CALCULATE(
+    customer_name=name,
+    num_transactions=COUNT(transactions_made),
+    total_trans_amount=SUM(transactions_made.amount)
+)
+
+# Step 2: Calculate the rank (CR) for each customer based on their total transaction amount.
+# Rank 1 is assigned to the customer with the highest total transaction amount (descending order).
+# Keep the previously calculated fields.
+result = customer_aggregates.CALCULATE(
+    customer_name=customer_name,
+    num_transactions=num_transactions,
+    total_trans_amount=total_trans_amount,
+    CR=RANKING(by=total_trans_amount.DESC())
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=459 candidates_tokens_details=None prompt_token_count=18421 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18421)] thoughts_token_count=1589 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20469 traffic_type=None",No Match,
+What are the 2 most frequently bought stock ticker symbols in the past 10 days? Return the ticker symbol and number of buy transactions.,"WITH popular_stocks AS (SELECT t.sbTickerSymbol, COUNT(*) AS tx_count FROM sbTransaction AS tx JOIN sbTicker AS t ON tx.sbTxTickerId = t.sbTickerId WHERE tx.sbTxType = 'buy' AND tx.sbTxDateTime >= DATE('now', '-10 days') GROUP BY t.sbTickerSymbol) SELECT sbTickerSymbol, tx_count FROM popular_stocks ORDER BY tx_count DESC LIMIT 2;",Broker,"```python
+# Filter transactions to include only 'buy' types within the last 10 days
+recent_buy_transactions = Transactions.WHERE(
+    (transaction_type == 'buy') &
+    (DATEDIFF(""days"", date_time, DATETIME('now')) <= 10)
+)
+
+# Partition the filtered transactions by ticker symbol
+ticker_groups = recent_buy_transactions.PARTITION(
+    name=""ticker_group"", by=(ticker.symbol)
+)
+
+# Calculate the count of transactions for each ticker symbol
+ticker_buy_counts = ticker_groups.CALCULATE(
+    ticker_symbol=ticker.symbol,
+    num_buy_transactions=COUNT(Transactions) # Count transactions within each partition group
+)
+
+# Select the top 2 ticker symbols based on the number of buy transactions
+top_2_bought_tickers = ticker_buy_counts.TOP_K(2, by=num_buy_transactions.DESC())
+
+# Assign the final result to the 'result' variable
+result = top_2_bought_tickers
+```
+
+**Explanation:**
+
+1.  **`recent_buy_transactions = Transactions.WHERE(...)`**: This line starts with the `Transactions` collection and filters it based on two conditions combined with `&` (AND):
+    *   `transaction_type == 'buy'`: Selects only transactions where the type is 'buy'.
+    *   `DATEDIFF(""days"", date_time, DATETIME('now')) <= 10`: Calculates the difference in days between the transaction's `date_time` and the current time (`DATETIME('now')`) and keeps only those transactions that occurred within the last 10 days (difference is less than or equal to 10).
+2.  **`ticker_groups = recent_buy_transactions.PARTITION(...)`**: This takes the filtered `recent_buy_transactions` and partitions (groups) them.
+    *   `name=""ticker_group""`: Assigns a temporary name to the partition groups.
+    *   `by=(ticker.symbol)`: Specifies that the partitioning should be done based on the `symbol` of the `ticker` associated with each transaction. All transactions for the same ticker symbol will be in the same group.
+3.  **`ticker_buy_counts = ticker_groups.CALCULATE(...)`**: This operates on the partitioned data. For each group (i.e., for each unique ticker symbol found in the filtered transactions):
+    *   `ticker_symbol=ticker.symbol`: Selects the ticker symbol (which is the partition key).
+    *   `num_buy_transactions=COUNT(Transactions)`: Counts the number of `Transactions` records within the current partition group (ticker_group). This gives the total number of buy transactions for that specific ticker symbol in the last 10 days.
+4.  **`top_2_bought_tickers = ticker_buy_counts.TOP_K(...)`**: This takes the calculated counts for each ticker symbol and selects the top records.
+    *   `2`: Specifies that we want the top 2 records.
+    *   `by=num_buy_transactions.DESC()`: Orders the records by the calculated `num_buy_transactions` in descending order (highest count first) before selecting the top 2.
+5.  **`result = top_2_bought_tickers`**: Assigns the final result (the collection containing the top 2 ticker symbols and their buy counts) to the variable `result`.",19.3594868183136,"# Filter transactions to include only 'buy' types within the last 10 days
+recent_buy_transactions = Transactions.WHERE(
+    (transaction_type == 'buy') &
+    (DATEDIFF(""days"", date_time, DATETIME('now')) <= 10)
+)
+
+# Partition the filtered transactions by ticker symbol
+ticker_groups = recent_buy_transactions.PARTITION(
+    name=""ticker_group"", by=(ticker.symbol)
+)
+
+# Calculate the count of transactions for each ticker symbol
+ticker_buy_counts = ticker_groups.CALCULATE(
+    ticker_symbol=ticker.symbol,
+    num_buy_transactions=COUNT(Transactions) # Count transactions within each partition group
+)
+
+# Select the top 2 ticker symbols based on the number of buy transactions
+top_2_bought_tickers = ticker_buy_counts.TOP_K(2, by=num_buy_transactions.DESC())
+
+# Assign the final result to the 'result' variable
+result = top_2_bought_tickers","cache_tokens_details=None cached_content_token_count=None candidates_token_count=764 candidates_tokens_details=None prompt_token_count=18410 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18410)] thoughts_token_count=1178 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20352 traffic_type=None",Query Error,Unrecognized term of simple table collection 'Transactions' in graph 'Broker': 'symbol'
+What are the PMCS and PMAT for customers who signed up in the last 6 months excluding the current month?PMCS = per month customer signups. PMAT = per month average transaction amount.,"SELECT strftime('%Y-%m', sbCustJoinDate) AS MONTH, COUNT(sbCustId) AS customer_signups, AVG(t.sbTxAmount) AS avg_tx_amount FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', t.sbTxDateTime) = strftime('%Y-%m', c.sbCustJoinDate) WHERE sbCustJoinDate >= date('now', '-6 months', 'start of month') AND sbCustJoinDate < date('now', 'start of month') GROUP BY MONTH;SELECT strftime('%Y-%m-01', sbCustJoinDate) AS MONTH, COUNT(sbCustId) AS customer_signups, AVG(t.sbTxAmount) AS avg_tx_amount FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', t.sbTxDateTime) = strftime('%Y-%m', c.sbCustJoinDate) WHERE sbCustJoinDate >= date('now', '-6 months', 'start of month') AND sbCustJoinDate < date('now', 'start of month') GROUP BY MONTH;SELECT strftime('%Y-%m-01 %H:%M:%S', sbCustJoinDate) AS MONTH, COUNT(sbCustId) AS customer_signups, AVG(t.sbTxAmount) AS avg_tx_amount FROM sbCustomer AS c LEFT JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId AND strftime('%Y-%m', t.sbTxDateTime) = strftime('%Y-%m', c.sbCustJoinDate) WHERE sbCustJoinDate >= date('now', '-6 months', 'start of month') AND sbCustJoinDate < date('now', 'start of month') GROUP BY MONTH;",Broker,"```python
+# Define the start and end dates for the 6-month window preceding the current month
+# Start date is the beginning of the month 6 months ago
+start_date_cutoff = DATETIME('now', 'start of month', '-6 months')
+# End date is the beginning of the current month (exclusive)
+end_date_cutoff = DATETIME('now', 'start of month')
+
+# Filter customers who joined within the specified window
+recent_customers = Customers.WHERE(
+    (join_date >= start_date_cutoff) & (join_date < end_date_cutoff)
+)
+
+# Calculate the signup month (YYYY-MM format) for each relevant customer
+# LPAD ensures the month has a leading zero if needed (e.g., '2023-05')
+customers_with_signup_month = recent_customers.CALCULATE(
+    signup_year_month=JOIN_STRINGS(""-"", YEAR(join_date), LPAD(MONTH(join_date), 2, ""0""))
+)
+
+# Partition these customers by their signup month
+# Then calculate PMCS (count of customers) and PMAT (average transaction amount) for each month
+monthly_metrics = customers_with_signup_month.PARTITION(
+    name=""monthly_groups"", by=(signup_year_month)
+).CALCULATE(
+    signup_month=signup_year_month,
+    # PMCS: Count the number of customers within each monthly partition
+    pmcs=COUNT(Customers),
+    # PMAT: Calculate the average transaction amount for all transactions made by customers in this partition
+    pmat=AVG(Customers.transactions_made.amount)
+).ORDER_BY(signup_month.ASC()) # Order results chronologically by signup month
+
+# Assign the final result to the output variable
+result = monthly_metrics
+```
+
+**Explanation:**
+
+1.  **Define Time Window:**
+    *   `start_date_cutoff`: Calculates the date corresponding to the first day of the month, exactly 6 months before the current month begins (e.g., if run in July, this would be January 1st).
+    *   `end_date_cutoff`: Calculates the date corresponding to the first day of the *current* month (e.g., if run in July, this would be July 1st).
+2.  **Filter Customers:**
+    *   `Customers.WHERE(...)`: Selects only those customers whose `join_date` is on or after `start_date_cutoff` AND strictly before `end_date_cutoff`. This effectively captures customers who joined in the 6 full months prior to the current month.
+3.  **Calculate Signup Month:**
+    *   `recent_customers.CALCULATE(...)`: For the filtered customers, a new field `signup_year_month` is created by concatenating the year and the zero-padded month from their `join_date`, resulting in a 'YYYY-MM' format string. `LPAD` ensures months like '5' become '05'.
+4.  **Partition by Signup Month:**
+    *   `customers_with_signup_month.PARTITION(name=""monthly_groups"", by=(signup_year_month))`: Groups the customers based on the `signup_year_month` calculated in the previous step. Each partition (`monthly_groups`) contains customers who signed up in the same year and month.
+5.  **Calculate Metrics (PMCS & PMAT):**
+    *   `.CALCULATE(...)`: Operates on each partition (each month group).
+        *   `signup_month=signup_year_month`: Selects the grouping key (the signup month).
+        *   `pmcs=COUNT(Customers)`: Calculates the Per Month Customer Signups (PMCS) by counting the number of `Customers` records within the current partition (month group).
+        *   `pmat=AVG(Customers.transactions_made.amount)`: Calculates the Per Month Average Transaction amount (PMAT) by navigating from the `Customers` in the current partition to their `transactions_made` and calculating the average of the `amount` field across all those transactions.
+6.  **Order Results:**
+    *   `.ORDER_BY(signup_month.ASC())`: Sorts the final results chronologically based on the signup month.
+7.  **Assign Result:**
+    *   `result = monthly_metrics`: Assigns the computed monthly metrics to the final `result` variable.",25.867722034454346,"# Define the start and end dates for the 6-month window preceding the current month
+# Start date is the beginning of the month 6 months ago
+start_date_cutoff = DATETIME('now', 'start of month', '-6 months')
+# End date is the beginning of the current month (exclusive)
+end_date_cutoff = DATETIME('now', 'start of month')
+
+# Filter customers who joined within the specified window
+recent_customers = Customers.WHERE(
+    (join_date >= start_date_cutoff) & (join_date < end_date_cutoff)
+)
+
+# Calculate the signup month (YYYY-MM format) for each relevant customer
+# LPAD ensures the month has a leading zero if needed (e.g., '2023-05')
+customers_with_signup_month = recent_customers.CALCULATE(
+    signup_year_month=JOIN_STRINGS(""-"", YEAR(join_date), LPAD(MONTH(join_date), 2, ""0""))
+)
+
+# Partition these customers by their signup month
+# Then calculate PMCS (count of customers) and PMAT (average transaction amount) for each month
+monthly_metrics = customers_with_signup_month.PARTITION(
+    name=""monthly_groups"", by=(signup_year_month)
+).CALCULATE(
+    signup_month=signup_year_month,
+    # PMCS: Count the number of customers within each monthly partition
+    pmcs=COUNT(Customers),
+    # PMAT: Calculate the average transaction amount for all transactions made by customers in this partition
+    pmat=AVG(Customers.transactions_made.amount)
+).ORDER_BY(signup_month.ASC()) # Order results chronologically by signup month
+
+# Assign the final result to the output variable
+result = monthly_metrics","cache_tokens_details=None cached_content_token_count=None candidates_token_count=979 candidates_tokens_details=None prompt_token_count=18423 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18423)] thoughts_token_count=1653 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21055 traffic_type=None",SQL error,You can only execute one statement at a time.
+"What is the ACP for each ticker type in the past 7 days, inclusive of today? Return the ticker type and the average closing price.ACP = Average Closing Price of tickers in the last 7 days, inclusive of today","SELECT sbTicker.sbTickerType, AVG(sbDailyPrice.sbDpClose) AS ACP FROM sbDailyPrice JOIN sbTicker ON sbDailyPrice.sbDpTickerId = sbTicker.sbTickerId WHERE sbDpDate >= DATE('now', '-7 days') GROUP BY sbTicker.sbTickerType;",Broker,"```python
+# Filter DailyPrices for the last 7 days (inclusive of today)
+# DATEDIFF(""days"", date, 'now') <= 6 covers today (diff=0) and the previous 6 days.
+recent_prices_info = DailyPrices.WHERE(DATEDIFF(""days"", date, 'now') <= 6).CALCULATE(
+    close_price=close,
+    ticker_type=ticker.ticker_type # Access ticker_type via the relationship
+)
+
+# Partition the filtered data by ticker_type
+# Calculate the average closing price (ACP) for each type_group
+ticker_type_acp = recent_prices_info.PARTITION(name=""type_group"", by=(ticker_type)).CALCULATE(
+    ticker_type=ticker_type, # Select the partition key
+    ACP=AVG(DailyPrices.close) # Calculate the average close price for the group
+)
+
+# Assign the final result to a variable
+result = ticker_type_acp
+```
+
+**Explanation:**
+
+1.  **`recent_prices_info = DailyPrices.WHERE(...)`**: We start with the `DailyPrices` collection.
+2.  **`WHERE(DATEDIFF(""days"", date, 'now') <= 6)`**: This filters the daily prices to include only records where the date is within the last 7 days, inclusive of today. `DATEDIFF(""days"", date, 'now')` calculates the number of full days between the record's `date` and the current moment (`now`). A value of 0 means today, 1 means yesterday, and so on, up to 6 for six days ago.
+3.  **`.CALCULATE(close_price=close, ticker_type=ticker.ticker_type)`**: For the filtered records, we calculate (or select) the `close` price (aliased as `close_price` for clarity, though not strictly necessary here) and retrieve the `ticker_type` by navigating the relationship `ticker` to the corresponding `Tickers` record. This makes `ticker_type` available as a field for partitioning.
+4.  **`recent_prices_info.PARTITION(name=""type_group"", by=(ticker_type))`**: We partition the intermediate `recent_prices_info` collection. The data is grouped based on the unique values of the `ticker_type` field calculated in the previous step. Each group is conceptually named `type_group`.
+5.  **`.CALCULATE(ticker_type=ticker_type, ACP=AVG(DailyPrices.close))`**: For each partition (i.e., for each `ticker_type`):
+    *   `ticker_type=ticker_type`: We select the `ticker_type` (which is the partition key).
+    *   `ACP=AVG(DailyPrices.close)`: We calculate the Average Closing Price (ACP) by applying the `AVG` aggregation function to the `close` field of the `DailyPrices` records belonging to that specific `ticker_type` group (within the date filter applied earlier).
+6.  **`result = ticker_type_acp`**: The final result, containing each `ticker_type` and its calculated `ACP` over the specified period, is assigned to the `result` variable.",24.165159702301025,"# Filter DailyPrices for the last 7 days (inclusive of today)
+# DATEDIFF(""days"", date, 'now') <= 6 covers today (diff=0) and the previous 6 days.
+recent_prices_info = DailyPrices.WHERE(DATEDIFF(""days"", date, 'now') <= 6).CALCULATE(
+    close_price=close,
+    ticker_type=ticker.ticker_type # Access ticker_type via the relationship
+)
+
+# Partition the filtered data by ticker_type
+# Calculate the average closing price (ACP) for each type_group
+ticker_type_acp = recent_prices_info.PARTITION(name=""type_group"", by=(ticker_type)).CALCULATE(
+    ticker_type=ticker_type, # Select the partition key
+    ACP=AVG(DailyPrices.close) # Calculate the average close price for the group
+)
+
+# Assign the final result to a variable
+result = ticker_type_acp","cache_tokens_details=None cached_content_token_count=None candidates_token_count=719 candidates_tokens_details=None prompt_token_count=18427 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18427)] thoughts_token_count=1623 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20769 traffic_type=None",Match,
+What is the AR for each country for customers who joined in 2022? Return the country and AR.AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100.,"SELECT c.sbCustCountry, COALESCE(100.0 * COUNT(DISTINCT CASE WHEN c.sbCustStatus = 'active' THEN c.sbCustId END) / NULLIF(COUNT(DISTINCT t.sbTxCustId), 0), 0) AS AR FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId WHERE c.sbCustJoinDate BETWEEN '2022-01-01' AND '2022-12-31' GROUP BY c.sbCustCountry;",Broker,"```python
+# Filter customers who joined in 2022 and have made at least one transaction
+customers_filtered = Customers.WHERE(
+    (YEAR(join_date) == 2022) & (HAS(transactions_made) == 1)
+)
+
+# Partition these customers by country
+country_groups = customers_filtered.PARTITION(
+    name=""country_group"", by=(country)
+)
+
+# Calculate the total and active customers within each country group
+country_stats = country_groups.CALCULATE(
+    country_name=country,
+    # Count total customers (who joined in 2022 and have transactions) in this country group
+    total_customers_with_transactions=COUNT(Customers),
+    # Count active customers (status='Active') among them
+    active_customers_with_transactions=COUNT(Customers.WHERE(status == 'Active'))
+)
+
+# Calculate the Activity Ratio (AR) for each country
+result = country_stats.CALCULATE(
+    country=country_name,
+    # AR = (Active Customers with Transactions / Total Customers with Transactions) * 100
+    # Use IFF to handle potential division by zero, though the initial filter makes it unlikely
+    AR=IFF(
+        total_customers_with_transactions > 0,
+        100.0 * active_customers_with_transactions / total_customers_with_transactions,
+        0.0 # Assign 0 AR if no customers found (shouldn't happen with the filter)
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`customers_filtered`**: This selects customers who meet two criteria:
+    *   Their `join_date` falls within the year 2022 (`YEAR(join_date) == 2022`).
+    *   They have made at least one transaction (`HAS(transactions_made) == 1`). This ensures we only consider customers relevant to the AR calculation as defined.
+2.  **`country_groups`**: This partitions the `customers_filtered` collection into groups based on the `country` field. Each group represents a unique country containing customers who joined in 2022 and have transactions.
+3.  **`country_stats`**: This calculates statistics for each country group created by the partition:
+    *   `country_name`: Retrieves the country name (the partition key).
+    *   `total_customers_with_transactions`: Counts all customers within the current country group (these are the customers filtered in the first step). This serves as the denominator for the AR.
+    *   `active_customers_with_transactions`: Counts only the customers within the current country group whose `status` is 'Active'. This serves as the numerator for the AR.
+4.  **`result`**: This performs the final calculation and selects the desired output fields:
+    *   `country`: Renames `country_name` to `country`.
+    *   `AR`: Calculates the Activity Ratio using the formula provided: `(active_customers_with_transactions / total_customers_with_transactions) * 100.0`. The `100.0` ensures floating-point division for a percentage result. An `IFF` statement is included as a safeguard against division by zero, assigning an AR of 0.0 if `total_customers_with_transactions` were somehow zero (though the initial `HAS(transactions_made) == 1` filter makes this unlikely).",27.885735511779785,"# Filter customers who joined in 2022 and have made at least one transaction
+customers_filtered = Customers.WHERE(
+    (YEAR(join_date) == 2022) & (HAS(transactions_made) == 1)
+)
+
+# Partition these customers by country
+country_groups = customers_filtered.PARTITION(
+    name=""country_group"", by=(country)
+)
+
+# Calculate the total and active customers within each country group
+country_stats = country_groups.CALCULATE(
+    country_name=country,
+    # Count total customers (who joined in 2022 and have transactions) in this country group
+    total_customers_with_transactions=COUNT(Customers),
+    # Count active customers (status='Active') among them
+    active_customers_with_transactions=COUNT(Customers.WHERE(status == 'Active'))
+)
+
+# Calculate the Activity Ratio (AR) for each country
+result = country_stats.CALCULATE(
+    country=country_name,
+    # AR = (Active Customers with Transactions / Total Customers with Transactions) * 100
+    # Use IFF to handle potential division by zero, though the initial filter makes it unlikely
+    AR=IFF(
+        total_customers_with_transactions > 0,
+        100.0 * active_customers_with_transactions / total_customers_with_transactions,
+        0.0 # Assign 0 AR if no customers found (shouldn't happen with the filter)
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=763 candidates_tokens_details=None prompt_token_count=18432 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18432)] thoughts_token_count=1966 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21161 traffic_type=None",No Match,
+"What is the number of customers whose name starts with J or ends with 'ez', and who live in a state ending with the letter 'a'?all customer attributes should be matched case insensitively",SELECT COUNT(sbCustId) FROM sbCustomer WHERE (LOWER(sbCustName) LIKE 'j%' OR LOWER(sbCustName) LIKE '%ez') AND LOWER(sbCustState) LIKE '%a';,Broker,"```python
+customer_count_result = Broker.CALCULATE(
+    num_customers = COUNT(
+        Customers.WHERE(
+            # Filter customers based on name: starts with 'J' OR ends with 'ez' (case-insensitive)
+            (STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez')) &
+            # Filter customers based on state: ends with 'a' (case-insensitive)
+            ENDSWITH(LOWER(state), 'a')
+        )
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`Broker.CALCULATE(...)`**: We start from the top-level `Broker` collection because we want a single aggregated result (the total count). `CALCULATE` is used to compute this single value.
+2.  **`num_customers = COUNT(...)`**: We define a field `num_customers` in our result. Its value is determined by the `COUNT` function, which counts the number of records in the collection provided to it.
+3.  **`Customers.WHERE(...)`**: We provide the `Customers` collection to `COUNT`, but first, we filter it using `WHERE` to only include customers who meet the specified criteria.
+4.  **`(STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez'))`**: This is the first part of the filter condition.
+    *   `LOWER(name)` converts the customer's name to lowercase for case-insensitive matching.
+    *   `STARTSWITH(..., 'j')` checks if the lowercase name starts with 'j'.
+    *   `ENDSWITH(..., 'ez')` checks if the lowercase name ends with 'ez'.
+    *   The `|` (OR) operator combines these two checks, so a customer matches if *either* condition is true.
+5.  **`ENDSWITH(LOWER(state), 'a')`**: This is the second part of the filter condition.
+    *   `LOWER(state)` converts the customer's state to lowercase.
+    *   `ENDSWITH(..., 'a')` checks if the lowercase state ends with 'a'.
+6.  **`&`**: The `&` (AND) operator combines the name condition and the state condition. A customer is only included in the final count if *both* the name condition (starts with 'j' OR ends with 'ez') AND the state condition (ends with 'a') are true.
+7.  The `COUNT` function then counts how many customers remain after applying this combined filter.",15.707629680633543,"customer_count_result = Broker.CALCULATE(
+    num_customers = COUNT(
+        Customers.WHERE(
+            # Filter customers based on name: starts with 'J' OR ends with 'ez' (case-insensitive)
+            (STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez')) &
+            # Filter customers based on state: ends with 'a' (case-insensitive)
+            ENDSWITH(LOWER(state), 'a')
+        )
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=579 candidates_tokens_details=None prompt_token_count=18421 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18421)] thoughts_token_count=1016 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20016 traffic_type=None",Match,

@@ -1,0 +1,112 @@
+question,sql,db_name,response,execution_time,extracted_python_code,usage,comparison_result,exception
+"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;",Broker,"```python
+# Assuming 'Transactions' is a sub-collection of 'Customers'
+# and each transaction has a 'status' field where 'Success' indicates a successful transaction.
+
+# Filter customers with at least 5 transactions
+filtered_customers = Customers.WHERE(COUNT(Transactions) >= 5)
+
+# Calculate the success rate for each of these customers
+customer_success_rates = filtered_customers.CALCULATE(
+    customer_name=name,
+    # Calculate success rate: (count of successful transactions / total transactions)
+    # Multiply by 1.0 to ensure floating-point division
+    success_rate=(1.0 * COUNT(Transactions.WHERE(status == 'Success'))) / COUNT(Transactions)
+)
+
+# Order the results by success rate in ascending order
+result = customer_success_rates.ORDER_BY(success_rate.ASC())
+```
+
+**Explanation:**
+
+1.  **`Customers.WHERE(COUNT(Transactions) >= 5)`**: This line starts with the `Customers` collection and filters it to include only those customers who have 5 or more transactions associated with them. `COUNT(Transactions)` calculates the total number of transactions for each customer.
+2.  **`.CALCULATE(...)`**: This step processes the filtered customers.
+    *   `customer_name=name`: Selects the customer's name.
+    *   `success_rate=(1.0 * COUNT(Transactions.WHERE(status == 'Success'))) / COUNT(Transactions)`: Calculates the success rate.
+        *   `COUNT(Transactions.WHERE(status == 'Success'))` counts the number of transactions for the customer where the `status` field is exactly 'Success'.
+        *   `COUNT(Transactions)` counts the total number of transactions for that customer (as established in the initial filter).
+        *   Multiplying the count of successful transactions by `1.0` ensures the division results in a floating-point number (the rate) rather than integer division.
+3.  **`.ORDER_BY(success_rate.ASC())`**: This sorts the resulting collection of customers and their success rates in ascending order based on the calculated `success_rate`.
+4.  **`result = ...`**: The final ordered collection is assigned to the variable `result`.",20.11690855026245,"# Assuming 'Transactions' is a sub-collection of 'Customers'
+# and each transaction has a 'status' field where 'Success' indicates a successful transaction.
+
+# Filter customers with at least 5 transactions
+filtered_customers = Customers.WHERE(COUNT(Transactions) >= 5)
+
+# Calculate the success rate for each of these customers
+customer_success_rates = filtered_customers.CALCULATE(
+    customer_name=name,
+    # Calculate success rate: (count of successful transactions / total transactions)
+    # Multiply by 1.0 to ensure floating-point division
+    success_rate=(1.0 * COUNT(Transactions.WHERE(status == 'Success'))) / COUNT(Transactions)
+)
+
+# Order the results by success rate in ascending order
+result = customer_success_rates.ORDER_BY(success_rate.ASC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=1948 candidates_tokens_details=None prompt_token_count=17562 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=17562)] thoughts_token_count=1458 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19510 traffic_type=None",Query Error,Unrecognized term of graph 'Broker': 'Customers'
+"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,Broker,"```python
+faang_buyers_count = Broker.CALCULATE(
+    num_faang_buyers_dotcom = COUNT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) &
+            (HAS(trades.WHERE(ISIN(ticker.symbol, (""AMZN"", ""AAPL"", ""GOOGL"", ""META"", ""NFLX"")))) == 1)
+        )
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`Broker.CALCULATE(...)`**: We start at the top-level `Broker` collection to calculate a single aggregated value.
+2.  **`num_faang_buyers_dotcom = COUNT(...)`**: We define a field `num_faang_buyers_dotcom` which will hold the final count of customers meeting the criteria.
+3.  **`Customers.WHERE(...)`**: We access the `Customers` collection and filter it based on the conditions inside the `WHERE` clause.
+4.  **`(ENDSWITH(email, "".com""))`**: This condition filters for customers whose `email` field ends with "".com"".
+5.  **`&`**: This is the logical AND operator, requiring both conditions to be true.
+6.  **`HAS(trades.WHERE(...)) == 1`**: This checks if a customer has at least one (`== 1`) trade that satisfies the inner condition.
+7.  **`trades.WHERE(ISIN(ticker.symbol, (""AMZN"", ""AAPL"", ""GOOGL"", ""META"", ""NFLX"")))`**: This filters the `trades` sub-collection for each customer, keeping only those trades where the associated `ticker.symbol` is one of the specified FAANG stock symbols using the `ISIN` function.
+8.  The `COUNT()` function then counts the number of `Customers` records that remain after applying both filters.",15.504988193511965,"faang_buyers_count = Broker.CALCULATE(
+    num_faang_buyers_dotcom = COUNT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) &
+            (HAS(trades.WHERE(ISIN(ticker.symbol, (""AMZN"", ""AAPL"", ""GOOGL"", ""META"", ""NFLX"")))) == 1)
+        )
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=1494 candidates_tokens_details=None prompt_token_count=17593 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=17593)] thoughts_token_count=1080 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19087 traffic_type=None",Query Error,Unrecognized term of graph 'Broker': 'Customers'
+"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;",Broker,"```python
+# Filter customers who joined on or after January 1, 2023, and extract their country
+recent_customers = Customers.WHERE(join_date >= ""2023-01-01"").CALCULATE(
+    cust_country = address.country
+)
+
+# Partition the filtered customers by their country
+country_groups = recent_customers.PARTITION(name=""country_group"", by=(cust_country))
+
+# Calculate the count of customers (TAC) for each country
+tac_by_country = country_groups.CALCULATE(
+    country = cust_country,
+    tac_count = COUNT(Customers) # Count customers within each country partition
+)
+```
+
+**Explanation:**
+
+1.  **`recent_customers = Customers.WHERE(...)`**: We start with the `Customers` collection and filter it using `WHERE` to include only customers whose `join_date` is on or after January 1, 2023.
+2.  **`.CALCULATE(cust_country = address.country)`**: We then use `CALCULATE` to create a new field `cust_country` by accessing the `country` field through the customer's `address`. This makes the country directly available for partitioning.
+3.  **`country_groups = recent_customers.PARTITION(...)`**: We partition the `recent_customers` collection.
+    *   `name=""country_group""`: Assigns a name to the partition groups (optional but good practice).
+    *   `by=(cust_country)`: Specifies that the partitioning should be done based on the `cust_country` field calculated in the previous step.
+4.  **`tac_by_country = country_groups.CALCULATE(...)`**: We perform a final calculation on the partitioned data.
+    *   `country = cust_country`: Selects the country (the partition key).
+    *   `tac_count = COUNT(Customers)`: Counts the number of `Customers` records within each partition group (country). This gives the Total Active Customers (TAC) as defined in the prompt for that specific country.",17.19401454925537,"# Filter customers who joined on or after January 1, 2023, and extract their country
+recent_customers = Customers.WHERE(join_date >= ""2023-01-01"").CALCULATE(
+    cust_country = address.country
+)
+
+# Partition the filtered customers by their country
+country_groups = recent_customers.PARTITION(name=""country_group"", by=(cust_country))
+
+# Calculate the count of customers (TAC) for each country
+tac_by_country = country_groups.CALCULATE(
+    country = cust_country,
+    tac_count = COUNT(Customers) # Count customers within each country partition
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=1697 candidates_tokens_details=None prompt_token_count=17581 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=17581)] thoughts_token_count=1233 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19278 traffic_type=None",Query Error,Unrecognized term of graph 'Broker': 'Customers'
