@@ -13,6 +13,8 @@ from google.genai import types
 import aisuite as ai
 from mistralai import Mistral
 import mlflow
+from anthropic import AnthropicVertex
+
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
     @abstractmethod
