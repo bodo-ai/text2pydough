@@ -8,7 +8,7 @@ import boto3
 import json
 import pandas as pd
 from botocore.config import Config
-import google.genai as genai
+from google import genai
 from google.genai import types
 import aisuite as ai
 from mistralai import Mistral
