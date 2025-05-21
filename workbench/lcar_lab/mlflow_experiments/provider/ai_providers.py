@@ -157,7 +157,7 @@ class GeminiAIProvider(AIProvider):
             )
             response =response.to_json()
             print(response)
-            text_message = response["content"]
+            text_message = response.content
             usage = response["usage"]
             return text_message, usage
         else:    
