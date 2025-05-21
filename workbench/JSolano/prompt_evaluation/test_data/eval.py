@@ -141,8 +141,8 @@ def compare_df(
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
     is_equal = df_gold.values == df_gen.values
-    if is_equal == True:
-        return is_equal
+    if is_equal.all() == True:
+        return True
     
     return secondary_check(df_gold, df_gen)
     
