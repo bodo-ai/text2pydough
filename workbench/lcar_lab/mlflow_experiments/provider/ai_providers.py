@@ -135,7 +135,7 @@ class GeminiAIProvider(AIProvider):
                 self.location="us-east5"
                 self.client = AnthropicVertex(project_id=self.project, region=self.location)
             else:   
-                self.client = genai.Client(api_key=self.api_key, project=self.project, location=self.location)    
+                self.client = genai.Client(project=self.project, location=self.location)    
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
         
