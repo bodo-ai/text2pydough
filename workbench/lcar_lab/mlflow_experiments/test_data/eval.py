@@ -269,7 +269,8 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
         return process_row(row, db_base_path, metadata_base_path)
 
     
-    results = list(map(process_and_return, [row for index, row in df.iterrows()]))
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
     # Extract the results into the appropriate columns
     df['comparison_result'] = [result[0] for result in results]
