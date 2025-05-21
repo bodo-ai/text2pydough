@@ -170,46 +170,46 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
         bool: True if all column contents of df_gold can be uniquely matched in df_gen, False otherwise.
     """
 
-    num_a_cols = df_gold.shape[1]
-    num_b_cols = df_gen.shape[1]
-    num_a_rows = df_gold.shape[0]
-    num_b_rows = df_gen.shape[0]
+    num_gold_cols = df_gold.shape[1]
+    num_gen_cols = df_gen.shape[1]
+    num_gold_rows = df_gold.shape[0]
+    num_gen_rows = df_gen.shape[0]
 
     # 1. Handle df_gold having zero columns
-    if num_a_cols == 0:
-        if num_a_rows == 0: # df_gold is 0x0
+    if num_gold_cols == 0:
+        if num_gold_rows == 0: # df_gold is 0x0
             print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
             return True
         else: # df_gold is Rx0 (R > 0)
             # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
-            result = num_a_rows == num_b_rows
-            print(f"Info: df_gold has 0 columns and {num_a_rows} rows.")
-            print(f"Result: {result}. (df_gen must have the same number of rows: {num_b_rows})")
+            result = num_gold_rows == num_gen_rows
+            print(f"Info: df_gold has 0 columns and {num_gold_rows} rows.")
+            print(f"Result: {result}. (df_gen must have the same number of rows: {num_gen_rows})")
             return result
 
     # 2. Row count mismatch (unless df_gold was 0x0, handled above)
-    if num_a_rows != num_b_rows:
+    if num_gold_rows != num_gen_rows:
         return False
 
     # 3. Not enough columns in df_gen to match all of df_gold's columns
-    if num_a_cols > num_b_cols:
+    if num_gold_cols > num_gen_cols:
         return False
     
     # --- Greedy Matching ---
-    b_cols_used = [False] * num_b_cols # Tracks which columns in df_gen have been matched
+    b_cols_used = [False] * num_gen_cols # Tracks which columns in df_gen have been matched
 
-    for i in range(num_a_cols):
-        s_a = df_gold.iloc[:, i]
-        found_match_for_s_a = False
-        for j in range(num_b_cols):
+    for i in range(num_gold_cols):
+        series_gold = df_gold.iloc[:, i]
+        found_match_for_s_gold = False
+        for j in range(num_gen_cols):
             if not b_cols_used[j]: # If df_gen's j-th column is not yet used
-                s_b = df_gen.iloc[:, j]
-                if series_contents_equal(s_a, s_b):
-                    b_cols_used[j] = True # Mark as used
-                    found_match_for_s_a = True
+                series_gen = df_gen.iloc[:, j]
+                if series_contents_equal(series_gold, series_gen):
+                    b_cols_used[j] = True
+                    found_match_for_s_gold = True
                     break # Move to the next column in df_gold
         
-        if not found_match_for_s_a:
+        if not found_match_for_s_gold:
             return False
         
     return True    
