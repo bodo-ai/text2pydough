@@ -8,7 +8,7 @@ import boto3
 import json
 import pandas as pd
 from botocore.config import Config
-from google import genai
+import google.genai as genai
 from google.genai import types
 import aisuite as ai
 from mistralai import Mistral
@@ -131,7 +131,7 @@ class GeminiAIProvider(AIProvider):
             self.model_id = model_id
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        self.client = genai.Client(api_key= self.api_key)
+        self.client = genai.Client(vertexai= True,  project=self.project, location=self.location)
     
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
