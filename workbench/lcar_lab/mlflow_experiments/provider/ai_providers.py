@@ -133,7 +133,7 @@ class GeminiAIProvider(AIProvider):
             self.model_id = model_id
             if "claude" in model_id:
                 self.location="us-east5"
-                self.client = AnthropicVertex(project_id=self.project, location=self.location)
+                self.client = AnthropicVertex(project_id=self.project, region=self.location)
             else:   
                 self.client = genai.Client(api_key=self.api_key, project=self.project, location=self.location)    
         except KeyError:
