@@ -169,8 +169,7 @@ class GeminiAIProvider(AIProvider):
                 ),
             
             )
-            print(response)
-            return response.text, response.usage
+            return response.text, response.usage_metadata
     
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
