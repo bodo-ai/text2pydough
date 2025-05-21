@@ -143,7 +143,7 @@ class GeminiAIProvider(AIProvider):
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
         if "claude" in self.model_id:
-            message = client.messages.create(
+            message = self.client.messages.create(
                 messages=[
                 {
                     "role": "system",
