@@ -155,8 +155,7 @@ class GeminiAIProvider(AIProvider):
                 system=system_instruction,
                 **kwargs
             )
-            print(response)
-            return response, response.usage_metadata
+            return response.content.text, response.usage_metadata
         else:    
             response = self.client.models.generate_content(
                 model=self.model_id,
@@ -167,7 +166,7 @@ class GeminiAIProvider(AIProvider):
                 ),
             
             )
-            return response.text, response.usage_metadata
+            return response.text, response.usage
     
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
