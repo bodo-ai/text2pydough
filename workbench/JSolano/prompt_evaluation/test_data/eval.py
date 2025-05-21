@@ -141,10 +141,89 @@ def compare_df(
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
     is_equal = df_gold.values == df_gen.values
-    try:
-        return is_equal.all()
-    except:
+    if is_equal == True:
         return is_equal
+    
+    return secondary_check(df_gold, df_gen)
+    
+def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
+    """
+    Checks if two Series have identical dtypes and values in the same order.
+    Their original indices/names are ignored for the comparison itself, but they must
+    have the same length (which should be pre-checked at the DataFrame level).
+    """
+    if s1.dtype != s2.dtype:
+        return False
+    # reset_index(drop=True) ensures they both have a simple 0-based index
+    # .equals() then checks for identical values (NaNs are equal) and matching (now simple) indices.
+    return s1.reset_index(drop=True).equals(s2.reset_index(drop=True))
+
+def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
+    """
+    Checks if all column contents of DataFrame A can be uniquely matched to column
+    contents in DataFrame B. Column names and the order of columns in both
+    DataFrames are ignored. Only dtype and values (in order) within each column matter.
+
+    Args:
+        df_gold (pd.DataFrame): The first dataframe.
+        df_gen (pd.DataFrame): The second dataframe.
+
+    Returns:
+        bool: True if all column contents of df_gold can be uniquely matched in df_gen, False otherwise.
+    """
+    print(f"\n--- Checking if all column contents of df_gold can be uniquely matched in df_gen (names/orders ignored) ---")
+    print(f"df_gold shape: {df_gold.shape}, df_gen shape: {df_gen.shape}")
+
+    # --- Initial Checks ---
+    num_a_cols = df_gold.shape[1]
+    num_b_cols = df_gen.shape[1]
+    num_a_rows = df_gold.shape[0]
+    num_b_rows = df_gen.shape[0]
+
+    # 1. Handle df_gold having zero columns
+    if num_a_cols == 0:
+        if num_a_rows == 0: # df_gold is 0x0
+            print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
+            return True
+        else: # df_gold is Rx0 (R > 0)
+            # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
+            result = num_a_rows == num_b_rows
+            print(f"Info: df_gold has 0 columns and {num_a_rows} rows.")
+            print(f"Result: {result}. (df_gen must have the same number of rows: {num_b_rows})")
+            return result
+
+    # 2. Row count mismatch (unless df_gold was 0x0, handled above)
+    if num_a_rows != num_b_rows:
+        print(f"Result: False. Row count mismatch (df_gold has {num_a_rows}, df_gen has {num_b_rows}).")
+        print("         Column contents cannot be identical if lengths differ.")
+        return False
+    print(f"Info: Row counts match ({num_a_rows}).")
+
+    # 3. Not enough columns in df_gen to match all of df_gold's columns
+    if num_a_cols > num_b_cols:
+        print(f"Result: False. Not enough columns in df_gen ({num_b_cols}) to match all columns from df_gold ({num_a_cols}).")
+        return False
+    print(f"Info: df_gen has enough or more columns ({num_b_cols}) than df_gold ({num_a_cols}).")
+
+    # --- Greedy Matching ---
+    b_cols_used = [False] * num_b_cols # Tracks which columns in df_gen have been matched
+
+    print("Info: Attempting to greedily match df_gold columns to unique df_gen columns by content...")
+    for i in range(num_a_cols):
+        s_a = df_gold.iloc[:, i]
+        found_match_for_s_a = False
+        for j in range(num_b_cols):
+            if not b_cols_used[j]: # If df_gen's j-th column is not yet used
+                s_b = df_gen.iloc[:, j]
+                if series_contents_equal(s_a, s_b):
+                    b_cols_used[j] = True # Mark as used
+                    found_match_for_s_a = True
+                    break # Move to the next column in df_gold
+        
+        if not found_match_for_s_a:
+            return False
+        
+    return True    
     
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
