@@ -157,6 +157,7 @@ class GeminiAIProvider(AIProvider):
             )
             
             text_message = response.content
+            print(f"Response: {text_message}")
             usage = response.usage 
             return text_message, usage
         else:    
