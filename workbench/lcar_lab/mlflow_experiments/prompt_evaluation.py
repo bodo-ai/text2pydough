@@ -22,21 +22,7 @@ from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
 from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
-
-class GeminiWrapper(PythonModel):
-    def __init__(self, model_id):
-        import pydough
-        self.model_id = model_id
-
-    def load_context(self, context):
-        self.client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-
-    def predict(self, context, model_input: List[str]) -> List[str]:
-        response = self.client.models.generate_content(
-            model=self.model_id,
-            contents=model_input
-        )
-        return [response.text]
+from gemini_wrapper import GeminiWrapper
 
 # === Helper Functions ===
 
@@ -101,7 +87,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{script}\n\n", f"\n\n\nQuestion: {question}\n", "\nDatabase schema:\n", str(db_content)]), prompt.format(
+    return "".join([f"\n\n\nQuestion: {question}\n", "\nDatabase schema:\n", str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -236,7 +222,7 @@ def main(git_hash):
             metrics_file.write(metrics_json)
 
         mlflow.pyfunc.log_model(
-            artifact_path="Gemini Model",
+            artifact_path=args.model_id,
             python_model=GeminiWrapper(model_id=args.model_id),
             artifacts={
                 "prompt_file": args.prompt_file,
