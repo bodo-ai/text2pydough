@@ -156,7 +156,7 @@ class GeminiAIProvider(AIProvider):
                 **kwargs
             )
             
-            text_message = response.content.text
+            text_message = response.content[0].text
             print(f"Response: {text_message}")
             usage = response.usage 
             return text_message, usage
