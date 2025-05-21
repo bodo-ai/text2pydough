@@ -101,6 +101,7 @@ def normalize_table(
 
     if not has_order_by:
         # sort rows using values from first column to last
+        print(sorted_df.columns)
         sorted_df = sorted_df.sort_values(by=list(sorted_df.columns))
 
     # reset index
