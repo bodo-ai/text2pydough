@@ -145,16 +145,14 @@ class GeminiAIProvider(AIProvider):
         if "claude" in self.model_id:
             message = self.client.messages.create(
                 messages=[
-                {
-                    "role": "system",
-                    "content": system_instruction,
-                },
+           
                 {
                     "role": "user",
-                    "content": system_instruction,
+                    "content": prompt,
                 }
                 ],
                 model=self.model_id,
+                system=system_instruction,
                 **kwargs
             )
             return response.choices[0].message.content, response.usage_metadata
