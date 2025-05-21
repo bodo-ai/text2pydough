@@ -148,8 +148,6 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
     """Executes the Python code and returns the result or raises an exception."""
     try:
         print(f" In the execute code: {cheatsheet_path}, {db_name}")
-        pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
-        pydough.active_session.connect_database("sqlite", database=database_path)
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
@@ -212,7 +210,8 @@ def process_row(row,db_base_path,metadata_base_path):
         metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
-
+        pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
+        pydough.active_session.connect_database("sqlite", database=database_path)
         result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
         if result is not None:
