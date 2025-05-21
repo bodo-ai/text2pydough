@@ -154,8 +154,6 @@ def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
     """
     if s1.dtype != s2.dtype:
         return False
-    # reset_index(drop=True) ensures they both have a simple 0-based index
-    # .equals() then checks for identical values (NaNs are equal) and matching (now simple) indices.
     return s1.reset_index(drop=True).equals(s2.reset_index(drop=True))
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
@@ -165,16 +163,13 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     DataFrames are ignored. Only dtype and values (in order) within each column matter.
 
     Args:
-        df_gold (pd.DataFrame): The first dataframe.
-        df_gen (pd.DataFrame): The second dataframe.
+        df_gold (pd.DataFrame): The dataframe obtained by running the reference SQL.
+        df_gen (pd.DataFrame): The dataframe obtained by running the generated PyDough code.
 
     Returns:
         bool: True if all column contents of df_gold can be uniquely matched in df_gen, False otherwise.
     """
-    print(f"\n--- Checking if all column contents of df_gold can be uniquely matched in df_gen (names/orders ignored) ---")
-    print(f"df_gold shape: {df_gold.shape}, df_gen shape: {df_gen.shape}")
 
-    # --- Initial Checks ---
     num_a_cols = df_gold.shape[1]
     num_b_cols = df_gen.shape[1]
     num_a_rows = df_gold.shape[0]
@@ -194,16 +189,11 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
 
     # 2. Row count mismatch (unless df_gold was 0x0, handled above)
     if num_a_rows != num_b_rows:
-        print(f"Result: False. Row count mismatch (df_gold has {num_a_rows}, df_gen has {num_b_rows}).")
-        print("         Column contents cannot be identical if lengths differ.")
         return False
-    print(f"Info: Row counts match ({num_a_rows}).")
 
     # 3. Not enough columns in df_gen to match all of df_gold's columns
     if num_a_cols > num_b_cols:
-        print(f"Result: False. Not enough columns in df_gen ({num_b_cols}) to match all columns from df_gold ({num_a_cols}).")
         return False
-    print(f"Info: df_gen has enough or more columns ({num_b_cols}) than df_gold ({num_a_cols}).")
 
     # --- Greedy Matching ---
     b_cols_used = [False] * num_b_cols # Tracks which columns in df_gen have been matched
