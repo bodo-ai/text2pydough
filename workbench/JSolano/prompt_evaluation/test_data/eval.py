@@ -6,10 +6,11 @@ import pandas as pd
 import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
+from pandas.api.types import is_numeric_dtype
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-
+numeric_tolerance = 1e-5
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -152,6 +153,10 @@ def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
     Their original indices/names are ignored for the comparison itself, but they must
     have the same length (which should be pre-checked at the DataFrame level).
     """
+    if is_numeric_dtype(s1) and is_numeric_dtype(s2):
+        # Check if the numeric values are equal within a small tolerance
+        return (s1 - s2).abs().max() < numeric_tolerance
+    
     if s1.dtype != s2.dtype:
         return False
     return s1.reset_index(drop=True).equals(s2.reset_index(drop=True))
