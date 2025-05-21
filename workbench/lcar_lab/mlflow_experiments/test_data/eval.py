@@ -100,7 +100,6 @@ def normalize_table(
 
     if not has_order_by:
         # sort rows using values from first column to last
-        print(list(sorted_df.columns))
         sorted_df = sorted_df.sort_values(by=list(sorted_df.columns))
 
     # reset index
@@ -218,7 +217,6 @@ def query_sqlite_db(
         conn.close()
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
-        print(f"sql gt: {df}")
         # round floats to decimal_points
         if decimal_points:
             df = df.round(decimal_points)
