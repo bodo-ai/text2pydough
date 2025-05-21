@@ -169,6 +169,7 @@ class GeminiAIProvider(AIProvider):
                 ),
             
             )
+            print(response)
             return response.text, response.usage
     
     def chat(self, question, prompt, chat=None, **kwargs):
