@@ -134,12 +134,12 @@ class GeminiAIProvider(AIProvider):
         self.client = genai.Client(vertexai= True,  project=self.project, location=self.location)
     
     @mlflow.trace
-    def ask(self, question, prompt, **kwargs):
+    def ask(self, prompt, system_instruction, **kwargs):
         response = self.client.models.generate_content(
             model=self.model_id,
-            contents=question,
+            contents=prompt,
             config=types.GenerateContentConfig(
-                system_instruction=prompt,
+                system_instruction=system_instruction,
                 **kwargs
             ),
         

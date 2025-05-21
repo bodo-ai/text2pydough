@@ -144,11 +144,11 @@ def compare_df(
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
-def execute_code_and_extract_result(extracted_code, local_env, db_name):
+def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
     """Executes the Python code and returns the result or raises an exception."""
     try:
-        pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/{db_name}_graph.json", db_name)
-        pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/{db_name}.db",  check_same_thread=False)
+        pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
+        pydough.active_session.connect_database("sqlite", database=database_path,  check_same_thread=False)
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
@@ -160,7 +160,7 @@ def execute_code_and_extract_result(extracted_code, local_env, db_name):
 
 def query_sqlite_db(
     query: str,
-    db_name: str = None,
+    db_path: str = None,
     decimal_points: int = None,
 ) -> pd.DataFrame:
     """
@@ -177,7 +177,7 @@ def query_sqlite_db(
     cur = None
     try:
       
-        conn = sqlite3.connect(f"{os.path.dirname(__file__)}/{db_name}.db")
+        conn = sqlite3.connect(db_path)
         cur = conn.cursor()
         cur.execute(query)
         results = cur.fetchall()
@@ -198,16 +198,21 @@ def query_sqlite_db(
             conn.close()
         return None, str(e)
     
-def process_row(row):
+def process_row(row,db_base_path,metadata_base_path):
     extracted_code = row.get('extracted_python_code')
     question= row.get('question')
     
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
-        db_name= row["db_name"]
+        db_name = row['db_name']
+        dataset_name = row['dataset_name']
+
+        db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
 
-        result, exception = execute_code_and_extract_result(extracted_code, local_env, db_name)
+        result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
         if result is not None:
             extracted_sql, db_exception = query_sqlite_db(row["sql"],db_name )
@@ -221,7 +226,7 @@ def process_row(row):
             return 'Query Error', exception
     return 'Unknown', None  
 
-def compare_output(folder_path, csv_file_path):
+def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path):
     """
     Extracts and returns the value of a specific variable from Python code in a CSV file.
     Returns:
@@ -231,7 +236,7 @@ def compare_output(folder_path, csv_file_path):
     df = pd.read_csv(csv_file_path)
 
     def process_and_return(row):
-        return process_row(row)
+        return process_row(row, db_base_path, metadata_base_path)
 
     with ThreadPoolExecutor() as executor:
         results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
