@@ -8,7 +8,7 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
-
+import time
 
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
