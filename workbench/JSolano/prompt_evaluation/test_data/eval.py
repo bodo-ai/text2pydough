@@ -183,8 +183,6 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
         else: # df_gold is Rx0 (R > 0)
             # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
             result = num_gold_rows == num_gen_rows
-            print(f"Info: df_gold has 0 columns and {num_gold_rows} rows.")
-            print(f"Result: {result}. (df_gen must have the same number of rows: {num_gen_rows})")
             return result
 
     # 2. Row count mismatch (unless df_gold was 0x0, handled above)
