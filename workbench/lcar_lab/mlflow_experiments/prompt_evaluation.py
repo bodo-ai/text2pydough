@@ -69,7 +69,8 @@ def extract_python_code(text):
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
 def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
-    db_names = df["db_name"].dropna().unique()
+    db_names = df["db_name"]
+    dataset_name = df["dataset_name"]
     db_markdown_map = {}
  
     for db_name in db_names:
