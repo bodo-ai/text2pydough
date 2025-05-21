@@ -68,17 +68,18 @@ def extract_python_code(text):
     matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
-def prepare_db_markdown_map(df, base_path="test_data"):
+def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     db_names = df["db_name"].dropna().unique()
     db_markdown_map = {}
-
+ 
     for db_name in db_names:
-        json_file = os.path.join(base_path, f"{db_name}_graph.json")
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
         
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(base_path, f"{db_name}.db")}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")}"
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
             with open(json_file, "w") as f:
@@ -197,7 +198,7 @@ def main(git_hash):
             data = json.load(f)
 
         df = pd.read_csv(args.questions)
-        db_markdown_map = prepare_db_markdown_map(df)
+        db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
         results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
 
