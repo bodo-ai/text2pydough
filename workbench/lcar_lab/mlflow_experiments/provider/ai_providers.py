@@ -155,7 +155,7 @@ class GeminiAIProvider(AIProvider):
                 system=system_instruction,
                 **kwargs
             )
-            response.to_json()
+            response =response.to_json()
             text_message = response["content"][0]["text"]
             usage = response["usage"]["input_tokens"]
             return text_message, usage
