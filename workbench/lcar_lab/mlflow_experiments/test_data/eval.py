@@ -221,7 +221,7 @@ def process_row(row,db_base_path,metadata_base_path):
         result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
         if result is not None:
-            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_name )
+            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_path )
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
