@@ -155,10 +155,9 @@ class GeminiAIProvider(AIProvider):
                 system=system_instruction,
                 **kwargs
             )
-            response =response.to_json()
-            print(response)
+            
             text_message = response.content
-            usage = response["usage"]
+            usage = response.usage 
             return text_message, usage
         else:    
             response = self.client.models.generate_content(
