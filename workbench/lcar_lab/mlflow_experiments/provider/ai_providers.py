@@ -13,8 +13,6 @@ from google.genai import types
 import aisuite as ai
 from mistralai import Mistral
 import mlflow
-from anthropic import AnthropicVertex
-
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
     @abstractmethod
@@ -131,45 +129,22 @@ class GeminiAIProvider(AIProvider):
             self.project = os.environ["GOOGLE_PROJECT_ID"]
             self.location = os.environ["GOOGLE_REGION"]
             self.model_id = model_id
-            if "claude" in model_id:
-                self.location="us-east5"
-                self.client = AnthropicVertex(project_id=self.project, region=self.location)
-            else:   
-                self.client = genai.Client(project=self.project, location=self.location)    
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        
+        self.client = genai.Client(vertexai= True,  project=self.project, location=self.location)
     
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
-        if "claude" in self.model_id:
-            response = self.client.messages.create(
-                messages=[
-           
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-                ],
-                model=self.model_id,
-                system=system_instruction,
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
                 **kwargs
-            )
-            
-            text_message = response.content[0].text
-            usage = response.usage 
-            return text_message, usage
-        else:    
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    **kwargs
-                ),
-            
-            )
-            return response.text, response.usage_metadata
+            ),
+        
+        )
+        return response.text, response.usage_metadata
     
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
