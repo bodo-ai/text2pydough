@@ -156,8 +156,9 @@ class GeminiAIProvider(AIProvider):
                 **kwargs
             )
             response =response.to_json()
+            print(response)
             text_message = response["content"][0]["text"]
-            usage = response["usage"]["input_tokens"]
+            usage = response["usage"]
             return text_message, usage
         else:    
             response = self.client.models.generate_content(
