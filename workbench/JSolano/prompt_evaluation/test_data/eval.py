@@ -194,11 +194,10 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     # 3. Not enough columns in df_gen to match all of df_gold's columns
     if num_a_cols > num_b_cols:
         return False
-
+    
     # --- Greedy Matching ---
     b_cols_used = [False] * num_b_cols # Tracks which columns in df_gen have been matched
 
-    print("Info: Attempting to greedily match df_gold columns to unique df_gen columns by content...")
     for i in range(num_a_cols):
         s_a = df_gold.iloc[:, i]
         found_match_for_s_a = False
