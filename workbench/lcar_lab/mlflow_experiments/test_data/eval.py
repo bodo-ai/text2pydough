@@ -8,7 +8,9 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
-import time
+from threading import Lock
+metadata_lock = Lock()
+
 
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -147,10 +149,12 @@ def convert_to_df(last_variable):
 def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
     """Executes the Python code and returns the result or raises an exception."""
     try:
-        print(f" In the execute code: {cheatsheet_path}, {db_name}")
-        pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
-        pydough.active_session.connect_database("sqlite", database=database_path)
-        time.sleep(5)
+        with metadata_lock:
+            print(f" In the execute code: {cheatsheet_path}, {db_name}")
+            pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
+            pydough.active_session.connect_database("sqlite", database=database_path)
+            time.sleep(5)
+
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
@@ -159,6 +163,7 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
         return result_df, None  # Return result and no exception
     except Exception as e:
         return None, e  # Return None as result and exception message
+
 
 def query_sqlite_db(
     query: str,
