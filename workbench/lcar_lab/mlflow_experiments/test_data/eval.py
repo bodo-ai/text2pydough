@@ -8,6 +8,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+metadata_lock = Lock()
 
 
 
@@ -147,8 +149,10 @@ def convert_to_df(last_variable):
 def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
     """Executes the Python code and returns the result or raises an exception."""
     try:
-        pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
-        pydough.active_session.connect_database("sqlite", database=database_path,  check_same_thread=False)
+        with metadata_lock:
+            pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
+            pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
+
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
@@ -157,6 +161,7 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
         return result_df, None  # Return result and no exception
     except Exception as e:
         return None, e  # Return None as result and exception message
+
 
 def query_sqlite_db(
     query: str,
@@ -215,7 +220,7 @@ def process_row(row,db_base_path,metadata_base_path):
         result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
         if result is not None:
-            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_name )
+            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_path )
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 

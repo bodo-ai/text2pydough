@@ -22,21 +22,7 @@ from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
 from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
-
-class GeminiWrapper(PythonModel):
-    def __init__(self, model_id):
-        import pydough
-        self.model_id = model_id
-
-    def load_context(self, context):
-        self.client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-
-    def predict(self, context, model_input: List[str]) -> List[str]:
-        response = self.client.models.generate_content(
-            model=self.model_id,
-            contents=model_input
-        )
-        return [response.text]
+from gemini_wrapper import GeminiWrapper
 
 # === Helper Functions ===
 
@@ -68,17 +54,19 @@ def extract_python_code(text):
     matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
-def prepare_db_markdown_map(df, base_path="test_data"):
-    db_names = df["db_name"].dropna().unique()
+def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
+    db_names = df["db_name"]
+    dataset_names = df["dataset_name"]
     db_markdown_map = {}
-
-    for db_name in db_names:
-        json_file = os.path.join(base_path, f"{db_name}_graph.json")
-        
+    print(f"[INFO] Preparing DB markdown map for {len(db_names)} databases in metadata base path: {metadata_base_path}")
+    for db_name, dataset_name in zip(db_names, dataset_names):
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
+        print(json_file)
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(base_path, f"{db_name}.db")}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")}"
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
             with open(json_file, "w") as f:
@@ -99,7 +87,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{script}\n\n", f"\n\n\nQuestion: {question}\n", "\nDatabase schema:\n", str(db_content)]), prompt.format(
+    return "".join([f"\n\n\nQuestion: {question}\n", "\nDatabase schema:\n", str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -197,7 +185,7 @@ def main(git_hash):
             data = json.load(f)
 
         df = pd.read_csv(args.questions)
-        db_markdown_map = prepare_db_markdown_map(df)
+        db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
         results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
 
@@ -234,7 +222,7 @@ def main(git_hash):
             metrics_file.write(metrics_json)
 
         mlflow.pyfunc.log_model(
-            artifact_path="Gemini Model",
+            artifact_path=args.model_id,
             python_model=GeminiWrapper(model_id=args.model_id),
             artifacts={
                 "prompt_file": args.prompt_file,
