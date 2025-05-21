@@ -143,7 +143,7 @@ class GeminiAIProvider(AIProvider):
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
         if "claude" in self.model_id:
-            message = self.client.messages.create(
+            response = self.client.messages.create(
                 messages=[
            
                 {
@@ -155,7 +155,8 @@ class GeminiAIProvider(AIProvider):
                 system=system_instruction,
                 **kwargs
             )
-            return response.choices[0].message.content, response.usage_metadata
+            print(response)
+            return response, response.usage_metadata
         else:    
             response = self.client.models.generate_content(
                 model=self.model_id,
