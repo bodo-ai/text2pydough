@@ -150,6 +150,7 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
     """Executes the Python code and returns the result or raises an exception."""
     try:
         with metadata_lock:
+            print(f" In the execute code: {cheatsheet_path}, {db_name}")
             pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
             pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
 
