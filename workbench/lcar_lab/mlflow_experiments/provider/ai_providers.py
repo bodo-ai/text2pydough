@@ -131,22 +131,44 @@ class GeminiAIProvider(AIProvider):
             self.project = os.environ["GOOGLE_PROJECT_ID"]
             self.location = os.environ["GOOGLE_REGION"]
             self.model_id = model_id
+            if "claude" in model_id:
+                self.location="us-east5"
+                self.client = AnthropicVertex(project=self.project, location=self.location)
+            else:   
+                self.client = genai.Client(api_key=self.api_key, project=self.project, location=self.location)    
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        self.client = genai.Client(vertexai= True,  project=self.project, location=self.location)
+        
     
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
-        response = self.client.models.generate_content(
-            model=self.model_id,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
+        if "claude" in self.model_id:
+            message = client.messages.create(
+                messages=[
+                {
+                    "role": "system",
+                    "content": system_instruction,
+                },
+                {
+                    "role": "user",
+                    "content": system_instruction,
+                }
+                ],
+                model=self.model_id,
                 **kwargs
-            ),
-        
-        )
-        return response.text, response.usage_metadata
+            )
+            return response.choices[0].message.content, response.usage_metadata
+        else:    
+            response = self.client.models.generate_content(
+                model=self.model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    **kwargs
+                ),
+            
+            )
+            return response.text, response.usage_metadata
     
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
