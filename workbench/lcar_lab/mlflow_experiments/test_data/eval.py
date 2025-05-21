@@ -149,7 +149,7 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
     try:
         print(f" In the execute code: {cheatsheet_path}, {db_name}")
         pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
-        pydough.active_session.connect_database("sqlite", database=database_path,  check_same_thread=False)
+        pydough.active_session.connect_database("sqlite", database=database_path)
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
