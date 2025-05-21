@@ -155,9 +155,10 @@ class GeminiAIProvider(AIProvider):
                 system=system_instruction,
                 **kwargs
             )
-            print(response.to_json())
-            
-            return response.to_json(), response.usage_metadata
+            response.to_json()
+            text_message = response["content"][0]["text"]
+            usage = response["usage"]["input_tokens"]
+            return text_message, usage
         else:    
             response = self.client.models.generate_content(
                 model=self.model_id,
