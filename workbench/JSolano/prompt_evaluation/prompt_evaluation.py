@@ -6,20 +6,23 @@ import os
 import re
 import textwrap
 import time
+from typing import List
 import pandas as pd
 from datetime import datetime
 import multiprocessing
 import mlflow
+import mlflow.pyfunc
+from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from test_data.eval import compare_output, execute_code_and_extract_result
-from claude import ClaudeModel, DeepseekModel, GeminiModel
 import aisuite as ai
 from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
 from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
+from gemini_wrapper import GeminiWrapper
 
 # === Helper Functions ===
 
@@ -32,6 +35,8 @@ def get_provider(provider, model_id, config=None):
         return DeepSeekAIProvider(model_id)
     elif provider == "google":
         return GeminiAIProvider(model_id)
+    elif provider == "mistral":
+        return MistralAIProvider(model_id)
     else:
         return OtherAIProvider(provider, model_id, config)
     
@@ -46,20 +51,21 @@ def read_file(path):
 
 def extract_python_code(text):
     if not isinstance(text, str): return ""
-    matches = re.findall(r"```(?:\w+\n)?(.*?)```", text, re.DOTALL)
+    matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
     return textwrap.dedent(matches[-1]).strip() if matches else ""
 
-def prepare_db_markdown_map(df, base_path="test_data"):
-    db_names = df["db_name"].dropna().unique()
+def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
+    db_names = df["db_name"]
+    dataset_names = df["dataset_name"]
     db_markdown_map = {}
-
-    for db_name in db_names:
-        json_file = os.path.join(base_path, f"{db_name}_graph.json")
-        
+    for db_name, dataset_name in zip(db_names, dataset_names):
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
+        print(json_file)
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(base_path, f"{db_name}.db")}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")}"
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
             with open(json_file, "w") as f:
@@ -68,7 +74,7 @@ def prepare_db_markdown_map(df, base_path="test_data"):
         if db_name not in db_markdown_map:
             with open(json_file, "r") as f:
                 data = json.load(f)
-                db_markdown_map[db_name] = json_to_markdown(data)
+                db_markdown_map[db_name] = data
 
     return db_markdown_map
 
@@ -80,10 +86,9 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-
-    return question, prompt.format(
+    return "".join([f"\n\n\nQuestion: {question}\n"]), prompt.format(
         script_content=script,
-        database_content=db_content,
+        database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -106,7 +111,8 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     db_name = row.get("db_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
-    response1 = client.ask(formatted_q, formatted_prompt, **kwargs)
+    print(f"[INFO] Asking question: {question}")
+    response1 = client.ask(formatted_q,formatted_prompt, **kwargs)
     duration = time.time() - start
     if isinstance(response1, tuple):  # Gemini returns (text, usage)
         #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
@@ -151,6 +157,11 @@ def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
+    parser.add_argument("--experiment_name", type=str)
+    parser.add_argument('--db-base-path', type=str, required=True,
+                      help='Path to the SQLite database file')
+    parser.add_argument('--metadata-base-path', type=str, required=True,
+                      help='Path to the metadata graph JSON file')
     parser.add_argument("--pydough_file", type=str)
     parser.add_argument("--prompt_file", type=str)
     parser.add_argument("--questions", type=str)
@@ -160,9 +171,11 @@ def main(git_hash):
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
-
-    mlflow.set_tracking_uri("http://127.0.0.1:5001")
-    experiment = mlflow.set_experiment("text2pydough")
+    MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
+    MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"] 
+    mlflow.gemini.autolog()
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    experiment = mlflow.set_experiment("epoch change")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
         prompt = read_file(args.prompt_file)
@@ -172,7 +185,7 @@ def main(git_hash):
             data = json.load(f)
 
         df = pd.read_csv(args.questions)
-        db_markdown_map = prepare_db_markdown_map(df)
+        db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
         results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
 
@@ -188,7 +201,7 @@ def main(git_hash):
 
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
-        tested_file, tested_df = compare_output(test_path, output_file)
+        tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
         total_rows = len(tested_df)
 
         counts = tested_df['comparison_result'].value_counts()
@@ -200,6 +213,23 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
+
+        percentages_dict = percentages.to_dict()
+        metrics_json = json.dumps(percentages_dict, indent=4)
+
+        metrics_path = "./metrics.json"
+        with open(metrics_path, "w") as metrics_file:
+            metrics_file.write(metrics_json)
+
+        mlflow.pyfunc.log_model(
+            artifact_path=args.model_id,
+            python_model=GeminiWrapper(model_id=args.model_id),
+            artifacts={
+                "prompt_file": args.prompt_file,
+                "pydough_file": args.pydough_file,
+                "metrics.json": metrics_path
+            }
+        )
 
 if __name__ == "__main__":
     cwd = os.getcwd()
