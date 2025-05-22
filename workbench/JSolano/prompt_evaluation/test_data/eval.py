@@ -159,7 +159,7 @@ def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
     
     if s1.dtype != s2.dtype:
         return False
-    return s1.reset_index(drop=True).equals(s2.reset_index(drop=True))
+    return s1.equals(s2)
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     """

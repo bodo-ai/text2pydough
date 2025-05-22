@@ -8,9 +8,13 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from concurrent.futures import ThreadPoolExecutor
+from pandas.api.types import is_numeric_dtype
 from threading import Lock
 metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
+#Global comparison tolerance
+numeric_tolerance = 1e-5
+
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -148,27 +152,99 @@ def compare_df(
     """
     # drop duplicates to ensure equivalence
     try:
-        if df_gold.equals(df_gen):
+        is_equal = df_gold.values == df_gen.values
+        if is_equal.all():
             return True
     except:
-        pass
+        try:
+            is_equal = df_gold.values == df_gen.values
+            if is_equal:
+                return True
+        except:
+            pass
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
 
-    # perform same checks again for normalized tables
-    if df_gold.shape != df_gen.shape:
-        return False
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
-    
     is_equal = df_gold.values == df_gen.values
-    try:
-        return is_equal.all()
-    except:
-        return is_equal
+    if is_equal.all() == True:
+        return True
     
+    return secondary_check(df_gold, df_gen)
+    
+def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
+    """
+    Checks if two Series have identical dtypes and values in the same order.
+    Their original indices/names are ignored for the comparison itself, but they must
+    have the same length (which should be pre-checked at the DataFrame level).
+    """
+    if is_numeric_dtype(s1) and is_numeric_dtype(s2):
+        # Check if the numeric values are equal within a small tolerance
+        return (s1 - s2).abs().max() < numeric_tolerance
+    
+    if s1.dtype != s2.dtype:
+        return False
+    return s1.reset_index(drop=True).equals(s2.reset_index(drop=True))
+
+def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
+    """
+    Checks if all column contents of DataFrame A can be uniquely matched to column
+    contents in DataFrame B. Column names and the order of columns in both
+    DataFrames are ignored. Only dtype and values (in order) within each column matter.
+
+    Args:
+        df_gold (pd.DataFrame): The dataframe obtained by running the reference SQL.
+        df_gen (pd.DataFrame): The dataframe obtained by running the generated PyDough code.
+
+    Returns:
+        bool: True if all column contents of df_gold can be uniquely matched in df_gen, False otherwise.
+    """
+
+    num_gold_cols = df_gold.shape[1]
+    num_gen_cols = df_gen.shape[1]
+    num_gold_rows = df_gold.shape[0]
+    num_gen_rows = df_gen.shape[0]
+
+    # 1. Handle df_gold having zero columns
+    if num_gold_cols == 0:
+        if num_gold_rows == 0: # df_gold is 0x0
+            print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
+            return True
+        else: # df_gold is Rx0 (R > 0)
+            # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
+            result = num_gold_rows == num_gen_rows
+            return result
+
+    # 2. Row count mismatch (unless df_gold was 0x0, handled above)
+    if num_gold_rows != num_gen_rows:
+        return False
+
+    # 3. Not enough columns in df_gen to match all of df_gold's columns
+    if num_gold_cols > num_gen_cols:
+        return False
+    
+    # --- Greedy Matching ---
+    b_cols_used = [False] * num_gen_cols # Tracks which columns in df_gen have been matched
+
+    for i in range(num_gold_cols):
+        series_gold = df_gold.iloc[:, i]
+        found_match_for_s_gold = False
+        for j in range(num_gen_cols):
+            if not b_cols_used[j]: # If df_gen's j-th column is not yet used
+                series_gen = df_gen.iloc[:, j]
+                if series_contents_equal(series_gold, series_gen):
+                    b_cols_used[j] = True
+                    found_match_for_s_gold = True
+                    break # Move to the next column in df_gold
+        
+        if not found_match_for_s_gold:
+            return False
+        
+    return True    
+
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
