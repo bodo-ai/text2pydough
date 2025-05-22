@@ -115,19 +115,27 @@ def eval_complexity(sql: str, dialect="sqlite"):
 
 
 
-def annotate_difficulty(input_csv: str, output_csv: str):
-    df = pd.read_csv(input_csv)
-    df['difficulty'] = df['ground_truth_sql'].apply(lambda s: eval_hardness(s))
-    df['complexity'] = df['ground_truth_sql'].apply(lambda s: eval_complexity(s))
-    df.to_csv(output_csv, index=False)
-    print(f"Annotated CSV saved to {output_csv}")
+def clasificate_queries(df):
+    if 'ground_truth_sql' in df.columns:
+        df['difficulty'] = df['ground_truth_sql'].apply(lambda s: eval_hardness(s))
+        df['complexity'] = df['ground_truth_sql'].apply(lambda s: eval_complexity(s))
+    else:
+        raise ValueError("The dataframe must contain 'ground_truth_sql' column.")
+    return df
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_csv')
     parser.add_argument('output_csv')
     args = parser.parse_args()
-    annotate_difficulty(args.input_csv, args.output_csv)
+
+    # Read the CSV file
+    df = pd.read_csv(args.input_csv)
+
+    final_df = clasificate_queries(df)
+
+    # Save the modified DataFrame to a new CSV file
+    final_df.to_csv(args.output_csv, index=False)
 
 
 
