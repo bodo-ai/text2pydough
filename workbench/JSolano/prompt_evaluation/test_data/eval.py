@@ -324,7 +324,7 @@ def process_row(row,db_base_path,metadata_base_path):
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
-            comparison_result = hard_match(result, extracted_sql)
+            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
