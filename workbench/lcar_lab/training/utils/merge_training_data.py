@@ -5,8 +5,7 @@ from query_classification import clasificate_queries
 spider_path = '/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/labeled_data/spider/training_ready/labeled_training_data_with_schema_133702.csv'
 kaggledbqa_path = '/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/labeled_data/kaggledbqa/training_ready/training_data_with_schema_20250512_155042.csv'
 
-#output_path = '/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/labeled_data/spider_kaggle_data/spider_kaggle_full.csv'
-output_path = '/home/gerald8525/repositories/test.csv'
+output_path = '/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/labeled_data/spider_kaggle_data/spider_kaggle_full.csv'
 
 spider_df = pd.read_csv(spider_path)
 kaggle_df = pd.read_csv(kaggledbqa_path)
