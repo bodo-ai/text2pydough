@@ -58,7 +58,6 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     db_names = df["db_name"]
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
-    print(f"[INFO] Preparing DB markdown map for {len(db_names)} databases in metadata base path: {metadata_base_path}")
     for db_name, dataset_name in zip(db_names, dataset_names):
         metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
@@ -87,7 +86,6 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    # , "\nDatabase schema:\n", str(db_content)
     return "".join([f"\n\n\nQuestion: {question}\n"]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
@@ -113,6 +111,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     db_name = row.get("db_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
     start = time.time()
+    print(f"[INFO] Asking question: {question}")
     response1 = client.ask(formatted_q,formatted_prompt, **kwargs)
     duration = time.time() - start
     if isinstance(response1, tuple):  # Gemini returns (text, usage)
