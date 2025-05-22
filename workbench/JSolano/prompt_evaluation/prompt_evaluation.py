@@ -65,7 +65,7 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.db")}"
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
             with open(json_file, "w") as f:
