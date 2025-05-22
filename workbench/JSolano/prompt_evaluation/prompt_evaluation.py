@@ -58,8 +58,8 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     db_names = df["db_name"]
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
-    for db_name, dataset_name in zip(dataset_names, db_names):
-        metadata_dir = os.path.join(metadata_base_path, "metadata")
+    for db_name, dataset_name in zip(db_names, dataset_names):
+        metadata_dir = os.path.join(metadata_base_path, "metadatass")
         json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(json_file)
         # Only generate if missing
