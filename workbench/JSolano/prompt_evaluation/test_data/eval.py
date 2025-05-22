@@ -313,7 +313,7 @@ def process_row(row,db_base_path,metadata_base_path):
         dataset_name = row['dataset_name']
 
         db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
-        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
 
