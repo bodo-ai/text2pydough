@@ -167,9 +167,18 @@ def compare_df(
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
-    is_equal = df_gold.values == df_gen.values
-    if is_equal.all() == True:
-        return True
+    
+    try:
+        is_equal = df_gold.values == df_gen.values
+        if is_equal.all():
+            return True
+    except:
+        try:
+            is_equal = df_gold.values == df_gen.values
+            if is_equal:
+                return True
+        except:
+            pass
     
     return secondary_check(df_gold, df_gen)
     
