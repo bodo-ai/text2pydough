@@ -10,8 +10,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 metadata_lock = Lock()
-
-
+from pandas.testing import assert_frame_equal   # works in every supported pandas version
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -108,6 +107,33 @@ def normalize_table(
     sorted_df = sorted_df.reset_index(drop=True)
     return sorted_df
 
+def hard_match(left, right, atol=1e-6, rtol=1e-6,
+                 ignore_order=True, **kwargs) -> bool:
+    """
+    Return True if two DataFrames are equal within the given tolerances.
+    Parameters
+    ----------
+    atol, rtol : float
+        Absolute / relative tolerance for numeric differences.
+    ignore_order : bool
+        If True, sort both on column names and index labels before comparing.
+    **kwargs
+        Any other assert_frame_equal keyword (e.g. check_dtype=False).
+    """
+    if ignore_order:
+        left  = left.sort_index(axis=0).sort_index(axis=1)
+        right = right.sort_index(axis=0).sort_index(axis=1)
+    try:
+        assert_frame_equal(
+            left, right,
+            check_exact=False,     # turn on tolerance mode
+            atol=atol, rtol=rtol,
+            **kwargs               # pass things like check_dtype, check_names, etc.
+        )
+        return True
+    except AssertionError:
+        return False
+
 def compare_df(
     df_gold: pd.DataFrame,
     df_gen: pd.DataFrame,
@@ -150,7 +176,6 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
     """Executes the Python code and returns the result or raises an exception."""
     try:
         with metadata_lock:
-            print(f" In the execute code: {cheatsheet_path}, {db_name}")
             pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
             pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
 
@@ -192,7 +217,6 @@ def query_sqlite_db(
         conn.close()
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
-
         # round floats to decimal_points
         if decimal_points:
             df = df.round(decimal_points)
@@ -225,7 +249,7 @@ def process_row(row,db_base_path,metadata_base_path):
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
-            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
+            comparison_result = hard_match(result, extracted_sql)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
@@ -244,6 +268,7 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     def process_and_return(row):
         return process_row(row, db_base_path, metadata_base_path)
 
+    
     with ThreadPoolExecutor() as executor:
         results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
