@@ -6,11 +6,13 @@ import pandas as pd
 import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
-from pandas.api.types import is_numeric_dtype
 import re
 from concurrent.futures import ThreadPoolExecutor
+from pandas.api.types import is_numeric_dtype
+from threading import Lock
+metadata_lock = Lock()
+from pandas.testing import assert_frame_equal   # works in every supported pandas version
 
-numeric_tolerance = 1e-5
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -107,6 +109,33 @@ def normalize_table(
     sorted_df = sorted_df.reset_index(drop=True)
     return sorted_df
 
+def hard_match(left, right, atol=1e-6, rtol=1e-6,
+                 ignore_order=True, **kwargs) -> bool:
+    """
+    Return True if two DataFrames are equal within the given tolerances.
+    Parameters
+    ----------
+    atol, rtol : float
+        Absolute / relative tolerance for numeric differences.
+    ignore_order : bool
+        If True, sort both on column names and index labels before comparing.
+    **kwargs
+        Any other assert_frame_equal keyword (e.g. check_dtype=False).
+    """
+    if ignore_order:
+        left  = left.sort_index(axis=0).sort_index(axis=1)
+        right = right.sort_index(axis=0).sort_index(axis=1)
+    try:
+        assert_frame_equal(
+            left, right,
+            check_exact=False,     # turn on tolerance mode
+            atol=atol, rtol=rtol,
+            **kwargs               # pass things like check_dtype, check_names, etc.
+        )
+        return True
+    except AssertionError:
+        return False
+
 def compare_df(
     df_gold: pd.DataFrame,
     df_gen: pd.DataFrame,
@@ -135,9 +164,6 @@ def compare_df(
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
 
-    # perform same checks again for normalized tables
-    if df_gold.shape != df_gen.shape:
-        return False
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
@@ -147,12 +173,13 @@ def compare_df(
     
     return secondary_check(df_gold, df_gen)
     
-def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
+def series_contents_equal(s1: pd.Series, s2: pd.Series, numeric_tolerance = 1e-5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
     have the same length (which should be pre-checked at the DataFrame level).
     """
+    #Global comparison tolerance
     if is_numeric_dtype(s1) and is_numeric_dtype(s2):
         # Check if the numeric values are equal within a small tolerance
         return (s1 - s2).abs().max() < numeric_tolerance
@@ -216,27 +243,30 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
             return False
         
     return True    
-    
+
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
-def execute_code_and_extract_result(extracted_code, local_env, db_name):
+def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
     """Executes the Python code and returns the result or raises an exception."""
     try:
-        print(db_name)
-        pydough.active_session.load_metadata_graph(f"{os.path.dirname(__file__)}/{db_name}_graph.json", db_name)
-        pydough.active_session.connect_database("sqlite", database=f"{os.path.dirname(__file__)}/{db_name}.db",  check_same_thread=False)
+        with metadata_lock:
+            pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
+            pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
+
         transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
         result_df = convert_to_df(last_variable)
+        
         return result_df, None  # Return result and no exception
     except Exception as e:
-        return None, str(e)  # Return None as result and exception message
+        return None, e  # Return None as result and exception message
+
 
 def query_sqlite_db(
     query: str,
-    db_name: str = None,
+    db_path: str = None,
     decimal_points: int = None,
 ) -> pd.DataFrame:
     """
@@ -253,7 +283,7 @@ def query_sqlite_db(
     cur = None
     try:
       
-        conn = sqlite3.connect(f"{os.path.dirname(__file__)}/{db_name}.db")
+        conn = sqlite3.connect(db_path)
         cur = conn.cursor()
         cur.execute(query)
         results = cur.fetchall()
@@ -262,7 +292,6 @@ def query_sqlite_db(
         conn.close()
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
-
         # round floats to decimal_points
         if decimal_points:
             df = df.round(decimal_points)
@@ -274,30 +303,35 @@ def query_sqlite_db(
             conn.close()
         return None, str(e)
     
-def process_row(row):
+def process_row(row,db_base_path,metadata_base_path):
     extracted_code = row.get('extracted_python_code')
     question= row.get('question')
     
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
-        db_name= row["db_name"]
+        db_name = row['db_name']
+        dataset_name = row['dataset_name']
+
+        db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
 
-        result, exception = execute_code_and_extract_result(extracted_code, local_env, db_name)
+        result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
         if result is not None:
-            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_name )
+            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_path )
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
-            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
+            comparison_result = hard_match(result, extracted_sql)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
             return 'Query Error', exception
     return 'Unknown', None  
 
-def compare_output(folder_path, csv_file_path):
+def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path):
     """
     Extracts and returns the value of a specific variable from Python code in a CSV file.
     Returns:
@@ -307,8 +341,9 @@ def compare_output(folder_path, csv_file_path):
     df = pd.read_csv(csv_file_path)
 
     def process_and_return(row):
-        return process_row(row)
+        return process_row(row, db_base_path, metadata_base_path)
 
+    
     with ThreadPoolExecutor() as executor:
         results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
@@ -321,7 +356,3 @@ def compare_output(folder_path, csv_file_path):
     df.to_csv(output_file, index=False)
 
     return output_file, df
-
-# %%
-#compare_output("../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/test", "../results/aws/us.anthropic.claude-3-7-sonnet-20250219-v1:0/responses_2025_03_11-09_47_42.csv","./tpch.db")
-# %%
