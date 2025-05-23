@@ -105,7 +105,6 @@ def normalize_table(
         sorted_df = sorted_df.sort_values(by=list(sorted_df.columns))
 
     # reset index
-    sorted_df = deduplicate_columns(sorted_df)
     sorted_df = sorted_df.reset_index(drop=True)
     return sorted_df
 
