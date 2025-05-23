@@ -119,6 +119,9 @@ def clasificate_queries(df):
     if 'ground_truth_sql' in df.columns:
         df['difficulty'] = df['ground_truth_sql'].apply(lambda s: eval_hardness(s))
         df['complexity'] = df['ground_truth_sql'].apply(lambda s: eval_complexity(s))
+    elif 'sql' in df.columns:
+        df['difficulty'] = df['sql'].apply(lambda s: eval_hardness(s))
+        df['complexity'] = df['sql'].apply(lambda s: eval_complexity(s))
     else:
         raise ValueError("The dataframe must contain 'ground_truth_sql' column.")
     return df
