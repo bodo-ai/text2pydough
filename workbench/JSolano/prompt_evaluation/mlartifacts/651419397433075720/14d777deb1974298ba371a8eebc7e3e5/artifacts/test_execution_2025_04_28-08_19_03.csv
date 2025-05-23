@@ -1,0 +1,1234 @@
+question,sql,db_name,response,execution_time,extracted_python_code,usage,comparison_result,exception
+"Calculate the CPUR for each merchant, considering only successful transactions. Return the merchant name and CPUR.CPUR (coupon usage rate) = number of distinct coupons used / number of distinct transactions","SELECT m.name, (COUNT(DISTINCT wtd.coupon_id) * 1.0 / NULLIF(COUNT(DISTINCT wtd.txid), 0)) AS CPUR FROM wallet_transactions_daily AS wtd JOIN merchants AS m ON wtd.receiver_id = m.mid WHERE wtd.status = 'success' GROUP BY m.name;",Ewallet,"```python
+merchant_cpur = Merchants.WHERE(
+    HAS(transactions_received.WHERE(status == 'completed')) == 1  # Ensure merchant has successful transactions to avoid division by zero
+).CALCULATE(
+    merchant_name=name,
+    # Calculate CPUR: distinct coupons used in successful transactions / distinct successful transactions
+    cpur = NDISTINCT(transactions_received.WHERE(status == 'completed').coupon_id) / NDISTINCT(transactions_received.WHERE(status == 'completed').txid)
+)
+```
+
+**Explanation:**
+
+1.  **`Merchants.WHERE(...)`**: We start with the `Merchants` collection and filter it to include only those merchants who have at least one (`HAS(...) == 1`) received transaction (`transactions_received`) that is marked as 'completed' (`WHERE(status == 'completed')`). This pre-filtering prevents potential division-by-zero errors later if a merchant has no successful transactions.
+2.  **`.CALCULATE(...)`**: For the filtered merchants, we calculate the required output fields.
+3.  **`merchant_name=name`**: We select the merchant's name.
+4.  **`cpur = NDISTINCT(...) / NDISTINCT(...)`**: We calculate the CPUR according to the definition:
+    *   **`NDISTINCT(transactions_received.WHERE(status == 'completed').coupon_id)`**: This counts the number of unique `coupon_id`s associated with the merchant's successful received transactions.
+    *   **`NDISTINCT(transactions_received.WHERE(status == 'completed').txid)`**: This counts the number of unique successful received transactions (using `txid` as the unique identifier for a transaction).
+    *   The division gives the Coupon Usage Rate (CPUR).",20.60519528388977,"merchant_cpur = Merchants.WHERE(
+    HAS(transactions_received.WHERE(status == 'completed')) == 1  # Ensure merchant has successful transactions to avoid division by zero
+).CALCULATE(
+    merchant_name=name,
+    # Calculate CPUR: distinct coupons used in successful transactions / distinct successful transactions
+    cpur = NDISTINCT(transactions_received.WHERE(status == 'completed').coupon_id) / NDISTINCT(transactions_received.WHERE(status == 'completed').txid)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=396 candidates_tokens_details=None prompt_token_count=20290 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20290)] thoughts_token_count=1417 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22103 traffic_type=None",No Match,
+"For users in the US and Canada, how many total notifications were sent in each of the last 3 weeks excluding the current week? How many of those were sent on weekends?Weekends are Saturdays and Sundays. Truncate created_at to week for aggregation.","SELECT date(n.created_at,  '-' || ((strftime('%w', n.created_at) + 6) % 7) || ' days') AS WEEK, COUNT(*) AS total_notifications, COUNT(CASE WHEN strftime('%w', n.created_at) IN ('0', '6') THEN 1 END) AS weekend_notifications FROM notifications AS n JOIN users AS u ON n.user_id = u.uid WHERE u.country IN ('US', 'CA') AND n.created_at >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-21 days') AND n.created_at < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Ewallet,"```python
+# Define the time boundaries for the last 3 weeks, excluding the current week
+start_period = DATETIME('now', 'start of week', '-3 weeks')
+end_period = DATETIME('now', 'start of week')
+
+# Filter notifications based on time period and user country (US or Canada)
+# Calculate the starting date of the week for each notification
+notification_info = Notifications.WHERE(
+    (created_at >= start_period)
+    & (created_at < end_period)
+    & ISIN(user.country, (""US"", ""Canada""))
+).CALCULATE(
+    notification_week_start = DATETIME(created_at, 'start of week')
+)
+
+# Partition the filtered notifications by the calculated week start date
+# Calculate the total notifications and weekend notifications for each week
+result = notification_info.PARTITION(name=""weekly_notifications"", by=(notification_week_start)).CALCULATE(
+    week_start_date = notification_week_start,
+    total_notifications = COUNT(Notifications), # Count all notifications within this week's group
+    weekend_notifications = COUNT(KEEP_IF(Notifications, ISIN(DAYNAME(created_at), (""Saturday"", ""Sunday"")))) # Count notifications sent on Saturday or Sunday
+).ORDER_BY(week_start_date.ASC()) # Order the results by week
+```
+
+**Explanation:**
+
+1.  **Define Time Period:** We first define the `start_period` (start of the week 3 weeks ago) and `end_period` (start of the current week) using the `DATETIME` function with relative offsets ('-3 weeks') and truncation ('start of week').
+2.  **Filter Notifications:** We start with the `Notifications` collection and apply filters using `WHERE`:
+    *   `created_at >= start_period`: Ensures notifications are from the beginning of the 3-week period or later.
+    *   `created_at < end_period`: Ensures notifications are before the start of the current week.
+    *   `ISIN(user.country, (""US"", ""Canada""))`: Filters for notifications sent to users whose `country` is either ""US"" or ""Canada"".
+3.  **Calculate Week Start:** In the same step, we use `CALCULATE` to create a new field `notification_week_start` by truncating the `created_at` timestamp to the beginning of its week using `DATETIME(created_at, 'start of week')`. This field will be used for grouping.
+4.  **Partition by Week:** We use `PARTITION` on the filtered `notification_info` collection.
+    *   `name=""weekly_notifications""`: Assigns a name to the partition groups.
+    *   `by=(notification_week_start)`: Groups the notifications based on the calculated `notification_week_start` date.
+5.  **Calculate Weekly Counts:** After partitioning, we use `CALCULATE` on the resulting groups:
+    *   `week_start_date = notification_week_start`: Selects the grouping key (the start date of the week).
+    *   `total_notifications = COUNT(Notifications)`: Counts all notifications belonging to the current week's partition group.
+    *   `weekend_notifications = COUNT(KEEP_IF(Notifications, ISIN(DAYNAME(created_at), (""Saturday"", ""Sunday""))))`: Counts only the notifications within the group whose `created_at` falls on a Saturday or Sunday. `DAYNAME` extracts the day name, `ISIN` checks if it's Saturday or Sunday, and `KEEP_IF` returns the notification record only if the condition is true, which `COUNT` then counts.
+6.  **Order Results:** Finally, `ORDER_BY(week_start_date.ASC())` sorts the output chronologically by the week start date.",35.335514307022095,"# Define the time boundaries for the last 3 weeks, excluding the current week
+start_period = DATETIME('now', 'start of week', '-3 weeks')
+end_period = DATETIME('now', 'start of week')
+
+# Filter notifications based on time period and user country (US or Canada)
+# Calculate the starting date of the week for each notification
+notification_info = Notifications.WHERE(
+    (created_at >= start_period)
+    & (created_at < end_period)
+    & ISIN(user.country, (""US"", ""Canada""))
+).CALCULATE(
+    notification_week_start = DATETIME(created_at, 'start of week')
+)
+
+# Partition the filtered notifications by the calculated week start date
+# Calculate the total notifications and weekend notifications for each week
+result = notification_info.PARTITION(name=""weekly_notifications"", by=(notification_week_start)).CALCULATE(
+    week_start_date = notification_week_start,
+    total_notifications = COUNT(Notifications), # Count all notifications within this week's group
+    weekend_notifications = COUNT(KEEP_IF(Notifications, ISIN(DAYNAME(created_at), (""Saturday"", ""Sunday"")))) # Count notifications sent on Saturday or Sunday
+).ORDER_BY(week_start_date.ASC()) # Order the results by week","cache_tokens_details=None cached_content_token_count=None candidates_token_count=850 candidates_tokens_details=None prompt_token_count=20305 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20305)] thoughts_token_count=2626 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23781 traffic_type=None",Query Error,Unrecognized term: 'created_at'
+How many active retail merchants have issued coupons? Return the merchant name and the total number of coupons issued.Merchant category should be matched case-insensitively ,"SELECT m.name, COUNT(c.cid) AS total_coupons FROM merchants AS m JOIN coupons AS c ON m.mid = c.merchant_id WHERE m.status = 'active' AND LOWER(m.category) LIKE '%retail%' GROUP BY m.name;",Ewallet,"```python
+active_retail_merchants_with_coupons = Merchants.WHERE(
+    (status == 'active') &
+    (LOWER(category) == 'retail') &
+    (HAS(coupons) == 1)
+).CALCULATE(
+    merchant_name=name,
+    total_coupons=COUNT(coupons)
+)
+```
+
+**Explanation:**
+
+1.  **`Merchants.WHERE(...)`**: Starts with the `Merchants` collection and filters it based on the specified conditions.
+2.  **`(status == 'active')`**: Filters for merchants whose status is exactly 'active'.
+3.  **`(LOWER(category) == 'retail')`**: Filters for merchants whose category is 'Retail', ignoring case by converting the category to lowercase before comparison.
+4.  **`(HAS(coupons) == 1)`**: Filters for merchants who have issued at least one coupon by checking if the `coupons` sub-collection is not empty.
+5.  **`.CALCULATE(...)`**: Selects and calculates the final output fields for the filtered merchants.
+6.  **`merchant_name=name`**: Selects the merchant's name and assigns it to the `merchant_name` field.
+7.  **`total_coupons=COUNT(coupons)`**: Counts the number of coupons associated with each filtered merchant and assigns the result to the `total_coupons` field.",8.522308349609375,"active_retail_merchants_with_coupons = Merchants.WHERE(
+    (status == 'active') &
+    (LOWER(category) == 'retail') &
+    (HAS(coupons) == 1)
+).CALCULATE(
+    merchant_name=name,
+    total_coupons=COUNT(coupons)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=316 candidates_tokens_details=None prompt_token_count=20283 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20283)] thoughts_token_count=395 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20994 traffic_type=None",No Match,
+How many wallet transactions were made by users from the US in the last 7 days inclusive of today? Return the number of transactions and total transaction amount.,"SELECT COUNT(*) AS num_transactions, SUM(amount) AS total_amount FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE u.country = 'US' AND t.created_at >= DATE('now', '-7 days') AND t.created_at < DATE('now', '+1 day');",Ewallet,"```python
+# Filter transactions made by US users of type 'wallet' within the last 7 days (inclusive of today)
+filtered_transactions = Transactions.WHERE(
+    (sending_user.country == ""US"") &
+    (transaction_type == ""wallet"") &
+    (DATEDIFF(""days"", created_at, 'now') <= 6) # DATEDIFF <= 6 covers today (0 days diff) and the previous 6 days
+)
+
+# Calculate the total count and sum of amounts for the filtered transactions
+result = Ewallet.CALCULATE(
+    number_of_transactions = COUNT(filtered_transactions),
+    total_amount = SUM(filtered_transactions.amount)
+)
+```
+
+**Explanation:**
+
+1.  **`filtered_transactions = Transactions.WHERE(...)`**: This line starts by accessing the `Transactions` collection and filters it based on multiple conditions combined with the logical AND operator (`&`).
+    *   **`sending_user.country == ""US""`**: It filters transactions where the `country` of the `sending_user` (accessed via the relationship) is ""US"".
+    *   **`transaction_type == ""wallet""`**: It further filters for transactions where the `transaction_type` field is exactly ""wallet"".
+    *   **`DATEDIFF(""days"", created_at, 'now') <= 6`**: This condition filters transactions based on their creation date (`created_at`). `DATEDIFF(""days"", created_at, 'now')` calculates the number of full days between the transaction's creation date and the current moment ('now'). By checking if this difference is less than or equal to 6, we include transactions from today (0 days difference) and the previous 6 days, effectively covering the ""last 7 days inclusive"".
+2.  **`result = Ewallet.CALCULATE(...)`**: This line performs calculations at the top `Ewallet` graph level using the previously filtered transactions.
+    *   **`number_of_transactions = COUNT(filtered_transactions)`**: It counts the total number of transactions present in the `filtered_transactions` collection and assigns it to the `number_of_transactions` field.
+    *   **`total_amount = SUM(filtered_transactions.amount)`**: It calculates the sum of the `amount` field for all transactions within the `filtered_transactions` collection and assigns it to the `total_amount` field.
+
+The final `result` variable will contain a single record with the total count and total amount of wallet transactions made by US users in the specified timeframe.",19.687598943710327,"# Filter transactions made by US users of type 'wallet' within the last 7 days (inclusive of today)
+filtered_transactions = Transactions.WHERE(
+    (sending_user.country == ""US"") &
+    (transaction_type == ""wallet"") &
+    (DATEDIFF(""days"", created_at, 'now') <= 6) # DATEDIFF <= 6 covers today (0 days diff) and the previous 6 days
+)
+
+# Calculate the total count and sum of amounts for the filtered transactions
+result = Ewallet.CALCULATE(
+    number_of_transactions = COUNT(filtered_transactions),
+    total_amount = SUM(filtered_transactions.amount)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=558 candidates_tokens_details=None prompt_token_count=20282 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20282)] thoughts_token_count=1165 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22005 traffic_type=None",No Match,
+"What is the average AMB for user wallets updated in the past week, inclusive of 7 days ago? Return the average balance.AMB = average balance per user (for the given time duration)","SELECT AVG(balance) AS AMB FROM wallet_user_balance_daily WHERE updated_at >= DATE('now', '-7 days');",Ewallet,"```python
+# Filter UserBalances updated within the last 7 days (inclusive)
+recent_user_balances = UserBalances.WHERE(DATEDIFF(""days"", updated_at, 'now') <= 7)
+
+# Partition the filtered balances by user_id to calculate the average balance per user (AMB)
+user_amb_calculation = recent_user_balances.PARTITION(name=""user_balances_group"", by=(user_id)).CALCULATE(
+    # Calculate the average balance for each user's records within the time frame
+    user_average_balance=AVG(UserBalances.balance)
+)
+
+# Calculate the final average across all users' average balances
+average_amb_result = Ewallet.CALCULATE(
+    # Compute the average of the per-user average balances calculated above
+    average_amb=AVG(user_amb_calculation.user_average_balance)
+)
+```
+
+**Explanation:**
+
+1.  **`recent_user_balances = UserBalances.WHERE(DATEDIFF(""days"", updated_at, 'now') <= 7)`**: This line filters the `UserBalances` collection to include only records where the `updated_at` timestamp falls within the last 7 days (inclusive) from the current time ('now'). `DATEDIFF(""days"", updated_at, 'now')` calculates the difference in days between the update time and now.
+2.  **`user_amb_calculation = recent_user_balances.PARTITION(...)`**: This partitions the filtered `recent_user_balances` based on the `user_id`. This groups all recent balance records for each unique user together.
+3.  **`.CALCULATE(user_average_balance=AVG(UserBalances.balance))`**: Within each user partition created in the previous step, this calculates the average `balance` for that specific user's records from the filtered set. This gives the Average Balance (AMB) for each user during the specified period. The result `user_amb_calculation` is a collection where each row represents a user and their calculated average balance (`user_average_balance`).
+4.  **`average_amb_result = Ewallet.CALCULATE(...)`**: This performs a final calculation at the top level (`Ewallet`).
+5.  **`average_amb=AVG(user_amb_calculation.user_average_balance)`**: This calculates the overall average of the `user_average_balance` values obtained from the `user_amb_calculation` collection. This effectively computes the average of all the individual users' AMBs, providing the final requested average AMB across all relevant users.",18.04254674911499,"# Filter UserBalances updated within the last 7 days (inclusive)
+recent_user_balances = UserBalances.WHERE(DATEDIFF(""days"", updated_at, 'now') <= 7)
+
+# Partition the filtered balances by user_id to calculate the average balance per user (AMB)
+user_amb_calculation = recent_user_balances.PARTITION(name=""user_balances_group"", by=(user_id)).CALCULATE(
+    # Calculate the average balance for each user's records within the time frame
+    user_average_balance=AVG(UserBalances.balance)
+)
+
+# Calculate the final average across all users' average balances
+average_amb_result = Ewallet.CALCULATE(
+    # Compute the average of the per-user average balances calculated above
+    average_amb=AVG(user_amb_calculation.user_average_balance)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=570 candidates_tokens_details=None prompt_token_count=20292 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20292)] thoughts_token_count=1011 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21873 traffic_type=None",Match,
+"What is the LUB for each user.LUB = Latest User Balance, which is the most recent balance for each user","WITH user_balances AS (SELECT user_id, balance, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY CASE WHEN updated_at IS NULL THEN 1 ELSE 0 END DESC, updated_at DESC) AS rn FROM wallet_user_balance_daily) SELECT user_id, balance FROM user_balances WHERE rn = 1;",Ewallet,"```python
+# Calculate the Latest User Balance (LUB) for each user.
+# LUB is defined as the balance from the most recent UserBalances record for that user.
+lub_per_user = Users.CALCULATE(
+    user_id=uid,
+    # Find the balance record with the latest 'updated_at' timestamp for each user using RANKING.
+    # RANKING is performed 'per' user. Rank 1 corresponds to the latest record.
+    # .SINGULAR() is used because RANKING == 1 ensures at most one record per user.
+    # DEFAULT_TO handles cases where a user might not have any balance records.
+    latest_user_balance=DEFAULT_TO(
+        balances.WHERE(RANKING(by=updated_at.DESC(), per=""Users"") == 1).SINGULAR().balance,
+        None  # Return None if a user has no balance records
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`Users.CALCULATE(...)`**: We start with the `Users` collection and use `CALCULATE` to define the output fields for each user.
+2.  **`user_id=uid`**: We select the user's unique identifier (`uid`) and name it `user_id`.
+3.  **`latest_user_balance=...`**: This calculates the LUB for each user.
+4.  **`balances.WHERE(...)`**: We access the `balances` sub-collection associated with each user.
+5.  **`RANKING(by=updated_at.DESC(), per=""Users"") == 1`**: Inside the `WHERE` clause, we use the `RANKING` window function:
+    *   `by=updated_at.DESC()`: Ranks the balance records based on the `updated_at` timestamp in descending order (latest first).
+    *   `per=""Users""`: Ensures the ranking is performed independently for each user's set of balances.
+    *   `== 1`: Filters to keep only the balance record with rank 1 (the most recent one).
+6.  **`.SINGULAR()`**: Since the `WHERE` clause with `RANKING(...) == 1` guarantees that at most one balance record remains for each user, `.SINGULAR()` converts this single-item collection into a singular record, allowing access to its fields.
+7.  **`.balance`**: We access the `balance` field from the singular, most recent balance record identified.
+8.  **`DEFAULT_TO(..., None)`**: This function wraps the balance retrieval. If a user has no balance records (`balances` is empty), the `WHERE` clause will yield nothing, `.SINGULAR()` will result in null, and accessing `.balance` would normally fail. `DEFAULT_TO` catches this and returns `None` instead, ensuring the query doesn't error for users without balances.",25.466556787490845,"# Calculate the Latest User Balance (LUB) for each user.
+# LUB is defined as the balance from the most recent UserBalances record for that user.
+lub_per_user = Users.CALCULATE(
+    user_id=uid,
+    # Find the balance record with the latest 'updated_at' timestamp for each user using RANKING.
+    # RANKING is performed 'per' user. Rank 1 corresponds to the latest record.
+    # .SINGULAR() is used because RANKING == 1 ensures at most one record per user.
+    # DEFAULT_TO handles cases where a user might not have any balance records.
+    latest_user_balance=DEFAULT_TO(
+        balances.WHERE(RANKING(by=updated_at.DESC(), per=""Users"") == 1).SINGULAR().balance,
+        None  # Return None if a user has no balance records
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=630 candidates_tokens_details=None prompt_token_count=20276 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20276)] thoughts_token_count=1551 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22457 traffic_type=None",No Match,
+"What is the marketing opt-in preference for each user? Return the user ID and boolean opt-in valueTo get any user's settings, only select the latest snapshot of user_setting_snapshot for each user","WITH user_latest_setting AS (SELECT u.uid, s.marketing_opt_in, s.created_at, ROW_NUMBER() OVER (PARTITION BY u.uid ORDER BY CASE WHEN s.created_at IS NULL THEN 1 ELSE 0 END DESC, s.created_at DESC) AS rn FROM users AS u JOIN user_setting_snapshot AS s ON u.uid = s.user_id) SELECT UID, marketing_opt_in FROM user_latest_setting WHERE rn = 1;",Ewallet,"```python
+# Find the latest setting snapshot for each user
+latest_snapshot = UserSettingSnapshots.WHERE(
+    RANKING(by=snapshot_date.DESC(), per=""Users"") == 1
+).SINGULAR()
+
+# Calculate the user ID and their marketing opt-in preference from the latest snapshot
+user_marketing_preferences = Users.CALCULATE(
+    user_id=uid,
+    marketing_preference=latest_snapshot.marketing_opt_in
+)
+```
+
+**Explanation:**
+
+1.  **`latest_snapshot = UserSettingSnapshots.WHERE(...)`**: We start by accessing all `UserSettingSnapshots`.
+2.  **`RANKING(by=snapshot_date.DESC(), per=""Users"") == 1`**: Inside the `WHERE` clause, we use the `RANKING` window function.
+    *   `by=snapshot_date.DESC()`: This orders the snapshots for each user by their `snapshot_date` in descending order (latest first).
+    *   `per=""Users""`: This ensures the ranking is done independently for each user (partitioned by user).
+    *   `== 1`: We filter to keep only the snapshot ranked as #1 (the latest one) for each user.
+3.  **`.SINGULAR()`**: Since the ranking filter ensures we have at most one snapshot per user, we use `.SINGULAR()` to treat this result as a single record within the context of each user. This allows direct access to its fields in the subsequent `CALCULATE`.
+4.  **`user_marketing_preferences = Users.CALCULATE(...)`**: We then go back to the `Users` collection.
+5.  **`user_id=uid`**: We select the user's ID (`uid`).
+6.  **`marketing_preference=latest_snapshot.marketing_opt_in`**: We access the `marketing_opt_in` field from the `latest_snapshot` variable we defined earlier. Because `latest_snapshot` was made singular relative to each user, we can directly access its `marketing_opt_in` field.
+
+This query effectively retrieves the latest setting snapshot for every user and extracts their marketing opt-in preference along with their user ID.",12.769824981689451,"# Find the latest setting snapshot for each user
+latest_snapshot = UserSettingSnapshots.WHERE(
+    RANKING(by=snapshot_date.DESC(), per=""Users"") == 1
+).SINGULAR()
+
+# Calculate the user ID and their marketing opt-in preference from the latest snapshot
+user_marketing_preferences = Users.CALCULATE(
+    user_id=uid,
+    marketing_preference=latest_snapshot.marketing_opt_in
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=485 candidates_tokens_details=None prompt_token_count=20295 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20295)] thoughts_token_count=553 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21333 traffic_type=None",Query Error,Unrecognized term of simple table collection 'Users' in graph 'Ewallet': 'UserSettingSnapshots'
+"What is the MRR for each merchant? Return the merchant name, category, revenue amount, and revenue rank.MRR = Merchant Revenue Rank, which ranks merchants based on amounts from successfully received transactions only. Filter receiver_type=1 in wallet_transactions_daily for merchants. Merchant with rank 1 has the highest revenue.","WITH merchant_revenue AS (SELECT m.mid, m.category AS merchant_category, SUM(w.amount) AS total_revenue FROM merchants AS m INNER JOIN wallet_transactions_daily AS w ON m.mid = w.receiver_id AND w.receiver_type = 1 WHERE w.status = 'success' GROUP BY m.mid, m.category) SELECT *, RANK() OVER (ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC) AS mrr FROM merchant_revenue;",Ewallet,"```python
+# Calculate total revenue for each merchant from completed received transactions
+merchant_revenues = Merchants.CALCULATE(
+    merchant_name=name,
+    merchant_category=category,
+    # Sum the amount of transactions received by the merchant where the status is 'completed'
+    # This implicitly handles the 'receiver_type' being 'merchant' as we start from Merchants.transactions_received
+    total_revenue=SUM(transactions_received.WHERE(status == 'completed').amount)
+)
+
+# Rank merchants based on their calculated total revenue and select final fields
+mrr_results = merchant_revenues.CALCULATE(
+    merchant_name=merchant_name,
+    merchant_category=merchant_category,
+    revenue_amount=total_revenue,
+    # Assign rank based on total_revenue in descending order (highest revenue gets rank 1)
+    revenue_rank=RANKING(by=total_revenue.DESC())
+).ORDER_BY(revenue_rank.ASC()) # Optional: Order by rank for presentation
+```
+
+**Explanation:**
+
+1.  **`merchant_revenues = Merchants.CALCULATE(...)`**: We start with the `Merchants` collection. For each merchant, we calculate:
+    *   `merchant_name`: Takes the `name` field.
+    *   `merchant_category`: Takes the `category` field.
+    *   `total_revenue`: This calculates the sum of the `amount` for all transactions associated with the merchant via the `transactions_received` relationship. We apply a `WHERE` clause *within* the `SUM` aggregation to filter these transactions, including only those where the `status` is `'completed'`, as required by the definition of MRR (based on successfully received transactions).
+2.  **`mrr_results = merchant_revenues.CALCULATE(...)`**: We take the results from the previous step (`merchant_revenues`) and apply another `CALCULATE`:
+    *   We select the `merchant_name` and `merchant_category` calculated previously.
+    *   We rename `total_revenue` to `revenue_amount` as requested in the output description.
+    *   We calculate `revenue_rank` using the `RANKING()` window function. The ranking is performed `by` the `total_revenue` in descending order (`.DESC()`), ensuring that the merchant with the highest revenue receives rank 1.
+3.  **`.ORDER_BY(revenue_rank.ASC())`**: Finally, the results are ordered by the calculated `revenue_rank` in ascending order, presenting the top-ranked merchants first. This step is optional but helpful for reviewing the results.
+4.  The final result containing the merchant name, category, revenue amount, and revenue rank is assigned to the `mrr_results` variable.",28.18633222579956,"# Calculate total revenue for each merchant from completed received transactions
+merchant_revenues = Merchants.CALCULATE(
+    merchant_name=name,
+    merchant_category=category,
+    # Sum the amount of transactions received by the merchant where the status is 'completed'
+    # This implicitly handles the 'receiver_type' being 'merchant' as we start from Merchants.transactions_received
+    total_revenue=SUM(transactions_received.WHERE(status == 'completed').amount)
+)
+
+# Rank merchants based on their calculated total revenue and select final fields
+mrr_results = merchant_revenues.CALCULATE(
+    merchant_name=merchant_name,
+    merchant_category=merchant_category,
+    revenue_amount=total_revenue,
+    # Assign rank based on total_revenue in descending order (highest revenue gets rank 1)
+    revenue_rank=RANKING(by=total_revenue.DESC())
+).ORDER_BY(revenue_rank.ASC()) # Optional: Order by rank for presentation","cache_tokens_details=None cached_content_token_count=None candidates_token_count=611 candidates_tokens_details=None prompt_token_count=20318 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20318)] thoughts_token_count=2060 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22989 traffic_type=None",No Match,
+What is the PMDAU (Per Month Daily Active Users) for wallet transactions in the last 2 months excluding the current month?PMDAU (Per Month Daily Active Users) = distinct sender with  sender_type = 0. Truncate created_at to month for aggregation.,"SELECT strftime('%Y-%m', t.created_at) AS month, COUNT(DISTINCT t.sender_id) AS active_users FROM wallet_transactions_daily AS t WHERE t.sender_type = 0 AND t.created_at >= date('now', 'start of month', '-2 months') AND t.created_at < date('now', 'start of month') GROUP BY month;",Ewallet,"```python
+# Define the start and end dates for the last two full months
+# Start date is the first day of the month, two months prior to the current month
+start_date = DATETIME('now', 'start of month', '-2 months')
+# End date is the first day of the current month (exclusive)
+end_date = DATETIME('now', 'start of month')
+
+# Filter transactions:
+# 1. Select only transactions from user senders (sender_type == 0).
+# 2. Filter transactions within the calculated date range (last two full months).
+# 3. Extract the day and month from 'created_at' and the 'sender_id'.
+filtered_transactions = Transactions.WHERE(
+    (sender_type == 0) &
+    (created_at >= start_date) &
+    (created_at < end_date)
+).CALCULATE(
+    transaction_day = DATETIME(created_at, 'start of day'),
+    transaction_month = DATETIME(created_at, 'start of month'),
+    user_id = sender_id
+)
+
+# Calculate Daily Active Users (DAU):
+# 1. Partition the filtered transactions by month and day.
+# 2. For each day, count the number of distinct user_ids (senders).
+daily_active_users = filtered_transactions.PARTITION(
+    name=""daily_groups"", by=(transaction_month, transaction_day)
+).CALCULATE(
+    month = transaction_month,
+    day = transaction_day,
+    dau_count = NDISTINCT(Transactions.user_id) # Count distinct users for that specific day
+)
+
+# Calculate Per Month Daily Active Users (PMDAU):
+# 1. Partition the daily active user counts by month.
+# 2. For each month, calculate the average of the daily distinct user counts (dau_count).
+# 3. Order the results by month.
+pmdau_results = daily_active_users.PARTITION(
+    name=""monthly_groups"", by=(month)
+).CALCULATE(
+    month = month,
+    pmdau = AVG(daily_groups.dau_count) # Calculate the average DAU for the month
+).ORDER_BY(month.ASC())
+```
+
+**Explanation:**
+
+1.  **Date Range Calculation:** We first define `start_date` and `end_date` using the `DATETIME` function to precisely capture the last two full calendar months, excluding the current month. `start_date` is set to the beginning of the month two months ago, and `end_date` is set to the beginning of the current month.
+2.  **Transaction Filtering:** We start with the `Transactions` collection and apply filters:
+    *   `sender_type == 0`: Selects only transactions initiated by users.
+    *   `created_at >= start_date & created_at < end_date`: Filters transactions to fall within the desired two-month period.
+    *   We then use `CALCULATE` to extract the specific day (`transaction_day`), month (`transaction_month`), and the `sender_id` for each relevant transaction.
+3.  **Daily Active Users (DAU) Calculation:**
+    *   We partition the `filtered_transactions` by both `transaction_month` and `transaction_day` using `PARTITION(name=""daily_groups"", ...)`. This groups transactions by each specific day within the two-month period.
+    *   Inside the `CALCULATE` following the partition, we calculate `dau_count = NDISTINCT(Transactions.user_id)`. This counts the number of unique users (`sender_id`) who made at least one transaction on that specific `day` within that `month`.
+4.  **Per Month Daily Active Users (PMDAU) Calculation:**
+    *   We take the `daily_active_users` results (which contain daily unique user counts) and partition them again, this time only by `month` using `PARTITION(name=""monthly_groups"", ...)`.
+    *   In the final `CALCULATE`, we compute `pmdau = AVG(daily_groups.dau_count)`. This calculates the average of the daily active user counts (`dau_count`) for each `month`, giving us the PMDAU. The `daily_groups` refers back to the collection created by the previous partition step.
+5.  **Ordering:** Finally, `.ORDER_BY(month.ASC())` sorts the results chronologically by month.",29.008856058120728,"# Define the start and end dates for the last two full months
+# Start date is the first day of the month, two months prior to the current month
+start_date = DATETIME('now', 'start of month', '-2 months')
+# End date is the first day of the current month (exclusive)
+end_date = DATETIME('now', 'start of month')
+
+# Filter transactions:
+# 1. Select only transactions from user senders (sender_type == 0).
+# 2. Filter transactions within the calculated date range (last two full months).
+# 3. Extract the day and month from 'created_at' and the 'sender_id'.
+filtered_transactions = Transactions.WHERE(
+    (sender_type == 0) &
+    (created_at >= start_date) &
+    (created_at < end_date)
+).CALCULATE(
+    transaction_day = DATETIME(created_at, 'start of day'),
+    transaction_month = DATETIME(created_at, 'start of month'),
+    user_id = sender_id
+)
+
+# Calculate Daily Active Users (DAU):
+# 1. Partition the filtered transactions by month and day.
+# 2. For each day, count the number of distinct user_ids (senders).
+daily_active_users = filtered_transactions.PARTITION(
+    name=""daily_groups"", by=(transaction_month, transaction_day)
+).CALCULATE(
+    month = transaction_month,
+    day = transaction_day,
+    dau_count = NDISTINCT(Transactions.user_id) # Count distinct users for that specific day
+)
+
+# Calculate Per Month Daily Active Users (PMDAU):
+# 1. Partition the daily active user counts by month.
+# 2. For each month, calculate the average of the daily distinct user counts (dau_count).
+# 3. Order the results by month.
+pmdau_results = daily_active_users.PARTITION(
+    name=""monthly_groups"", by=(month)
+).CALCULATE(
+    month = month,
+    pmdau = AVG(daily_groups.dau_count) # Calculate the average DAU for the month
+).ORDER_BY(month.ASC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=996 candidates_tokens_details=None prompt_token_count=20311 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20311)] thoughts_token_count=1815 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23122 traffic_type=None",No Match,
+What is the total number of wallet transactions sent by each user that is not a merchant? Return the user ID and total transaction count.,"WITH user_transactions AS (SELECT u.uid, t.txid FROM users AS u JOIN wallet_transactions_daily AS t ON u.uid = t.sender_id WHERE t.sender_type = 0) SELECT UID, COUNT(txid) AS total_transactions FROM user_transactions GROUP BY UID;",Ewallet,"```python
+user_transaction_counts = Users.WHERE(user_type != 'merchant').CALCULATE(
+    user_id=uid,
+    total_transactions_sent=COUNT(transactions_sent)
+)
+```
+
+**Explanation:**
+
+1.  **`Users`**: We start with the `Users` collection, as the request is focused on users.
+2.  **`.WHERE(user_type != 'merchant')`**: This filters the `Users` collection to include only those records where the `user_type` field is not equal to 'merchant'.
+3.  **`.CALCULATE(...)`**: This step processes each user that passed the filter.
+    *   **`user_id=uid`**: Selects the `uid` field from the `Users` collection and renames it to `user_id` in the output.
+    *   **`total_transactions_sent=COUNT(transactions_sent)`**: Counts the number of records in the `transactions_sent` sub-collection for each user and names this count `total_transactions_sent`. The `transactions_sent` sub-collection links users to the transactions they initiated.",13.432000637054443,"user_transaction_counts = Users.WHERE(user_type != 'merchant').CALCULATE(
+    user_id=uid,
+    total_transactions_sent=COUNT(transactions_sent)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=251 candidates_tokens_details=None prompt_token_count=20278 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20278)] thoughts_token_count=861 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21390 traffic_type=None",No Match,
+"What is the total session duration in seconds for each user between 2023-06-01 inclusive and 2023-06-08 exclusive? Return the user ID and their total duration as an integer sorted by total duration with the longest duration firstTo analyze user engagement, calculate total session duration per user for a given date range. Remember to convert your answer into seconds","WITH user_session_duration AS (SELECT u.uid, s.session_start_ts, s.session_end_ts FROM users AS u JOIN user_sessions AS s ON u.uid = s.user_id WHERE s.session_start_ts >= '2023-06-01' AND s.session_end_ts < '2023-06-08') SELECT uid, SUM(strftime('%s', session_end_ts) - strftime('%s', session_start_ts)) AS total_duration FROM user_session_duration GROUP BY uid ORDER BY total_duration DESC;",Ewallet,"```python
+# Filter sessions that started between 2023-06-01 (inclusive) and 2023-06-08 (exclusive)
+filtered_sessions = UserSessions.WHERE(
+    (session_start_ts >= ""2023-06-01"") & (session_start_ts < ""2023-06-08"")
+)
+
+# Partition the filtered sessions by user_id
+# For each user, calculate the total duration of their sessions in seconds
+user_total_durations = filtered_sessions.PARTITION(
+    name=""user_sessions_group"", by=(user_id)
+).CALCULATE(
+    user_id=user_id,
+    # Calculate the duration of each session in the group and sum them up.
+    # Convert the final sum to an integer.
+    total_duration_secs=INT(SUM(
+        user_sessions_group.CALCULATE(
+            session_duration=DATEDIFF(""seconds"", session_start_ts, session_end_ts)
+        ).session_duration
+    ))
+)
+
+# Sort the results by the total duration in descending order (longest duration first)
+result = user_total_durations.ORDER_BY(total_duration_secs.DESC())
+```
+
+**Explanation:**
+
+1.  **`filtered_sessions = UserSessions.WHERE(...)`**: This line starts with the `UserSessions` collection and filters it to include only sessions where the `session_start_ts` falls within the specified date range (June 1st, 2023, up to, but not including, June 8th, 2023). The `>=` ensures inclusivity for the start date, and `<` ensures exclusivity for the end date. Logical AND is represented by `&`.
+2.  **`user_total_durations = filtered_sessions.PARTITION(...)`**: This takes the `filtered_sessions` and partitions (groups) them based on the `user_id`. Each partition (`user_sessions_group`) contains all the filtered sessions belonging to a single user.
+3.  **`.CALCULATE(...)`**: This operates on each partition (i.e., for each user).
+    *   `user_id=user_id`: Selects the `user_id` from the partition key.
+    *   `total_duration_secs=INT(SUM(...))`: This calculates the total session duration for the user.
+        *   `user_sessions_group.CALCULATE(...)`: This inner `CALCULATE` runs on each session *within* the current user's group.
+        *   `session_duration=DATEDIFF(""seconds"", session_start_ts, session_end_ts)`: Calculates the duration of a single session in seconds using `DATEDIFF`.
+        *   `.session_duration`: Selects the calculated duration for the `SUM` function.
+        *   `SUM(...)`: Sums up the individual `session_duration` values for all sessions within the user's group.
+        *   `INT(...)`: Converts the final summed duration into an integer as requested.
+4.  **`result = user_total_durations.ORDER_BY(total_duration_secs.DESC())`**: This takes the results (one row per user with their total duration) and sorts them based on the `total_duration_secs` field in descending order, placing users with the longest total session duration first. The final sorted result is assigned to the `result` variable.",30.704613208770752,"# Filter sessions that started between 2023-06-01 (inclusive) and 2023-06-08 (exclusive)
+filtered_sessions = UserSessions.WHERE(
+    (session_start_ts >= ""2023-06-01"") & (session_start_ts < ""2023-06-08"")
+)
+
+# Partition the filtered sessions by user_id
+# For each user, calculate the total duration of their sessions in seconds
+user_total_durations = filtered_sessions.PARTITION(
+    name=""user_sessions_group"", by=(user_id)
+).CALCULATE(
+    user_id=user_id,
+    # Calculate the duration of each session in the group and sum them up.
+    # Convert the final sum to an integer.
+    total_duration_secs=INT(SUM(
+        user_sessions_group.CALCULATE(
+            session_duration=DATEDIFF(""seconds"", session_start_ts, session_end_ts)
+        ).session_duration
+    ))
+)
+
+# Sort the results by the total duration in descending order (longest duration first)
+result = user_total_durations.ORDER_BY(total_duration_secs.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=778 candidates_tokens_details=None prompt_token_count=20333 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20333)] thoughts_token_count=2201 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23312 traffic_type=None",Query Error,PyDough nodes INT is not callable. Did you mean to use a function?
+What is the total transaction amount for each coupon offered by merchant with ID 1? Return the coupon ID and total amount transacted with it.,"WITH merchant_coupon_usage AS (SELECT c.cid, t.amount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id WHERE c.merchant_id = 1) SELECT cid, SUM(amount) AS total_discount FROM merchant_coupon_usage GROUP BY cid;",Ewallet,"```python
+merchant_coupons_total = Merchants.WHERE(mid == 1).coupons.CALCULATE(
+    coupon_id=cid,
+    total_amount=SUM(transaction_used_in.amount)
+)
+```
+
+**Explanation:**
+
+1.  **`Merchants.WHERE(mid == 1)`**: This selects the specific merchant with `mid` equal to 1.
+2.  **`.coupons`**: This accesses the `coupons` sub-collection associated with the selected merchant.
+3.  **`.CALCULATE(...)`**: This function is applied to each coupon belonging to the merchant.
+    *   **`coupon_id=cid`**: Selects the coupon ID (`cid`) and renames it to `coupon_id` for the output.
+    *   **`total_amount=SUM(transaction_used_in.amount)`**: Calculates the sum of the `amount` for all transactions linked to the current coupon via the `transaction_used_in` relationship. This sum is named `total_amount`.
+
+The final result `merchant_coupons_total` will be a collection where each record contains the `coupon_id` and the corresponding `total_amount` transacted using that coupon for the merchant with ID 1.",16.484304904937744,"merchant_coupons_total = Merchants.WHERE(mid == 1).coupons.CALCULATE(
+    coupon_id=cid,
+    total_amount=SUM(transaction_used_in.amount)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=278 candidates_tokens_details=None prompt_token_count=20280 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20280)] thoughts_token_count=1312 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21870 traffic_type=None",Match,
+"What is the TUC in the past month, inclusive of 1 month ago? Return the total count.TUC = Total number of user sessions in the past month","SELECT COUNT(*) AS TUC FROM user_sessions WHERE session_start_ts >= DATE('now', '-1 month') OR session_end_ts >= DATE('now', '-1 month');",Ewallet,"```python
+# Filter user sessions that started within the last month, including exactly one month ago
+sessions_in_past_month = UserSessions.WHERE(
+    session_start_ts >= DATETIME('now', '-1 month')
+)
+
+# Calculate the total count of these sessions
+result = Ewallet.CALCULATE(
+    TUC_past_month=COUNT(sessions_in_past_month)
+)
+```
+
+**Explanation:**
+
+1.  **`sessions_in_past_month = UserSessions.WHERE(...)`**: This line filters the `UserSessions` collection.
+    *   `session_start_ts >= DATETIME('now', '-1 month')`: This condition selects sessions where the `session_start_ts` (session start timestamp) is greater than or equal to the timestamp exactly one month before the current time (`now`). This effectively captures all sessions from one month ago up to the present moment.
+2.  **`result = Ewallet.CALCULATE(...)`**: This performs the final calculation at the top `Ewallet` level.
+    *   `TUC_past_month=COUNT(sessions_in_past_month)`: This counts the total number of sessions found in the `sessions_in_past_month` filtered collection and assigns the result to the field `TUC_past_month`, representing the Total User Count (TUC) for the past month as defined.",10.793329000473022,"# Filter user sessions that started within the last month, including exactly one month ago
+sessions_in_past_month = UserSessions.WHERE(
+    session_start_ts >= DATETIME('now', '-1 month')
+)
+
+# Calculate the total count of these sessions
+result = Ewallet.CALCULATE(
+    TUC_past_month=COUNT(sessions_in_past_month)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=307 candidates_tokens_details=None prompt_token_count=20285 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20285)] thoughts_token_count=695 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21287 traffic_type=None",Match,
+What was the STR for wallet transactions in the previous month?STR (success transaction rate) = number of successful transactions / total number of transactions,"SELECT (SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 1.0 / COUNT(*)) AS STR FROM wallet_transactions_daily WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'start of month', '-1 month');",Ewallet,"```python
+# Define the start of the current month and the start of the previous month
+date_boundaries = Ewallet.CALCULATE(
+    start_of_current_month=DATETIME('now', 'start of month'),
+    start_of_previous_month=DATETIME(DATETIME('now', 'start of month'), '-1 month')
+)
+
+# Filter transactions that occurred within the previous month
+transactions_previous_month = date_boundaries.Transactions.WHERE(
+    (created_at >= start_of_previous_month) & (created_at < start_of_current_month)
+)
+
+# Calculate the total number of transactions and the number of successful transactions ('completed') in the previous month
+transaction_stats = date_boundaries.CALCULATE(
+    total_transactions_prev_month=COUNT(transactions_previous_month),
+    successful_transactions_prev_month=COUNT(transactions_previous_month.WHERE(status == 'completed'))
+)
+
+# Calculate the Success Transaction Rate (STR) for the previous month
+# STR = number of successful transactions / total number of transactions
+# Use IFF to handle potential division by zero if there were no transactions
+result = transaction_stats.CALCULATE(
+    previous_month_str=IFF(
+        total_transactions_prev_month > 0,
+        1.0 * successful_transactions_prev_month / total_transactions_prev_month,
+        0.0  # Return 0.0 if there were no transactions in the previous month
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`date_boundaries`**: We first calculate the necessary date boundaries using the `Ewallet` top-level collection.
+    *   `start_of_current_month`: Determines the beginning of the current month using `DATETIME('now', 'start of month')`.
+    *   `start_of_previous_month`: Calculates the beginning of the previous month by subtracting one month from the `start_of_current_month`.
+2.  **`transactions_previous_month`**: We filter the `Transactions` collection to include only those records where the `created_at` timestamp falls within the previous month (greater than or equal to `start_of_previous_month` and less than `start_of_current_month`).
+3.  **`transaction_stats`**: We calculate two aggregate values based on the filtered transactions:
+    *   `total_transactions_prev_month`: The total count of transactions in the previous month.
+    *   `successful_transactions_prev_month`: The count of transactions within the previous month where the `status` is 'completed'.
+4.  **`result`**: Finally, we calculate the Success Transaction Rate (STR).
+    *   We use the `IFF` function to check if `total_transactions_prev_month` is greater than 0 to prevent division by zero.
+    *   If there were transactions, we calculate STR by dividing `successful_transactions_prev_month` by `total_transactions_prev_month`. We multiply by `1.0` to ensure floating-point division.
+    *   If there were no transactions (`total_transactions_prev_month` is 0), STR is set to `0.0`.
+    *   The final result contains a single field `previous_month_str` representing the calculated rate.",24.45348072052002,"# Define the start of the current month and the start of the previous month
+date_boundaries = Ewallet.CALCULATE(
+    start_of_current_month=DATETIME('now', 'start of month'),
+    start_of_previous_month=DATETIME(DATETIME('now', 'start of month'), '-1 month')
+)
+
+# Filter transactions that occurred within the previous month
+transactions_previous_month = date_boundaries.Transactions.WHERE(
+    (created_at >= start_of_previous_month) & (created_at < start_of_current_month)
+)
+
+# Calculate the total number of transactions and the number of successful transactions ('completed') in the previous month
+transaction_stats = date_boundaries.CALCULATE(
+    total_transactions_prev_month=COUNT(transactions_previous_month),
+    successful_transactions_prev_month=COUNT(transactions_previous_month.WHERE(status == 'completed'))
+)
+
+# Calculate the Success Transaction Rate (STR) for the previous month
+# STR = number of successful transactions / total number of transactions
+# Use IFF to handle potential division by zero if there were no transactions
+result = transaction_stats.CALCULATE(
+    previous_month_str=IFF(
+        total_transactions_prev_month > 0,
+        1.0 * successful_transactions_prev_month / total_transactions_prev_month,
+        0.0  # Return 0.0 if there were no transactions in the previous month
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=738 candidates_tokens_details=None prompt_token_count=20279 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20279)] thoughts_token_count=1729 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22746 traffic_type=None",Query Error,Unrecognized term of graph 'Ewallet': 'Ewallet'
+Which merchant created the highest number of coupons within the same month that the merchant was created (coupon or merchant can be created earlier than the other)? Return the number of coupons along with the merchant's _id and name.,"WITH coupons_per_merchant AS (SELECT m.mid, COUNT(c.cid) AS num_coupons FROM coupons AS c JOIN merchants AS m ON m.mid = c.merchant_id AND strftime('%Y-%m', c.created_at) = strftime('%Y-%m', m.created_at) GROUP BY m.mid) SELECT coupons_per_merchant.mid, m.name, coupons_per_merchant.num_coupons FROM coupons_per_merchant JOIN merchants AS m USING (mid) ORDER BY coupons_per_merchant.num_coupons DESC LIMIT 1;",Ewallet,"```python
+# Calculate the number of coupons created in the same month/year as the merchant for each merchant
+merchant_coupon_counts = Merchants.CALCULATE(
+    merchant_mid=mid,
+    merchant_name=name,
+    num_same_month_coupons=COUNT(coupons.WHERE(
+        (YEAR(coupons.created_at) == YEAR(created_at)) &
+        (MONTH(coupons.created_at) == MONTH(created_at))
+    ))
+)
+
+# Find the merchant with the highest count
+result = merchant_coupon_counts.TOP_K(1, by=num_same_month_coupons.DESC())
+```
+
+**Explanation:**
+
+1.  We start with the `Merchants` collection.
+2.  We use `CALCULATE` to process each merchant individually and compute new fields:
+    *   `merchant_mid`: Stores the merchant's ID (`mid`).
+    *   `merchant_name`: Stores the merchant's name (`name`).
+    *   `num_same_month_coupons`: This calculates the count of coupons for the current merchant. It accesses the `coupons` sub-collection and applies a `WHERE` filter. The filter keeps only those coupons where the coupon's creation year (`YEAR(coupons.created_at)`) and month (`MONTH(coupons.created_at)`) are the same as the merchant's creation year (`YEAR(created_at)`) and month (`MONTH(created_at)`). The `created_at` without `coupons.` refers to the `created_at` field of the `Merchants` collection in this context. `COUNT` then counts how many coupons passed the filter for that specific merchant.
+3.  Finally, `TOP_K(1, by=num_same_month_coupons.DESC())` is applied to the collection generated by `CALCULATE`. This selects the single merchant (`1`) who has the highest (`DESC()`) value for our calculated `num_same_month_coupons` field.
+4.  The final result, containing the `merchant_mid`, `merchant_name`, and `num_same_month_coupons` for the top merchant, is assigned to the `result` variable.",26.60687232017517,"# Calculate the number of coupons created in the same month/year as the merchant for each merchant
+merchant_coupon_counts = Merchants.CALCULATE(
+    merchant_mid=mid,
+    merchant_name=name,
+    num_same_month_coupons=COUNT(coupons.WHERE(
+        (YEAR(coupons.created_at) == YEAR(created_at)) &
+        (MONTH(coupons.created_at) == MONTH(created_at))
+    ))
+)
+
+# Find the merchant with the highest count
+result = merchant_coupon_counts.TOP_K(1, by=num_same_month_coupons.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=498 candidates_tokens_details=None prompt_token_count=20296 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20296)] thoughts_token_count=2135 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22929 traffic_type=None",Query Error,Unrecognized term of simple table collection 'Coupons' in graph 'Ewallet': 'coupons'
+"Which users from the US have unread promotional notifications? Return the username and the total number of unread promotional notifications.User country should be matched case-insensitively, e.g., LOWER(users.country) = 'us'. Notification type and status should be matched exactly.","SELECT u.username, COUNT(n._id) AS total_notifications FROM users AS u JOIN notifications AS n ON u.uid = n.user_id WHERE n.type = 'promotion' AND n.status = 'unread' AND LOWER(u.country) = 'us' GROUP BY u.username;",Ewallet,"```python
+us_users_unread_promo = Users.WHERE(
+    (LOWER(country) == 'us') &
+    (HAS(notifications.WHERE((notification_type == 'promotional') & (status == 'unread'))) == 1)
+).CALCULATE(
+    user_name=username,
+    total_unread_promotional_notifications=COUNT(notifications.WHERE((notification_type == 'promotional') & (status == 'unread')))
+)
+```
+
+**Explanation:**
+
+1.  **`Users.WHERE(...)`**: Starts by accessing the `Users` collection and filtering it based on specific criteria.
+2.  **`(LOWER(country) == 'us')`**: Filters users whose `country` field, when converted to lowercase, is exactly 'us'. This ensures case-insensitive matching for the country.
+3.  **`HAS(notifications.WHERE(...)) == 1`**: This is a crucial filter.
+    *   `notifications.WHERE(...)`: Accesses the `notifications` sub-collection for each user and filters these notifications.
+    *   `(notification_type == 'promotional') & (status == 'unread')`: The inner filter keeps only notifications that are of type 'promotional' AND have a status of 'unread'.
+    *   `HAS(...) == 1`: Checks if the user has *at least one* notification that matches the inner filter criteria (unread and promotional). Only users who meet this condition, along with the country condition, are kept.
+4.  **`.CALCULATE(...)`**: For the users who passed the `WHERE` clause filters:
+    *   `user_name=username`: Selects the `username` field and assigns it to the new field `user_name`.
+    *   `total_unread_promotional_notifications=COUNT(...)`: Calculates the total count of unread promotional notifications for each selected user.
+        *   `COUNT(notifications.WHERE(...))`: Counts the number of notifications within the user's `notifications` sub-collection that satisfy the condition `(notification_type == 'promotional') & (status == 'unread')`.
+5.  **`us_users_unread_promo = ...`**: Assigns the final result (a collection of users with their usernames and counts of unread promotional notifications) to the variable `us_users_unread_promo`.",20.02312469482422,"us_users_unread_promo = Users.WHERE(
+    (LOWER(country) == 'us') &
+    (HAS(notifications.WHERE((notification_type == 'promotional') & (status == 'unread'))) == 1)
+).CALCULATE(
+    user_name=username,
+    total_unread_promotional_notifications=COUNT(notifications.WHERE((notification_type == 'promotional') & (status == 'unread')))
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=512 candidates_tokens_details=None prompt_token_count=20309 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20309)] thoughts_token_count=1388 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22209 traffic_type=None",Match,
+"How many distinct active users sent money per month in 2023? Return the number of active users per month (as a date), starting from the earliest date. Do not include merchants in the query. Only include successful transactions.","SELECT strftime('%Y-%m', t.created_at) AS month, COUNT(DISTINCT t.sender_id) AS active_users FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE t.sender_type = 0 AND t.status = 'success' AND u.status = 'active' AND t.created_at >= '2023-01-01' AND t.created_at < '2024-01-01' GROUP BY month ORDER BY month;",Ewallet,"```python
+# Filter transactions to include only those sent by active users in 2023 and were successful
+filtered_transactions = Transactions.WHERE(
+    (YEAR(created_at) == 2023) &
+    (status == ""successful"") &
+    (sender_type == ""user"") &  # Ensure the sender is a user, not a merchant
+    (sending_user.status == ""active"") # Ensure the sending user is active
+)
+
+# Calculate the start of the month for each transaction and get the sending user's ID
+transaction_info = filtered_transactions.CALCULATE(
+    transaction_month_date=DATETIME(created_at, 'start of month'),
+    sending_user_id=sending_user.uid # Get the user ID for distinct counting
+)
+
+# Partition the transactions by the calculated month date
+monthly_groups = transaction_info.PARTITION(
+    name=""monthly_transactions"",
+    by=(transaction_month_date)
+)
+
+# Calculate the distinct count of sending users for each month
+monthly_active_user_counts = monthly_groups.CALCULATE(
+    month_start_date=transaction_month_date, # The month (as the first day of the month)
+    distinct_active_users_count=NDISTINCT(monthly_transactions.sending_user_id) # Count distinct user IDs within the partition
+)
+
+# Order the results by month in ascending order
+result = monthly_active_user_counts.ORDER_BY(month_start_date.ASC())
+```
+
+**Explanation:**
+
+1.  **`filtered_transactions`**: This step filters the `Transactions` collection based on multiple criteria:
+    *   `YEAR(created_at) == 2023`: Selects transactions only from the year 2023.
+    *   `status == ""successful""`: Includes only successfully completed transactions.
+    *   `sender_type == ""user""`: Ensures the sender was a user, excluding merchants.
+    *   `sending_user.status == ""active""`: Filters for transactions where the associated sending user has an 'active' status.
+2.  **`transaction_info`**: This step calculates two new fields for the filtered transactions:
+    *   `transaction_month_date`: Extracts the date corresponding to the start of the month from the transaction's `created_at` timestamp using `DATETIME(created_at, 'start of month')`. This will be used for grouping.
+    *   `sending_user_id`: Retrieves the unique identifier (`uid`) of the sending user, which is needed for counting distinct users later.
+3.  **`monthly_groups`**: This step partitions the `transaction_info` collection.
+    *   `PARTITION(name=""monthly_transactions"", by=(transaction_month_date))`: Groups the transactions based on the `transaction_month_date` calculated previously. All transactions from the same month will be in the same group.
+4.  **`monthly_active_user_counts`**: This step calculates the final result for each monthly group:
+    *   `month_start_date=transaction_month_date`: Selects the month date (which is the partition key).
+    *   `distinct_active_users_count=NDISTINCT(monthly_transactions.sending_user_id)`: Counts the number of unique `sending_user_id` values within each month's partition group (`monthly_transactions`). This gives the count of distinct active users who sent money in that specific month.
+5.  **`result`**: This final step orders the calculated monthly counts by `month_start_date` in ascending order, presenting the results from the earliest month in 2023 to the latest.",28.850887298583984,"# Filter transactions to include only those sent by active users in 2023 and were successful
+filtered_transactions = Transactions.WHERE(
+    (YEAR(created_at) == 2023) &
+    (status == ""successful"") &
+    (sender_type == ""user"") &  # Ensure the sender is a user, not a merchant
+    (sending_user.status == ""active"") # Ensure the sending user is active
+)
+
+# Calculate the start of the month for each transaction and get the sending user's ID
+transaction_info = filtered_transactions.CALCULATE(
+    transaction_month_date=DATETIME(created_at, 'start of month'),
+    sending_user_id=sending_user.uid # Get the user ID for distinct counting
+)
+
+# Partition the transactions by the calculated month date
+monthly_groups = transaction_info.PARTITION(
+    name=""monthly_transactions"",
+    by=(transaction_month_date)
+)
+
+# Calculate the distinct count of sending users for each month
+monthly_active_user_counts = monthly_groups.CALCULATE(
+    month_start_date=transaction_month_date, # The month (as the first day of the month)
+    distinct_active_users_count=NDISTINCT(monthly_transactions.sending_user_id) # Count distinct user IDs within the partition
+)
+
+# Order the results by month in ascending order
+result = monthly_active_user_counts.ORDER_BY(month_start_date.ASC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=824 candidates_tokens_details=None prompt_token_count=20299 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20299)] thoughts_token_count=2009 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23132 traffic_type=None",Query Error,Unrecognized term: 'monthly_transactions'
+Return merchants (merchant ID and name) who have not issued any coupons.,"SELECT m.mid AS merchant_id, m.name AS merchant_name FROM merchants AS m LEFT JOIN coupons AS c ON m.mid = c.merchant_id WHERE c.cid IS NULL;",Ewallet,"```python
+merchants_without_coupons = Merchants.WHERE(HASNOT(coupons) == 1).CALCULATE(
+    merchant_id=mid,
+    merchant_name=name
+)
+```
+
+**Explanation:**
+
+1.  **`Merchants`**: Starts with the `Merchants` collection.
+2.  **`.WHERE(HASNOT(coupons) == 1)`**: Filters the merchants to include only those for whom the `coupons` sub-collection is empty (i.e., they have not issued any coupons). The `HASNOT()` function returns true if the specified sub-collection is empty.
+3.  **`.CALCULATE(merchant_id=mid, merchant_name=name)`**: Selects and renames the `mid` to `merchant_id` and `name` to `merchant_name` for the resulting merchants.",6.271936893463135,"merchants_without_coupons = Merchants.WHERE(HASNOT(coupons) == 1).CALCULATE(
+    merchant_id=mid,
+    merchant_name=name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=191 candidates_tokens_details=None prompt_token_count=20266 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20266)] thoughts_token_count=341 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20798 traffic_type=None",Match,
+"Return the distinct list of merchant IDs that have received money from a transaction. Consider all transaction types in the results you return, but only include the merchant ids in your final answer.",SELECT DISTINCT m.mid AS merchant_id FROM merchants AS m JOIN wallet_transactions_daily AS t ON m.mid = t.receiver_id WHERE t.receiver_type = 1;,Ewallet,"```python
+# Filter transactions to find those completed and received by merchants
+receiving_merchant_transactions = Transactions.WHERE(
+    (receiver_type == 'merchant') & (status == 'completed')
+)
+
+# Extract the receiver_id (which is the merchant_id in this case)
+merchant_ids_from_transactions = receiving_merchant_transactions.CALCULATE(
+    merchant_id=receiver_id
+)
+
+# Partition by merchant_id to get the distinct list
+distinct_receiving_merchant_ids = merchant_ids_from_transactions.PARTITION(
+    name=""distinct_merchants"", by=(merchant_id)
+).CALCULATE(
+    merchant_id=merchant_id
+)
+
+result = distinct_receiving_merchant_ids
+```
+
+**Explanation:**
+
+1.  **`receiving_merchant_transactions = Transactions.WHERE(...)`**: This line filters the `Transactions` collection to include only those transactions where the `receiver_type` is 'merchant' (meaning a merchant received the funds) and the transaction `status` is 'completed' (ensuring the money was successfully transferred).
+2.  **`merchant_ids_from_transactions = receiving_merchant_transactions.CALCULATE(...)`**: From the filtered transactions, this step extracts the `receiver_id` and assigns it to a new field named `merchant_id`. At this point, the list might contain duplicate merchant IDs if a merchant received multiple transactions.
+3.  **`distinct_receiving_merchant_ids = merchant_ids_from_transactions.PARTITION(...)`**: This uses the `PARTITION` function to group the results by the `merchant_id`. Partitioning by a field effectively creates groups where each group represents a unique value of that field.
+4.  **`.CALCULATE(merchant_id=merchant_id)`**: After partitioning, this `CALCULATE` step selects the `merchant_id` from each distinct group, resulting in a list containing only the unique merchant IDs that received completed transactions.
+5.  **`result = distinct_receiving_merchant_ids`**: The final distinct list of merchant IDs is assigned to the `result` variable.",15.732699871063232,"# Filter transactions to find those completed and received by merchants
+receiving_merchant_transactions = Transactions.WHERE(
+    (receiver_type == 'merchant') & (status == 'completed')
+)
+
+# Extract the receiver_id (which is the merchant_id in this case)
+merchant_ids_from_transactions = receiving_merchant_transactions.CALCULATE(
+    merchant_id=receiver_id
+)
+
+# Partition by merchant_id to get the distinct list
+distinct_receiving_merchant_ids = merchant_ids_from_transactions.PARTITION(
+    name=""distinct_merchants"", by=(merchant_id)
+).CALCULATE(
+    merchant_id=merchant_id
+)
+
+result = distinct_receiving_merchant_ids","cache_tokens_details=None cached_content_token_count=None candidates_token_count=466 candidates_tokens_details=None prompt_token_count=20287 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20287)] thoughts_token_count=950 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21703 traffic_type=None",No Match,
+Return the distinct list of user IDs who have received transaction notifications.,SELECT DISTINCT user_id FROM notifications WHERE type = 'transaction';,Ewallet,"```python
+import Ewallet
+
+# Filter notifications to find those of type 'transaction'
+transaction_notifications = Ewallet.Notifications.WHERE(notification_type == 'transaction')
+
+# Partition the filtered notifications by user_id to get unique user IDs
+distinct_user_ids = transaction_notifications.PARTITION(name=""user_groups"", by=(user_id)).CALCULATE(
+    user_id=user_id
+)
+
+# Assign the final result to a variable
+result = distinct_user_ids
+```
+
+**Explanation:**
+
+1.  **`transaction_notifications = Ewallet.Notifications.WHERE(notification_type == 'transaction')`**: This line starts with the `Notifications` collection from the `Ewallet` graph and filters it to include only those notifications where the `notification_type` field is exactly equal to 'transaction'.
+2.  **`distinct_user_ids = transaction_notifications.PARTITION(name=""user_groups"", by=(user_id))`**: This takes the filtered `transaction_notifications` and partitions them based on the `user_id`. The `PARTITION` function groups all notifications belonging to the same `user_id` together. Each group represents a unique `user_id` that has received at least one transaction notification.
+3.  **`.CALCULATE(user_id=user_id)`**: After partitioning, this `CALCULATE` step is applied to each partition group. Since `user_id` is the partition key, this selects the unique `user_id` associated with each group, effectively creating a distinct list of user IDs.
+4.  **`result = distinct_user_ids`**: The final result, containing the distinct list of user IDs who received transaction notifications, is assigned to the variable `result`.",12.12369704246521,"import Ewallet
+
+# Filter notifications to find those of type 'transaction'
+transaction_notifications = Ewallet.Notifications.WHERE(notification_type == 'transaction')
+
+# Partition the filtered notifications by user_id to get unique user IDs
+distinct_user_ids = transaction_notifications.PARTITION(name=""user_groups"", by=(user_id)).CALCULATE(
+    user_id=user_id
+)
+
+# Assign the final result to a variable
+result = distinct_user_ids","cache_tokens_details=None cached_content_token_count=None candidates_token_count=381 candidates_tokens_details=None prompt_token_count=20264 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20264)] thoughts_token_count=695 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21340 traffic_type=None",Query Error,No module named 'Ewallet'
+Return users (user ID and username) who have not received any notifications,"SELECT u.uid, u.username FROM users AS u LEFT JOIN notifications AS n ON u.uid = n.user_id WHERE n._id IS NULL;",Ewallet,"```python
+users_without_notifications = Users.WHERE(HASNOT(notifications)==1).CALCULATE(
+    user_id=uid,
+    user_name=username
+)
+```
+
+**Explanation:**
+
+1.  **`Users`**: Starts with the `Users` collection.
+2.  **`.WHERE(HASNOT(notifications)==1)`**: Filters the `Users` collection to include only those users for whom the `notifications` sub-collection is empty (i.e., they have received no notifications). `HASNOT(notifications)` returns true if the `notifications` list is empty.
+3.  **`.CALCULATE(user_id=uid, user_name=username)`**: Selects and renames the `uid` field to `user_id` and the `username` field to `user_name` for the resulting users.",5.235065460205078,"users_without_notifications = Users.WHERE(HASNOT(notifications)==1).CALCULATE(
+    user_id=uid,
+    user_name=username
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=186 candidates_tokens_details=None prompt_token_count=20265 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20265)] thoughts_token_count=257 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20708 traffic_type=None",Match,
+What are the top 2 most frequently used device types for user sessions and their respective counts?,"SELECT device_type, COUNT(*) AS COUNT FROM user_sessions GROUP BY device_type ORDER BY CASE WHEN COUNT IS NULL THEN 1 ELSE 0 END DESC, COUNT DESC LIMIT 2;",Ewallet,"```python
+top_device_types = UserSessions.PARTITION(name=""device_groups"", by=(device_type)).CALCULATE(
+    device_type=device_type,
+    session_count=COUNT(UserSessions)
+).TOP_K(2, by=session_count.DESC())
+```
+
+**Explanation:**
+
+1.  **`UserSessions.PARTITION(name=""device_groups"", by=(device_type))`**: This groups the `UserSessions` collection by the unique values found in the `device_type` field. Each group represents a distinct device type.
+2.  **`.CALCULATE(device_type=device_type, session_count=COUNT(UserSessions))`**: For each `device_type` group created by the partition, this calculates:
+    *   `device_type`: The actual device type for the group.
+    *   `session_count`: The total number of user sessions (`COUNT(UserSessions)`) associated with that specific device type within the group.
+3.  **`.TOP_K(2, by=session_count.DESC())`**: This selects the top 2 results from the calculated groups, ordered by `session_count` in descending order (highest count first).",8.321224451065063,"top_device_types = UserSessions.PARTITION(name=""device_groups"", by=(device_type)).CALCULATE(
+    device_type=device_type,
+    session_count=COUNT(UserSessions)
+).TOP_K(2, by=session_count.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=271 candidates_tokens_details=None prompt_token_count=20270 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20270)] thoughts_token_count=424 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20965 traffic_type=None",Match,
+What are the top 3 most common transaction statuses and their respective counts?,"SELECT status, COUNT(*) AS COUNT FROM wallet_transactions_daily GROUP BY status ORDER BY CASE WHEN COUNT IS NULL THEN 1 ELSE 0 END DESC, COUNT DESC LIMIT 3;",Ewallet,"```python
+result = Transactions.PARTITION(name=""status_groups"", by=(status)).CALCULATE(
+    transaction_status=status,
+    status_count=COUNT(Transactions)
+).TOP_K(3, by=status_count.DESC())
+```
+
+**Explanation:**
+
+1.  **`Transactions.PARTITION(name=""status_groups"", by=(status))`**: This groups the `Transactions` collection by the unique values found in the `status` field. Each group represents a distinct transaction status.
+2.  **`.CALCULATE(...)`**: For each status group created by the partition:
+    *   `transaction_status=status`: Selects the status value (the partition key).
+    *   `status_count=COUNT(Transactions)`: Counts the number of transactions within that specific status group.
+3.  **`.TOP_K(3, by=status_count.DESC())`**: This selects the top 3 status groups based on the `status_count` (the number of transactions), ordered from the highest count to the lowest.",7.969294548034668,"result = Transactions.PARTITION(name=""status_groups"", by=(status)).CALCULATE(
+    transaction_status=status,
+    status_count=COUNT(Transactions)
+).TOP_K(3, by=status_count.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=233 candidates_tokens_details=None prompt_token_count=20266 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20266)] thoughts_token_count=447 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20946 traffic_type=None",Match,
+"What are the top 3 most frequently used coupon codes? Return the coupon code, total number of redemptions, and total amount redeemed.","SELECT c.code AS coupon_code, COUNT(t.txid) AS redemption_count, SUM(t.amount) AS total_discount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id GROUP BY c.code ORDER BY CASE WHEN redemption_count IS NULL THEN 1 ELSE 0 END DESC, redemption_count DESC LIMIT 3;",Ewallet,"```python
+top_coupons = Coupons.WHERE(HAS(transaction_used_in) == 1).CALCULATE(
+    coupon_code=code,
+    total_redemptions=COUNT(transaction_used_in),
+    total_amount=SUM(transaction_used_in.amount)
+).TOP_K(3, by=total_redemptions.DESC())
+```
+
+**Explanation:**
+
+1.  **`Coupons.WHERE(HAS(transaction_used_in) == 1)`**: Starts with the `Coupons` collection and filters it to include only those coupons that have been used in at least one transaction (i.e., have a relationship via `transaction_used_in`).
+2.  **`.CALCULATE(...)`**: For each of these used coupons, it calculates three new fields:
+    *   `coupon_code=code`: Selects the coupon's code.
+    *   `total_redemptions=COUNT(transaction_used_in)`: Counts the number of transactions associated with the coupon, representing the total number of times it was redeemed.
+    *   `total_amount=SUM(transaction_used_in.amount)`: Sums the `amount` field from all transactions where this coupon was used, giving the total value redeemed using this coupon.
+3.  **`.TOP_K(3, by=total_redemptions.DESC())`**: Sorts the resulting coupons based on the calculated `total_redemptions` in descending order (most frequent first) and selects the top 3. The final result includes the `coupon_code`, `total_redemptions`, and `total_amount` for these top 3 coupons.",16.680272102355957,"top_coupons = Coupons.WHERE(HAS(transaction_used_in) == 1).CALCULATE(
+    coupon_code=code,
+    total_redemptions=COUNT(transaction_used_in),
+    total_amount=SUM(transaction_used_in.amount)
+).TOP_K(3, by=total_redemptions.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=371 candidates_tokens_details=None prompt_token_count=20280 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20280)] thoughts_token_count=1205 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21856 traffic_type=None",No Match,
+"Which are the top 5 countries by total transaction amount sent by users, sender_type = 0? Return the country, number of distinct users who sent, and total transaction amount.","SELECT u.country, COUNT(DISTINCT t.sender_id) AS user_count, SUM(t.amount) AS total_amount FROM users AS u JOIN wallet_transactions_daily AS t ON u.uid = t.sender_id WHERE t.sender_type = 0 GROUP BY u.country ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 5;",Ewallet,"```python
+# Calculate sender country, sender UID, and transaction amount for relevant transactions
+transactions_info = Transactions.WHERE(sender_type == 0).CALCULATE(
+    sender_country = sending_user.country,
+    sender_uid = sending_user.uid,
+    tx_amount = amount
+)
+
+# Partition transactions by sender country
+country_groups = transactions_info.PARTITION(name=""country_group"", by=(sender_country))
+
+# Calculate aggregates for each country
+country_stats = country_groups.CALCULATE(
+    country = sender_country,
+    total_transaction_amount = SUM(country_group.tx_amount),
+    distinct_user_count = NDISTINCT(country_group.sender_uid)
+)
+
+# Select the top 5 countries by total transaction amount
+top_countries_by_amount = country_stats.TOP_K(5, by=total_transaction_amount.DESC())
+```
+
+**Explanation:**
+
+1.  **`transactions_info = Transactions.WHERE(sender_type == 0).CALCULATE(...)`**: This line starts by filtering the `Transactions` collection to include only those where the `sender_type` is 0 (indicating the sender is a user). It then uses `CALCULATE` to create a temporary collection containing the sending user's country (`sender_country`), the sending user's unique ID (`sender_uid`), and the transaction amount (`tx_amount`) for each of these filtered transactions.
+2.  **`country_groups = transactions_info.PARTITION(name=""country_group"", by=(sender_country))`**: This partitions the `transactions_info` collection into groups based on the `sender_country`. Each partition (`country_group`) contains all the transaction information (country, user ID, amount) for a specific country.
+3.  **`country_stats = country_groups.CALCULATE(...)`**: This line operates on the partitioned data. For each `country_group`, it calculates:
+    *   `country`: The country name (which is the partition key `sender_country`).
+    *   `total_transaction_amount`: The sum of all `tx_amount` values within that specific country's partition (`country_group`).
+    *   `distinct_user_count`: The count of unique `sender_uid` values within that country's partition, effectively counting the distinct users who sent transactions from that country.
+4.  **`top_countries_by_amount = country_stats.TOP_K(5, by=total_transaction_amount.DESC())`**: Finally, this selects the top 5 rows from the `country_stats` collection, ordered by `total_transaction_amount` in descending order. The result includes the country, the total transaction amount, and the count of distinct users for each of these top 5 countries.",32.022815227508545,"# Calculate sender country, sender UID, and transaction amount for relevant transactions
+transactions_info = Transactions.WHERE(sender_type == 0).CALCULATE(
+    sender_country = sending_user.country,
+    sender_uid = sending_user.uid,
+    tx_amount = amount
+)
+
+# Partition transactions by sender country
+country_groups = transactions_info.PARTITION(name=""country_group"", by=(sender_country))
+
+# Calculate aggregates for each country
+country_stats = country_groups.CALCULATE(
+    country = sender_country,
+    total_transaction_amount = SUM(country_group.tx_amount),
+    distinct_user_count = NDISTINCT(country_group.sender_uid)
+)
+
+# Select the top 5 countries by total transaction amount
+top_countries_by_amount = country_stats.TOP_K(5, by=total_transaction_amount.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=627 candidates_tokens_details=None prompt_token_count=20289 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20289)] thoughts_token_count=2534 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23450 traffic_type=None",Query Error,Unrecognized term: 'country_group'
+"Who are the top 2 merchants (receiver type 1) by total transaction amount in the past 150 days (inclusive of 150 days ago)? Return the merchant name, total number of transactions, and total transaction amount.","SELECT m.name AS merchant_name, COUNT(t.txid) AS total_transactions, SUM(t.amount) AS total_amount FROM merchants AS m JOIN wallet_transactions_daily AS t ON m.mid = t.receiver_id WHERE t.receiver_type = 1 AND t.created_at >= DATE('now', '-150 days') GROUP BY m.name ORDER BY total_amount DESC LIMIT 2;",Ewallet,"```python
+# Filter transactions received by merchants within the last 150 days where receiver_type is 1
+recent_merchant_transactions = Merchants.transactions_received.WHERE(
+    (DATEDIFF(""days"", created_at, DATETIME('now')) <= 150) &
+    (receiver_type == 1)
+)
+
+# Calculate the total transaction amount and count for each merchant based on the filtered transactions
+merchant_totals = Merchants.WHERE(
+    # Ensure the merchant has at least one relevant transaction
+    HAS(recent_merchant_transactions) == 1
+).CALCULATE(
+    merchant_name=name,
+    num_transactions=COUNT(recent_merchant_transactions),
+    total_transaction_amount=SUM(recent_merchant_transactions.amount)
+)
+
+# Select the top 2 merchants based on the total transaction amount
+top_2_merchants = merchant_totals.TOP_K(2, by=total_transaction_amount.DESC())
+
+# Assign the final result to the variable
+result = top_2_merchants
+```
+
+**Explanation:**
+
+1.  **`recent_merchant_transactions`**: This intermediate step defines the set of transactions we are interested in for each merchant. It accesses the `transactions_received` sub-collection for each merchant and applies two filters using `WHERE`:
+    *   `DATEDIFF(""days"", created_at, DATETIME('now')) <= 150`: This filters transactions created within the last 150 days (inclusive) relative to the current time (`DATETIME('now')`).
+    *   `receiver_type == 1`: This filters transactions where the `receiver_type` field is exactly 1, as specified in the request.
+2.  **`merchant_totals`**: This step calculates the required aggregates for each merchant that has relevant transactions.
+    *   It starts with the `Merchants` collection.
+    *   `WHERE(HAS(recent_merchant_transactions) == 1)`: This filters the `Merchants` collection to include only those merchants who have at least one transaction matching the criteria defined in `recent_merchant_transactions`.
+    *   `CALCULATE(...)`: This calculates the required output fields for each qualifying merchant:
+        *   `merchant_name=name`: Selects the merchant's name.
+        *   `num_transactions=COUNT(recent_merchant_transactions)`: Counts the number of transactions identified in the `recent_merchant_transactions` step for the current merchant.
+        *   `total_transaction_amount=SUM(recent_merchant_transactions.amount)`: Sums the `amount` of the transactions identified in the `recent_merchant_transactions` step for the current merchant.
+3.  **`top_2_merchants`**: This step selects the top 2 merchants from the `merchant_totals` collection.
+    *   `TOP_K(2, by=total_transaction_amount.DESC())`: This function takes the top 2 records, ordering them in descending order (`DESC()`) based on the `total_transaction_amount` calculated previously.
+4.  **`result = top_2_merchants`**: The final result containing the top 2 merchants, their transaction counts, and total amounts is assigned to the `result` variable.",27.235265970230103,"# Filter transactions received by merchants within the last 150 days where receiver_type is 1
+recent_merchant_transactions = Merchants.transactions_received.WHERE(
+    (DATEDIFF(""days"", created_at, DATETIME('now')) <= 150) &
+    (receiver_type == 1)
+)
+
+# Calculate the total transaction amount and count for each merchant based on the filtered transactions
+merchant_totals = Merchants.WHERE(
+    # Ensure the merchant has at least one relevant transaction
+    HAS(recent_merchant_transactions) == 1
+).CALCULATE(
+    merchant_name=name,
+    num_transactions=COUNT(recent_merchant_transactions),
+    total_transaction_amount=SUM(recent_merchant_transactions.amount)
+)
+
+# Select the top 2 merchants based on the total transaction amount
+top_2_merchants = merchant_totals.TOP_K(2, by=total_transaction_amount.DESC())
+
+# Assign the final result to the variable
+result = top_2_merchants","cache_tokens_details=None cached_content_token_count=None candidates_token_count=721 candidates_tokens_details=None prompt_token_count=20301 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20301)] thoughts_token_count=1989 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23011 traffic_type=None",Query Error,Unrecognized term of simple table collection 'Merchants' in graph 'Ewallet': 'Merchants'
+Give me today's median merchant wallet balance for all active merchants whose category contains 'retail',"WITH retail_merchants AS (SELECT mid FROM merchants WHERE LOWER(category) LIKE LOWER('%retail%') AND status = 'active'), merchant_balances AS (SELECT balance FROM wallet_merchant_balance_daily AS wmbd JOIN retail_merchants AS rm ON wmbd.merchant_id = rm.mid WHERE DATE(wmbd.updated_at) = date('now')) SELECT AVG(balance) AS median_balance FROM (SELECT balance FROM merchant_balances ORDER BY balance LIMIT 2 - (SELECT COUNT(*) FROM merchant_balances) % 2 OFFSET (SELECT (COUNT(*) - 1) / 2 FROM merchant_balances));",Ewallet,"```python
+# Filter merchants who are active and have 'retail' in their category (case-insensitive)
+active_retail_merchants = Merchants.WHERE(
+    (status == 'active') & CONTAINS(LOWER(category), 'retail')
+)
+
+# Calculate the median balance for these filtered merchants
+# We access the 'balances' sub-collection of the filtered merchants and calculate the median of the 'balance' field.
+# This calculation is done at the top Ewallet level to get a single median value across all relevant merchants.
+result = Ewallet.CALCULATE(
+    median_merchant_balance = MEDIAN(active_retail_merchants.balances.balance)
+)
+```
+
+**Explanation:**
+
+1.  **`active_retail_merchants = Merchants.WHERE(...)`**: This line filters the `Merchants` collection.
+    *   `status == 'active'`: It selects merchants whose `status` is exactly 'active'.
+    *   `CONTAINS(LOWER(category), 'retail')`: It selects merchants whose `category` field contains the substring 'retail'. `LOWER()` is used to make the search case-insensitive.
+    *   `&`: Both conditions must be true for a merchant to be included.
+2.  **`result = Ewallet.CALCULATE(...)`**: This line calculates the final result at the top `Ewallet` level.
+    *   `MEDIAN(active_retail_merchants.balances.balance)`: This calculates the median value of the `balance` field found within the `balances` sub-collection of the previously filtered `active_retail_merchants`. The `MEDIAN` function aggregates the balances from all selected merchants into a single median value.
+    *   `median_merchant_balance = ...`: The calculated median value is assigned to the field `median_merchant_balance` in the final output.",14.87985897064209,"# Filter merchants who are active and have 'retail' in their category (case-insensitive)
+active_retail_merchants = Merchants.WHERE(
+    (status == 'active') & CONTAINS(LOWER(category), 'retail')
+)
+
+# Calculate the median balance for these filtered merchants
+# We access the 'balances' sub-collection of the filtered merchants and calculate the median of the 'balance' field.
+# This calculation is done at the top Ewallet level to get a single median value across all relevant merchants.
+result = Ewallet.CALCULATE(
+    median_merchant_balance = MEDIAN(active_retail_merchants.balances.balance)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=408 candidates_tokens_details=None prompt_token_count=20270 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20270)] thoughts_token_count=1015 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21693 traffic_type=None",No Match,
+What was the average transaction daily and monthly limit for the earliest setting snapshot in 2023?,"SELECT AVG(tx_limit_daily) AS avg_daily_limit, AVG(tx_limit_monthly) AS avg_monthly_limit FROM user_setting_snapshot WHERE snapshot_date = (SELECT MIN(snapshot_date) FROM user_setting_snapshot WHERE snapshot_date >= '2023-01-01' AND snapshot_date < '2024-01-01');",Ewallet,"```python
+# Calculate the earliest snapshot date in 2023 at the top level
+earliest_info = Ewallet.CALCULATE(
+    min_date_2023=MIN(UserSettingSnapshots.WHERE(YEAR(snapshot_date) == 2023).snapshot_date)
+)
+
+# Use the calculated earliest date to filter snapshots and compute the average limits
+result = earliest_info.CALCULATE(
+    avg_daily_limit=AVG(UserSettingSnapshots.WHERE(snapshot_date == min_date_2023).tx_limit_daily),
+    avg_monthly_limit=AVG(UserSettingSnapshots.WHERE(snapshot_date == min_date_2023).tx_limit_monthly)
+)
+```
+
+**Explanation:**
+
+1.  **`earliest_info = Ewallet.CALCULATE(...)`**: We start at the top `Ewallet` level to calculate a global value: the earliest snapshot date in 2023.
+    *   **`MIN(UserSettingSnapshots.WHERE(YEAR(snapshot_date) == 2023).snapshot_date)`**: This finds the minimum `snapshot_date` among all snapshots within the `UserSettingSnapshots` collection where the year of the `snapshot_date` is 2023.
+    *   **`min_date_2023=...`**: The calculated minimum date is stored in the variable `min_date_2023`.
+2.  **`result = earliest_info.CALCULATE(...)`**: We perform another calculation at the `Ewallet` level, using the previously calculated `min_date_2023`.
+    *   **`AVG(UserSettingSnapshots.WHERE(snapshot_date == min_date_2023).tx_limit_daily)`**: This filters the `UserSettingSnapshots` collection to include only those snapshots whose `snapshot_date` exactly matches the `min_date_2023` found earlier. It then calculates the average of the `tx_limit_daily` for these specific snapshots.
+    *   **`AVG(UserSettingSnapshots.WHERE(snapshot_date == min_date_2023).tx_limit_monthly)`**: Similarly, this calculates the average of the `tx_limit_monthly` for the snapshots matching the earliest date in 2023.
+    *   **`avg_daily_limit=...`, `avg_monthly_limit=...`**: The calculated averages are assigned to the respective result fields.
+
+This query efficiently finds the earliest snapshot date in 2023 and then calculates the average daily and monthly transaction limits specifically for all snapshots taken on that earliest date.",27.10628318786621,"# Calculate the earliest snapshot date in 2023 at the top level
+earliest_info = Ewallet.CALCULATE(
+    min_date_2023=MIN(UserSettingSnapshots.WHERE(YEAR(snapshot_date) == 2023).snapshot_date)
+)
+
+# Use the calculated earliest date to filter snapshots and compute the average limits
+result = earliest_info.CALCULATE(
+    avg_daily_limit=AVG(UserSettingSnapshots.WHERE(snapshot_date == min_date_2023).tx_limit_daily),
+    avg_monthly_limit=AVG(UserSettingSnapshots.WHERE(snapshot_date == min_date_2023).tx_limit_monthly)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=601 candidates_tokens_details=None prompt_token_count=20272 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20272)] thoughts_token_count=2167 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23040 traffic_type=None",Match,
+what was the average user session duration in seconds split by device_type?,"SELECT device_type, AVG(strftime('%s', session_end_ts) - strftime('%s', session_start_ts)) AS avg_session_duration_seconds FROM user_sessions WHERE session_end_ts IS NOT NULL GROUP BY device_type;",Ewallet,"```python
+# Calculate session duration for each session first
+session_durations = UserSessions.CALCULATE(
+    device_type=device_type, # Need device_type for partitioning
+    duration_secs=DATEDIFF(""seconds"", session_start_ts, session_end_ts) # Calculate duration in seconds
+)
+
+# Partition by device type and calculate the average duration for each group
+avg_duration_by_device = session_durations.PARTITION(
+    name=""device_groups"", by=(device_type) # Group sessions by device_type
+).CALCULATE(
+    device_type=device_type, # Select the device type
+    avg_session_duration_seconds=AVG(UserSessions.duration_secs) # Calculate the average of the durations calculated earlier for this group
+)
+```
+
+**Explanation:**
+
+1.  **`session_durations = UserSessions.CALCULATE(...)`**: This first step accesses the `UserSessions` collection. For each session, it calculates the duration in seconds by finding the difference between `session_end_ts` and `session_start_ts` using the `DATEDIFF` function. It also keeps the `device_type` field, which is needed for grouping later. The result is stored in the `session_durations` variable.
+2.  **`avg_duration_by_device = session_durations.PARTITION(...)`**: This step takes the `session_durations` collection and partitions it.
+    *   `name=""device_groups""`: Assigns a temporary name to the groups created by the partition.
+    *   `by=(device_type)`: Specifies that the sessions should be grouped based on their `device_type`.
+3.  **`.CALCULATE(...)`**: This is applied to the result of the partition. For each `device_type` group:
+    *   `device_type=device_type`: Selects the `device_type` for the current group.
+    *   `avg_session_duration_seconds=AVG(UserSessions.duration_secs)`: Calculates the average (`AVG`) of the `duration_secs` (calculated in the first step) for all sessions belonging to the current `device_type` group. The `UserSessions.duration_secs` refers back to the `duration_secs` field calculated on the original `UserSessions` collection within the context of the current partition group.
+
+The final `avg_duration_by_device` variable will contain a collection where each record represents a unique `device_type` and its corresponding average session duration in seconds.",15.379008054733276,"# Calculate session duration for each session first
+session_durations = UserSessions.CALCULATE(
+    device_type=device_type, # Need device_type for partitioning
+    duration_secs=DATEDIFF(""seconds"", session_start_ts, session_end_ts) # Calculate duration in seconds
+)
+
+# Partition by device type and calculate the average duration for each group
+avg_duration_by_device = session_durations.PARTITION(
+    name=""device_groups"", by=(device_type) # Group sessions by device_type
+).CALCULATE(
+    device_type=device_type, # Select the device type
+    avg_session_duration_seconds=AVG(UserSessions.duration_secs) # Calculate the average of the durations calculated earlier for this group
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=565 candidates_tokens_details=None prompt_token_count=20266 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20266)] thoughts_token_count=923 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21754 traffic_type=None",Match,
+"Which merchants earliest coupon start date was within a year of the merchant's registration? Return the merchant _id, registration date, and earliest coupon _id and start date","WITH earliest_coupons AS (SELECT c.merchant_id, MIN(c.start_date) AS earliest_coupon_start_date FROM coupons AS c GROUP BY c.merchant_id) SELECT m.mid AS merchant_id, m.created_at AS merchant_registration_date, ec.earliest_coupon_start_date, c.cid AS earliest_coupon_id FROM merchants AS m JOIN earliest_coupons AS ec ON m.mid = ec.merchant_id JOIN coupons AS c ON ec.merchant_id = c.merchant_id AND ec.earliest_coupon_start_date = c.start_date WHERE ec.earliest_coupon_start_date <= date(m.created_at, '+1 year');",Ewallet,"```python
+# Start with merchants that have at least one coupon
+merchants_with_coupons = Merchants.WHERE(HAS(coupons) == 1)
+
+# For each merchant, find the earliest coupon using RANKING and SINGULAR
+# Calculate the necessary fields including the earliest coupon's details
+merchant_earliest_coupon_info = merchants_with_coupons.CALCULATE(
+    merchant_id=mid,
+    registration_date=created_at,
+    # Find the earliest coupon for this merchant
+    earliest_coupon=coupons.WHERE(
+        RANKING(by=start_date.ASC(), per=""Merchants"") == 1
+    ).SINGULAR()
+)
+
+# Filter merchants where the earliest coupon's start date is within one year
+# of the merchant's registration date (created_at).
+# This means the start_date must be >= created_at and the difference in full years must be 0.
+filtered_merchants = merchant_earliest_coupon_info.WHERE(
+    (earliest_coupon.start_date >= registration_date) &
+    (DATEDIFF(""years"", registration_date, earliest_coupon.start_date) == 0)
+)
+
+# Select the final required fields: merchant ID, registration date,
+# earliest coupon ID, and earliest coupon start date.
+result = filtered_merchants.CALCULATE(
+    merchant_id=merchant_id,
+    registration_date=registration_date,
+    earliest_coupon_id=earliest_coupon.cid,
+    earliest_coupon_start_date=earliest_coupon.start_date
+)
+```
+
+**Explanation:**
+
+1.  **`merchants_with_coupons = Merchants.WHERE(HAS(coupons) == 1)`**: This line starts with the `Merchants` collection and filters out any merchants that do not have any associated coupons using `HAS(coupons) == 1`. This prevents potential errors when trying to access coupons later.
+2.  **`merchant_earliest_coupon_info = ... .CALCULATE(...)`**: This step processes the filtered merchants.
+    *   `merchant_id=mid`, `registration_date=created_at`: Selects the merchant's ID and creation date.
+    *   `earliest_coupon=coupons.WHERE(RANKING(by=start_date.ASC(), per=""Merchants"") == 1).SINGULAR()`: This is the core logic to find the earliest coupon for *each* merchant.
+        *   `coupons`: Accesses the coupons associated with the current merchant.
+        *   `RANKING(by=start_date.ASC(), per=""Merchants"") == 1`: Ranks the coupons for the current merchant (`per=""Merchants""`) based on their `start_date` in ascending order. The `WHERE(...) == 1` clause selects only the coupon with rank 1 (the earliest).
+        *   `.SINGULAR()`: Converts the result (which is guaranteed to be one coupon per merchant due to the ranking filter) into a singular record, allowing direct access to its fields like `cid` and `start_date`.
+3.  **`filtered_merchants = merchant_earliest_coupon_info.WHERE(...)`**: This line filters the results further based on the time condition.
+    *   `earliest_coupon.start_date >= registration_date`: Ensures the earliest coupon did not start *before* the merchant was created.
+    *   `DATEDIFF(""years"", registration_date, earliest_coupon.start_date) == 0`: Calculates the difference in *full years* between the merchant's registration date and the earliest coupon's start date. Checking for `== 0` ensures the start date is within the same calendar year or the next calendar year but less than a full 365/366 days later, effectively checking if it's ""within a year"".
+4.  **`result = filtered_merchants.CALCULATE(...)`**: This final step selects and renames the required output fields from the filtered merchants and their earliest coupon details.",31.91230177879333,"# Start with merchants that have at least one coupon
+merchants_with_coupons = Merchants.WHERE(HAS(coupons) == 1)
+
+# For each merchant, find the earliest coupon using RANKING and SINGULAR
+# Calculate the necessary fields including the earliest coupon's details
+merchant_earliest_coupon_info = merchants_with_coupons.CALCULATE(
+    merchant_id=mid,
+    registration_date=created_at,
+    # Find the earliest coupon for this merchant
+    earliest_coupon=coupons.WHERE(
+        RANKING(by=start_date.ASC(), per=""Merchants"") == 1
+    ).SINGULAR()
+)
+
+# Filter merchants where the earliest coupon's start date is within one year
+# of the merchant's registration date (created_at).
+# This means the start_date must be >= created_at and the difference in full years must be 0.
+filtered_merchants = merchant_earliest_coupon_info.WHERE(
+    (earliest_coupon.start_date >= registration_date) &
+    (DATEDIFF(""years"", registration_date, earliest_coupon.start_date) == 0)
+)
+
+# Select the final required fields: merchant ID, registration date,
+# earliest coupon ID, and earliest coupon start date.
+result = filtered_merchants.CALCULATE(
+    merchant_id=merchant_id,
+    registration_date=registration_date,
+    earliest_coupon_id=earliest_coupon.cid,
+    earliest_coupon_start_date=earliest_coupon.start_date
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=908 candidates_tokens_details=None prompt_token_count=20285 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20285)] thoughts_token_count=2271 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23464 traffic_type=None",Query Error,"Expected an expression, but received a collection: coupons.WHERE(RANKING(by=(start_date.ASC(na_pos='first')), levels=1) == 1).SINGULAR"
+"Which users did not get a notification within the first year of signing up? Return their usernames, emails and signup dates.","SELECT u.username, u.email, u.created_at FROM users AS u LEFT JOIN notifications AS n ON u.uid = n.user_id AND n.created_at BETWEEN u.created_at AND date(u.created_at, '+1 year') WHERE n.user_id IS NULL;",Ewallet,"```python
+import datetime
+
+users_without_first_year_notification = Users.WHERE(
+    # Check if the user has zero notifications within their first year
+    HAS(
+        notifications.WHERE(
+            # Filter notifications created less than one year after the user's signup date
+            created_at < DATETIME(created_at, '+1 year')
+        )
+    ) == 0
+).CALCULATE(
+    # Select the required fields
+    user_name=username,
+    user_email=email,
+    signup_date=created_at
+)
+```
+
+**Explanation:**
+
+1.  **`Users.WHERE(...)`**: Starts by accessing the `Users` collection and applies a filter using the `WHERE` clause.
+2.  **`HAS(notifications.WHERE(...)) == 0`**: This is the core filtering condition.
+    *   `notifications`: Accesses the list of notifications associated with each user.
+    *   `.WHERE(created_at < DATETIME(created_at, '+1 year'))`: Filters these notifications to find only those whose `created_at` timestamp is strictly less than one year after the user's own `created_at` timestamp (signup date). The outer `created_at` refers to `Users.created_at`, and the inner `created_at` refers to `Notifications.created_at`. `DATETIME(created_at, '+1 year')` calculates the date exactly one year after the user signed up.
+    *   `HAS(...)`: Checks if *any* notification exists that satisfies the inner `WHERE` condition (i.e., was created within the first year).
+    *   `== 0`: The filter keeps only those users for whom the `HAS` check returns `0` (false), meaning they have *no* notifications created within their first year.
+3.  **`.CALCULATE(...)`**: For the users who pass the filter, this selects and potentially renames the required fields:
+    *   `user_name=username`: Selects the `username`.
+    *   `user_email=email`: Selects the `email`.
+    *   `signup_date=created_at`: Selects the user's `created_at` date (signup date).
+4.  **`users_without_first_year_notification = ...`**: Assigns the resulting collection of users (with their username, email, and signup date) to the variable `users_without_first_year_notification`.",18.859224319458008,"import datetime
+
+users_without_first_year_notification = Users.WHERE(
+    # Check if the user has zero notifications within their first year
+    HAS(
+        notifications.WHERE(
+            # Filter notifications created less than one year after the user's signup date
+            created_at < DATETIME(created_at, '+1 year')
+        )
+    ) == 0
+).CALCULATE(
+    # Select the required fields
+    user_name=username,
+    user_email=email,
+    signup_date=created_at
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=545 candidates_tokens_details=None prompt_token_count=20275 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20275)] thoughts_token_count=1277 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22097 traffic_type=None",No Match,

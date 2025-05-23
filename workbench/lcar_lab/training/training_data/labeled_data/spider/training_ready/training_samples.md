@@ -1,0 +1,1252 @@
+# Pydough Training Examples
+
+## Question
+How many singers do we have?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. Analysis of the question:
+The question asks for the total number of singers in the database. This can be achieved by counting the number of records in the `singers` collection.
+
+2. Step-by-step explanation of the solution:
+- Access the `singers` collection.
+- Use the `COUNT` function to count the number of singers.
+- Assign the result to a variable named `num_singers`.
+
+3. The PyDough code in a Python code block:
+```python
+num_singers = concert_singer.singers.CALCULATE(number_of_singers=COUNT(singers)).SINGULAR().number_of_singers
+```
+
+4. Explanation of how the code works:
+- `concert_singer.singers`: This accesses the `singers` collection.
+- `.CALCULATE(number_of_singers=COUNT(singers))`: This calculates the count of all records in the `singers` collection and assigns it to a new field named `number_of_singers`.
+- `.SINGULAR().number_of_singers`: This extracts the singular value of `number_of_singers` from the result.
+
+## Pydough Code
+```python
+num_singers = concert_singer.singers.CALCULATE(number_of_singers=COUNT(singers)).SINGULAR().number_of_singers
+```
+
+## Code Context
+# Explanation of Pydough Code for Counting Singers
+
+Let me explain the following Pydough code that answers the question "How many singers do we have?":
+
+```python
+num_singers = concert_singer.singers.CALCULATE(number_of_singers=COUNT(singers)).SINGULAR().number_of_singers
+```
+
+## 1. Pydough-specific Functions and Patterns Used
+
+### CALCULATE
+The `CALCULATE` function [b78dc8c] is used to derive new properties via calculated expressions. In this code, it's creating a new property called `number_of_singers` by counting the singers.
+
+### COUNT
+`COUNT` is a collection aggregation function [b78dc8c] that, when called on a subcollection, returns how many records of it exist for each record of the current collection. In this case, it's counting the number of singers.
+
+### SINGULAR
+The `SINGULAR()` modifier [edc4690] is used to tell PyDough that the data should be treated as singular. This is necessary when accessing a sub-collection in a collection context, as PyDough requires the collection to be singular with regards to the sub-collection.
+
+## 2. Data Flow and Transformations
+
+The data flow in this code follows these steps:
+
+1. Start with the `concert_singer` collection
+2. Access its `singers` subcollection
+3. Use `CALCULATE` to create a new property `number_of_singers` that counts the singers
+4. Apply `SINGULAR()` to indicate that the result should be treated as a singular value
+5. Access the `number_of_singers` property from the result
+6. Assign this value to the variable `num_singers`
+
+## 3. Important Pydough Best Practices Demonstrated
+
+The code demonstrates the best practice of using `SINGULAR()` [edc4690] when accessing a sub-collection that should be treated as singular. This is important because PyDough will ban plural data from being treated as singular unless the `.SINGULAR()` modifier is explicitly used.
+
+## 4. How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions by:
+
+1. Using the appropriate aggregation function (`COUNT`) for counting records [b78dc8c]
+2. Properly using `CALCULATE` to derive a new property [fcc80aa]
+3. Using `SINGULAR()` to explicitly indicate that the result should be treated as singular [edc4690]
+4. Following the pattern of accessing a property from the result of a calculation
+
+## 5. How the Code Addresses the Original Question
+
+The original question asks "How many singers do we have?" The code directly answers this by:
+
+1. Accessing the `singers` collection within `concert_singer`
+2. Counting the number of singers using the `COUNT` function
+3. Storing the result in the variable `num_singers`
+
+This provides a direct count of the total number of singers in the system.
+
+## 6. Key Examples from the Search
+
+From the documentation [edc4690], we can see examples of proper `SINGULAR()` usage:
+
+```python
+# Good Example #1: Access the package cost of the most recent package ordered by each person
+most_recent_package = packages.WHERE(
+    RANKING(by=order_date.DESC(), levels=1) == 1
+).SINGULAR()
+
+People.CALCULATE(
+    ssn,
+    first_name,
+    middle_name,
+    last_name,
+    most_recent_package_cost=most_recent_package.package_cost
+)
+```
+
+This example shows how `SINGULAR()` is used when a filter ensures there is only one record for each record of the parent collection.
+
+## 7. Key Definitions
+
+- **CALCULATE**: A method that contains expressions to be derived by the operation [fcc80aa]
+- **COUNT**: When called on a subcollection, returns how many records of it exist for each record of the current collection [b78dc8c]
+- **SINGULAR**: A modifier that tells PyDough that data should be treated as singular, which is required when accessing a sub-collection in a collection context [edc4690]
+
+In conclusion, this Pydough code efficiently counts the total number of singers by accessing the singers subcollection, calculating the count, and ensuring the result is treated as a singular value.
+
+---
+
+## Question
+What is the total number of singers?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. **Analysis of the question:**
+The question asks for the total number of singers in the database. This requires counting all records in the `singers` collection.
+
+2. **Step-by-step explanation of the solution:**
+   - Access the `singers` collection.
+   - Use the `COUNT` function to count the number of records in the `singers` collection.
+   - Assign the result to a variable named `total_singers`.
+
+3. **The PyDough code:**
+
+```python
+total_singers = concert_singer.singers.CALCULATE(num_singers=COUNT(concert_singer.singers)).SINGULAR().num_singers
+```
+
+4. **Explanation of how the code works:**
+   - `concert_singer.singers`: Accesses the `singers` collection.
+   - `.CALCULATE(num_singers=COUNT(concert_singer.singers))`: Calculates the count of all records in the `singers` collection and assigns it to the field `num_singers`.
+   - `.SINGULAR().num_singers`: Accesses the calculated value `num_singers` from the single record created by the `CALCULATE` function.
+   - `total_singers = ...`: Assigns the final count to the variable `total_singers`.
+
+## Pydough Code
+```python
+total_singers = concert_singer.singers.CALCULATE(num_singers=COUNT(concert_singer.singers)).SINGULAR().num_singers
+```
+
+## Code Context
+# Explanation of Pydough Code for Counting Total Singers
+
+## Code Analysis
+
+```python
+total_singers = concert_singer.singers.CALCULATE(num_singers=COUNT(concert_singer.singers)).SINGULAR().num_singers
+```
+
+This Pydough code answers the question "What is the total number of singers?" by calculating the count of all singers in the concert_singer database.
+
+## Pydough-Specific Functions and Patterns Used
+
+### CALCULATE
+The `CALCULATE` function is used to derive new properties from existing data [988171e]. In this code, it's used to create a new property called `num_singers` that contains the count of all singers.
+
+### COUNT
+The `COUNT` function is an aggregation function that counts the number of records in a collection. Here, it's counting all records in the `concert_singer.singers` collection.
+
+### SINGULAR
+The `SINGULAR()` modifier is a critical component in this code [eb3ac75]. It tells PyDough that the data should be treated as singular (having only one record) even though it might normally be considered plural. This is necessary because:
+
+1. PyDough requires that when accessing a sub-collection in a collection context, the collection must be singular with regards to the sub-collection [eb3ac75].
+2. Without `.SINGULAR()`, PyDough would prohibit the operation because it wouldn't know that there's only a single value being returned from the aggregation [eb3ac75].
+
+## Data Flow and Transformations
+
+The data flow in this code follows these steps:
+
+1. Start with `concert_singer.singers` - accessing the singers collection
+2. Apply `CALCULATE(num_singers=COUNT(concert_singer.singers))` - count all singers and store this value in a property called `num_singers`
+3. Apply `.SINGULAR()` - tell PyDough that the result should be treated as a singular value
+4. Access `.num_singers` - extract just the count value from the result
+
+## PyDough Best Practices Demonstrated
+
+This code demonstrates several PyDough best practices:
+
+1. **Proper use of SINGULAR**: The code correctly uses `.SINGULAR()` when an aggregation function like `COUNT` is used, which ensures that PyDough knows the result is a single value [eb3ac75].
+
+2. **Hierarchical thinking**: The code follows PyDough's approach of expressing analytical questions with hierarchical thinking, which is closer to human linguistics than a relational model [988171e].
+
+3. **Concise expression**: The code solves the problem in a single, readable line, which is one of PyDough's strengths compared to equivalent SQL [988171e].
+
+## How This Code Follows PyDough Conventions
+
+The code follows PyDough conventions by:
+
+1. Using the `.SINGULAR()` modifier appropriately after an aggregation operation that reduces multiple records to a single value [eb3ac75].
+
+2. Following the pattern of accessing a sub-collection (`singers`), performing a calculation on it, and then extracting a specific property from the result.
+
+3. Using the proper syntax for aggregation functions like `COUNT` [988171e].
+
+## How the Code Addresses the Original Question
+
+The original question asks for the total number of singers. This code directly answers this by:
+
+1. Accessing the singers collection (`concert_singer.singers`)
+2. Counting all records in this collection (`COUNT(concert_singer.singers)`)
+3. Storing this count in a variable (`total_singers`)
+
+The result is a single number representing the total count of all singers in the database.
+
+## Relevant Examples from Search Results
+
+From the search results, a similar example of using `.SINGULAR()` is provided [eb3ac75]:
+
+```python
+nation_4 = nations.WHERE(key == 4).SINGULAR()
+pydough.to_df(regions.CALCULATE(name, nation_4_name=nation_4.name))
+```
+
+This example shows how `.SINGULAR()` is used when we know there is at most a single value for each instance, which is conceptually similar to our case where the count operation produces a single value.
+
+Another good example from the search results [edc4690]:
+
+```python
+most_recent_package = packages.WHERE(
+    RANKING(by=order_date.DESC(), levels=1) == 1
+).SINGULAR()
+
+People.CALCULATE(
+    ssn,
+    first_name,
+    middle_name,
+    last_name,
+    most_recent_package_cost=most_recent_package.package_cost
+)
+```
+
+This demonstrates how `.SINGULAR()` is used after filtering operations that ensure only one record remains.
+
+---
+
+## Question
+Show name, country, age for all singers ordered by age from the oldest to the youngest.
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. **Analysis of the question**
+The question asks to retrieve the name, country, and age of all singers, sorted by age in descending order (oldest to youngest). This requires accessing the `singers` collection, selecting the specified fields, and ordering the results by the `age` field.
+
+2. **Step-by-step explanation of the solution**
+- Start with the `singers` collection.
+- Use `CALCULATE` to select the `name`, `country`, and `age` fields, aliasing them to `singer_name`, `singer_country`, and `singer_age` respectively.
+- Use `ORDER_BY` to sort the results by `age` in descending order (`age.DESC()`).
+
+3. **The PyDough code in a Python code block**
+```python
+singers_ordered = singers.CALCULATE(singer_name=name, singer_country=country, singer_age=age).ORDER_BY(age.DESC())
+```
+
+4. **Explanation of how the code works**
+- `singers.CALCULATE(singer_name=name, singer_country=country, singer_age=age)`: This part selects the `name`, `country`, and `age` fields from the `singers` collection and renames them to `singer_name`, `singer_country`, and `singer_age` respectively.
+- `.ORDER_BY(age.DESC())`: This part sorts the resulting collection by the `age` field in descending order, ensuring that the oldest singers appear first.
+
+## Pydough Code
+```python
+singers_ordered = singers.CALCULATE(singer_name=name, singer_country=country, singer_age=age).ORDER_BY(age.DESC())
+```
+
+## Code Context
+# Explanation of Pydough Code for Sorting Singers by Age
+
+## Code Analysis
+
+```python
+singers_ordered = singers.CALCULATE(singer_name=name, singer_country=country, singer_age=age).ORDER_BY(age.DESC())
+```
+
+This Pydough code answers the question: "Show name, country, age for all singers ordered by age from the oldest to the youngest."
+
+## Pydough-Specific Functions and Patterns Used
+
+### 1. CALCULATE Function
+The code uses the `CALCULATE` function to select and rename specific fields from the `singers` collection:
+- `singer_name=name`: Selects the `name` field and renames it to `singer_name`
+- `singer_country=country`: Selects the `country` field and renames it to `singer_country`
+- `singer_age=age`: Selects the `age` field and renames it to `singer_age`
+
+### 2. ORDER_BY Function
+The code uses the `ORDER_BY` function with `age.DESC()` to sort the results by the `age` field in descending order (from oldest to youngest) [9c4448e].
+
+As explained in the documentation:
+> "Another operation that can be done onto PyDough collections is sorting them. This is done by appending a collection with `.ORDER_BY(...)` which will order the collection by the collation terms between the parenthesis." [9c4448e]
+
+The `.DESC()` modifier indicates that the sorting should be in descending order:
+> "An expression becomes a collation expression when it is appended with `.ASC()` (indicating that the expression should be used to sort in ascending order) or `.DESC()` (indicating that the expression should be used to sort in descending order)." [9c4448e]
+
+## Data Flow and Transformations
+
+The data flow in this code follows these steps:
+1. Start with the `singers` collection
+2. Apply `CALCULATE` to select and rename the fields `name`, `country`, and `age` to `singer_name`, `singer_country`, and `singer_age` respectively
+3. Apply `ORDER_BY` to sort the results by the `age` field in descending order
+4. Store the final result in the `singers_ordered` variable
+
+## Pydough Best Practices Demonstrated
+
+1. **Clear Field Naming**: The code renames fields with descriptive prefixes (`singer_`) to make their purpose clear.
+2. **Chaining Operations**: The code chains the `CALCULATE` and `ORDER_BY` operations for concise expression.
+3. **Explicit Sorting Direction**: The code explicitly specifies `.DESC()` to make the sorting direction clear.
+
+## How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions by:
+1. Using the standard pattern of collection.CALCULATE().ORDER_BY()
+2. Using the `.DESC()` modifier for specifying sort order
+3. Storing the result in a descriptively named variable (`singers_ordered`)
+
+As shown in the documentation examples:
+> "**Good Example #2**: For every person list their SSN & how many packages they have ordered, and order them from highest number of orders to lowest, breaking ties in favor of whoever is oldest.
+> ```py
+> People.CALCULATE(
+>   ssn, n_packages=COUNT(packages).DESC()
+> ).ORDER_BY(
+>   n_packages.DESC(), birth_date.ASC()
+> )
+> ```" [9c4448e]
+
+## How the Code Addresses the Original Question
+
+The original question asks for:
+1. Showing name, country, and age for all singers
+2. Ordering them by age from oldest to youngest
+
+The code addresses these requirements by:
+1. Selecting and renaming the required fields (`name`, `country`, `age`)
+2. Sorting by age in descending order (`.DESC()`) which puts the oldest singers first
+
+## Additional Information from Documentation
+
+The documentation notes that:
+- "The default is `"first"` for `.ASC()` and `"last"` for `.DESC()`" when it comes to handling null values [9c4448e]
+- "If there are multiple `ORDER_BY` terms, the last one is the one that takes precedence" [9c4448e]
+- "The terms in the collection are unchanged by the `ORDER_BY` clause, since the only change is the order of the records" [9c4448e]
+
+This code is a straightforward application of Pydough's sorting capabilities to achieve the requested result of displaying singers ordered from oldest to youngest.
+
+---
+
+## Question
+What are  the different countries with singers above age 20?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. **Analysis of the question:**
+
+The question asks to identify the distinct countries that have singers with an age greater than 20. This requires filtering singers based on their age and then extracting the unique countries they belong to.
+
+2. **Step-by-step explanation of the solution:**
+
+*   Start with the `singers` collection.
+*   Filter the `singers` collection to include only singers whose age is greater than 20.
+*   Use `PARTITION` to group the singers by country and then calculate the distinct countries.
+*   Select the country.
+
+3.  **The PyDough code:**
+
+```python
+singers_above_20 = concert_singer.singers.WHERE(age > 20)
+different_countries = singers_above_20.PARTITION(name="countries", by=country).CALCULATE(country=country)
+result = different_countries
+```
+
+4.  **Explanation of how the code works:**
+
+*   `singers_above_20 = concert_singer.singers.WHERE(age > 20)`: This line filters the `singers` collection, keeping only those singers whose `age` is greater than 20.
+*   `different_countries = singers_above_20.PARTITION(name="countries", by=country).CALCULATE(country=country)`: This line groups the filtered singers by their `country` using the `PARTITION` function. The `CALCULATE` function then selects the `country` for each group, effectively giving us a collection of distinct countries.
+*   `result = different_countries`: This line assigns the result to the `result` variable.
+
+## Pydough Code
+```python
+singers_above_20 = concert_singer.singers.WHERE(age > 20)
+different_countries = singers_above_20.PARTITION(name="countries", by=country).CALCULATE(country=country)
+result = different_countries
+```
+
+## Code Context
+# Explanation of Pydough Code for Finding Countries with Singers Above Age 20
+
+## Code Analysis
+
+The Pydough code in question answers the user's question about finding different countries with singers above age 20:
+
+```python
+singers_above_20 = concert_singer.singers.WHERE(age > 20)
+different_countries = singers_above_20.PARTITION(name="countries", by=country).CALCULATE(country=country)
+result = different_countries
+```
+
+Let me break down this code by examining the Pydough-specific functions and patterns used.
+
+## 1. Pydough-Specific Functions and Patterns
+
+### WHERE Function
+The code uses the `WHERE` function to filter records [7330190]:
+```python
+singers_above_20 = concert_singer.singers.WHERE(age > 20)
+```
+The `WHERE` operation filters the records of a collection based on a condition. In this case, it's filtering singers to only include those with an age greater than 20. According to the documentation [ea1072d], `WHERE` preserves only records where the condition evaluates to True, while dropping the rest.
+
+### PARTITION Function
+The code uses the `PARTITION` operation [ea1072d]:
+```python
+different_countries = singers_above_20.PARTITION(name="countries", by=country)
+```
+The `PARTITION` operation creates a new collection by partitioning records based on specified terms. As explained in [7330190], every unique combination of values of the partitioning terms corresponds to a single record in the new collection. The syntax requires a `name` argument (which is "countries" in this case) and a `by` argument specifying the partitioning key(s).
+
+### CALCULATE Function
+The code uses `CALCULATE` to specify which terms to include in the output [7330190]:
+```python
+.CALCULATE(country=country)
+```
+The `CALCULATE` operation is used to derive new terms or select existing terms from a collection. In this case, it's selecting the `country` term from the partitioned data.
+
+## 2. Data Flow and Transformations
+
+The data flow in this code follows these steps:
+
+1. **Filtering**: First, the code accesses the `singers` subcollection of `concert_singer` and filters it to only include singers above age 20 using `WHERE(age > 20)`.
+
+2. **Partitioning**: Next, it partitions these filtered singers by their country using `PARTITION(name="countries", by=country)`. This creates a new collection where each record represents a unique country.
+
+3. **Selection**: Finally, it uses `CALCULATE(country=country)` to select just the country field from each record in the partitioned data.
+
+4. **Assignment**: The result is assigned to `different_countries` and then to `result`.
+
+## 3. Important Pydough Best Practices Demonstrated
+
+The code demonstrates several Pydough best practices:
+
+1. **Clear Variable Naming**: The variables `singers_above_20` and `different_countries` clearly indicate what data they contain [8ad9c9f].
+
+2. **Step-by-Step Transformation**: The code breaks down the transformation into clear, logical steps rather than trying to do everything in one complex operation [8ad9c9f].
+
+3. **Proper Use of PARTITION**: The code correctly uses the `PARTITION` operation with both the required `name` and `by` parameters [ea1072d].
+
+## 4. How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions in several ways:
+
+1. **Proper Syntax for WHERE**: It uses the correct syntax for filtering with `WHERE`, providing a boolean condition [ea1072d].
+
+2. **Correct PARTITION Usage**: It follows the proper syntax for `PARTITION`, providing both the `name` and `by` parameters [7330190].
+
+3. **Appropriate CALCULATE Usage**: It uses `CALCULATE` to specify which fields to include in the output [7330190].
+
+4. **Logical Data Flow**: The code follows a logical flow from filtering to partitioning to selection, which is a common pattern in Pydough [8ad9c9f].
+
+## 5. How the Code Addresses the Original Question
+
+The original question asks: "What are the different countries with singers above age 20?"
+
+The code addresses this by:
+
+1. Filtering singers to only include those above age 20 (`singers_above_20 = concert_singer.singers.WHERE(age > 20)`)
+
+2. Grouping these singers by country and selecting only the unique country values (`different_countries = singers_above_20.PARTITION(name="countries", by=country).CALCULATE(country=country)`)
+
+The result (`different_countries`) contains exactly what was asked for: a list of the different countries that have singers above age 20.
+
+## 6. Key Examples from Search Results
+
+From the search results, we can see similar patterns in example code:
+
+From [ea1072d], a similar partitioning example:
+```python
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(
+  state,
+  n_addr=COUNT(addrs)
+)
+```
+
+From [7330190], a filtering example:
+```python
+People.WHERE(PRESENT(middle_name) & ENDSWITH(email, "gmail.com")).CALCULATE(first_name, last_name)
+```
+
+## 7. Summary
+
+This Pydough code efficiently answers the question by:
+1. Using `WHERE` to filter singers by age
+2. Using `PARTITION` to group by country
+3. Using `CALCULATE` to select just the country field
+
+The code follows Pydough conventions and best practices, with a clear, step-by-step approach to data transformation that makes it easy to understand and maintain.
+
+---
+
+## Question
+Show all countries and the number of singers in each country.
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. **Analysis of the question:**
+The question asks to group singers by their country and count the number of singers in each country. This requires using the `singers` collection and aggregating the count based on the `country` field.
+
+2. **Step-by-step explanation of the solution:**
+   - Start with the `singers` collection.
+   - Use `PARTITION` to group the singers by `country`.
+   - Use `CALCULATE` to count the number of singers in each country.
+   - Select the `country` and the calculated count.
+
+3. **The PyDough code:**
+
+```python
+country_counts = singers.PARTITION(name="country_group", by=(country)).CALCULATE(
+    country=country,
+    num_singers=COUNT(singers)
+)
+```
+
+4. **Explanation of how the code works:**
+   - `singers.PARTITION(name="country_group", by=(country))`: This partitions the `singers` collection by the `country` field, creating groups of singers for each country.
+   - `.CALCULATE(country=country, num_singers=COUNT(singers))`: This calculates the number of singers in each country group using the `COUNT` aggregation function. It also selects the `country` field to display the country name.
+   - The result is a collection `country_counts` containing the country and the number of singers in that country.
+
+## Pydough Code
+```python
+country_counts = singers.PARTITION(name="country_group", by=(country)).CALCULATE(
+    country=country,
+    num_singers=COUNT(singers)
+)
+```
+
+## Code Context
+# Explanation of Pydough Code for Counting Singers by Country
+
+## Code Analysis
+
+The Pydough code in question answers the original question "Show all countries and the number of singers in each country" with the following implementation:
+
+```python
+country_counts = singers.PARTITION(name="country_group", by=(country)).CALCULATE(
+    country=country,
+    num_singers=COUNT(singers)
+)
+```
+
+## Pydough-Specific Functions and Patterns
+
+### PARTITION Operation
+
+The code uses the `PARTITION` operation, which is a core Pydough function that groups records based on specified keys [3f7d77d]. According to the documentation:
+
+- `PARTITION` allows grouping collections under interesting keys similar to a SQL `GROUP BY` [3f7d77d]
+- The syntax is `PARTITION(data, name="...", by=...)` where:
+  - `data` is the collection to be partitioned (in this case, `singers`)
+  - `name` is a string indicating the name used when accessing the partitioned data (here, "country_group")
+  - `by` is either a single partitioning key or an iterable of keys (here, `country`) [2ba30a5]
+
+### CALCULATE Operation
+
+After partitioning, the code uses the `CALCULATE` operation to:
+
+1. Define which fields to include in the output (`country`)
+2. Create a new calculated field (`num_singers`) [bd8fc50]
+
+The `CALCULATE` operation serves several purposes:
+- Select which entries to include in the output
+- Define new fields by calling functions
+- Allow operations to be evaluated for each entry in the outermost collection's context [8ad9c9f]
+
+### COUNT Function
+
+The `COUNT` function is used to count the number of records in a collection. In this case, it counts the number of singers in each country group [91a43fe]. The documentation shows that:
+
+- `COUNT` can be used on a collection for total entries [91a43fe]
+- When used within a partitioned context, it counts the number of records in each partition
+
+## Data Flow and Transformations
+
+The data flow in this code follows these steps:
+
+1. Start with the `singers` collection, which contains information about singers including their country
+2. Partition (group) the singers by their country using `PARTITION(name="country_group", by=(country))`
+3. For each unique country value, calculate:
+   - The country name itself (preserved from the partitioning key)
+   - The count of singers in that country using `COUNT(singers)`
+4. The result is stored in `country_counts`, which contains one row per country with the country name and the number of singers
+
+## Pydough Best Practices Demonstrated
+
+The code demonstrates several Pydough best practices:
+
+1. **Meaningful variable naming**: The variable `country_counts` clearly indicates what the result contains [8ad9c9f]
+2. **Appropriate partitioning**: Using `PARTITION` for grouping data by a specific attribute [3f7d77d]
+3. **Clear aggregation**: Using `COUNT` to perform the required aggregation [91a43fe]
+4. **Explicit naming**: Using the `name` parameter in `PARTITION` to give a clear reference to the partitioned data [2ba30a5]
+
+## How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions by:
+
+1. Using uppercase for Pydough operations (`PARTITION`, `CALCULATE`, `COUNT`) [91a43fe]
+2. Using the standard pattern for partitioning data and then calculating aggregations [3f7d77d]
+3. Following the proper syntax for the `PARTITION` operation with named parameters [2ba30a5]
+4. Using the collection-first approach, where operations are chained onto collections [bd8fc50]
+
+## How the Code Addresses the Original Question
+
+The original question asks to "Show all countries and the number of singers in each country." The code directly addresses this by:
+
+1. Grouping singers by country using `PARTITION`
+2. Calculating the count of singers in each country group using `COUNT`
+3. Returning both the country name and the count in the result
+
+The final output `country_counts` will contain exactly what was requested: a list of all countries and the number of singers in each country.
+
+## Similar Examples from Documentation
+
+The documentation provides similar examples of using `PARTITION`:
+
+```python
+grouped_nations = PARTITION(
+  updated_nations, name="n", by=(name_length)
+).CALCULATE(
+  name_length,
+  nation_count=COUNT(n.key)
+)
+```
+[3f7d77d]
+
+This example partitions nations by name length and counts the number of nations with each length, which follows the same pattern as our singers example.
+
+Another example shows partitioning addresses by state:
+```python
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(state)
+```
+[2ba30a5]
+
+These examples confirm that the approach used in the singers code follows established Pydough patterns.
+
+---
+
+## Question
+How many singers are from each country?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. **Analysis of the question:**
+The question asks for the number of singers from each country. This requires grouping singers by country and counting the number of singers in each group. The `singers` collection has the `country` attribute. We need to use the `PARTITION` function to group the singers by country and then use the `COUNT` function to count the number of singers in each country.
+
+2. **Step-by-step explanation of the solution:**
+   - Start with the `singers` collection.
+   - Use the `PARTITION` function to group the singers by `country`. Name the partition "country_group".
+   - Use the `CALCULATE` function to calculate the `country` and the number of singers in each country using the `COUNT` function.
+   - Assign the result to a variable named `country_singer_counts`.
+
+3. **The PyDough code in a Python code block:**
+```python
+country_singer_counts = singers.PARTITION(name="country_group", by=country).CALCULATE(
+    country=country,
+    num_singers=COUNT(singers)
+)
+```
+
+4. **Explanation of how the code works:**
+   - `singers.PARTITION(name="country_group", by=country)`: This partitions the `singers` collection by the `country` attribute, creating a partition named "country_group".
+   - `.CALCULATE(country=country, num_singers=COUNT(singers))`: This calculates the `country` and the number of singers in each country using the `COUNT` function. The result is a collection with two fields: `country` and `num_singers`.
+   - `country_singer_counts`: This variable stores the final result, which is a collection of countries and the number of singers from each country.
+
+## Pydough Code
+```python
+country_singer_counts = singers.PARTITION(name="country_group", by=country).CALCULATE(
+    country=country,
+    num_singers=COUNT(singers)
+)
+```
+
+## Code Context
+# Explanation of Pydough Code for Counting Singers by Country
+
+## Code Analysis
+
+The Pydough code in question answers the user's question "How many singers are from each country?" with the following implementation:
+
+```python
+country_singer_counts = singers.PARTITION(name="country_group", by=country).CALCULATE(
+    country=country,
+    num_singers=COUNT(singers)
+)
+```
+
+## Pydough-Specific Functions and Patterns
+
+### PARTITION Operation
+
+The code uses the `PARTITION` operation, which is a core Pydough function that groups records based on specified keys [2ba30a5]. According to the documentation:
+
+- `PARTITION` creates a new collection by partitioning records of another collection based on one or more partitioning terms [2ba30a5]
+- The syntax is `PARTITION(data, name="...", by=...)` where:
+  - `data` is the collection to be partitioned (in this case, `singers`)
+  - `name` is a string indicating the name used when accessing the partitioned data (here, "country_group")
+  - `by` specifies the partitioning key(s) (here, `country`) [2ba30a5]
+
+### CALCULATE Operation
+
+After partitioning, the code uses the `CALCULATE` operation to:
+1. Select which entries to include in the output
+2. Define new fields by calling functions [bd8fc50]
+
+In this case, `CALCULATE` is used to:
+- Include the `country` field in the output
+- Create a new field `num_singers` that counts the number of singers in each country group
+
+### COUNT Function
+
+The `COUNT` function is used to count the number of records in a collection [09e9927]. In this code, `COUNT(singers)` counts the total number of singer records for each country group.
+
+## Data Flow and Transformations
+
+The data flow in this code follows these steps:
+
+1. Start with the `singers` collection, which presumably contains information about singers including their country
+2. Group these singers by their country using `PARTITION(name="country_group", by=country)`
+3. For each country group, calculate:
+   - The country name (`country=country`)
+   - The count of singers in that country (`num_singers=COUNT(singers)`)
+4. The result is stored in `country_singer_counts`, which contains one row per country with the country name and the count of singers from that country
+
+## Pydough Best Practices Demonstrated
+
+This code demonstrates several Pydough best practices:
+
+1. **Appropriate use of PARTITION**: The code correctly uses PARTITION to group data by a specific attribute [2ba30a5]
+2. **Meaningful variable naming**: The variable `country_singer_counts` clearly describes what the result contains
+3. **Efficient aggregation**: Using COUNT directly on the collection is the proper way to count records [09e9927]
+4. **Clear data transformation**: The code follows a logical flow of grouping and then calculating aggregates
+
+## How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions in several ways:
+
+1. **Operation chaining**: Operations are chained in a logical sequence (PARTITION followed by CALCULATE) [3f7d77d]
+2. **Capitalized operations**: Pydough operations like PARTITION and CALCULATE are capitalized [bd8fc50]
+3. **Named parameters**: The code uses named parameters for clarity (name="country_group")
+4. **Expression references**: The code properly references expressions from the partitioned data [2ba30a5]
+
+## How the Code Addresses the Original Question
+
+The original question "How many singers are from each country?" requires:
+1. Grouping singers by their country
+2. Counting how many singers are in each group
+
+The Pydough code directly addresses this by:
+1. Using PARTITION to group singers by country
+2. Using COUNT to count the number of singers in each country group
+3. Returning a result set with country names and their corresponding singer counts
+
+This provides exactly the information requested - a breakdown of singer counts by country.
+
+## Example from Search Results
+
+A similar example from the search results shows how PARTITION is used to count addresses by state [2ba30a5]:
+
+```python
+# For every state, count how many addresses are in that state.
+PARTITION(Addresses, name="addrs", by=state).CALCULATE(
+    state,
+    n_addr=COUNT(addrs)
+)
+```
+
+This example follows the same pattern as our singer code - partitioning a collection by a specific attribute and then counting the records in each partition.
+
+In conclusion, the provided Pydough code efficiently answers the original question by using PARTITION to group singers by country and COUNT to determine how many singers are from each country, following Pydough conventions and best practices.
+
+---
+
+## Question
+Show location and name for all stadiums with a capacity between 5000 and 10000.
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+1. **Analysis of the question**
+The question asks to retrieve the location and name of stadiums that have a capacity between 5000 and 10000. This requires filtering the `stadiums` collection based on the `capacity` field and then selecting the `location` and `name` fields.
+
+2. **Step-by-step explanation of the solution**
+   - Start with the `stadiums` collection.
+   - Filter the `stadiums` collection using the `WHERE` clause to select stadiums with a `capacity` between 5000 and 10000. Since capacity is a string, we need to convert it to an integer for comparison.
+   - Use the `CALCULATE` function to select the `name` and `location` fields.
+
+3. **The PyDough code in a Python code block**
+```python
+stadiums_between_capacity = stadiums.WHERE((CAST_INT(capacity) >= 5000) & (CAST_INT(capacity) <= 10000)).CALCULATE(location=location, name=name)
+```
+
+4. **Explanation of how the code works**
+   - `stadiums.WHERE((CAST_INT(capacity) >= 5000) & (CAST_INT(capacity) <= 10000))`: This part filters the `stadiums` collection, selecting only those stadiums where the `capacity` (converted to an integer using `CAST_INT`) is greater than or equal to 5000 and less than or equal to 10000.
+   - `.CALCULATE(location=location, name=name)`: This part selects the `location` and `name` fields from the filtered stadiums and renames them to `location` and `name` respectively.
+   - `stadiums_between_capacity`: This assigns the resulting collection to the variable `stadiums_between_capacity`.
+
+## Pydough Code
+```python
+stadiums_between_capacity = stadiums.WHERE((CAST_INT(capacity) >= 5000) & (CAST_INT(capacity) <= 10000)).CALCULATE(location=location, name=name)
+```
+
+## Code Context
+# Explanation of Pydough Code for Stadium Capacity Query
+
+## Overview of the Code
+
+The Pydough code answers a question about finding stadiums with capacity between 5000 and 10000, returning their location and name:
+
+```python
+stadiums_between_capacity = stadiums.WHERE((CAST_INT(capacity) >= 5000) & (CAST_INT(capacity) <= 10000)).CALCULATE(location=location, name=name)
+```
+
+Let me break down this code by examining the Pydough-specific functions and patterns used.
+
+## Pydough Functions and Patterns Used
+
+### 1. WHERE Function
+
+The `WHERE` function is used to filter a collection based on specified conditions [8ad9c9f]. In this code, it filters the `stadiums` collection to only include records where the capacity is between 5000 and 10000.
+
+### 2. CALCULATE Function
+
+The `CALCULATE` function is used to define the output columns or terms for a collection [8ad9c9f]. In this example, it specifies that the output should include the `location` and `name` fields from the filtered stadiums.
+
+### 3. CAST_INT Function
+
+The `CAST_INT` function is used to convert the `capacity` field to an integer type before performing the comparison operations. This ensures that the capacity values are treated as numbers rather than strings during the comparison.
+
+### 4. Logical Operators
+
+The code uses the logical AND operator (`&`) to combine two conditions: capacity greater than or equal to 5000 AND capacity less than or equal to 10000 [8ad9c9f].
+
+## Data Flow and Transformations
+
+The data flow in this code follows a typical Pydough pattern:
+
+1. Start with a base collection (`stadiums`)
+2. Apply filtering with `WHERE` to get only stadiums with capacity between 5000-10000
+3. Use `CALCULATE` to specify which fields to include in the output (location and name)
+4. Store the result in a new variable (`stadiums_between_capacity`)
+
+## Pydough Best Practices Demonstrated
+
+The code demonstrates several Pydough best practices:
+
+1. **Chaining operations**: The code chains the `WHERE` and `CALCULATE` operations together, which is a common pattern in Pydough [8ad9c9f].
+
+2. **Explicit type casting**: Using `CAST_INT` to ensure proper numeric comparison, which helps avoid type-related issues.
+
+3. **Descriptive variable naming**: The variable name `stadiums_between_capacity` clearly indicates what the collection contains.
+
+4. **Field selection**: Only selecting the required fields (`location` and `name`) rather than returning all fields.
+
+## How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions by:
+
+1. Using uppercase for Pydough operations like `WHERE` and `CALCULATE` [8ad9c9f].
+
+2. Using method chaining with dot notation to apply operations sequentially.
+
+3. Using parentheses to group logical conditions for clarity.
+
+4. Assigning the result to a descriptive variable name.
+
+## How the Code Addresses the Original Question
+
+The original question asks for the location and name of all stadiums with a capacity between 5000 and 10000. The code directly addresses this by:
+
+1. Filtering the stadiums collection to only include those with capacity between 5000 and 10000
+2. Returning exactly the requested fields: location and name
+
+## Similar Examples from the Search Results
+
+While there isn't an exact match for stadium queries in the provided context, we can see similar patterns in the examples provided:
+
+From Example 1 [8ad9c9f]:
+```python
+addr_info = Addresses.CALCULATE(n_occupants=COUNT(current_occupants))
+```
+This shows a similar pattern of using `CALCULATE` to define output terms.
+
+From Example 2 [8ad9c9f]:
+```python
+package_info = Packages.WHERE(PRESENT(arrival_date)).CALCULATE(
+  is_trans_coastal=from_west_coast & to_east_coast,
+  year=YEAR(order_date),
+)
+```
+This demonstrates the pattern of filtering with `WHERE` and then using `CALCULATE` to define the output, similar to our stadium query.
+
+## Conclusion
+
+The Pydough code efficiently answers the original question by filtering the stadiums collection based on capacity and returning the location and name fields. It follows Pydough conventions and best practices, making the code readable and maintainable.
+
+---
+
+## Question
+What are the locations and names of all stations with capacity between 5000 and 10000?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+```json
+{
+  "response": "Okay, I can help you with that. Here's the PyDough code to get the locations and names of all stadiums with capacity between 5000 and 10000.\n\n1. Analysis of the question\nThe question asks for the locations and names of stadiums that have a capacity between 5000 and 10000. This requires filtering the stadiums collection based on the capacity and then selecting the name and location fields.\n\n2. Step-by-step explanation of the solution\nFirst, filter the stadiums collection to include only those stadiums with a capacity between 5000 and 10000. Then, use the CALCULATE function to select the name and location fields for the filtered stadiums.\n\n3. The PyDough code in a Python code block\n```python\nstadiums_between_capacity = stadiums.WHERE((capacity >= 5000) & (capacity <= 10000)).CALCULATE(stadium_name=name, stadium_location=location)\n```\n\n4. Explanation of how the code works\n- `stadiums.WHERE((capacity >= 5000) & (capacity <= 10000))`: This filters the stadiums collection to include only stadiums where the capacity is greater than or equal to 5000 and less than or equal to 10000.\n- `.CALCULATE(stadium_name=name, stadium_location=location)`: This selects the name and location fields from the filtered stadiums and renames them to stadium_name and stadium_location, respectively."
+}
+```
+
+## Pydough Code
+```python
+```json
+{
+  "response": "Okay, I can help you with that. Here's the PyDough code to get the locations and names of all stadiums with capacity between 5000 and 10000.\n\n1. Analysis of the question\nThe question asks for the locations and names of stadiums that have a capacity between 5000 and 10000. This requires filtering the stadiums collection based on the capacity and then selecting the name and location fields.\n\n2. Step-by-step explanation of the solution\nFirst, filter the stadiums collection to include only those stadiums with a capacity between 5000 and 10000. Then, use the CALCULATE function to select the name and location fields for the filtered stadiums.\n\n3. The PyDough code in a Python code block\n```python\nstadiums_between_capacity = stadiums.WHERE((capacity >= 5000) & (capacity <= 10000)).CALCULATE(stadium_name=name, stadium_location=location)\n```\n\n4. Explanation of how the code works\n- `stadiums.WHERE((capacity >= 5000) & (capacity <= 10000))`: This filters the stadiums collection to include only stadiums where the capacity is greater than or equal to 5000 and less than or equal to 10000.\n- `.CALCULATE(stadium_name=name, stadium_location=location)`: This selects the name and location fields from the filtered stadiums and renames them to stadium_name and stadium_location, respectively."
+}
+```
+```
+
+## Code Context
+# Explanation of PyDough Code for Stadium Capacity Query
+
+I'll explain the PyDough code that answers the question about stadiums with capacity between 5000 and 10000, focusing on the PyDough-specific functions and patterns used.
+
+## The PyDough Code
+
+```python
+stadiums_between_capacity = stadiums.WHERE((capacity >= 5000) & (capacity <= 10000)).CALCULATE(stadium_name=name, stadium_location=location)
+```
+
+## PyDough-Specific Functions and Patterns
+
+### 1. WHERE Function
+
+The code uses the `WHERE` function to filter the stadiums collection [988171e]:
+
+```python
+stadiums.WHERE((capacity >= 5000) & (capacity <= 10000))
+```
+
+This filters the stadiums collection to include only stadiums where the capacity is between 5000 and 10000 (inclusive). The `WHERE` function is a core PyDough operation that filters collections based on a condition [fcc80aa].
+
+### 2. Logical Operators
+
+The code uses the `&` operator for logical AND [988171e]. This is a PyDough convention - instead of using Python's `and` keyword, PyDough requires using `&` for logical AND operations [0a7d61d]:
+
+```python
+(capacity >= 5000) & (capacity <= 10000)
+```
+
+PyDough specifically bans using Python's `and` operator and requires using `&` instead [0a7d61d]:
+```
+# Not allowed - will raise PyDoughUnqualifiedException
+Customers.WHERE((acctbal > 0) and (nation.name == "GERMANY"))
+
+# Use & instead of and:
+# Customers.WHERE((acctbal > 0) & (nation.name == "GERMANY"))
+```
+
+### 3. CALCULATE Function
+
+After filtering, the code uses the `CALCULATE` function [fcc80aa]:
+
+```python
+.CALCULATE(stadium_name=name, stadium_location=location)
+```
+
+This selects specific fields from the filtered collection and renames them. The `CALCULATE` function is used to derive new properties via calculated expressions [fcc80aa]. In this case, it's selecting the `name` and `location` fields and renaming them to `stadium_name` and `stadium_location` respectively.
+
+## Data Flow and Transformations
+
+The data flow in this PyDough code follows a logical sequence [988171e]:
+
+1. Start with the `stadiums` collection
+2. Filter the collection using `WHERE` to include only stadiums with capacity between 5000 and 10000
+3. Use `CALCULATE` to select and rename specific fields from the filtered collection
+4. Store the result in the `stadiums_between_capacity` variable
+
+This approach demonstrates PyDough's ability to express analytical questions with hierarchical thinking [988171e].
+
+## PyDough Best Practices Demonstrated
+
+The code demonstrates several PyDough best practices:
+
+1. **Chaining operations**: The code chains the `WHERE` and `CALCULATE` operations, which is a common pattern in PyDough [988171e].
+
+2. **Renaming fields for clarity**: Using `CALCULATE` to rename fields to more descriptive names (`stadium_name` and `stadium_location`) improves readability [fcc80aa].
+
+3. **Using proper logical operators**: Using `&` instead of `and` follows PyDough's requirements for logical operations [0a7d61d].
+
+## How the Code Addresses the Original Question
+
+The original question asks for "locations and names of all stations with capacity between 5000 and 10000." The PyDough code directly addresses this by:
+
+1. Filtering the stadiums collection to include only those with capacity between 5000 and 10000
+2. Selecting and renaming the name and location fields to clearly indicate what they represent
+
+## Comparison with SQL
+
+PyDough provides a simpler and more intuitive way to express this query compared to SQL [988171e]. In SQL, this query might look like:
+
+```sql
+SELECT name AS stadium_name, location AS stadium_location
+FROM stadiums
+WHERE capacity >= 5000 AND capacity <= 10000
+```
+
+PyDough's approach is more aligned with human linguistic thinking and provides a more compact representation [988171e].
+
+## Conclusion
+
+The PyDough code effectively answers the original question by filtering the stadiums collection based on capacity and selecting the relevant fields. It demonstrates PyDough's ability to express analytical questions in a way that is closer to human linguistics than a relational model [988171e], making it more intuitive and easier to understand.
+
+---
+
+## Question
+What is the name and capacity for the stadium with highest average attendance?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+```text
+1. Analysis of the question:
+The question asks for the name and capacity of the stadium with the highest average attendance. This requires accessing the `stadiums` collection, finding the stadium with the maximum `average` value, and then extracting its `name` and `capacity`.
+
+2. Step-by-step explanation of the solution:
+- Access the `stadiums` collection.
+- Use `TOP_K` to find the stadium with the highest `average`.
+- Use `CALCULATE` to select the `name` and `capacity` of the stadium.
+
+3. The PyDough code in a Python code block:
+```python
+stadium_highest_avg = stadiums.TOP_K(1, by=average.DESC()).CALCULATE(stadium_name=name, stadium_capacity=capacity)
+```
+
+4. Explanation of how the code works:
+- `stadiums.TOP_K(1, by=average.DESC())`: This part selects the top 1 stadium based on the `average` attendance in descending order.
+- `.CALCULATE(stadium_name=name, stadium_capacity=capacity)`: This part extracts the `name` and `capacity` of the selected stadium and renames them to `stadium_name` and `stadium_capacity` respectively.
+
+## Pydough Code
+```python
+stadium_highest_avg = stadiums.TOP_K(1, by=average.DESC()).CALCULATE(stadium_name=name, stadium_capacity=capacity)
+```
+
+## Code Context
+# Explanation of Pydough Code for Stadium with Highest Average Attendance
+
+Let me explain the Pydough code that answers the question "What is the name and capacity for the stadium with highest average attendance?"
+
+```python
+stadium_highest_avg = stadiums.TOP_K(1, by=average.DESC()).CALCULATE(stadium_name=name, stadium_capacity=capacity)
+```
+
+## Pydough Functions and Patterns Used
+
+### TOP_K Function
+The code uses the `TOP_K` function, which selects a specified number of top records based on a sorting criterion [aed8f9e]. This function takes two main arguments:
+- A number (in this case `1`) indicating how many top records to return
+- A `by` parameter that specifies the sorting criterion
+
+### DESC() Sorting Method
+The code uses `.DESC()` to specify descending order sorting [aed8f9e]. This ensures that the stadium with the highest average attendance (not the lowest) is selected.
+
+### CALCULATE Function
+After selecting the top stadium, the code uses the `CALCULATE` function to specify which fields to include in the result [5fd24cf]. In this case:
+- `stadium_name=name`: Renames the "name" field to "stadium_name"
+- `stadium_capacity=capacity`: Renames the "capacity" field to "stadium_capacity"
+
+## Data Flow and Transformations
+
+The data flow in this code follows these steps:
+1. Start with the `stadiums` collection
+2. Sort the stadiums by their `average` (attendance) value in descending order
+3. Select only the top 1 record (the stadium with highest average attendance)
+4. Calculate and rename specific fields for the output
+
+This pattern of collection → sorting → limiting → calculating is a common pattern in Pydough, as seen in several examples from the search results [8ad9c9f].
+
+## Pydough Best Practices Demonstrated
+
+The code demonstrates several Pydough best practices:
+
+1. **Chaining operations**: Operations are chained together in a readable sequence [8ad9c9f]
+2. **Renaming fields for clarity**: Using `CALCULATE` to rename fields to more descriptive names [5fd24cf]
+3. **Using TOP_K instead of manual filtering**: Using the built-in TOP_K function rather than manually filtering for the maximum value [aed8f9e]
+
+## How This Code Follows Pydough Conventions
+
+The code follows Pydough conventions by:
+
+1. Using the standard pattern of starting with a collection (`stadiums`) and applying operations to it
+2. Using proper capitalization for Pydough functions (TOP_K, CALCULATE, DESC)
+3. Using the `by` parameter to specify sorting criteria
+4. Assigning the result to a descriptive variable name (`stadium_highest_avg`)
+
+## How the Code Addresses the Original Question
+
+The original question asks for the name and capacity of the stadium with the highest average attendance. The code directly addresses this by:
+
+1. Sorting stadiums by average attendance in descending order
+2. Taking only the top record (the stadium with highest average)
+3. Returning both the name and capacity of that stadium
+
+## Similar Examples from the Search Results
+
+The provided code is similar to examples in the search results:
+
+From [8ad9c9f], we see a similar pattern in Example 1:
+```python
+result = states.TOP_K(5, by=average_occupants.DESC())
+```
+This example also uses TOP_K with DESC() to find top records based on a numeric value.
+
+From [5fd24cf], we see the use of CALCULATE to derive and rename fields:
+```python
+packages = selected_packages.CALCULATE(
+  month=MONTH(order_date),
+  is_10x_avg=package_cost >= (10.0 * avg_package_cost)
+)
+```
+
+These examples demonstrate that the stadium code follows established Pydough patterns for selecting top records and calculating fields.
+
+---
+
+## Question
+What is the name and capacity for the stadium with the highest average attendance?
+Database Schema:
+{"concert_singer": {"concerts": {"type": "simple_table", "table_path": "main.concert", "unique_properties": ["concert_id"], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "concert_name": {"type": "table_column", "column_name": "concert_name", "data_type": "string"}, "theme": {"type": "table_column", "column_name": "theme", "data_type": "string"}, "stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "year": {"type": "table_column", "column_name": "year", "data_type": "string"}, "stadium": {"type": "simple_join", "other_collection_name": "stadiums", "singular": true, "no_collisions": false, "keys": {"stadium_id": ["stadium_id"]}, "reverse_relationship_name": "concerts"}}}, "singers": {"type": "simple_table", "table_path": "main.singer", "unique_properties": ["singer_id"], "properties": {"singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "country": {"type": "table_column", "column_name": "country", "data_type": "string"}, "song_name": {"type": "table_column", "column_name": "song_name", "data_type": "string"}, "song_release_year": {"type": "table_column", "column_name": "song_release_year", "data_type": "string"}, "age": {"type": "table_column", "column_name": "age", "data_type": "string"}, "is_male": {"type": "table_column", "column_name": "is_male", "data_type": "string"}}}, "singer_in_concerts": {"type": "simple_table", "table_path": "main.singer_in_concert", "unique_properties": [["concert_id", "singer_id"]], "properties": {"concert_id": {"type": "table_column", "column_name": "concert_id", "data_type": "string"}, "singer_id": {"type": "table_column", "column_name": "singer_id", "data_type": "string"}, "singer": {"type": "simple_join", "other_collection_name": "singers", "singular": true, "no_collisions": false, "keys": {"singer_id": ["singer_id"]}, "reverse_relationship_name": "singer_in_concerts"}, "concert": {"type": "simple_join", "other_collection_name": "concerts", "singular": true, "no_collisions": false, "keys": {"concert_id": ["concert_id"]}, "reverse_relationship_name": "singer_in_concerts"}}}, "stadiums": {"type": "simple_table", "table_path": "main.stadium", "unique_properties": ["stadium_id"], "properties": {"stadium_id": {"type": "table_column", "column_name": "stadium_id", "data_type": "string"}, "location": {"type": "table_column", "column_name": "location", "data_type": "string"}, "name": {"type": "table_column", "column_name": "name", "data_type": "string"}, "capacity": {"type": "table_column", "column_name": "capacity", "data_type": "string"}, "highest": {"type": "table_column", "column_name": "highest", "data_type": "string"}, "lowest": {"type": "table_column", "column_name": "lowest", "data_type": "string"}, "average": {"type": "table_column", "column_name": "average", "data_type": "string"}}}}}
+
+## Answer
+```text
+1. Analysis of the question:
+The question asks for the name and capacity of the stadium that has the highest average attendance. This requires finding the stadium with the maximum value in the 'average' field and then retrieving its 'name' and 'capacity'.
+
+2. Step-by-step explanation of the solution:
+First, access the 'stadiums' collection. Then, use the TOP_K function to find the stadium with the highest average attendance. Finally, use the CALCULATE function to select the 'name' and 'capacity' of the stadium.
+
+3. The PyDough code in a Python code block:
+```python
+stadium_highest_avg = stadiums.TOP_K(1, by=average.DESC()).CALCULATE(stadium_name=name, stadium_capacity=capacity)
+```
+
+4. Explanation of how the code works:
+The code first accesses the `stadiums` collection. Then, it uses `TOP_K(1, by=average.DESC())` to select the stadium with the highest average attendance. Finally, it uses `CALCULATE(stadium_name=name, stadium_capacity=capacity)` to select the name and capacity of the stadium and rename them to stadium_name and stadium_capacity respectively. The result is stored in the variable `stadium_highest_avg`.
+
+## Pydough Code
+```python
+stadium_highest_avg = stadiums.TOP_K(1, by=average.DESC()).CALCULATE(stadium_name=name, stadium_capacity=capacity)
+```
+
+## Code Context
+# Explanation of PyDough Code for Stadium Query
+
+## Code Analysis
+
+The PyDough code in question answers the original user question "What is the name and capacity for the stadium with the highest average attendance?" with:
+
+```python
+stadium_highest_avg = stadiums.TOP_K(1, by=average.DESC()).CALCULATE(stadium_name=name, stadium_capacity=capacity)
+```
+
+## PyDough Functions and Patterns Used
+
+### TOP_K Function
+The code uses the `TOP_K` function, which selects a specified number of top records from a collection based on a sorting criterion [9c4448e]. In this case, it's selecting the top 1 stadium with the highest average attendance.
+
+### DESC Sorting
+The code uses the `.DESC()` method to sort the average attendance in descending order [9c4448e]. This ensures that the stadium with the highest average attendance is selected.
+
+### CALCULATE Function
+After selecting the top stadium, the code uses the `CALCULATE` function to specify which fields to include in the result [e67e9de]. Here, it's selecting the stadium name and capacity, and renaming them to `stadium_name` and `stadium_capacity` respectively.
+
+## Data Flow and Transformations
+
+The data flow in this code follows these steps:
+
+1. Start with the `stadiums` collection
+2. Apply `TOP_K(1, by=average.DESC())` to select the stadium with the highest average attendance
+3. Use `CALCULATE` to project only the name and capacity fields, renaming them to `stadium_name` and `stadium_capacity`
+4. Assign the result to the variable `stadium_highest_avg`
+
+## PyDough Best Practices Demonstrated
+
+The code demonstrates several PyDough best practices:
+
+1. **Chaining operations**: The code chains the `TOP_K` and `CALCULATE` operations together, which is a common pattern in PyDough [8ad9c9f].
+
+2. **Renaming fields**: The code renames the fields to more descriptive names (`stadium_name` and `stadium_capacity`), which makes the output more readable [e67e9de].
+
+3. **Using descriptive variable names**: The variable name `stadium_highest_avg` clearly indicates what the result represents.
+
+## PyDough Conventions
+
+The code follows PyDough conventions:
+
+1. **Collection access**: It starts with a collection name (`stadiums`) [988171e].
+
+2. **Method chaining**: It chains methods together using the dot notation [8ad9c9f].
+
+3. **Sorting specification**: It uses the `.DESC()` method to specify descending order [9c4448e].
+
+4. **Field selection and renaming**: It uses `CALCULATE` to select and rename fields [e67e9de].
+
+## How the Code Addresses the Original Question
+
+The original question asks for the name and capacity of the stadium with the highest average attendance. The code directly addresses this by:
+
+1. Selecting the stadium with the highest average attendance using `TOP_K(1, by=average.DESC())`
+2. Retrieving the name and capacity of that stadium using `CALCULATE(stadium_name=name, stadium_capacity=capacity)`
+
+## Similar Examples from the Search Results
+
+A similar example from the search results is [8ad9c9f]:
+
+```python
+# Obtain the top-5 states with the highest average
+result = states.TOP_K(5, by=average_occupants.DESC())
+```
+
+This example also uses `TOP_K` with a `DESC` sorting to find the top records based on an average value.
+
+Another relevant example [9c4448e]:
+
+```python
+# Order every person alphabetically by last name, then first name, then middle name
+People.ORDER_BY(last_name.ASC(), first_name.ASC(), middle_name.ASC(na_pos="last"))
+```
+
+This demonstrates the use of sorting functions like `ASC()` and `DESC()` in PyDough.
+
+## Key Definitions
+
+- **TOP_K**: A function that selects the top K records from a collection based on a sorting criterion [9c4448e].
+- **DESC()**: A method that specifies descending order for sorting [9c4448e].
+- **CALCULATE**: A function that projects specific fields from a collection, optionally renaming them [e67e9de].
+- **Collection**: A set of records in PyDough, similar to a table in SQL [988171e].
+
+In summary, this PyDough code efficiently retrieves the stadium with the highest average attendance and returns its name and capacity, directly answering the original question.
+
+---
+

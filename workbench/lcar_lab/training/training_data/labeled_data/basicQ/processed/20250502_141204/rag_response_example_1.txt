@@ -1,0 +1,4877 @@
+RAG Response for Example 1
+==================================================
+
+Full RAG Results Dictionary:
+{'generated_answer': '# Documentation for the `HAS` Function in PyDough\n\nBased on the provided search results, I can explain the purpose and implementation of the `HAS` function in PyDough, particularly in relation to table relationships.\n\n## Purpose of the `HAS` Function\n\nThe `HAS` function in PyDough is specifically designed to check for the existence of related records in a subcollection. It returns a boolean value indicating whether a record in one collection has at least one matching record in a related collection.\n\n## Implementation Details\n\nAccording to the search results [620de93], PyDough implements a rewrite mechanism for the `HAS` function. The `has_hasnot_rewrite` function transforms `HAS` expressions in the Query Directed Acyclic Graph (QDAG):\n\n```python\n# Will be rewritten to `Customers.CALCULATE(name, has_orders=COUNT(orders) > 0)`\nCustomers.CALCULATE(name, has_orders=HAS(orders))\n```\n\nThis shows that internally, `HAS(subcollection)` is rewritten as `COUNT(subcollection) > 0`, which checks if there is at least one record in the subcollection.\n\n## Complementary Function: `HASNOT`\n\nPyDough also provides a complementary function called `HASNOT`, which checks for the absence of related records:\n\n```python\n# Will be rewritten to `Customers.CALCULATE(name, never_made_order=COUNT(orders) == 0)`\nCustomers.CALCULATE(name, never_made_order=HASNOT(orders))\n```\n\nThis is rewritten as `COUNT(subcollection) == 0`.\n\n## Usage in WHERE Clauses\n\nInterestingly, the rewrite behavior differs depending on context. When `HAS` is used in a `WHERE` clause conjunction, it is not rewritten:\n\n```python\n# Will not be rewritten\nCustomers.WHERE(HAS(orders) & (nation.region.name == "EUROPE"))\n\n# Will not be rewritten\nCustomers.WHERE(HASNOT(orders))\n```\n\nHowever, when used in a disjunction (OR condition), it is rewritten:\n\n```python\n# Will be rewritten to\n# `Customers.WHERE((COUNT(orders) > 0) | (nation.region.name == "EUROPE"))`\nCustomers.WHERE(HAS(orders) | (nation.region.name == "EUROPE"))\n\n# Will be rewritten to\n# `Customers.WHERE((COUNT(orders) == 0) | (acct_bal < 0))`\nCustomers.WHERE(HASNOT(orders) | (acct_bal < 0))\n```\n\n## Relationship to Table Joins\n\nThe `HAS` function is closely related to the concept of joins in PyDough. From [9ae3698], we can see that PyDough supports various join types including `SEMI` and `ANTI` joins, which are conceptually related to the `HAS` and `HASNOT` functions:\n\n```python\nclass JoinType(Enum):\n    INNER = "inner"\n    LEFT = "left"\n    RIGHT = "right"\n    FULL_OUTER = "full outer"\n    ANTI = "anti"\n    SEMI = "semi"\n```\n\nIn fact, from [524ab2a], we can see examples of semi-joins being used in the implementation:\n\n```\nJOIN(conditions=[t0.key == t1.part_key], types=[\'semi\'], columns={\'name\': t0.name})\n```\n\n## Table Relationships in PyDough\n\nThe search results [53ed32c] and [7cfc692] show how table relationships are defined in PyDough. For example:\n\n```json\n"accounts_held": {\n  "type": "simple_join",\n  "other_collection_name": "Accounts",\n  "singular": false,\n  "no_collisions": true,\n  "keys": {"id": ["client_id"]},\n  "reverse_relationship_name": "account_holder"\n}\n```\n\nThis defines a relationship between collections that can then be traversed using functions like `HAS`.\n\n## Conclusion\n\nThe `HAS` function in PyDough serves the specific purpose of checking for the existence of related records in table relationships. It provides a convenient way to express semi-join logic in a more readable manner, and is internally rewritten to use `COUNT() > 0` in most contexts. This function is particularly useful when working with one-to-many or many-to-many relationships between tables, allowing developers to easily filter records based on the existence of related records.', 'search_results': AggregateSearchResult(chunk_search_results=[ChunkSearchResult(score=0.065, text="Accounts": {
+
+"type": "simple_table",
+
+"table_path": "bank_schema.ACCOUNTS",
+
+"unique_properties": ["account_id"],
+
+"properties": {
+
+"client_id": {...},
+
+"account_type": {...},
+
+"account_balance": {...},
+
+"date_opened": {...}
+
+}
+
+}
+
+```
+
+<!-- TOC --><a name="properties"></a>
+
+## Properties
+
+<!-- TOC --><a name="property-type-table-column"></a>
+
+### Property Type: Table Column
+
+A property with this type is essentially just a view of a column in a table stored in whatever database is being used to execute the queries. Properties of this type are scalar expression attributes of the collection, as opposed to subcollections. Properties of this type have a type string of "table_column" and have the following additional key-value pairs in their metadata JSON object:
+
+`column_name`: a string indicating the name of the column within the table it comes from, which it can be different from the name of the property itself.
+
+`data_type`: a string indicating the PyDough type that this column corresponds to.
+
+Example of the structure of the metadata for a table column property:
+
+```json
+
+"first_name": {
+
+"type": "table_column",
+
+"column_name": "firstname",
+
+"data_type": "string"
+
+}
+
+```
+
+<!-- TOC --><a name="property-type-simple-join"></a>
+
+### Property Type: Simple Join
+
+A property with this type describes a subcollection of the current collection that is derived from performing an equi-join on two tables (e.g. SELECT ... FROM T1 JOIN T2 ON T1.a=T2.x AND T1.b = T2.y). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "simple_join" and have the following additional key-value pairs in their metadata JSON object:
+
+`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports simple_join properties.
+
+`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection, and false otherwise.
+
+`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the other collection, and false otherwise (true if-and-only-if the reverse relationship is singular).
+
+`keys`: a JSON object indicating the combinations of properties from this collection and the other collection that are compared for equality in order to determine join matches. The keys to this JSON object are the names of properties in the current collection, and the values are a list of 1+ strings that. are the names of properties in the other collection that they must be equal to in order to produce a match. All property names invoked in the keys object must correspond to scalar attributes of the collection, as opposed to being names of its subcollections. This object must be non-empty.
+
+`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.
+
+Example of the structure of the metadata for a simple join property (connects a collection `Clients` to a collection `Accounts` by joining `Clients.id` on `Accounts.client_id`):
+
+```json
+
+"accounts_held": {
+
+"type": "simple_join",
+
+"other_collection_name": "Accounts",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {"id": ["client_id"]},
+
+"reverse_relationship_name": "account_holder"
+
+}
+
+```
+
+<!-- TOC --><a name="property-type-cartesian-product"></a>), ChunkSearchResult(score=0.062, text=SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+JOIN(conditions=[t0.ticker_id == t1.ticker_id], types=['inner'], columns={'ticker_id_18': t1.ticker_id, 'transaction_type_19': t1.transaction_type})
+
+AGGREGATE(keys={'ticker_id': ticker_id}, aggregations={})
+
+AGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={})
+
+SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+AGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={})
+
+SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+SCAN(table=main.sbTransaction, columns={'customer_id': sbTxCustId, 'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+JOIN(conditions=[t0.ticker_id_33 == t1.ticker_id & t0.transaction_type_34 == t1.transaction_type], types=['inner'], columns={'customer_id': t1.customer_id, 'n_ticker_type_trans': t0.n_ticker_type_trans, 'transaction_id': t1.transaction_id, 'transaction_type_37': t1.transaction_type})
+
+JOIN(conditions=[t0.transaction_type_30 == t1.transaction_type_34], types=['inner'], columns={'n_ticker_type_trans': t1.n_ticker_type_trans, 'ticker_id_33': t1.ticker_id_33, 'transaction_type_34': t1.transaction_type_34})
+
+FILTER(condition=n_type_trans > 1:int64, columns={'transaction_type_30': transaction_type_30})
+
+PROJECT(columns={'n_type_trans': DEFAULT_TO(agg_0, 0:int64), 'transaction_type_30': transaction_type_30})
+
+AGGREGATE(keys={'transaction_type_30': transaction_type_30}, aggregations={'agg_0': SUM(n_ticker_type_trans)})
+
+JOIN(conditions=[t0.ticker_id == t1.ticker_id], types=['inner'], columns={'n_ticker_type_trans': t1.n_ticker_type_trans, 'transaction_type_30': t1.transaction_type})
+
+AGGREGATE(keys={'ticker_id': ticker_id}, aggregations={})
+
+AGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={})
+
+SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+PROJECT(columns={'n_ticker_type_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id, 'transaction_type': transaction_type})
+
+AGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={'agg_0': COUNT()})
+
+SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+JOIN(conditions=[t0.ticker_id == t1.ticker_id], types=['inner'], columns={'n_ticker_type_trans': t1.n_ticker_type_trans, 'ticker_id_33': t1.ticker_id, 'transaction_type_34': t1.transaction_type})
+
+FILTER(condition=n_ticker_trans > 1:int64, columns={'ticker_id': ticker_id})
+
+PROJECT(columns={'n_ticker_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id})
+
+AGGREGATE(keys={'ticker_id': ticker_id}, aggregations={'agg_0': SUM(n_ticker_type_trans)})
+
+PROJECT(columns={'n_ticker_type_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id})
+
+AGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={'agg_0': COUNT()})
+
+SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+PROJECT(columns={'n_ticker_type_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id, 'transaction_type': transaction_type})
+
+AGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={'agg_0': COUNT()})
+
+SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})
+
+SCAN(table=main.sbTransaction, columns={'customer_id': sbTxCustId, 'ticker_id': sbTxTickerId, 'transaction_id': sbTxId, 'transaction_type': sbTxType})
+
+````
+
+## File: tests/test_plan_refsols/multiple_has_hasnot.txt
+
+````
+
+ROOT(columns=[('name', name)], orderings=[])
+
+JOIN(conditions=[t0.key == t1.part_key], types=['semi'], columns={'name': t0.name})
+
+JOIN(conditions=[t0.key == t1.part_key], types=['anti'], columns={'key': t0.key, 'name': t0.name})
+
+JOIN(conditions=[t0.key == t1.part_key], types=['semi'], columns={'key': t0.key, 'name': t0.name})), ChunkSearchResult(score=0.061, text=days_since=DATEDIFF("days",datetime.date(1992, 1, 1), order_date)
+
+)
+
+```
+
+The first argument in the `DATEDIFF` function supports the following aliases for each unit of time. The argument is **case-insensitive**, and if a unit is not one of the provided options, an error will be thrown. See [`DATETIME`](#datetime) for the supported units and their aliases. Invalid or unrecognized units will result in an error.
+
+<!-- TOC --><a name="dayofweek"></a>
+
+### DAYOFWEEK
+
+The `DAYOFWEEK` function returns the day of the week for a given date/timestamp. It takes a single argument, which is a date/timestamp, and returns an integer between 1 and 7, or between 0 and 6, depending on the `start_of_week` config and `start_week_as_zero` config. Please see the [Session Configs](./usage.md#session-configs) documentation for more details and in-depth examples.
+
+In other words, `DAYOFWEEK` returns which day of the week is the given date/timestamp, where the first day of the give date/timestamp is decided by the `start_of_week` config.
+
+```py
+
+# Returns the day of the week for the order date
+
+Orders.CALCULATE(day_of_week = DAYOFWEEK(order_date))
+
+```
+
+The following table shows the day of the week for a given date/timestamp, where the first day of the give date/timestamp is decided by the `start_of_week` config and if the week starts at 0 or 1 decided by the `start_week_as_zero` config.
+
+| Day of Week | Start is Sunday, Start at 0 | Start is Sunday, Start at 1 | Start is Monday, Start at 0 | Start is Monday, Start at 1 |
+
+|--------------|-----------------------------|-----------------------------|-----------------------------|-----------------------------|
+
+| Sunday | 0 | 1 | 6 | 7 |
+
+| Monday | 1 | 2 | 0 | 1 |
+
+| Tuesday | 2 | 3 | 1 | 2 |
+
+| Wednesday | 3 | 4 | 2 | 3 |
+
+| Thursday | 4 | 5 | 3 | 4 |
+
+| Friday | 5 | 6 | 4 | 5 |
+
+| Saturday | 6 | 7 | 5 | 6 |
+
+<!-- TOC --><a name="dayname"></a>
+
+### DAYNAME
+
+The `DAYNAME` function returns the name of the day of the week for a given date/timestamp. It takes a single argument, which is a date/timestamp, and returns a string, corresponding to the name of the day of the week. This returns one of the following: `"Monday"`, `"Tuesday"`, `"Wednesday"`, `"Thursday"`, `"Friday"`, `"Saturday"`, or `"Sunday"`.
+
+```py
+
+# Returns the name of the day of the week for the order date
+
+Orders.CALCULATE(day_name = DAYNAME(order_date))
+
+```
+
+<!-- TOC --><a name="conditional-functions"></a>
+
+## Conditional Functions
+
+Below is each function currently supported in PyDough that handles conditional logic.
+
+<!-- TOC --><a name="iff"></a>
+
+### IFF
+
+The `IFF` function cases on the True/False value of its first argument. If it is True, it returns the second argument, otherwise it returns the third argument. In this way, the PyDough code `IFF(a, b, c)` is semantically the same as the SQL expression `CASE WHEN a THEN b ELSE c END`.
+
+```py
+
+qty_from_germany = IFF(supplier.nation.name == "GERMANY", quantity, 0)
+
+Customers.CALCULATE(
+
+total_quantity_shipped_from_germany = SUM(lines.CALCULATE(q=qty_from_germany).q)
+
+)
+
+```
+
+<!-- TOC --><a name="isin"></a>
+
+### ISIN
+
+The `ISIN` function takes in an expression and an iterable of literals and returns whether the expression is a member of provided literals.
+
+```py
+
+Parts.WHERE(ISIN(size, (10, 11, 17, 19, 45)))
+
+```
+
+<!-- TOC --><a name="default_to"></a>
+
+### DEFAULT_TO
+
+The `DEFAULT_TO` function returns the first of its arguments that is non-null (e.g. the same as the `COALESCE` function in SQL):
+
+```py
+
+Lineitems.CALCULATE(adj_tax = DEFAULT_TO(tax, 0))
+
+```
+
+<!-- TOC --><a name="present"></a>
+
+### PRESENT
+
+The `PRESENT` function checks if its argument is non-null (e.g. the same as `IS NOT NULL` in SQL):
+
+```py
+
+Lineitems.CALCULATE(has_tax = PRESENT(tax))
+
+```
+
+<!-- TOC --><a name="absent"></a>
+
+### ABSENT
+
+The `ABSENT` function checks if its argument is null (e.g. the same as `IS NULL` in SQL):
+
+```py
+
+Lineitems.CALCULATE(no_tax = ABSENT(tax))
+
+```
+
+<!-- TOC --><a name="keep_if"></a>), ChunkSearchResult(score=0.060, text=SELECT
+
+region.r_name AS region_name,
+
+COALESCE(_t3.agg_4, 0) AS n_red_acctbal,
+
+COALESCE(_t3.agg_3, 0) AS n_black_acctbal,
+
+_t3.agg_2 AS median_red_acctbal,
+
+_t3.agg_0 AS median_black_acctbal,
+
+_t3.agg_1 AS median_overall_acctbal
+
+FROM tpch.region AS region
+
+LEFT JOIN _t3_2 AS _t3
+
+ON _t3.region_key = region.r_regionkey
+
+ORDER BY
+
+region.r_name
+
+````
+
+## File: tests/test_sql_refsols/region_acctbal_breakdown_sqlite.sql
+
+````sql
+
+WITH _t2_2 AS (
+
+SELECT
+
+CASE
+
+WHEN ABS(
+
+(
+
+ROW_NUMBER() OVER (PARTITION BY nation.n_regionkey ORDER BY customer.c_acctbal DESC) - 1.0
+
+) - (
+
+CAST((
+
+COUNT(customer.c_acctbal) OVER (PARTITION BY nation.n_regionkey) - 1.0
+
+) AS REAL) / 2.0
+
+)
+
+) < 1.0
+
+THEN customer.c_acctbal
+
+ELSE NULL
+
+END AS expr_7,
+
+CASE
+
+WHEN ABS(
+
+(
+
+ROW_NUMBER() OVER (PARTITION BY nation.n_regionkey ORDER BY CASE WHEN customer.c_acctbal < 0 THEN customer.c_acctbal ELSE NULL END DESC) - 1.0
+
+) - (
+
+CAST((
+
+COUNT(CASE WHEN customer.c_acctbal < 0 THEN customer.c_acctbal ELSE NULL END) OVER (PARTITION BY nation.n_regionkey) - 1.0
+
+) AS REAL) / 2.0
+
+)
+
+) < 1.0
+
+THEN CASE WHEN customer.c_acctbal < 0 THEN customer.c_acctbal ELSE NULL END
+
+ELSE NULL
+
+END AS expr_8,
+
+CASE
+
+WHEN ABS(
+
+(
+
+ROW_NUMBER() OVER (PARTITION BY nation.n_regionkey ORDER BY CASE WHEN customer.c_acctbal >= 0 THEN customer.c_acctbal ELSE NULL END DESC) - 1.0
+
+) - (
+
+CAST((
+
+COUNT(CASE WHEN customer.c_acctbal >= 0 THEN customer.c_acctbal ELSE NULL END) OVER (PARTITION BY nation.n_regionkey) - 1.0
+
+) AS REAL) / 2.0
+
+)
+
+) < 1.0
+
+THEN CASE WHEN customer.c_acctbal >= 0 THEN customer.c_acctbal ELSE NULL END
+
+ELSE NULL
+
+END AS expr_6,
+
+CASE WHEN customer.c_acctbal < 0 THEN customer.c_acctbal ELSE NULL END AS negative_acctbal,
+
+CASE WHEN customer.c_acctbal >= 0 THEN customer.c_acctbal ELSE NULL END AS non_negative_acctbal,
+
+nation.n_regionkey AS region_key
+
+FROM tpch.nation AS nation
+
+JOIN tpch.customer AS customer
+
+ON customer.c_nationkey = nation.n_nationkey
+
+), _t3_2 AS (
+
+SELECT
+
+AVG(expr_6) AS agg_0,
+
+AVG(expr_7) AS agg_1,
+
+AVG(expr_8) AS agg_2,
+
+COUNT(negative_acctbal) AS agg_4,
+
+COUNT(non_negative_acctbal) AS agg_3,
+
+region_key
+
+FROM _t2_2
+
+GROUP BY
+
+region_key
+
+)
+
+SELECT
+
+region.r_name AS region_name,
+
+COALESCE(_t3.agg_4, 0) AS n_red_acctbal,
+
+COALESCE(_t3.agg_3, 0) AS n_black_acctbal,
+
+_t3.agg_2 AS median_red_acctbal,
+
+_t3.agg_0 AS median_black_acctbal,
+
+_t3.agg_1 AS median_overall_acctbal
+
+FROM tpch.region AS region
+
+LEFT JOIN _t3_2 AS _t3
+
+ON _t3.region_key = region.r_regionkey
+
+ORDER BY
+
+region.r_name
+
+````
+
+## File: tests/test_sql_refsols/simple_anti_join_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+table.a AS a
+
+FROM table AS table
+
+)
+
+SELECT
+
+_t0.a AS a
+
+FROM _t1 AS _t0
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.a = _t1.a
+
+)
+
+````
+
+## File: tests/test_sql_refsols/simple_distinct_sqlite.sql
+
+````sql
+
+SELECT DISTINCT
+
+b
+
+FROM table
+
+````
+
+## File: tests/test_sql_refsols/simple_filter_ansi.sql
+
+````sql
+
+SELECT
+
+o_orderdate AS order_date,
+
+o_orderkey,
+
+o_totalprice
+
+FROM tpch.orders
+
+WHERE
+
+o_totalprice < 1000.0
+
+````
+
+## File: tests/test_sql_refsols/simple_filter_sqlite.sql
+
+````sql
+
+SELECT
+
+o_orderdate AS order_date,
+
+o_orderkey,
+
+o_totalprice
+
+FROM tpch.orders
+
+WHERE
+
+o_totalprice < 1000.0
+
+````
+
+## File: tests/test_sql_refsols/simple_filter_test_sqlite.sql
+
+````sql
+
+SELECT
+
+a,
+
+b
+
+FROM table
+
+WHERE
+
+a = 1
+
+````
+
+## File: tests/test_sql_refsols/simple_full_outer_join_sqlite.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+a
+
+FROM table
+
+)
+
+SELECT
+
+_t0.a
+
+FROM _t0 AS _t0
+
+FULL JOIN _t0 AS _t1
+
+ON _t0.a = _t1.a
+
+````
+
+## File: tests/test_sql_refsols/simple_groupby_sum_sqlite.sql
+
+````sql
+
+SELECT
+
+SUM(a) AS a,
+
+b
+
+FROM table
+
+GROUP BY
+
+b
+
+````
+
+## File: tests/test_sql_refsols/simple_inner_join_sqlite.sql
+
+````sql
+
+SELECT
+
+table.a,
+
+table_2.b
+
+FROM table AS table
+
+JOIN table AS table_2
+
+ON table.a = table_2.a
+
+````
+
+## File: tests/test_sql_refsols/simple_left_join_sqlite.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+a
+
+FROM table
+
+)
+
+SELECT
+
+_t0.a
+
+FROM _t0 AS _t0
+
+LEFT JOIN _t0 AS _t1
+
+ON _t0.a = _t1.a
+
+````), ChunkSearchResult(score=0.058, text="properties": {
+
+"order_key": {"type": "table_column", "column_name": "l_orderkey", "data_type": "int64"},
+
+"part_key": {"type": "table_column", "column_name": "l_partkey", "data_type": "int64"},
+
+"supplier_key": {"type": "table_column", "column_name": "l_suppkey", "data_type": "int64"},
+
+"line_number": {"type": "table_column", "column_name": "l_linenumber", "data_type": "int8"},
+
+"quantity": {"type": "table_column", "column_name": "l_quantity", "data_type": "decimal[12,2]"},
+
+"extended_price": {"type": "table_column", "column_name": "l_extendedprice", "data_type": "decimal[12,2]"},
+
+"discount": {"type": "table_column", "column_name": "l_discount", "data_type": "decimal[12,2]"},
+
+"tax": {"type": "table_column", "column_name": "l_tax", "data_type": "decimal[12,2]"},
+
+"status": {"type": "table_column", "column_name": "l_linestatus", "data_type": "string"},
+
+"ship_date": {"type": "table_column", "column_name": "l_shipdate", "data_type": "date"},
+
+"commit_date": {"type": "table_column", "column_name": "l_commitdate", "data_type": "date"},
+
+"receipt_date": {"type": "table_column", "column_name": "l_receiptdate", "data_type": "date"},
+
+"ship_instruct": {"type": "table_column", "column_name": "l_shipinstruct", "data_type": "string"},
+
+"ship_mode": {"type": "table_column", "column_name": "l_shipmode", "data_type": "string"},
+
+"return_flag": {"type": "table_column", "column_name": "l_returnflag", "data_type": "string"},
+
+"comment": {"type": "table_column", "column_name": "l_comment", "data_type": "string"},
+
+"part_and_supplier": {
+
+"type": "simple_join",
+
+"other_collection_name": "PartSupp",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {"part_key": ["part_key"], "supplier_key": ["supplier_key"]},
+
+"reverse_relationship_name": "lines"
+
+},
+
+"order": {
+
+"type": "simple_join",
+
+"other_collection_name": "Orders",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {"order_key": ["key"]},
+
+"reverse_relationship_name": "lines"
+
+}
+
+}
+
+},
+
+"PartSupp": {
+
+"type": "simple_table",
+
+"table_path": "tpch.PARTSUPP",
+
+"unique_properties": [["part_key", "supplier_key"]],
+
+"properties": {
+
+"part_key": {"type": "table_column", "column_name": "ps_partkey", "data_type": "int64"},
+
+"supplier_key": {"type": "table_column", "column_name": "ps_suppkey", "data_type": "int64"},
+
+"availqty": {"type": "table_column", "column_name": "ps_availqty", "data_type": "decimal[12,2]"},
+
+"supplycost": {"type": "table_column", "column_name": "ps_supplycost", "data_type": "decimal[12,2]"},
+
+"comment": {"type": "table_column", "column_name": "ps_comment", "data_type": "string"}
+
+}
+
+},
+
+"Orders": {
+
+"type": "simple_table",
+
+"table_path": "tpch.ORDERS",
+
+"unique_properties": ["key"],
+
+"properties": {
+
+"key": {"type": "table_column", "column_name": "o_orderkey", "data_type": "int64"},
+
+"customer_key": {"type": "table_column", "column_name": "o_custkey", "data_type": "int64"},
+
+"order_status": {"type": "table_column", "column_name": "o_orderstatus", "data_type": "decimal[12,2]"},
+
+"total_price": {"type": "table_column", "column_name": "o_totalprice", "data_type": "decimal[12,2]"},
+
+"order_date": {"type": "table_column", "column_name": "o_orderdate", "data_type": "date"},
+
+"order_priority": {"type": "table_column", "column_name": "o_orderpriority", "data_type": "int64"},
+
+"clerk": {"type": "table_column", "column_name": "o_clerk", "data_type": "int64"},
+
+"ship_priority": {"type": "table_column", "column_name": "o_shippriority", "data_type": "int64"},
+
+"comment": {"type": "table_column", "column_name": "o_comment", "data_type": "string"},
+
+"customer": {
+
+"type": "simple_join",
+
+"other_collection_name": "Customers",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {"customer_key": ["key"]},
+
+"reverse_relationship_name": "orders"
+
+},
+
+"shipping_nation": {
+
+"type": "compound",
+
+"primary_property": "customer",
+
+"secondary_property": "nation",
+
+"singular": true,
+
+"no_collisions": false,
+
+"inherited_properties": {},
+
+"reverse_relationship_name": "orders_shipped_to"
+
+},), ChunkSearchResult(score=0.057, text=def subcollection_calc_backref_impl() -> UnqualifiedNode
+
+⋮----
+
+def calc_subcollection_impl() -> UnqualifiedNode
+
+⋮----
+
+def filter_impl() -> UnqualifiedNode
+
+⋮----
+
+def order_by_impl() -> UnqualifiedNode
+
+⋮----
+
+def top_k_impl() -> UnqualifiedNode
+
+⋮----
+
+def partition_impl() -> UnqualifiedNode
+
+⋮----
+
+def partition_child_impl() -> UnqualifiedNode
+
+⋮----
+
+def nation_expr_impl() -> UnqualifiedNode
+
+⋮----
+
+def contextless_expr_impl() -> UnqualifiedNode
+
+⋮----
+
+def contextless_collections_impl() -> UnqualifiedNode
+
+⋮----
+
+def contextless_func_impl() -> UnqualifiedNode
+
+⋮----
+
+def contextless_aggfunc_impl() -> UnqualifiedNode
+
+⋮----
+
+def nation_name_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def nation_region_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def nation_region_name_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def region_nations_suppliers_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def region_nations_suppliers_name_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def region_nations_back_name() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def region_n_suppliers_in_red_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def parts_avg_price_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def parts_avg_price_child_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def nations_lowercase_name_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def suppliers_iff_balance_impl() -> UnqualifiedNode
+
+⋮----
+
+def lineitems_arithmetic_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def customers_without_orders_impl() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+⋮----
+
+def parts_with_german_supplier() -> tuple[UnqualifiedNode, UnqualifiedNode]
+
+````
+
+## File: tests/init_defog.sql
+
+````sql
+
+-- Modified version of the defog.ai schema setup for the broker schema:
+
+-- https://github.com/defog-ai/defog-data/blob/main/defog_data/broker/broker.sql
+
+-- changed slightly to use SQLite dialect instead of postgress.
+
+-------------------------------------------------------------------------------
+
+--BROKER SCHEMA
+
+-- Dimension tables
+
+CREATE TABLE sbCustomer (
+
+sbCustId varchar(20) PRIMARY KEY,
+
+sbCustName varchar(100) NOT NULL,
+
+sbCustEmail varchar(100) NOT NULL,
+
+sbCustPhone varchar(20),
+
+sbCustAddress1 varchar(200),
+
+sbCustAddress2 varchar(200),
+
+sbCustCity varchar(50),
+
+sbCustState varchar(20),
+
+sbCustCountry varchar(50),
+
+sbCustPostalCode varchar(20),
+
+sbCustJoinDate date NOT NULL,
+
+sbCustStatus varchar(20) NOT NULL -- possible values: active, inactive, suspended, closed
+
+);
+
+CREATE TABLE sbTicker (
+
+sbTickerId varchar(20) PRIMARY KEY,
+
+sbTickerSymbol varchar(10) NOT NULL,
+
+sbTickerName varchar(100) NOT NULL,
+
+sbTickerType varchar(20) NOT NULL, -- possible values: stock, etf, mutualfund
+
+sbTickerExchange varchar(50) NOT NULL,
+
+sbTickerCurrency varchar(10) NOT NULL,
+
+sbTickerDb2x varchar(20), -- 2 letter exchange code
+
+sbTickerIsActive boolean NOT NULL
+
+);
+
+-- Fact tables
+
+CREATE TABLE sbDailyPrice (
+
+sbDpTickerId varchar(20) NOT NULL,
+
+sbDpDate date NOT NULL,
+
+sbDpOpen numeric(10,2) NOT NULL,
+
+sbDpHigh numeric(10,2) NOT NULL,
+
+sbDpLow numeric(10,2) NOT NULL,
+
+sbDpClose numeric(10,2) NOT NULL,
+
+sbDpVolume bigint NOT NULL,
+
+sbDpEpochMs bigint NOT NULL, -- epoch milliseconds for timestamp
+
+sbDpSource varchar(50)
+
+);
+
+CREATE TABLE sbTransaction (
+
+sbTxId varchar(50) PRIMARY KEY,
+
+sbTxCustId varchar(20) NOT NULL,
+
+sbTxTickerId varchar(20) NOT NULL,
+
+sbTxDateTime timestamp NOT NULL,
+
+sbTxType varchar(20) NOT NULL, -- possible values: buy, sell
+
+sbTxShares numeric(10,2) NOT NULL,
+
+sbTxPrice numeric(10,2) NOT NULL,
+
+sbTxAmount numeric(10,2) NOT NULL,
+
+sbTxCcy varchar(10), -- transaction currency
+
+sbTxTax numeric(10,2) NOT NULL,
+
+sbTxCommission numeric(10,2) NOT NULL,
+
+sbTxKpx varchar(10), -- internal code
+
+sbTxSettlementDateStr varchar(25), -- settlement date as string in yyyyMMdd HH:mm:ss format. NULL if not settled
+
+sbTxStatus varchar(10) NOT NULL -- possible values: success, fail, pending
+
+);), ChunkSearchResult(score=0.057, text=## File: tests/test_sql_refsols/defog_ewallet_basic1_sqlite.sql
+
+````sql
+
+SELECT
+
+DATE(wallet_transactions_daily.created_at, 'start of month') AS month,
+
+COUNT(DISTINCT wallet_transactions_daily.sender_id) AS active_users
+
+FROM main.wallet_transactions_daily AS wallet_transactions_daily
+
+JOIN main.users AS users
+
+ON users.status = 'active' AND users.uid = wallet_transactions_daily.sender_id
+
+WHERE
+
+CAST(STRFTIME('%Y', wallet_transactions_daily.created_at) AS INTEGER) = 2023
+
+AND wallet_transactions_daily.sender_type = 0
+
+AND wallet_transactions_daily.status = 'success'
+
+GROUP BY
+
+DATE(wallet_transactions_daily.created_at, 'start of month')
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic10_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+COUNT() AS agg_1,
+
+SUM(amount) AS agg_0,
+
+receiver_id
+
+FROM main.wallet_transactions_daily
+
+WHERE
+
+created_at >= DATE_TRUNC('DAY', DATE_ADD(CURRENT_TIMESTAMP(), -150, 'DAY'))
+
+AND receiver_type = 1
+
+GROUP BY
+
+receiver_id
+
+), _t0_2 AS (
+
+SELECT
+
+merchants.name AS merchant_name,
+
+COALESCE(_t1.agg_0, 0) AS ordering_2,
+
+COALESCE(_t1.agg_0, 0) AS total_amount,
+
+COALESCE(_t1.agg_1, 0) AS total_transactions
+
+FROM main.merchants AS merchants
+
+LEFT JOIN _t1 AS _t1
+
+ON _t1.receiver_id = merchants.mid
+
+ORDER BY
+
+ordering_2 DESC
+
+LIMIT 2
+
+)
+
+SELECT
+
+merchant_name,
+
+total_transactions,
+
+total_amount
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_2 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic10_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+COUNT() AS agg_1,
+
+SUM(amount) AS agg_0,
+
+receiver_id
+
+FROM main.wallet_transactions_daily
+
+WHERE
+
+created_at >= DATE(DATETIME('now', '-150 day'), 'start of day')
+
+AND receiver_type = 1
+
+GROUP BY
+
+receiver_id
+
+), _t0_2 AS (
+
+SELECT
+
+merchants.name AS merchant_name,
+
+COALESCE(_t1.agg_0, 0) AS ordering_2,
+
+COALESCE(_t1.agg_0, 0) AS total_amount,
+
+COALESCE(_t1.agg_1, 0) AS total_transactions
+
+FROM main.merchants AS merchants
+
+LEFT JOIN _t1 AS _t1
+
+ON _t1.receiver_id = merchants.mid
+
+ORDER BY
+
+ordering_2 DESC
+
+LIMIT 2
+
+)
+
+SELECT
+
+merchant_name,
+
+total_transactions,
+
+total_amount
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_2 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic2_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+coupons.merchant_id AS merchant_id
+
+FROM main.coupons AS coupons
+
+), _t0 AS (
+
+SELECT
+
+merchants.mid AS mid,
+
+merchants.name AS name
+
+FROM main.merchants AS merchants
+
+)
+
+SELECT
+
+_t0.mid AS merchant_id,
+
+_t0.name AS merchant_name
+
+FROM _t0 AS _t0
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.mid = _t1.merchant_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic2_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+coupons.merchant_id AS merchant_id
+
+FROM main.coupons AS coupons
+
+), _t0 AS (
+
+SELECT
+
+merchants.mid AS mid,
+
+merchants.name AS name
+
+FROM main.merchants AS merchants
+
+)
+
+SELECT
+
+_t0.mid AS merchant_id,
+
+_t0.name AS merchant_name
+
+FROM _t0 AS _t0
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.mid = _t1.merchant_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic3_ansi.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+wallet_transactions_daily.receiver_id AS receiver_id,
+
+wallet_transactions_daily.receiver_type AS receiver_type
+
+FROM main.wallet_transactions_daily AS wallet_transactions_daily
+
+WHERE
+
+wallet_transactions_daily.receiver_type = 1
+
+), _t1 AS (
+
+SELECT
+
+_t0.receiver_id AS receiver_id
+
+FROM _t0 AS _t0
+
+), _t0_2 AS (
+
+SELECT
+
+merchants.mid AS mid
+
+FROM main.merchants AS merchants
+
+)
+
+SELECT
+
+_t0.mid AS merchant
+
+FROM _t0_2 AS _t0
+
+WHERE
+
+EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.mid = _t1.receiver_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic3_sqlite.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+wallet_transactions_daily.receiver_id AS receiver_id,
+
+wallet_transactions_daily.receiver_type AS receiver_type
+
+FROM main.wallet_transactions_daily AS wallet_transactions_daily
+
+WHERE
+
+wallet_transactions_daily.receiver_type = 1
+
+), _t1 AS (
+
+SELECT
+
+_t0.receiver_id AS receiver_id
+
+FROM _t0 AS _t0
+
+), _t0_2 AS (
+
+SELECT
+
+merchants.mid AS mid), ChunkSearchResult(score=0.055, text="attendances": {
+
+"type": "simple_join",
+
+"other_collection_name": "Attendance",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"p_ssn": ["a_ssn"]
+
+},
+
+"reverse_relationship_name": "person"
+
+},
+
+"schools_attended": {
+
+"type": "compound",
+
+"primary_property": "attendances",
+
+"secondary_property": "school",
+
+"singular": false,
+
+"no_collisions": false,
+
+"inherited_properties": {
+
+"gpa": "gpa",
+
+"graduation_date": "graduation_date",
+
+"degree": "degree"
+
+},
+
+"reverse_relationship_name": "students"
+
+}
+
+}
+
+},
+
+"Schools": {
+
+"type": "simple_table",
+
+"table_path": "education.SCHOOLS",
+
+"unique_properties": ["school_id"],
+
+"properties": {
+
+"school_id": {
+
+"type": "table_column",
+
+"column_name": "s_id",
+
+"data_type": "string"
+
+},
+
+"name": {
+
+"type": "table_column",
+
+"column_name": "s_name",
+
+"data_type": "string"
+
+},
+
+"attendances": {
+
+"type": "simple_join",
+
+"other_collection_name": "Attendance",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"school_id": ["school_id"]
+
+},
+
+"reverse_relationship_name": "school"
+
+}
+
+}
+
+},
+
+"Attendance": {
+
+"type": "simple_table",
+
+"table_path": "education.ATTENDANCE",
+
+"unique_properties": ["person_ssn", "school_id"],
+
+"properties": {
+
+"person_ssn": {
+
+"type": "table_column",
+
+"column_name": "a_ssn",
+
+"data_type": "string"
+
+},
+
+"school_id": {
+
+"type": "table_column",
+
+"column_name": "a_id",
+
+"data_type": "string"
+
+},
+
+"gpa": {
+
+"type": "table_column",
+
+"column_name": "a_gpa",
+
+"data_type": "float64"
+
+},
+
+"graduation_date": {
+
+"type": "table_column",
+
+"column_name": "a_graddate",
+
+"data_type": "date"
+
+},
+
+"degree": {
+
+"type": "table_column",
+
+"column_name": "a_degree",
+
+"data_type": "string"
+
+}
+
+}
+
+}
+
+}
+
+}
+
+```
+
+The PyDough metadata representation shown in this JSON file corresponds to the following set of collections:
+
+`People` (corresponds to `education.PEOPLE`; records are unique per unique value of `ssn`). Has the following properties:
+
+`ssn` (scalar property)
+
+`name` (scalar property)
+
+`attendances` (sub-collection connecting to `Attendances`)
+
+`schools` (sub-collection connecting to `Schools` by going through `Attendances`)
+
+`Schools` (corresponds to `education.SCHOOLS`; records are unique per unique value of `school_id`). Has the following properties:
+
+`school_id` (scalar property)
+
+`school_name` (scalar property)
+
+`attendances` (sub-collection connecting to `Attendances`)
+
+`students` (sub-collection connecting to `People` by going through `Attendances`, reverse of `People.schools`)
+
+`Attendances` (corresponds to `education.ATTENDANCES`; records are unique per unique combination of `person_ssn` & `school_id`). Has the following properties:
+
+`person_ssn` (scalar property)
+
+`school_id` (scalar property)
+
+`gpa` (scalar property)
+
+`graduation_date` (scalar property)
+
+`degree` (scalar property)
+
+`person` (sub-collection connecting to `People`, reverse of `People.attendances`)
+
+`school` (sub-collection connecting to `School`, reverse of `Schools.attendances`)
+
+<!-- TOC --><a name="example-shipping"></a>), ChunkSearchResult(score=0.054, text=FROM main.merchants AS merchants
+
+)
+
+SELECT
+
+_t0.mid AS merchant
+
+FROM _t0_2 AS _t0
+
+WHERE
+
+EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.mid = _t1.receiver_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic4_ansi.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+notifications.type AS notification_type,
+
+notifications.user_id AS user_id
+
+FROM main.notifications AS notifications
+
+WHERE
+
+notifications.type = 'transaction'
+
+), _t1 AS (
+
+SELECT
+
+_t0.user_id AS user_id
+
+FROM _t0 AS _t0
+
+), _t0_2 AS (
+
+SELECT
+
+users.uid AS uid
+
+FROM main.users AS users
+
+)
+
+SELECT
+
+_t0.uid AS user_id
+
+FROM _t0_2 AS _t0
+
+WHERE
+
+EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.uid = _t1.user_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic4_sqlite.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+notifications.type AS notification_type,
+
+notifications.user_id AS user_id
+
+FROM main.notifications AS notifications
+
+WHERE
+
+notifications.type = 'transaction'
+
+), _t1 AS (
+
+SELECT
+
+_t0.user_id AS user_id
+
+FROM _t0 AS _t0
+
+), _t0_2 AS (
+
+SELECT
+
+users.uid AS uid
+
+FROM main.users AS users
+
+)
+
+SELECT
+
+_t0.uid AS user_id
+
+FROM _t0_2 AS _t0
+
+WHERE
+
+EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.uid = _t1.user_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic5_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+notifications.user_id AS user_id
+
+FROM main.notifications AS notifications
+
+), _t0 AS (
+
+SELECT
+
+users.uid AS uid,
+
+users.username AS username
+
+FROM main.users AS users
+
+)
+
+SELECT
+
+_t0.uid AS uid,
+
+_t0.username AS username
+
+FROM _t0 AS _t0
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.uid = _t1.user_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic5_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+notifications.user_id AS user_id
+
+FROM main.notifications AS notifications
+
+), _t0 AS (
+
+SELECT
+
+users.uid AS uid,
+
+users.username AS username
+
+FROM main.users AS users
+
+)
+
+SELECT
+
+_t0.uid AS uid,
+
+_t0.username AS username
+
+FROM _t0 AS _t0
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.uid = _t1.user_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic6_ansi.sql
+
+````sql
+
+WITH _t2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+device_type
+
+FROM main.user_sessions
+
+GROUP BY
+
+device_type
+
+), _t0 AS (
+
+SELECT
+
+COALESCE(agg_0, 0) AS count,
+
+device_type,
+
+COALESCE(agg_0, 0) AS ordering_1
+
+FROM _t2
+
+ORDER BY
+
+ordering_1 DESC
+
+LIMIT 2
+
+)
+
+SELECT
+
+device_type,
+
+count
+
+FROM _t0
+
+ORDER BY
+
+ordering_1 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic6_sqlite.sql
+
+````sql
+
+WITH _t2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+device_type
+
+FROM main.user_sessions
+
+GROUP BY
+
+device_type
+
+), _t0 AS (
+
+SELECT
+
+COALESCE(agg_0, 0) AS count,
+
+device_type,
+
+COALESCE(agg_0, 0) AS ordering_1
+
+FROM _t2
+
+ORDER BY
+
+ordering_1 DESC
+
+LIMIT 2
+
+)
+
+SELECT
+
+device_type,
+
+count
+
+FROM _t0
+
+ORDER BY
+
+ordering_1 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic7_ansi.sql
+
+````sql
+
+WITH _t2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+status
+
+FROM main.wallet_transactions_daily
+
+GROUP BY
+
+status
+
+), _t0 AS (
+
+SELECT
+
+COALESCE(agg_0, 0) AS count,
+
+COALESCE(agg_0, 0) AS ordering_1,
+
+status
+
+FROM _t2
+
+ORDER BY
+
+ordering_1 DESC
+
+LIMIT 3
+
+)
+
+SELECT
+
+status,
+
+count
+
+FROM _t0
+
+ORDER BY
+
+ordering_1 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic7_sqlite.sql
+
+````sql
+
+WITH _t2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+status
+
+FROM main.wallet_transactions_daily
+
+GROUP BY
+
+status
+
+), _t0 AS (
+
+SELECT
+
+COALESCE(agg_0, 0) AS count,
+
+COALESCE(agg_0, 0) AS ordering_1,
+
+status
+
+FROM _t2
+
+ORDER BY
+
+ordering_1 DESC
+
+LIMIT 3
+
+)
+
+SELECT
+
+status,
+
+count
+
+FROM _t0
+
+ORDER BY
+
+ordering_1 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_ewallet_basic8_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+COUNT(txid) AS agg_0,
+
+SUM(amount) AS agg_1,
+
+coupon_id
+
+FROM main.wallet_transactions_daily
+
+GROUP BY
+
+coupon_id
+
+), _t0_2 AS (
+
+SELECT
+
+coupons.code AS coupon_code,
+
+COALESCE(_t1.agg_0, 0) AS ordering_2,
+
+COALESCE(_t1.agg_0, 0) AS redemption_count,
+
+COALESCE(_t1.agg_1, 0) AS total_discount
+
+FROM main.coupons AS coupons), ChunkSearchResult(score=0.046, text=partition_by_node = partition_by_node.with_keys([partition_key])
+
+# Build a child reference collection node
+
+# Equivalent PyDough code: `Nations.CALCULATE(n_customers=COUNT(customers))`
+
+customers_sub_collection = builder.build_child_access("customers", table_collection)
+
+customers_child = ChildOperatorChildAccess(customers_sub_collection)
+
+child_reference_collection_node = builder.build_child_reference_collection(
+
+table_collection, [customers_subcollection], 0
+
+)
+
+child_collection =
+
+count_call = builder.build_expression_function_call(
+
+"COUNT",
+
+[child_reference_collection_node]
+
+)
+
+calculate_node = builder.build_calc(table_collection, [customers_child])
+
+calculate_node = calculate_node.with_terms([("n_customers", count_call)])
+
+# Build a window function call node
+
+# Equivalent PyDough code: `RANKING(by=TPCH.Nations.name, levels=1, allow_ties=True)`
+
+from pydough.operators import RANKING
+
+window_call_node = builder.build_window_call(RANKING, [reference_node], 1, {"allow_ties": True})
+
+```
+
+### HAS/HASNOT Rewrite
+
+The `has_hasnot_rewrite` function is used to transform `HAS` and `HASNOT` expressions in the QDAG. It is used in the `with_terms`, `with_condition`, and `with_collation` calls of the various child operator classes to rewrite all `HAS(x)` into `COUNT(X) > 0` and all `HASNOT(X)` into `COUNT(X) == 0` unless they are in the conjunction of a `WHERE` clause.
+
+Below are some examples of PyDough snippets that are/aren't affected by the rewrite.
+
+```python
+
+# Will be rewritten to `Customers.CALCULATE(name, has_orders=COUNT(orders) > 0)`
+
+Customers.CALCULATE(name, has_orders=HAS(orders))
+
+# Will be rewritten to `Customers.CALCULATE(name, never_made_order=COUNT(orders) == 0)`
+
+Customers.CALCULATE(name, never_made_order=HASNOT(orders))
+
+# Will not be rewritten
+
+Customers.WHERE(HAS(orders) & (nation.region.name == "EUROPE"))
+
+# Will not be rewritten
+
+Customers.WHERE(HASNOT(orders))
+
+# Will be rewritten to
+
+# `Customers.WHERE((COUNT(orders) > 0) | (nation.region.name == "EUROPE"))`
+
+Customers.WHERE(HAS(orders) | (nation.region.name == "EUROPE"))
+
+# Will be rewritten to
+
+# `Customers.WHERE((COUNT(orders) == 0) | (acct_bal < 0))`
+
+Customers.WHERE(HASNOT(orders) | (acct_bal < 0))
+
+```
+
+````
+
+## File: pydough/relational/relational_expressions/__init__.py
+
+````python
+
+"""
+
+Submodule of PyDough relational module dealing with expressions in the nodes of
+
+the relational tree.
+
+"""
+
+⋮----
+
+__all__ = [
+
+````
+
+## File: pydough/relational/relational_expressions/abstract_expression.py
+
+````python
+
+"""
+
+This file contains the abstract base classes for the relational
+
+expression representation. Relational expressions are representations
+
+of literals, column accesses, or other functions that are used in the
+
+relational tree to build the final SQL query.
+
+"""
+
+⋮----
+
+__all__ = ["RelationalExpression"]
+
+⋮----
+
+class RelationalExpression(ABC)
+
+⋮----
+
+def __init__(self, data_type: PyDoughType) -> None
+
+⋮----
+
+@property
+
+def data_type(self) -> PyDoughType
+
+⋮----
+
+@staticmethod
+
+def form_conjunction(terms: list["RelationalExpression"]) -> "RelationalExpression"
+
+⋮----
+
+"""
+
+Builds a condition from a conjunction of terms.
+
+Args:
+
+`terms`: the list of relational expressions forming the
+
+conjunction.
+
+Returns:
+
+A relational expression describing the logical-AND of the
+
+values of `terms`.
+
+"""
+
+⋮----
+
+def equals(self, other: "RelationalExpression") -> bool
+
+⋮----
+
+"""
+
+Determine if two RelationalExpression nodes are exactly identical,
+
+including ordering. This does not check if two expression are equal
+
+after any alterations, for example commuting the inputs.
+
+Args:
+
+other (RelationalExpression): The other relational expression to compare against.
+
+Returns:
+
+bool: Are the two relational expressions equal.
+
+"""
+
+⋮----
+
+def __eq__(self, other: Any) -> bool
+
+⋮----
+
+@abstractmethod
+
+def to_string(self, compact: bool = False) -> str
+
+⋮----
+
+"""
+
+Convert the relational expression to a string.
+
+Returns:
+
+str: A string representation of the this expression including converting
+
+any of its inputs to strings.
+
+"""
+
+⋮----
+
+def __repr__(self) -> str
+
+⋮----), ChunkSearchResult(score=0.045, text=Example of the structure of the metadata for a compound relationship property (connects a collection `Regions` to a collection `Customers` by combining `Regions.nations.customers` into a single property, skipping over a middle collection `Nations` but picking up its property `name` under a new name `nation_name):
+
+```json
+
+"customers": {
+
+"type": "compound",
+
+"primary_property": "nations",
+
+"secondary_property": "customers",
+
+"singular": false,
+
+"no_collisions": true,
+
+"inherited_properties": {
+
+"nation_name": "name"
+
+},
+
+"reverse_relationship_name": "region"
+
+}
+
+```
+
+<!-- TOC --><a name="pydough-type-strings"></a>
+
+## PyDough Type Strings
+
+The strings used in the type field for certain properties must be one of the following:
+
+`int8`: an 8-bit integer.
+
+`int16`: a 16-bit integer.
+
+`int32`: a 32-bit integer.
+
+`int64`: a 64-bit integer.
+
+`float32`: a 32-bit float.
+
+`float64`: a 64-bit float.
+
+`decimal[p,s]`: a fixed-point number with precision p (integer between 1 and 38) indicating the number of digits and scale s (integer between 0 and p, exclusive of p) indicating the number of digits to the right hand side of the decimal point.
+
+`bool`: a boolean.
+
+`string`: a string.
+
+`binary`: a bytes format.
+
+`date`: a date without any time component.
+
+`time[p]`: a time of day with a precision p (integer between 0 and 9) indicating the number of sub-second decimal places it can have (e.g. 9 = nanosecond precision).
+
+`timestamp[p]`: a date with a time of day of a precision p (same rules as time).
+
+`timestamp[p,tz]`: a date with a time of day of a precision p (same rules as time) with the timezone described by tz (e.g. `timestamp[9,America/Los_Angeles]`).
+
+`array[t]`: an array of values of type t (where t is another PyDough type). For example: `array[int32]` or `array[array[string]]`.
+
+`map[t1,t2]`: a map of values with keys of type type t1 and values of type t2 (where t1 and t2 are also PyDough types). For example: `map[string,int64]` or `map[string,array[date]]`.
+
+`struct[field1:t1,field2:t2,...]`: a struct of values with fields named field1, field2, etc. with types t1, t2, etc. (which are also PyDough types). For example: `struct[x:int32,y:int32]` or `struct[name:string,birthday:date,car_accidents:array[struct[ts:timestamp[9],report:string]]`. Each field name must be a valid Python identifier.
+
+`unknown`: an unknown type.
+
+<!-- TOC --><a name="metadata-samples"></a>
+
+## Metadata Samples
+
+<!-- TOC --><a name="example-education"></a>
+
+### Example: Education
+
+The knowledge graph is for the following information about tables in a schema called `education`:
+
+`PEOPLE` is a table referring to each known person. Each row in this table has the following information:
+
+`p_ssn`: the social security number used to uniquely identify the person.
+
+`p_name`: the name of the person.
+
+`SCHOOLS` is a table referring to each known school. Each row in this table has the following information:
+
+`s_id`: the identifying number used to uniquely identify the school.
+
+`s_name`: the name of the school.
+
+`ATTENDANCE` is a table referring to every known instance of a person attending a school (assuming a person could have attended multiple schools, but attended each school at most once). Each row in this table has the following information:
+
+`a_ssn`: the social security number of the person attending the school.
+
+`a_id`: the id of the school being attended.
+
+`a_gpa`: the GPA that the person had while attending the school.
+
+`a_graddate`: the date that the person graduated from the school.
+
+`a_degree`: the degree the person earned from teh school.
+
+Records in `PEOPLE` and `ATTENDANCE` can be joined on the social security number.
+
+Records in `SCHOOLS` and `ATTENDANCE` can be joined on the school id.
+
+```json
+
+{
+
+"Education": {
+
+"People": {
+
+"type": "simple_table",
+
+"table_path": "education.PEOPLE",
+
+"unique_properties": ["p_ssn"],
+
+"properties": {
+
+"ssn": {
+
+"type": "table_column",
+
+"column_name": "p_ssn",
+
+"data_type": "string"
+
+},
+
+"name": {
+
+"type": "table_column",
+
+"column_name": "p_name",
+
+"data_type": "string"
+
+},), ChunkSearchResult(score=0.045, text=### Property Type: Cartesian Product
+
+A property with this type describes a subcollection of the current collection that is derived from performing an cross-join on two collections (e.g. SELECT ... FROM T1, T2). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "cartesian_product" and have the following additional key-value pairs in their metadata JSON object:
+
+`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports cartesian_product properties.
+
+`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.
+
+Example of the structure of the metadata for a cartesian product property (connects every record of a collection `CalendarDates` to every record of collection `InventorySnapshots`):
+
+```json
+
+"snapshots": {
+
+"type": "cartesian_product",
+
+"other_collection_name": "InventorySnapshots",
+
+"reverse_relationship_name": "calendar_dates"
+
+}
+
+```
+
+<!-- TOC --><a name="property-type-compound-relationship"></a>
+
+### Property Type: Compound Relationship
+
+A property with this type describes a subcollection of the current collection that is derived from combining a relationship from this collection to one of its subcollections with a relationship from that subcollection to one of its subcollections. Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship, and the subcollection can inherit additional properties from the middle subcollection. Properties of this type have a type string of "compound" and have the following additional key-value pairs in their metadata JSON object:
+
+`primary_property`: a string indicating the name of a property that connects this collection to a subcollection.
+
+`secondary_property`: a string indicating the name of the property that connects the primary subcollection to one of its subcollections.
+
+`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection’s subcollection, and false otherwise.
+
+`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the subcollection’s subcollection, and false otherwise (true if-and-only-if the reverse relationship is singular).
+
+`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.
+
+`inherited_properties`: a JSON object indicating any properties of the primary subcollection that should be accessible from the secondary subcollection. The keys are the string names that the inherited properties are referred to by, which can be a new alias or the original name, and the values are names of the properties of the collection accessed by the primary property. The names used for the inherited properties cannot overlap with any other names of properties of the secondary subcollection, including other inherited properties it could have from other compound relationships. This JSON object can be empty if there are no inherited properties.), ChunkSearchResult(score=0.043, text=## File: tests/test_sql_refsols/tpch_q4_sqlite.sql
+
+````sql
+
+WITH _t3 AS (
+
+SELECT
+
+orders.o_orderdate AS order_date,
+
+orders.o_orderkey AS key,
+
+orders.o_orderpriority AS order_priority
+
+FROM tpch.orders AS orders
+
+WHERE
+
+orders.o_orderdate < '1993-10-01' AND orders.o_orderdate >= '1993-07-01'
+
+), _t0 AS (
+
+SELECT
+
+_t3.key AS key,
+
+_t3.order_priority AS order_priority
+
+FROM _t3 AS _t3
+
+), _t4 AS (
+
+SELECT
+
+lineitem.l_commitdate AS commit_date,
+
+lineitem.l_orderkey AS order_key,
+
+lineitem.l_receiptdate AS receipt_date
+
+FROM tpch.lineitem AS lineitem
+
+WHERE
+
+lineitem.l_commitdate < lineitem.l_receiptdate
+
+), _t1 AS (
+
+SELECT
+
+_t4.order_key AS order_key
+
+FROM _t4 AS _t4
+
+), _t2 AS (
+
+SELECT
+
+_t0.order_priority AS order_priority
+
+FROM _t0 AS _t0
+
+WHERE
+
+EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0.key = _t1.order_key
+
+)
+
+), _t1_2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+_t2.order_priority AS order_priority
+
+FROM _t2 AS _t2
+
+GROUP BY
+
+_t2.order_priority
+
+), _t0_2 AS (
+
+SELECT
+
+COALESCE(_t1.agg_0, 0) AS order_count,
+
+_t1.order_priority AS o_orderpriority,
+
+_t1.order_priority AS ordering_1
+
+FROM _t1_2 AS _t1
+
+)
+
+SELECT
+
+_t0.o_orderpriority AS O_ORDERPRIORITY,
+
+_t0.order_count AS ORDER_COUNT
+
+FROM _t0_2 AS _t0
+
+ORDER BY
+
+_t0.ordering_1
+
+````
+
+## File: tests/test_sql_refsols/tpch_q5_ansi.sql
+
+````sql
+
+WITH _t1_2 AS (
+
+SELECT
+
+ANY_VALUE(nation.n_name) AS agg_3,
+
+SUM(lineitem.l_extendedprice * (
+
+1 - lineitem.l_discount
+
+)) AS agg_0
+
+FROM tpch.nation AS nation
+
+JOIN tpch.region AS region
+
+ON nation.n_regionkey = region.r_regionkey AND region.r_name = 'ASIA'
+
+JOIN tpch.customer AS customer
+
+ON customer.c_nationkey = nation.n_nationkey
+
+JOIN tpch.orders AS orders
+
+ON customer.c_custkey = orders.o_custkey
+
+AND orders.o_orderdate < CAST('1995-01-01' AS DATE)
+
+AND orders.o_orderdate >= CAST('1994-01-01' AS DATE)
+
+JOIN tpch.lineitem AS lineitem
+
+ON lineitem.l_orderkey = orders.o_orderkey
+
+LEFT JOIN tpch.supplier AS supplier
+
+ON lineitem.l_suppkey = supplier.s_suppkey
+
+JOIN tpch.nation AS nation_2
+
+ON nation_2.n_nationkey = supplier.s_nationkey
+
+WHERE
+
+nation.n_name = nation_2.n_name
+
+GROUP BY
+
+nation.n_nationkey
+
+)
+
+SELECT
+
+agg_3 AS N_NAME,
+
+COALESCE(agg_0, 0) AS REVENUE
+
+FROM _t1_2
+
+ORDER BY
+
+COALESCE(agg_0, 0) DESC
+
+````
+
+## File: tests/test_sql_refsols/tpch_q5_sqlite.sql
+
+````sql
+
+WITH _t1_2 AS (
+
+SELECT
+
+MAX(nation.n_name) AS agg_3,
+
+SUM(lineitem.l_extendedprice * (
+
+1 - lineitem.l_discount
+
+)) AS agg_0
+
+FROM tpch.nation AS nation
+
+JOIN tpch.region AS region
+
+ON nation.n_regionkey = region.r_regionkey AND region.r_name = 'ASIA'
+
+JOIN tpch.customer AS customer
+
+ON customer.c_nationkey = nation.n_nationkey
+
+JOIN tpch.orders AS orders
+
+ON customer.c_custkey = orders.o_custkey
+
+AND orders.o_orderdate < '1995-01-01'
+
+AND orders.o_orderdate >= '1994-01-01'
+
+JOIN tpch.lineitem AS lineitem
+
+ON lineitem.l_orderkey = orders.o_orderkey
+
+LEFT JOIN tpch.supplier AS supplier
+
+ON lineitem.l_suppkey = supplier.s_suppkey
+
+JOIN tpch.nation AS nation_2
+
+ON nation_2.n_nationkey = supplier.s_nationkey
+
+WHERE
+
+nation.n_name = nation_2.n_name
+
+GROUP BY
+
+nation.n_nationkey
+
+)
+
+SELECT
+
+agg_3 AS N_NAME,
+
+COALESCE(agg_0, 0) AS REVENUE
+
+FROM _t1_2
+
+ORDER BY
+
+COALESCE(agg_0, 0) DESC
+
+````
+
+## File: tests/test_sql_refsols/tpch_q6_ansi.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+SUM(l_extendedprice * l_discount) AS agg_0
+
+FROM tpch.lineitem
+
+WHERE
+
+l_discount <= 0.07
+
+AND l_discount >= 0.05
+
+AND l_quantity < 24
+
+AND l_shipdate < CAST('1995-01-01' AS DATE)
+
+AND l_shipdate >= CAST('1994-01-01' AS DATE)
+
+)
+
+SELECT
+
+COALESCE(agg_0, 0) AS REVENUE
+
+FROM _t0
+
+````
+
+## File: tests/test_sql_refsols/tpch_q6_sqlite.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+SUM(l_extendedprice * l_discount) AS agg_0
+
+FROM tpch.lineitem
+
+WHERE
+
+l_discount <= 0.07
+
+AND l_discount >= 0.05
+
+AND l_quantity < 24
+
+AND l_shipdate < '1995-01-01'
+
+AND l_shipdate >= '1994-01-01'
+
+)
+
+SELECT
+
+COALESCE(agg_0, 0) AS REVENUE
+
+FROM _t0
+
+````
+
+## File: tests/test_sql_refsols/tpch_q7_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+n_nationkey AS key,
+
+n_name AS name
+
+FROM tpch.nation
+
+), _t1_2 AS (
+
+SELECT), ChunkSearchResult(score=0.042, text=defog_broker_basic10_ansi.sql
+
+defog_broker_basic10_sqlite.sql
+
+defog_broker_basic2_ansi.sql
+
+defog_broker_basic2_sqlite.sql
+
+defog_broker_basic3_ansi.sql
+
+defog_broker_basic3_sqlite.sql
+
+defog_broker_basic4_ansi.sql
+
+defog_broker_basic4_sqlite.sql
+
+defog_broker_basic5_ansi.sql
+
+defog_broker_basic5_sqlite.sql
+
+defog_broker_basic6_ansi.sql
+
+defog_broker_basic6_sqlite.sql
+
+defog_broker_basic7_ansi.sql
+
+defog_broker_basic7_sqlite.sql
+
+defog_broker_basic8_ansi.sql
+
+defog_broker_basic8_sqlite.sql
+
+defog_broker_basic9_ansi.sql
+
+defog_broker_basic9_sqlite.sql
+
+defog_broker_gen1_ansi.sql
+
+defog_broker_gen1_sqlite.sql
+
+defog_broker_gen2_ansi.sql
+
+defog_broker_gen2_sqlite.sql
+
+defog_broker_gen3_ansi.sql
+
+defog_broker_gen3_sqlite.sql
+
+defog_broker_gen4_ansi.sql
+
+defog_broker_gen4_sqlite.sql
+
+defog_broker_gen5_ansi.sql
+
+defog_broker_gen5_sqlite.sql
+
+defog_ewallet_adv1_ansi.sql
+
+defog_ewallet_adv1_sqlite.sql
+
+defog_ewallet_adv10_ansi.sql
+
+defog_ewallet_adv10_sqlite.sql
+
+defog_ewallet_adv11_ansi.sql
+
+defog_ewallet_adv11_sqlite.sql
+
+defog_ewallet_adv12_ansi.sql
+
+defog_ewallet_adv12_sqlite.sql
+
+defog_ewallet_adv13_ansi.sql
+
+defog_ewallet_adv13_sqlite.sql
+
+defog_ewallet_adv14_ansi.sql
+
+defog_ewallet_adv14_sqlite.sql
+
+defog_ewallet_adv15_ansi.sql
+
+defog_ewallet_adv15_sqlite.sql
+
+defog_ewallet_adv16_ansi.sql
+
+defog_ewallet_adv16_sqlite.sql
+
+defog_ewallet_adv2_ansi.sql
+
+defog_ewallet_adv2_sqlite.sql
+
+defog_ewallet_adv3_ansi.sql
+
+defog_ewallet_adv3_sqlite.sql
+
+defog_ewallet_adv4_ansi.sql
+
+defog_ewallet_adv4_sqlite.sql
+
+defog_ewallet_adv5_ansi.sql
+
+defog_ewallet_adv5_sqlite.sql
+
+defog_ewallet_adv6_ansi.sql
+
+defog_ewallet_adv6_sqlite.sql
+
+defog_ewallet_adv7_ansi.sql
+
+defog_ewallet_adv7_sqlite.sql
+
+defog_ewallet_adv8_ansi.sql
+
+defog_ewallet_adv8_sqlite.sql
+
+defog_ewallet_adv9_ansi.sql
+
+defog_ewallet_adv9_sqlite.sql
+
+defog_ewallet_basic1_ansi.sql
+
+defog_ewallet_basic1_sqlite.sql
+
+defog_ewallet_basic10_ansi.sql
+
+defog_ewallet_basic10_sqlite.sql
+
+defog_ewallet_basic2_ansi.sql
+
+defog_ewallet_basic2_sqlite.sql
+
+defog_ewallet_basic3_ansi.sql
+
+defog_ewallet_basic3_sqlite.sql
+
+defog_ewallet_basic4_ansi.sql
+
+defog_ewallet_basic4_sqlite.sql
+
+defog_ewallet_basic5_ansi.sql
+
+defog_ewallet_basic5_sqlite.sql
+
+defog_ewallet_basic6_ansi.sql
+
+defog_ewallet_basic6_sqlite.sql
+
+defog_ewallet_basic7_ansi.sql
+
+defog_ewallet_basic7_sqlite.sql
+
+defog_ewallet_basic8_ansi.sql
+
+defog_ewallet_basic8_sqlite.sql
+
+defog_ewallet_basic9_ansi.sql
+
+defog_ewallet_basic9_sqlite.sql
+
+defog_ewallet_gen1_ansi.sql
+
+defog_ewallet_gen1_sqlite.sql
+
+defog_ewallet_gen2_ansi.sql
+
+defog_ewallet_gen2_sqlite.sql
+
+defog_ewallet_gen3_ansi.sql
+
+defog_ewallet_gen3_sqlite.sql
+
+defog_ewallet_gen4_ansi.sql
+
+defog_ewallet_gen4_sqlite.sql
+
+defog_ewallet_gen5_ansi.sql
+
+defog_ewallet_gen5_sqlite.sql
+
+duplicate_limit_different_ordering_sqlite.sql
+
+duplicate_limit_min_inner_sqlite.sql
+
+duplicate_limit_min_outer_sqlite.sql
+
+func_contains_ansi.sql
+
+func_ends_with_ansi.sql
+
+func_iff_iif_ansi.sql
+
+func_isin_ansi.sql
+
+func_like_ansi.sql
+
+func_rank_with_filters_a_ansi.sql
+
+func_rank_with_filters_b_ansi.sql
+
+func_starts_with_ansi.sql
+
+func_year_ansi.sql
+
+global_acctbal_breakdown_ansi.sql
+
+global_acctbal_breakdown_sqlite.sql
+
+hour_minute_day_ansi.sql
+
+hour_minute_day_sqlite.sql
+
+multi_join_sqlite.sql
+
+nation_acctbal_breakdown_ansi.sql
+
+nation_acctbal_breakdown_sqlite.sql
+
+nested_binary_functions_sqlite.sql
+
+nested_join_sqlite.sql
+
+ordering_function_sqlite.sql
+
+project_scan_with_ordering_sqlite.sql
+
+rank_a_ansi.sql
+
+rank_a_sqlite.sql
+
+rank_b_ansi.sql
+
+rank_b_sqlite.sql
+
+rank_c_ansi.sql
+
+rank_c_sqlite.sql
+
+region_acctbal_breakdown_ansi.sql
+
+region_acctbal_breakdown_sqlite.sql
+
+simple_anti_join_sqlite.sql
+
+simple_distinct_sqlite.sql
+
+simple_filter_ansi.sql
+
+simple_filter_sqlite.sql
+
+simple_filter_test_sqlite.sql
+
+simple_full_outer_join_sqlite.sql
+
+simple_groupby_sum_sqlite.sql
+
+simple_inner_join_sqlite.sql
+
+simple_left_join_sqlite.sql
+
+simple_limit_sqlite.sql
+
+simple_limit_with_ordering_sqlite.sql
+
+simple_right_join_sqlite.sql
+
+simple_scan_ansi.sql
+
+simple_scan_sqlite.sql
+
+simple_scan_test_sqlite.sql), ChunkSearchResult(score=0.042, text=## File: tests/test_sql_refsols/tpch_q19_ansi.sql
+
+````sql
+
+WITH _t0_2 AS (
+
+SELECT
+
+SUM(lineitem.l_extendedprice * (
+
+1 - lineitem.l_discount
+
+)) AS agg_0
+
+FROM tpch.lineitem AS lineitem
+
+JOIN tpch.part AS part
+
+ON (
+
+(
+
+lineitem.l_quantity <= 11
+
+AND lineitem.l_quantity >= 1
+
+AND part.p_brand = 'Brand#12'
+
+AND part.p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+
+AND part.p_size <= 5
+
+)
+
+OR (
+
+lineitem.l_quantity <= 20
+
+AND lineitem.l_quantity >= 10
+
+AND part.p_brand = 'Brand#23'
+
+AND part.p_container IN ('MED BAG', 'MED BOX', 'MED PACK', 'MED PKG')
+
+AND part.p_size <= 10
+
+)
+
+OR (
+
+lineitem.l_quantity <= 30
+
+AND lineitem.l_quantity >= 20
+
+AND part.p_brand = 'Brand#34'
+
+AND part.p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')
+
+AND part.p_size <= 15
+
+)
+
+)
+
+AND lineitem.l_partkey = part.p_partkey
+
+AND part.p_size >= 1
+
+WHERE
+
+(
+
+(
+
+lineitem.l_quantity <= 11
+
+AND lineitem.l_quantity >= 1
+
+AND part.p_brand = 'Brand#12'
+
+AND part.p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+
+AND part.p_size <= 5
+
+)
+
+OR (
+
+lineitem.l_quantity <= 20
+
+AND lineitem.l_quantity >= 10
+
+AND part.p_brand = 'Brand#23'
+
+AND part.p_container IN ('MED BAG', 'MED BOX', 'MED PACK', 'MED PKG')
+
+AND part.p_size <= 10
+
+)
+
+OR (
+
+lineitem.l_quantity <= 30
+
+AND lineitem.l_quantity >= 20
+
+AND part.p_brand = 'Brand#34'
+
+AND part.p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')
+
+AND part.p_size <= 15
+
+)
+
+)
+
+AND lineitem.l_shipinstruct = 'DELIVER IN PERSON'
+
+AND lineitem.l_shipmode IN ('AIR', 'AIR REG')
+
+)
+
+SELECT
+
+COALESCE(agg_0, 0) AS REVENUE
+
+FROM _t0_2
+
+````
+
+## File: tests/test_sql_refsols/tpch_q19_sqlite.sql
+
+````sql
+
+WITH _t0_2 AS (
+
+SELECT
+
+SUM(lineitem.l_extendedprice * (
+
+1 - lineitem.l_discount
+
+)) AS agg_0
+
+FROM tpch.lineitem AS lineitem
+
+JOIN tpch.part AS part
+
+ON (
+
+(
+
+lineitem.l_quantity <= 11
+
+AND lineitem.l_quantity >= 1
+
+AND part.p_brand = 'Brand#12'
+
+AND part.p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+
+AND part.p_size <= 5
+
+)
+
+OR (
+
+lineitem.l_quantity <= 20
+
+AND lineitem.l_quantity >= 10
+
+AND part.p_brand = 'Brand#23'
+
+AND part.p_container IN ('MED BAG', 'MED BOX', 'MED PACK', 'MED PKG')
+
+AND part.p_size <= 10
+
+)
+
+OR (
+
+lineitem.l_quantity <= 30
+
+AND lineitem.l_quantity >= 20
+
+AND part.p_brand = 'Brand#34'
+
+AND part.p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')
+
+AND part.p_size <= 15
+
+)
+
+)
+
+AND lineitem.l_partkey = part.p_partkey
+
+AND part.p_size >= 1
+
+WHERE
+
+(
+
+(
+
+lineitem.l_quantity <= 11
+
+AND lineitem.l_quantity >= 1
+
+AND part.p_brand = 'Brand#12'
+
+AND part.p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+
+AND part.p_size <= 5
+
+)
+
+OR (
+
+lineitem.l_quantity <= 20
+
+AND lineitem.l_quantity >= 10
+
+AND part.p_brand = 'Brand#23'
+
+AND part.p_container IN ('MED BAG', 'MED BOX', 'MED PACK', 'MED PKG')
+
+AND part.p_size <= 10
+
+)
+
+OR (
+
+lineitem.l_quantity <= 30
+
+AND lineitem.l_quantity >= 20
+
+AND part.p_brand = 'Brand#34'
+
+AND part.p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')
+
+AND part.p_size <= 15
+
+)
+
+)
+
+AND lineitem.l_shipinstruct = 'DELIVER IN PERSON'
+
+AND lineitem.l_shipmode IN ('AIR', 'AIR REG')
+
+)
+
+SELECT
+
+COALESCE(agg_0, 0) AS REVENUE
+
+FROM _t0_2
+
+````
+
+## File: tests/test_sql_refsols/tpch_q2_ansi.sql
+
+````sql
+
+WITH _t4 AS (
+
+SELECT
+
+r_name AS name,
+
+r_regionkey AS key
+
+FROM tpch.region
+
+WHERE
+
+r_name = 'EUROPE'
+
+), _t5 AS (
+
+SELECT
+
+ps_partkey AS part_key,
+
+ps_suppkey AS supplier_key,
+
+ps_supplycost AS supplycost
+
+FROM tpch.partsupp
+
+), _t16 AS (
+
+SELECT
+
+MIN(_t5.supplycost) AS best_cost,
+
+part.p_partkey AS key_9
+
+FROM tpch.nation AS nation
+
+JOIN _t4 AS _t4
+
+ON _t4.key = nation.n_regionkey
+
+JOIN tpch.supplier AS supplier
+
+ON nation.n_nationkey = supplier.s_nationkey
+
+JOIN _t5 AS _t5
+
+ON _t5.supplier_key = supplier.s_suppkey
+
+JOIN tpch.part AS part
+
+ON _t5.part_key = part.p_partkey AND part.p_size = 15 AND part.p_type LIKE '%BRASS'
+
+GROUP BY
+
+part.p_partkey
+
+), _t17 AS (
+
+SELECT
+
+part.p_partkey AS key_19,
+
+part.p_mfgr AS manufacturer,
+
+nation.n_name,
+
+supplier.s_acctbal,
+
+supplier.s_address,
+
+supplier.s_comment,
+
+supplier.s_name,
+
+supplier.s_phone,), ChunkSearchResult(score=0.040, text=### Example: Shipping
+
+The knowledge graph is for the following information about tables in a schema called `shipping`:
+
+`PEOPLE` is a table referring to each known person. Each row in this table has the following information:
+
+`ssn`: the social security number used to uniquely identify the person.
+
+`first`: the first name of the person.
+
+`middle`: the middle name of the person, if they have one.
+
+`last`: the last name of the person.
+
+`bdate`: the date that the person was born.
+
+`email`: the email of the person.
+
+`ca_id`: the id of the person's current address, if they have one.
+
+`PACKAGES` is a table referring to each known package. Each row in this table has the following information:
+
+`pid`: the identifying number used to uniquely identify the package.
+
+`cust_ssn`: the social security number of the person who ordered the package.
+
+`ship_id`: the address id of the address the package was shipped to.
+
+`bill_id`: the address id of the address the package was billed to.
+
+`order_date`: the date that the package was ordered.
+
+`arrival_date`: the date that the package arrived, if it has.
+
+`cost`: the total cost of the package.
+
+`ADDRESSES` is a table referring to every known address. Each row in this table has the following information:
+
+`aid`: the identifying number used to uniquely identify the address.
+
+`number`: the street number of the address.
+
+`street`: the name of the street of the the address.
+
+`apartment`: the name of the apartment, if the address has one.
+
+`zip`: the zip code of the address.
+
+`city`: the city containing the address.
+
+`state`: the state containing the address.
+
+Records in `PEOPLE` and `PACKAGES` can be joined on the social security number.
+
+Records in `PEOPLE` and `ADDRESSES` can be joined on the address id.
+
+Records in `PACKAGES` and `ADDRESSES` can be joined on either the shipping address id or the billing address id.
+
+```json
+
+{
+
+"Shipping": {
+
+"People": {
+
+"type": "simple_table",
+
+"table_path": "shipping.PEOPLE",
+
+"unique_properties": ["ssn"],
+
+"properties": {
+
+"ssn": {
+
+"type": "table_column",
+
+"column_name": "ssn",
+
+"data_type": "string"
+
+},
+
+"first_name": {
+
+"type": "table_column",
+
+"column_name": "first",
+
+"data_type": "string"
+
+},
+
+"middle_name": {
+
+"type": "table_column",
+
+"column_name": "middle",
+
+"data_type": "string"
+
+},
+
+"last_name": {
+
+"type": "table_column",
+
+"column_name": "last",
+
+"data_type": "string"
+
+},
+
+"birth_date": {
+
+"type": "table_column",
+
+"column_name": "bdate",
+
+"data_type": "date"
+
+},
+
+"email": {
+
+"type": "table_column",
+
+"column_name": "email",
+
+"data_type": "string"
+
+},
+
+"ca_id": {
+
+"type": "table_column",
+
+"column_name": "email",
+
+"data_type": "int64"
+
+},
+
+"current_address": {
+
+"type": "simple_join",
+
+"other_collection_name": "Addresses",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {
+
+"ca_id": ["aid"]
+
+},
+
+"reverse_relationship_name": "current_occupants"
+
+},
+
+"packages_ordered": {
+
+"type": "simple_join",
+
+"other_collection_name": "Packages",
+
+"singular": false,
+
+"no_collisions": true,
+
+"keys": {
+
+"ssn": ["cust_ssn"]
+
+},
+
+"reverse_relationship_name": "customer"
+
+}
+
+}
+
+},
+
+"Packages": {
+
+"type": "simple_table",
+
+"table_path": "shipping.PACKAGES",
+
+"unique_properties": ["pid"],
+
+"properties": {
+
+"package_id": {
+
+"type": "table_column",
+
+"column_name": "pid",
+
+"data_type": "int64"
+
+},
+
+"customer_ssn": {
+
+"type": "table_column",
+
+"column_name": "cust_ssn",
+
+"data_type": "string"
+
+},
+
+"shipping_address_id": {
+
+"type": "table_column",
+
+"column_name": "ship_id",
+
+"data_type": "int64"
+
+},
+
+"billing_address_id": {
+
+"type": "table_column",
+
+"column_name": "ship_id",
+
+"data_type": "int64"
+
+},
+
+"order_date": {
+
+"type": "table_column",
+
+"column_name": "order_date",
+
+"data_type": "date"
+
+},
+
+"arrival_date": {
+
+"type": "table_column",
+
+"column_name": "arrival_date",
+
+"data_type": "date"
+
+},
+
+"cost": {
+
+"type": "table_column",
+
+"column_name": "cost",
+
+"data_type": "decimal[10,2]"
+
+},
+
+"shipping_address": {
+
+"type": "simple_join",
+
+"other_collection_name": "Addresses",
+
+"singular": true,
+
+"no_collisions": false,
+
+"keys": {
+
+"shipping_address_id": ["aid"]
+
+},), ChunkSearchResult(score=0.031, text=### Hybrid Connections
+
+Hybrid connections represent the relationships between different parts of the hybrid tree. They are used to handle subcollection accesses and aggregations. Its fields are as follows:
+
+`parent`: The `HybridTree` that the connection exists within.
+
+`subtree`: The `HybridTree` corresponding to the child itself, starting from the bottom.
+
+`connection_type`: An enum indicating which connection type is being used.
+
+`required_steps`: An index indicating which step in the pipeline must be completed before the child can be defined.
+
+`aggs`: A mapping of aggregation calls made onto expressions relative to the context of `subtree`.
+
+The `ConnectionType` eEnum describes how a hybrid tree is connected to a child tree. It has the following values:
+
+`SINGULAR`: The child should be 1:1 with regards to the parent.
+
+`AGGREGATION`: The child is being accessed for the purposes of aggregating its columns.
+
+`NDISTINCT`: The child is being accessed for the purposes of counting how many distinct elements it has.
+
+`SEMI`: The child is being used as a semi-join.
+
+`SINGULAR_ONLY_MATCH`: A variant of `SINGULAR` that can use an INNER join instead of a LEFT join.
+
+`AGGREGATION_ONLY_MATCH`: A variant of `AGGREGATION` that can use an INNER join instead of a LEFT join.
+
+`NDISTINCT_ONLY_MATCH`: A variant of `NDISTINCT` that can use an INNER join instead of a LEFT join.
+
+`ANTI`: The child is being used as an anti-join.
+
+`NO_MATCH_SINGULAR`: A variant of `SINGULAR` that replaces all of the child references with NULL.
+
+`NO_MATCH_AGGREGATION`: A variant of `AGGREGATION` that replaces all of the aggregation outputs with NULL.
+
+`NO_MATCH_NDISTINCT`: A variant of `NDISTINCT` that replaces the NDISTINCT output with 0.
+
+### Hybrid Operations
+
+Hybrid operations represent the various operations that can be performed within the hybrid tree. Some notable classes include:
+
+`HybridOperation`: Base class for all hybrid operations.
+
+`HybridRoot`: Represents the root context.
+
+`HybridCollectionAccess`: Represents accessing a collection.
+
+`HybridFilter`: Represents a filter operation.
+
+`HybridCalc`: Represents a calculation operation.
+
+`HybridLimit`: Represents a limit operation.
+
+`HybridPartition`: Represents a partition operation.
+
+`HybridPartitionChild`: Represents accessing the data of a partition as a child.
+
+`HybridNoop`: Represents a do-nothing operation that propagates all of the data from the previous operation without any change.
+
+`HybridChildPullup`: Represents an operation that accesses all of the data from a child hybrid tree as if one of its levels were the current level and its ancestors were the current levels ancestors, while the bottom level remain as child references.
+
+## Hybrid De-Correlation
+
+The file [hybrid_decorrelater.py](hybrid_decorrelater.py) contains the logic used to hunt for `HybridCorrelExpr` outside of a semi/anti join and de-correlates them by snapshotting the hybrid tree and attaching the snapshot copy to the top of the child subtree, thus turning the correlated reference into a back reference. Also, for only-match patterns, replaces the original logic that was snapshotted with a single `HybridChildPullup` to avoid re-computing the same logic twice.), ChunkSearchResult(score=0.028, text=SELECT
+
+s_name AS S_NAME,
+
+s_address AS S_ADDRESS
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_1
+
+````
+
+## File: tests/test_sql_refsols/tpch_q20_sqlite.sql
+
+````sql
+
+WITH _t5_2 AS (
+
+SELECT
+
+SUM(l_quantity) AS agg_0,
+
+l_partkey AS part_key
+
+FROM tpch.lineitem
+
+WHERE
+
+l_shipdate < '1995-01-01' AND l_shipdate >= '1994-01-01'
+
+GROUP BY
+
+l_partkey
+
+), _t7_2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+partsupp.ps_suppkey AS supplier_key
+
+FROM tpch.partsupp AS partsupp
+
+JOIN tpch.part AS part
+
+ON part.p_name LIKE 'forest%' AND part.p_partkey = partsupp.ps_partkey
+
+LEFT JOIN _t5_2 AS _t5
+
+ON _t5.part_key = part.p_partkey
+
+WHERE
+
+partsupp.ps_availqty > (
+
+COALESCE(_t5.agg_0, 0) * 0.5
+
+)
+
+GROUP BY
+
+partsupp.ps_suppkey
+
+), _t0_2 AS (
+
+SELECT
+
+supplier.s_address,
+
+supplier.s_name,
+
+supplier.s_name AS ordering_1
+
+FROM tpch.supplier AS supplier
+
+LEFT JOIN tpch.nation AS nation
+
+ON nation.n_nationkey = supplier.s_nationkey
+
+LEFT JOIN _t7_2 AS _t7
+
+ON _t7.supplier_key = supplier.s_suppkey
+
+WHERE
+
+(
+
+COALESCE(_t7.agg_0, 0) AND nation.n_name = 'CANADA'
+
+) > 0
+
+ORDER BY
+
+ordering_1
+
+LIMIT 10
+
+)
+
+SELECT
+
+s_name AS S_NAME,
+
+s_address AS S_ADDRESS
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_1
+
+````
+
+## File: tests/test_sql_refsols/tpch_q21_ansi.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+supplier.s_suppkey AS key,
+
+supplier.s_name AS name,
+
+supplier.s_nationkey AS nation_key
+
+FROM tpch.supplier AS supplier
+
+), _t3 AS (
+
+SELECT
+
+nation.n_name AS name,
+
+nation.n_nationkey AS key
+
+FROM tpch.nation AS nation
+
+WHERE
+
+nation.n_name = 'SAUDI ARABIA'
+
+), _t1 AS (
+
+SELECT
+
+_t3.key AS key
+
+FROM _t3 AS _t3
+
+), _t8 AS (
+
+SELECT
+
+_t0.key AS key,
+
+_t0.name AS name
+
+FROM _t0 AS _t0
+
+JOIN _t1 AS _t1
+
+ON _t0.nation_key = _t1.key
+
+), _t5 AS (
+
+SELECT
+
+lineitem.l_commitdate AS commit_date,
+
+lineitem.l_orderkey AS order_key,
+
+lineitem.l_receiptdate AS receipt_date,
+
+lineitem.l_suppkey AS supplier_key
+
+FROM tpch.lineitem AS lineitem
+
+WHERE
+
+lineitem.l_commitdate < lineitem.l_receiptdate
+
+), _t4 AS (
+
+SELECT
+
+_t5.supplier_key AS original_key,
+
+_t5.order_key AS order_key,
+
+_t5.supplier_key AS supplier_key
+
+FROM _t5 AS _t5
+
+), _t6 AS (
+
+SELECT
+
+orders.o_orderkey AS key,
+
+orders.o_orderstatus AS order_status
+
+FROM tpch.orders AS orders
+
+WHERE
+
+orders.o_orderstatus = 'F'
+
+), _t5_2 AS (
+
+SELECT
+
+_t6.key AS key
+
+FROM _t6 AS _t6
+
+), _t3_2 AS (
+
+SELECT
+
+_t5.key AS key,
+
+_t4.original_key AS original_key,
+
+_t4.supplier_key AS supplier_key
+
+FROM _t4 AS _t4
+
+JOIN _t5_2 AS _t5
+
+ON _t4.order_key = _t5.key
+
+), _t7 AS (
+
+SELECT
+
+lineitem.l_orderkey AS order_key,
+
+lineitem.l_suppkey AS supplier_key
+
+FROM tpch.lineitem AS lineitem
+
+), _t6_2 AS (
+
+SELECT
+
+_t7.order_key AS order_key
+
+FROM _t7 AS _t7
+
+WHERE
+
+_t3.original_key <> _t7.supplier_key
+
+), _t2 AS (
+
+SELECT
+
+_t3.key AS key,
+
+_t3.original_key AS original_key,
+
+_t3.supplier_key AS supplier_key
+
+FROM _t3_2 AS _t3
+
+WHERE
+
+EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t6_2 AS _t6
+
+WHERE
+
+_t3.key = _t6.order_key
+
+)
+
+), _t7_2 AS (
+
+SELECT
+
+_t8.order_key AS order_key
+
+FROM _t5 AS _t8
+
+WHERE
+
+_t2.original_key <> _t8.supplier_key
+
+), _t4_2 AS (
+
+SELECT
+
+_t2.supplier_key AS supplier_key
+
+FROM _t2 AS _t2
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t7_2 AS _t7
+
+WHERE
+
+_t2.key = _t7.order_key
+
+)
+
+), _t9 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+_t4.supplier_key AS supplier_key
+
+FROM _t4_2 AS _t4
+
+GROUP BY
+
+_t4.supplier_key
+
+), _t2_2 AS (
+
+SELECT
+
+_t9.agg_0 AS agg_0,
+
+_t8.name AS name
+
+FROM _t8 AS _t8
+
+LEFT JOIN _t9 AS _t9
+
+ON _t8.key = _t9.supplier_key
+
+), _t1_2 AS (
+
+SELECT
+
+COALESCE(_t2.agg_0, 0) AS numwait,
+
+COALESCE(_t2.agg_0, 0) AS ordering_1,
+
+_t2.name AS s_name,
+
+_t2.name AS ordering_2
+
+FROM _t2_2 AS _t2
+
+), _t0_2 AS (
+
+SELECT
+
+_t1.numwait AS numwait,
+
+_t1.s_name AS s_name,
+
+_t1.ordering_1 AS ordering_1,
+
+_t1.ordering_2 AS ordering_2
+
+FROM _t1_2 AS _t1
+
+ORDER BY
+
+ordering_1 DESC,
+
+ordering_2
+
+LIMIT 10
+
+)
+
+SELECT
+
+_t0.s_name AS S_NAME,
+
+_t0.numwait AS NUMWAIT
+
+FROM _t0_2 AS _t0
+
+ORDER BY
+
+_t0.ordering_1 DESC,
+
+_t0.ordering_2
+
+````
+
+## File: tests/test_sql_refsols/tpch_q21_sqlite.sql
+
+````sql
+
+WITH _t0 AS (
+
+SELECT
+
+supplier.s_suppkey AS key,
+
+supplier.s_name AS name,), ChunkSearchResult(score=0.027, text=def visit_root(self, root: RelationalRoot) -> None
+
+⋮----
+
+def get_join_types(self, root: RelationalRoot) -> set[JoinType]
+
+⋮----
+
+"""
+
+Collect join types by traversing the relational tree starting from the root.
+
+Args:
+
+root: The root of the relational tree.
+
+Returns:
+
+List[JoinType]: A list of join types found in the tree.
+
+"""
+
+````
+
+## File: pydough/relational/relational_nodes/join.py
+
+````python
+
+"""
+
+Representation of the a join node in a relational tree.
+
+This node is responsible for holding all types of joins.
+
+"""
+
+⋮----
+
+class JoinType(Enum)
+
+⋮----
+
+INNER = "inner"
+
+LEFT = "left"
+
+RIGHT = "right"
+
+FULL_OUTER = "full outer"
+
+ANTI = "anti"
+
+SEMI = "semi"
+
+⋮----
+
+class Join(RelationalNode)
+
+⋮----
+
+"""
+
+Relational representation of all join operations. This single
+
+node can represent multiple joins at once, similar to a multi-join
+
+in other systems to enable better lowering and easier translation
+
+from earlier stages in the pipeline.
+
+However, unlike a traditional Multi-Join in most relational algebra
+
+implementations, this join does not ensure that joins can be reordered
+
+and provides a specific join ordering that is the only guaranteed
+
+valid ordering.
+
+In particular if we have 3 inputs A, B, and C, with join types INNER
+
+and SEMI, then the join ordering is treated as:
+
+(A INNER B) SEMI C
+
+It should be noted that this isn't necessarily the only valid join ordering,
+
+but this node makes no guarantees that the inputs can be reordered.
+
+"""
+
+⋮----
+
+num_inputs = len(inputs)
+
+num_conditions = len(conditions)
+
+num_join_types = len(join_types)
+
+⋮----
+
+@property
+
+def correl_name(self) -> str | None
+
+⋮----
+
+"""
+
+The name used to refer to the first join input when subsequent inputs
+
+have correlated references.
+
+"""
+
+⋮----
+
+@property
+
+def conditions(self) -> list[RelationalExpression]
+
+⋮----
+
+"""
+
+The conditions for the joins.
+
+"""
+
+⋮----
+
+@property
+
+def join_types(self) -> list[JoinType]
+
+⋮----
+
+"""
+
+The types of the joins.
+
+"""
+
+⋮----
+
+@property
+
+def inputs(self) -> MutableSequence[RelationalNode]
+
+⋮----
+
+@property
+
+def default_input_aliases(self) -> list[str | None]
+
+⋮----
+
+"""
+
+Provide the default aliases for each input
+
+to this node. This is used when remapping the
+
+names of each input for differentiating columns.
+
+Note: The lowering steps are not required to use this alias
+
+and can choose any name they want.
+
+"""
+
+⋮----
+
+def node_equals(self, other: RelationalNode) -> bool
+
+⋮----
+
+def to_string(self, compact: bool = False) -> str
+
+⋮----
+
+conditions: list[str] = [cond.to_string(compact) for cond in self.conditions]
+
+correl_suffix = (
+
+⋮----
+
+def accept(self, visitor: RelationalVisitor) -> None
+
+````
+
+## File: pydough/relational/relational_nodes/limit.py
+
+````python
+
+"""
+
+This file contains the relational implementation for a "limit" operation.
+
+This is the relational representation of top-n selection and typically depends
+
+on explicit ordering of the input relation.
+
+"""
+
+⋮----
+
+class Limit(SingleRelational)
+
+⋮----
+
+"""
+
+The Limit node in the relational tree. This node represents any TOP-N
+
+operations in the relational algebra. This operation is dependent on the
+
+orderings of the input relation.
+
+"""
+
+⋮----
+
+# Note: The limit is a relational expression because it should be a constant
+
+# now but in the future could be a more complex expression that may require
+
+# multi-step SQL to successfully evaluate.
+
+⋮----
+
+@property
+
+def limit(self) -> RelationalExpression
+
+⋮----
+
+"""
+
+The limit expression for the number of rows to return.
+
+"""
+
+⋮----
+
+@property
+
+def orderings(self) -> MutableSequence[ExpressionSortInfo]
+
+⋮----
+
+"""
+
+The orderings that are used to determine the top-n rows.
+
+"""
+
+⋮----
+
+def node_equals(self, other: RelationalNode) -> bool
+
+⋮----
+
+def to_string(self, compact: bool = False) -> str
+
+⋮----
+
+orderings: list[str] = [
+
+⋮----
+
+def accept(self, visitor: RelationalVisitor) -> None
+
+````
+
+## File: pydough/relational/relational_nodes/project.py), ChunkSearchResult(score=0.026, text=## File: tests/test_sql_refsols/defog_broker_basic10_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+sbdailyprice.sbdptickerid AS ticker_id
+
+FROM main.sbdailyprice AS sbdailyprice
+
+), _t0 AS (
+
+SELECT
+
+sbticker.sbtickerid AS _id,
+
+sbticker.sbtickersymbol AS symbol
+
+FROM main.sbticker AS sbticker
+
+)
+
+SELECT
+
+_t0._id AS _id,
+
+_t0.symbol AS symbol
+
+FROM _t0 AS _t0
+
+WHERE
+
+NOT EXISTS(
+
+SELECT
+
+1 AS "1"
+
+FROM _t1 AS _t1
+
+WHERE
+
+_t0._id = _t1.ticker_id
+
+)
+
+````
+
+## File: tests/test_sql_refsols/defog_broker_basic2_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+AVG(sbtxshares) AS avg_shares,
+
+COUNT(DISTINCT sbtxcustid) AS num_customers,
+
+COUNT(DISTINCT sbtxcustid) AS ordering_2,
+
+sbtxtype AS transaction_type
+
+FROM main.sbtransaction
+
+WHERE
+
+sbtxdatetime <= CAST('2023-03-31' AS DATE)
+
+AND sbtxdatetime >= CAST('2023-01-01' AS DATE)
+
+GROUP BY
+
+sbtxtype
+
+), _t0 AS (
+
+SELECT
+
+avg_shares,
+
+num_customers,
+
+ordering_2,
+
+transaction_type
+
+FROM _t1
+
+ORDER BY
+
+ordering_2 DESC
+
+LIMIT 3
+
+)
+
+SELECT
+
+transaction_type,
+
+num_customers,
+
+avg_shares
+
+FROM _t0
+
+ORDER BY
+
+ordering_2 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_broker_basic2_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+AVG(sbtxshares) AS avg_shares,
+
+COUNT(DISTINCT sbtxcustid) AS num_customers,
+
+COUNT(DISTINCT sbtxcustid) AS ordering_2,
+
+sbtxtype AS transaction_type
+
+FROM main.sbtransaction
+
+WHERE
+
+sbtxdatetime <= '2023-03-31' AND sbtxdatetime >= '2023-01-01'
+
+GROUP BY
+
+sbtxtype
+
+), _t0 AS (
+
+SELECT
+
+avg_shares,
+
+num_customers,
+
+ordering_2,
+
+transaction_type
+
+FROM _t1
+
+ORDER BY
+
+ordering_2 DESC
+
+LIMIT 3
+
+)
+
+SELECT
+
+transaction_type,
+
+num_customers,
+
+avg_shares
+
+FROM _t0
+
+ORDER BY
+
+ordering_2 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_broker_basic3_ansi.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+SUM(sbtxamount) AS agg_1,
+
+sbtxtickerid AS ticker_id
+
+FROM main.sbtransaction
+
+GROUP BY
+
+sbtxtickerid
+
+), _t0_2 AS (
+
+SELECT
+
+COALESCE(_t1.agg_0, 0) AS num_transactions,
+
+COALESCE(_t1.agg_1, 0) AS ordering_2,
+
+sbticker.sbtickersymbol AS symbol,
+
+COALESCE(_t1.agg_1, 0) AS total_amount
+
+FROM main.sbticker AS sbticker
+
+LEFT JOIN _t1 AS _t1
+
+ON _t1.ticker_id = sbticker.sbtickerid
+
+ORDER BY
+
+ordering_2 DESC
+
+LIMIT 10
+
+)
+
+SELECT
+
+symbol,
+
+num_transactions,
+
+total_amount
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_2 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_broker_basic3_sqlite.sql
+
+````sql
+
+WITH _t1 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+SUM(sbtxamount) AS agg_1,
+
+sbtxtickerid AS ticker_id
+
+FROM main.sbtransaction
+
+GROUP BY
+
+sbtxtickerid
+
+), _t0_2 AS (
+
+SELECT
+
+COALESCE(_t1.agg_0, 0) AS num_transactions,
+
+COALESCE(_t1.agg_1, 0) AS ordering_2,
+
+sbticker.sbtickersymbol AS symbol,
+
+COALESCE(_t1.agg_1, 0) AS total_amount
+
+FROM main.sbticker AS sbticker
+
+LEFT JOIN _t1 AS _t1
+
+ON _t1.ticker_id = sbticker.sbtickerid
+
+ORDER BY
+
+ordering_2 DESC
+
+LIMIT 10
+
+)
+
+SELECT
+
+symbol,
+
+num_transactions,
+
+total_amount
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_2 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_broker_basic4_ansi.sql
+
+````sql
+
+WITH _t2_2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+sbcustomer.sbcuststate AS state,
+
+sbticker.sbtickertype AS ticker_type
+
+FROM main.sbcustomer AS sbcustomer
+
+JOIN main.sbtransaction AS sbtransaction
+
+ON sbcustomer.sbcustid = sbtransaction.sbtxcustid
+
+JOIN main.sbticker AS sbticker
+
+ON sbticker.sbtickerid = sbtransaction.sbtxtickerid
+
+GROUP BY
+
+sbcustomer.sbcuststate,
+
+sbticker.sbtickertype
+
+), _t0_2 AS (
+
+SELECT
+
+COALESCE(agg_0, 0) AS num_transactions,
+
+COALESCE(agg_0, 0) AS ordering_1,
+
+state,
+
+ticker_type
+
+FROM _t2_2
+
+ORDER BY
+
+ordering_1 DESC
+
+LIMIT 5
+
+)
+
+SELECT
+
+state,
+
+ticker_type,
+
+num_transactions
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_1 DESC
+
+````
+
+## File: tests/test_sql_refsols/defog_broker_basic4_sqlite.sql
+
+````sql
+
+WITH _t2_2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+sbcustomer.sbcuststate AS state,
+
+sbticker.sbtickertype AS ticker_type
+
+FROM main.sbcustomer AS sbcustomer
+
+JOIN main.sbtransaction AS sbtransaction
+
+ON sbcustomer.sbcustid = sbtransaction.sbtxcustid
+
+JOIN main.sbticker AS sbticker
+
+ON sbticker.sbtickerid = sbtransaction.sbtxtickerid
+
+GROUP BY
+
+sbcustomer.sbcuststate,)], graph_search_results=[], web_search_results=None, document_search_results=None), 'citations': [Citation(id='620de93', object='citation', is_new=True, span=None, source_type=None, payload={'id': '620de938-97a5-53fa-bd46-e6e0431fb7ea', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.045783730158730156, 'text': 'partition_by_node = partition_by_node.with_keys([partition_key])\n\n# Build a child reference collection node\n\n# Equivalent PyDough code: `Nations.CALCULATE(n_customers=COUNT(customers))`\n\ncustomers_sub_collection = builder.build_child_access("customers", table_collection)\n\ncustomers_child = ChildOperatorChildAccess(customers_sub_collection)\n\nchild_reference_collection_node = builder.build_child_reference_collection(\n\ntable_collection, [customers_subcollection], 0\n\n)\n\nchild_collection =\n\ncount_call = builder.build_expression_function_call(\n\n"COUNT",\n\n[child_reference_collection_node]\n\n)\n\ncalculate_node = builder.build_calc(table_collection, [customers_child])\n\ncalculate_node = calculate_node.with_terms([("n_customers", count_call)])\n\n# Build a window function call node\n\n# Equivalent PyDough code: `RANKING(by=TPCH.Nations.name, levels=1, allow_ties=True)`\n\nfrom pydough.operators import RANKING\n\nwindow_call_node = builder.build_window_call(RANKING, [reference_node], 1, {"allow_ties": True})\n\n```\n\n### HAS/HASNOT Rewrite\n\nThe `has_hasnot_rewrite` function is used to transform `HAS` and `HASNOT` expressions in the QDAG. It is used in the `with_terms`, `with_condition`, and `with_collation` calls of the various child operator classes to rewrite all `HAS(x)` into `COUNT(X) > 0` and all `HASNOT(X)` into `COUNT(X) == 0` unless they are in the conjunction of a `WHERE` clause.\n\nBelow are some examples of PyDough snippets that are/aren\'t affected by the rewrite.\n\n```python\n\n# Will be rewritten to `Customers.CALCULATE(name, has_orders=COUNT(orders) > 0)`\n\nCustomers.CALCULATE(name, has_orders=HAS(orders))\n\n# Will be rewritten to `Customers.CALCULATE(name, never_made_order=COUNT(orders) == 0)`\n\nCustomers.CALCULATE(name, never_made_order=HASNOT(orders))\n\n# Will not be rewritten\n\nCustomers.WHERE(HAS(orders) & (nation.region.name == "EUROPE"))\n\n# Will not be rewritten\n\nCustomers.WHERE(HASNOT(orders))\n\n# Will be rewritten to\n\n# `Customers.WHERE((COUNT(orders) > 0) | (nation.region.name == "EUROPE"))`\n\nCustomers.WHERE(HAS(orders) | (nation.region.name == "EUROPE"))\n\n# Will be rewritten to\n\n# `Customers.WHERE((COUNT(orders) == 0) | (acct_bal < 0))`\n\nCustomers.WHERE(HASNOT(orders) | (acct_bal < 0))\n\n```\n\n````\n\n## File: pydough/relational/relational_expressions/__init__.py\n\n````python\n\n"""\n\nSubmodule of PyDough relational module dealing with expressions in the nodes of\n\nthe relational tree.\n\n"""\n\n⋮----\n\n__all__ = [\n\n````\n\n## File: pydough/relational/relational_expressions/abstract_expression.py\n\n````python\n\n"""\n\nThis file contains the abstract base classes for the relational\n\nexpression representation. Relational expressions are representations\n\nof literals, column accesses, or other functions that are used in the\n\nrelational tree to build the final SQL query.\n\n"""\n\n⋮----\n\n__all__ = ["RelationalExpression"]\n\n⋮----\n\nclass RelationalExpression(ABC)\n\n⋮----\n\ndef __init__(self, data_type: PyDoughType) -> None\n\n⋮----\n\n@property\n\ndef data_type(self) -> PyDoughType\n\n⋮----\n\n@staticmethod\n\ndef form_conjunction(terms: list["RelationalExpression"]) -> "RelationalExpression"\n\n⋮----\n\n"""\n\nBuilds a condition from a conjunction of terms.\n\nArgs:\n\n`terms`: the list of relational expressions forming the\n\nconjunction.\n\nReturns:\n\nA relational expression describing the logical-AND of the\n\nvalues of `terms`.\n\n"""\n\n⋮----\n\ndef equals(self, other: "RelationalExpression") -> bool\n\n⋮----\n\n"""\n\nDetermine if two RelationalExpression nodes are exactly identical,\n\nincluding ordering. This does not check if two expression are equal\n\nafter any alterations, for example commuting the inputs.\n\nArgs:\n\nother (RelationalExpression): The other relational expression to compare against.\n\nReturns:\n\nbool: Are the two relational expressions equal.\n\n"""\n\n⋮----\n\ndef __eq__(self, other: Any) -> bool\n\n⋮----\n\n@abstractmethod\n\ndef to_string(self, compact: bool = False) -> str\n\n⋮----\n\n"""\n\nConvert the relational expression to a string.\n\nReturns:\n\nstr: A string representation of the this expression including converting\n\nany of its inputs to strings.\n\n"""\n\n⋮----\n\ndef __repr__(self) -> str\n\n⋮----', 'metadata': {'version': 'v0', 'chunk_order': 170, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 4, 'full_text_rank': 200, 'associated_query': '4. How does the `HAS` function function in relation to table relationships according to common principles?'}}), Citation(id='9ae3698', object='citation', is_new=True, span=None, source_type=None, payload={'id': '9ae3698b-2ab6-5430-ba4d-0e1c4c677ce4', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.02684684684684685, 'text': 'def visit_root(self, root: RelationalRoot) -> None\n\n⋮----\n\ndef get_join_types(self, root: RelationalRoot) -> set[JoinType]\n\n⋮----\n\n"""\n\nCollect join types by traversing the relational tree starting from the root.\n\nArgs:\n\nroot: The root of the relational tree.\n\nReturns:\n\nList[JoinType]: A list of join types found in the tree.\n\n"""\n\n````\n\n## File: pydough/relational/relational_nodes/join.py\n\n````python\n\n"""\n\nRepresentation of the a join node in a relational tree.\n\nThis node is responsible for holding all types of joins.\n\n"""\n\n⋮----\n\nclass JoinType(Enum)\n\n⋮----\n\nINNER = "inner"\n\nLEFT = "left"\n\nRIGHT = "right"\n\nFULL_OUTER = "full outer"\n\nANTI = "anti"\n\nSEMI = "semi"\n\n⋮----\n\nclass Join(RelationalNode)\n\n⋮----\n\n"""\n\nRelational representation of all join operations. This single\n\nnode can represent multiple joins at once, similar to a multi-join\n\nin other systems to enable better lowering and easier translation\n\nfrom earlier stages in the pipeline.\n\nHowever, unlike a traditional Multi-Join in most relational algebra\n\nimplementations, this join does not ensure that joins can be reordered\n\nand provides a specific join ordering that is the only guaranteed\n\nvalid ordering.\n\nIn particular if we have 3 inputs A, B, and C, with join types INNER\n\nand SEMI, then the join ordering is treated as:\n\n(A INNER B) SEMI C\n\nIt should be noted that this isn\'t necessarily the only valid join ordering,\n\nbut this node makes no guarantees that the inputs can be reordered.\n\n"""\n\n⋮----\n\nnum_inputs = len(inputs)\n\nnum_conditions = len(conditions)\n\nnum_join_types = len(join_types)\n\n⋮----\n\n@property\n\ndef correl_name(self) -> str | None\n\n⋮----\n\n"""\n\nThe name used to refer to the first join input when subsequent inputs\n\nhave correlated references.\n\n"""\n\n⋮----\n\n@property\n\ndef conditions(self) -> list[RelationalExpression]\n\n⋮----\n\n"""\n\nThe conditions for the joins.\n\n"""\n\n⋮----\n\n@property\n\ndef join_types(self) -> list[JoinType]\n\n⋮----\n\n"""\n\nThe types of the joins.\n\n"""\n\n⋮----\n\n@property\n\ndef inputs(self) -> MutableSequence[RelationalNode]\n\n⋮----\n\n@property\n\ndef default_input_aliases(self) -> list[str | None]\n\n⋮----\n\n"""\n\nProvide the default aliases for each input\n\nto this node. This is used when remapping the\n\nnames of each input for differentiating columns.\n\nNote: The lowering steps are not required to use this alias\n\nand can choose any name they want.\n\n"""\n\n⋮----\n\ndef node_equals(self, other: RelationalNode) -> bool\n\n⋮----\n\ndef to_string(self, compact: bool = False) -> str\n\n⋮----\n\nconditions: list[str] = [cond.to_string(compact) for cond in self.conditions]\n\ncorrel_suffix = (\n\n⋮----\n\ndef accept(self, visitor: RelationalVisitor) -> None\n\n````\n\n## File: pydough/relational/relational_nodes/limit.py\n\n````python\n\n"""\n\nThis file contains the relational implementation for a "limit" operation.\n\nThis is the relational representation of top-n selection and typically depends\n\non explicit ordering of the input relation.\n\n"""\n\n⋮----\n\nclass Limit(SingleRelational)\n\n⋮----\n\n"""\n\nThe Limit node in the relational tree. This node represents any TOP-N\n\noperations in the relational algebra. This operation is dependent on the\n\norderings of the input relation.\n\n"""\n\n⋮----\n\n# Note: The limit is a relational expression because it should be a constant\n\n# now but in the future could be a more complex expression that may require\n\n# multi-step SQL to successfully evaluate.\n\n⋮----\n\n@property\n\ndef limit(self) -> RelationalExpression\n\n⋮----\n\n"""\n\nThe limit expression for the number of rows to return.\n\n"""\n\n⋮----\n\n@property\n\ndef orderings(self) -> MutableSequence[ExpressionSortInfo]\n\n⋮----\n\n"""\n\nThe orderings that are used to determine the top-n rows.\n\n"""\n\n⋮----\n\ndef node_equals(self, other: RelationalNode) -> bool\n\n⋮----\n\ndef to_string(self, compact: bool = False) -> str\n\n⋮----\n\norderings: list[str] = [\n\n⋮----\n\ndef accept(self, visitor: RelationalVisitor) -> None\n\n````\n\n## File: pydough/relational/relational_nodes/project.py', 'metadata': {'version': 'v0', 'chunk_order': 179, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 15, 'full_text_rank': 200, 'associated_query': '4. How does the `HAS` function function in relation to table relationships according to common principles?'}}), Citation(id='524ab2a', object='citation', is_new=True, span=None, source_type=None, payload={'id': '524ab2aa-6e1d-57ad-a4d6-6a87a213939c', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.062095330908794336, 'text': "SCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nJOIN(conditions=[t0.ticker_id == t1.ticker_id], types=['inner'], columns={'ticker_id_18': t1.ticker_id, 'transaction_type_19': t1.transaction_type})\n\nAGGREGATE(keys={'ticker_id': ticker_id}, aggregations={})\n\nAGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={})\n\nSCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nAGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={})\n\nSCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nSCAN(table=main.sbTransaction, columns={'customer_id': sbTxCustId, 'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nJOIN(conditions=[t0.ticker_id_33 == t1.ticker_id & t0.transaction_type_34 == t1.transaction_type], types=['inner'], columns={'customer_id': t1.customer_id, 'n_ticker_type_trans': t0.n_ticker_type_trans, 'transaction_id': t1.transaction_id, 'transaction_type_37': t1.transaction_type})\n\nJOIN(conditions=[t0.transaction_type_30 == t1.transaction_type_34], types=['inner'], columns={'n_ticker_type_trans': t1.n_ticker_type_trans, 'ticker_id_33': t1.ticker_id_33, 'transaction_type_34': t1.transaction_type_34})\n\nFILTER(condition=n_type_trans > 1:int64, columns={'transaction_type_30': transaction_type_30})\n\nPROJECT(columns={'n_type_trans': DEFAULT_TO(agg_0, 0:int64), 'transaction_type_30': transaction_type_30})\n\nAGGREGATE(keys={'transaction_type_30': transaction_type_30}, aggregations={'agg_0': SUM(n_ticker_type_trans)})\n\nJOIN(conditions=[t0.ticker_id == t1.ticker_id], types=['inner'], columns={'n_ticker_type_trans': t1.n_ticker_type_trans, 'transaction_type_30': t1.transaction_type})\n\nAGGREGATE(keys={'ticker_id': ticker_id}, aggregations={})\n\nAGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={})\n\nSCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nPROJECT(columns={'n_ticker_type_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id, 'transaction_type': transaction_type})\n\nAGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={'agg_0': COUNT()})\n\nSCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nJOIN(conditions=[t0.ticker_id == t1.ticker_id], types=['inner'], columns={'n_ticker_type_trans': t1.n_ticker_type_trans, 'ticker_id_33': t1.ticker_id, 'transaction_type_34': t1.transaction_type})\n\nFILTER(condition=n_ticker_trans > 1:int64, columns={'ticker_id': ticker_id})\n\nPROJECT(columns={'n_ticker_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id})\n\nAGGREGATE(keys={'ticker_id': ticker_id}, aggregations={'agg_0': SUM(n_ticker_type_trans)})\n\nPROJECT(columns={'n_ticker_type_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id})\n\nAGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={'agg_0': COUNT()})\n\nSCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nPROJECT(columns={'n_ticker_type_trans': DEFAULT_TO(agg_0, 0:int64), 'ticker_id': ticker_id, 'transaction_type': transaction_type})\n\nAGGREGATE(keys={'ticker_id': ticker_id, 'transaction_type': transaction_type}, aggregations={'agg_0': COUNT()})\n\nSCAN(table=main.sbTransaction, columns={'ticker_id': sbTxTickerId, 'transaction_type': sbTxType})\n\nSCAN(table=main.sbTransaction, columns={'customer_id': sbTxCustId, 'ticker_id': sbTxTickerId, 'transaction_id': sbTxId, 'transaction_type': sbTxType})\n\n````\n\n## File: tests/test_plan_refsols/multiple_has_hasnot.txt\n\n````\n\nROOT(columns=[('name', name)], orderings=[])\n\nJOIN(conditions=[t0.key == t1.part_key], types=['semi'], columns={'name': t0.name})\n\nJOIN(conditions=[t0.key == t1.part_key], types=['anti'], columns={'key': t0.key, 'name': t0.name})\n\nJOIN(conditions=[t0.key == t1.part_key], types=['semi'], columns={'key': t0.key, 'name': t0.name})", 'metadata': {'version': 'v0', 'chunk_order': 293, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 6, 'full_text_rank': 200, 'associated_query': '4. How does the `HAS` function function in relation to table relationships according to common principles?'}}), Citation(id='53ed32c', object='citation', is_new=True, span=None, source_type=None, payload={'id': '53ed32ca-67a1-5fd0-876a-d76e99a3c83e', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.06454091750396616, 'text': '"Accounts": {\n\n"type": "simple_table",\n\n"table_path": "bank_schema.ACCOUNTS",\n\n"unique_properties": ["account_id"],\n\n"properties": {\n\n"client_id": {...},\n\n"account_type": {...},\n\n"account_balance": {...},\n\n"date_opened": {...}\n\n}\n\n}\n\n```\n\n<!-- TOC --><a name="properties"></a>\n\n## Properties\n\n<!-- TOC --><a name="property-type-table-column"></a>\n\n### Property Type: Table Column\n\nA property with this type is essentially just a view of a column in a table stored in whatever database is being used to execute the queries. Properties of this type are scalar expression attributes of the collection, as opposed to subcollections. Properties of this type have a type string of "table_column" and have the following additional key-value pairs in their metadata JSON object:\n\n`column_name`: a string indicating the name of the column within the table it comes from, which it can be different from the name of the property itself.\n\n`data_type`: a string indicating the PyDough type that this column corresponds to.\n\nExample of the structure of the metadata for a table column property:\n\n```json\n\n"first_name": {\n\n"type": "table_column",\n\n"column_name": "firstname",\n\n"data_type": "string"\n\n}\n\n```\n\n<!-- TOC --><a name="property-type-simple-join"></a>\n\n### Property Type: Simple Join\n\nA property with this type describes a subcollection of the current collection that is derived from performing an equi-join on two tables (e.g. SELECT ... FROM T1 JOIN T2 ON T1.a=T2.x AND T1.b = T2.y). Properties of this type are subcollections of the collection, as opposed to scalar attributes. If a collection has a property of this type, a corresponding property is added to the other collection to describe the reverse of the relationship. Properties of this type have a type string of "simple_join" and have the following additional key-value pairs in their metadata JSON object:\n\n`other_collection_name`: a string indicating the name of the other collection that this property connects the current collection to. This must be another collection in the same graph that supports simple_join properties.\n\n`singular`: a boolean that is true if each record in the current collection has at most 1 matching record of the subcollection, and false otherwise.\n\n`no_collisions`: a boolean that is true if multiple records from this collection can match onto the same record from the other collection, and false otherwise (true if-and-only-if the reverse relationship is singular).\n\n`keys`: a JSON object indicating the combinations of properties from this collection and the other collection that are compared for equality in order to determine join matches. The keys to this JSON object are the names of properties in the current collection, and the values are a list of 1+ strings that. are the names of properties in the other collection that they must be equal to in order to produce a match. All property names invoked in the keys object must correspond to scalar attributes of the collection, as opposed to being names of its subcollections. This object must be non-empty.\n\n`reverse_relationship_name`: the name of the property that is to be added to the other collection to describe the reverse version of this relationship. This string must be a valid property name but cannot be equal to another existing property name in the other collection.\n\nExample of the structure of the metadata for a simple join property (connects a collection `Clients` to a collection `Accounts` by joining `Clients.id` on `Accounts.client_id`):\n\n```json\n\n"accounts_held": {\n\n"type": "simple_join",\n\n"other_collection_name": "Accounts",\n\n"singular": false,\n\n"no_collisions": true,\n\n"keys": {"id": ["client_id"]},\n\n"reverse_relationship_name": "account_holder"\n\n}\n\n```\n\n<!-- TOC --><a name="property-type-cartesian-product"></a>', 'metadata': {'version': 'v0', 'chunk_order': 72, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 1, 'full_text_rank': 200, 'associated_query': '4. How does the `HAS` function function in relation to table relationships according to common principles?'}}), Citation(id='7cfc692', object='citation', is_new=True, span=None, source_type=None, payload={'id': '7cfc6923-672f-57b1-96eb-45b84fe2e144', 'document_id': '4376f3de-092f-5691-84d5-66c8bb3ba69c', 'owner_id': 'c4adfdf4-3e3b-5da4-a121-e197b2350600', 'collection_ids': ['d73865ef-5062-5e8d-845a-000e00064c8f'], 'score': 0.057568857304097394, 'text': '"properties": {\n\n"order_key": {"type": "table_column", "column_name": "l_orderkey", "data_type": "int64"},\n\n"part_key": {"type": "table_column", "column_name": "l_partkey", "data_type": "int64"},\n\n"supplier_key": {"type": "table_column", "column_name": "l_suppkey", "data_type": "int64"},\n\n"line_number": {"type": "table_column", "column_name": "l_linenumber", "data_type": "int8"},\n\n"quantity": {"type": "table_column", "column_name": "l_quantity", "data_type": "decimal[12,2]"},\n\n"extended_price": {"type": "table_column", "column_name": "l_extendedprice", "data_type": "decimal[12,2]"},\n\n"discount": {"type": "table_column", "column_name": "l_discount", "data_type": "decimal[12,2]"},\n\n"tax": {"type": "table_column", "column_name": "l_tax", "data_type": "decimal[12,2]"},\n\n"status": {"type": "table_column", "column_name": "l_linestatus", "data_type": "string"},\n\n"ship_date": {"type": "table_column", "column_name": "l_shipdate", "data_type": "date"},\n\n"commit_date": {"type": "table_column", "column_name": "l_commitdate", "data_type": "date"},\n\n"receipt_date": {"type": "table_column", "column_name": "l_receiptdate", "data_type": "date"},\n\n"ship_instruct": {"type": "table_column", "column_name": "l_shipinstruct", "data_type": "string"},\n\n"ship_mode": {"type": "table_column", "column_name": "l_shipmode", "data_type": "string"},\n\n"return_flag": {"type": "table_column", "column_name": "l_returnflag", "data_type": "string"},\n\n"comment": {"type": "table_column", "column_name": "l_comment", "data_type": "string"},\n\n"part_and_supplier": {\n\n"type": "simple_join",\n\n"other_collection_name": "PartSupp",\n\n"singular": true,\n\n"no_collisions": false,\n\n"keys": {"part_key": ["part_key"], "supplier_key": ["supplier_key"]},\n\n"reverse_relationship_name": "lines"\n\n},\n\n"order": {\n\n"type": "simple_join",\n\n"other_collection_name": "Orders",\n\n"singular": true,\n\n"no_collisions": false,\n\n"keys": {"order_key": ["key"]},\n\n"reverse_relationship_name": "lines"\n\n}\n\n}\n\n},\n\n"PartSupp": {\n\n"type": "simple_table",\n\n"table_path": "tpch.PARTSUPP",\n\n"unique_properties": [["part_key", "supplier_key"]],\n\n"properties": {\n\n"part_key": {"type": "table_column", "column_name": "ps_partkey", "data_type": "int64"},\n\n"supplier_key": {"type": "table_column", "column_name": "ps_suppkey", "data_type": "int64"},\n\n"availqty": {"type": "table_column", "column_name": "ps_availqty", "data_type": "decimal[12,2]"},\n\n"supplycost": {"type": "table_column", "column_name": "ps_supplycost", "data_type": "decimal[12,2]"},\n\n"comment": {"type": "table_column", "column_name": "ps_comment", "data_type": "string"}\n\n}\n\n},\n\n"Orders": {\n\n"type": "simple_table",\n\n"table_path": "tpch.ORDERS",\n\n"unique_properties": ["key"],\n\n"properties": {\n\n"key": {"type": "table_column", "column_name": "o_orderkey", "data_type": "int64"},\n\n"customer_key": {"type": "table_column", "column_name": "o_custkey", "data_type": "int64"},\n\n"order_status": {"type": "table_column", "column_name": "o_orderstatus", "data_type": "decimal[12,2]"},\n\n"total_price": {"type": "table_column", "column_name": "o_totalprice", "data_type": "decimal[12,2]"},\n\n"order_date": {"type": "table_column", "column_name": "o_orderdate", "data_type": "date"},\n\n"order_priority": {"type": "table_column", "column_name": "o_orderpriority", "data_type": "int64"},\n\n"clerk": {"type": "table_column", "column_name": "o_clerk", "data_type": "int64"},\n\n"ship_priority": {"type": "table_column", "column_name": "o_shippriority", "data_type": "int64"},\n\n"comment": {"type": "table_column", "column_name": "o_comment", "data_type": "string"},\n\n"customer": {\n\n"type": "simple_join",\n\n"other_collection_name": "Customers",\n\n"singular": true,\n\n"no_collisions": false,\n\n"keys": {"customer_key": ["key"]},\n\n"reverse_relationship_name": "orders"\n\n},\n\n"shipping_nation": {\n\n"type": "compound",\n\n"primary_property": "customer",\n\n"secondary_property": "nation",\n\n"singular": true,\n\n"no_collisions": false,\n\n"inherited_properties": {},\n\n"reverse_relationship_name": "orders_shipped_to"\n\n},', 'metadata': {'version': 'v0', 'chunk_order': 255, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 9, 'full_text_rank': 200, 'associated_query': '4. How does the `HAS` function function in relation to table relationships according to common principles?'}})], 'metadata': {'id': 'msg_01A7D9bXYt1qiuoNezPLYbHs', 'choices': [{'finish_reason': 'stop', 'index': 0, 'message': {'refusal': None, 'role': 'assistant', 'function_call': None, 'tool_calls': None, 'structured_content': None}}], 'created': 1746213150, 'model': 'claude-3-7-sonnet-20250219', 'object': 'chat.completion', 'service_tier': None, 'system_fingerprint': None, 'usage': {'prompt_tokens': 28034, 'completion_tokens': 1069, 'total_tokens': 29103}}, 'completion': '# Documentation for the `HAS` Function in PyDough\n\nBased on the provided search results, I can explain the purpose and implementation of the `HAS` function in PyDough, particularly in relation to table relationships.\n\n## Purpose of the `HAS` Function\n\nThe `HAS` function in PyDough is specifically designed to check for the existence of related records in a subcollection. It returns a boolean value indicating whether a record in one collection has at least one matching record in a related collection.\n\n## Implementation Details\n\nAccording to the search results [620de93], PyDough implements a rewrite mechanism for the `HAS` function. The `has_hasnot_rewrite` function transforms `HAS` expressions in the Query Directed Acyclic Graph (QDAG):\n\n```python\n# Will be rewritten to `Customers.CALCULATE(name, has_orders=COUNT(orders) > 0)`\nCustomers.CALCULATE(name, has_orders=HAS(orders))\n```\n\nThis shows that internally, `HAS(subcollection)` is rewritten as `COUNT(subcollection) > 0`, which checks if there is at least one record in the subcollection.\n\n## Complementary Function: `HASNOT`\n\nPyDough also provides a complementary function called `HASNOT`, which checks for the absence of related records:\n\n```python\n# Will be rewritten to `Customers.CALCULATE(name, never_made_order=COUNT(orders) == 0)`\nCustomers.CALCULATE(name, never_made_order=HASNOT(orders))\n```\n\nThis is rewritten as `COUNT(subcollection) == 0`.\n\n## Usage in WHERE Clauses\n\nInterestingly, the rewrite behavior differs depending on context. When `HAS` is used in a `WHERE` clause conjunction, it is not rewritten:\n\n```python\n# Will not be rewritten\nCustomers.WHERE(HAS(orders) & (nation.region.name == "EUROPE"))\n\n# Will not be rewritten\nCustomers.WHERE(HASNOT(orders))\n```\n\nHowever, when used in a disjunction (OR condition), it is rewritten:\n\n```python\n# Will be rewritten to\n# `Customers.WHERE((COUNT(orders) > 0) | (nation.region.name == "EUROPE"))`\nCustomers.WHERE(HAS(orders) | (nation.region.name == "EUROPE"))\n\n# Will be rewritten to\n# `Customers.WHERE((COUNT(orders) == 0) | (acct_bal < 0))`\nCustomers.WHERE(HASNOT(orders) | (acct_bal < 0))\n```\n\n## Relationship to Table Joins\n\nThe `HAS` function is closely related to the concept of joins in PyDough. From [9ae3698], we can see that PyDough supports various join types including `SEMI` and `ANTI` joins, which are conceptually related to the `HAS` and `HASNOT` functions:\n\n```python\nclass JoinType(Enum):\n    INNER = "inner"\n    LEFT = "left"\n    RIGHT = "right"\n    FULL_OUTER = "full outer"\n    ANTI = "anti"\n    SEMI = "semi"\n```\n\nIn fact, from [524ab2a], we can see examples of semi-joins being used in the implementation:\n\n```\nJOIN(conditions=[t0.key == t1.part_key], types=[\'semi\'], columns={\'name\': t0.name})\n```\n\n## Table Relationships in PyDough\n\nThe search results [53ed32c] and [7cfc692] show how table relationships are defined in PyDough. For example:\n\n```json\n"accounts_held": {\n  "type": "simple_join",\n  "other_collection_name": "Accounts",\n  "singular": false,\n  "no_collisions": true,\n  "keys": {"id": ["client_id"]},\n  "reverse_relationship_name": "account_holder"\n}\n```\n\nThis defines a relationship between collections that can then be traversed using functions like `HAS`.\n\n## Conclusion\n\nThe `HAS` function in PyDough serves the specific purpose of checking for the existence of related records in table relationships. It provides a convenient way to express semi-join logic in a more readable manner, and is internally rewritten to use `COUNT() > 0` in most contexts. This function is particularly useful when working with one-to-many or many-to-many relationships between tables, allowing developers to easily filter records based on the existence of related records.'}
