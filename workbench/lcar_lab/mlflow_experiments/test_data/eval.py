@@ -12,8 +12,6 @@ from pandas.api.types import is_numeric_dtype
 from threading import Lock
 metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
-#Global comparison tolerance
-numeric_tolerance = 1e-5
 
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -169,18 +167,28 @@ def compare_df(
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
     df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
-    is_equal = df_gold.values == df_gen.values
-    if is_equal.all() == True:
-        return True
+    
+    try:
+        is_equal = df_gold.values == df_gen.values
+        if is_equal.all():
+            return True
+    except:
+        try:
+            is_equal = df_gold.values == df_gen.values
+            if is_equal:
+                return True
+        except:
+            pass
     
     return secondary_check(df_gold, df_gen)
     
-def series_contents_equal(s1: pd.Series, s2: pd.Series) -> bool:
+def series_contents_equal(s1: pd.Series, s2: pd.Series, numeric_tolerance = 1e-5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
     have the same length (which should be pre-checked at the DataFrame level).
     """
+
     if is_numeric_dtype(s1) and is_numeric_dtype(s2):
         # Check if the numeric values are equal within a small tolerance
         return (s1 - s2).abs().max() < numeric_tolerance
@@ -313,8 +321,8 @@ def process_row(row,db_base_path,metadata_base_path):
         db_name = row['db_name']
         dataset_name = row['dataset_name']
 
-        db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
-        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
+        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
 
@@ -325,7 +333,7 @@ def process_row(row,db_base_path,metadata_base_path):
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
-            comparison_result = hard_match(result, extracted_sql)
+            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
