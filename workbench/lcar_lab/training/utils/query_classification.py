@@ -113,8 +113,6 @@ def eval_complexity(sql: str, dialect="sqlite"):
     # 8. Fallback
     return "unknown"
 
-
-
 def clasificate_queries(df):
     if 'ground_truth_sql' in df.columns:
         df['difficulty'] = df['ground_truth_sql'].apply(lambda s: eval_hardness(s))
