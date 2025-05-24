@@ -1,4 +1,3 @@
-# %%
 import collections
 from datetime import datetime
 import os
@@ -14,7 +13,6 @@ metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
 
 
-
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
     if len(cols) != len(set(cols)):
@@ -27,6 +25,7 @@ def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
                 cols[i] = f"{dup}_{i}"
         df.columns = cols
     return df
+
 
 def normalize_table(
     df: pd.DataFrame, query_category: str, question: str, sql: str = None
@@ -149,9 +148,6 @@ def compare_df(
         return is_equal.all()
     except:
         return is_equal
-    
-def convert_to_df(last_variable):
-    return pydough.to_df(last_variable)
 
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
@@ -172,9 +168,10 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
     except Exception as e:
         return None, e  # Return None as result and exception message
 
+
 def query_sqlite_db(
     query: str,
-    db_name: str = None,
+    db_path: str = None,
     decimal_points: int = None,
 ) -> pd.DataFrame:
     """
@@ -191,7 +188,7 @@ def query_sqlite_db(
     cur = None
     try:
       
-        conn = sqlite3.connect(f"{os.path.dirname(__file__)}/{db_name}.db")
+        conn = sqlite3.connect(db_path)
         cur = conn.cursor()
         cur.execute(query)
         results = cur.fetchall()
@@ -200,7 +197,6 @@ def query_sqlite_db(
         conn.close()
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
-
         # round floats to decimal_points
         if decimal_points:
             df = df.round(decimal_points)

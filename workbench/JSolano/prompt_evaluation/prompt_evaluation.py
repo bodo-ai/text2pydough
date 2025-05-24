@@ -16,7 +16,7 @@ from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
-from test_data.eval import compare_output, execute_code_and_extract_result
+from test_data.old_eval import compare_output, execute_code_and_extract_result
 import aisuite as ai
 from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
