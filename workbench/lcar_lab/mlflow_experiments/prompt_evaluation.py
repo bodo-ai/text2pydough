@@ -59,7 +59,7 @@ def extract_python_code(text):
         return textwrap.dedent(matches[-1]).strip()
     
     # Fallback: Extract everything after "Answer:"
-    answer_split = re.split(r"Answer:\s*", text, flags=re.IGNORECASE)
+    answer_split = re.split(r"Answer: \s*", text, flags=re.IGNORECASE)
     print(f"[DEBUG] Extracted answer split: {answer_split}")
     if len(answer_split) > 1:
         return answer_split[1].strip()
