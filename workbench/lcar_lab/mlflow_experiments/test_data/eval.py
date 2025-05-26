@@ -39,9 +39,10 @@ def normalize_table(
     """
     # remove duplicate rows, if any
     df = df.drop_duplicates()
-
+    sorted_df = deduplicate_columns(df)
+    sorted_df = sorted_df.reset_index(drop=True)
     # sort columns in alphabetical order of column names
-    sorted_df = df.reindex(sorted(df.columns), axis=1)
+    sorted_df = sorted_df.reindex(sorted(sorted_df.columns), axis=1)
 
     # check if query_category is 'order_by' and if question asks for ordering
     has_order_by = False
@@ -100,8 +101,7 @@ def normalize_table(
 
                 sorted_df = sorted_df[other_columns + order_by_columns]
 
-    sorted_df = deduplicate_columns(sorted_df)
-    sorted_df = sorted_df.reset_index(drop=True)
+    
     if not has_order_by:
         # sort rows using values from first column to last
         sorted_df = _sort_by_all_columns(sorted_df)
