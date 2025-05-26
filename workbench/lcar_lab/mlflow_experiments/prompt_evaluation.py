@@ -60,7 +60,7 @@ def extract_python_code(text):
     
     # Fallback: Extract everything after "Answer:"
     answer_split = re.split(r"Answer:\s*", text, flags=re.IGNORECASE)
-    print(f"[DEBUG] Extracted answer split: {answer_split}")
+    print(f"[DEBUG] Extracted answer split: {answer_split[1].strip()}")
     if len(answer_split) > 1:
         return answer_split[1].strip()
     
