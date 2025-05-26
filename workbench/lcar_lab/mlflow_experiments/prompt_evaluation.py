@@ -50,9 +50,21 @@ def read_file(path):
         raise IOError(f"Failed to read file {path}: {e}")
 
 def extract_python_code(text):
-    if not isinstance(text, str): return ""
+    if not isinstance(text, str):
+        return ""
+    
+    # Try to extract code from a python code block
     matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
-    return textwrap.dedent(matches[-1]).strip() if matches else ""
+    if matches:
+        return textwrap.dedent(matches[-1]).strip()
+    
+    # Fallback: Extract everything after "Answer:"
+    answer_split = re.split(r"Answer:\s*", text, flags=re.IGNORECASE)
+    print(f"[DEBUG] Extracted answer split: {answer_split}")
+    if len(answer_split) > 1:
+        return answer_split[1].strip()
+    
+    return ""
 
 def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     db_names = df["db_name"]
