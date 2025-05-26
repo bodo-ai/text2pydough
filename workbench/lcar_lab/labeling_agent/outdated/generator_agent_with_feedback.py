@@ -3,6 +3,7 @@ from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import Tool, BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 from langchain.memory import ConversationBufferMemory
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
@@ -23,12 +24,6 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pydough.unqualified import transform_cell
 from pydantic import Field
-import traceback
-from contextlib import redirect_stdout, redirect_stderr
-import io
-
-pydough.active_session.load_metadata_graph("/mnt/c/Users/david/bodo/TPCH/test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database="/mnt/c/Users/david/bodo/TPCH/test_data/tpch.db",  check_same_thread=False)
 
 load_dotenv()
 
@@ -252,8 +247,12 @@ class PyDoughExecutionTool(BaseTool):
             metadata_path = self.metadata_path
         
         # Load metadata and connect to database
-        pydough.active_session.load_metadata_graph(metadata_path, "TPCH")
-        pydough.active_session.connect_database("sqlite", database=db_path, check_same_thread=False)
+        db_name = os.path.basename(self.db_path)
+        db_name_without_extension = os.path.splitext(db_name)[0]
+
+        pydough.active_session.load_metadata_graph(self.metadata_path, db_name_without_extension)
+        pydough.active_session.connect_database("sqlite", database=self.db_path,  check_same_thread=False)
+
     
     def _extract_code(self, response: str) -> str:
         """Extract Python code from triple backticks in text."""
@@ -279,39 +278,21 @@ class PyDoughExecutionTool(BaseTool):
     def _execute_code(self, code: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         """Execute PyDough code and return the result."""
         try:
+
             # Create local environment
             local_env = {
                 "pydough": pydough,
                 "datetime": datetime
             }
             
-            # Create string buffers for stdout and stderr
-            stdout_buf = io.StringIO()
-            stderr_buf = io.StringIO()
-            
-            # Transform and execute the code with output redirection
+            # Transform and execute the code
             transformed_source = transform_cell(code, "pydough.active_session.metadata", set(local_env))
-            
-            try:
-                with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-                    exec(transformed_source, {}, local_env)
-            except Exception as e:
-                # Get any output that was printed before the error
-                output = stdout_buf.getvalue()
-                error_output = stderr_buf.getvalue()
-                tb = traceback.format_exc()
-                
-                # Combine all error information
-                error_msg = f"Error executing PyDough code:\n"
-                if output:
-                    error_msg += f"Output before error:\n{output}\n"
-                if error_output:
-                    error_msg += f"Error output:\n{error_output}\n"
-                error_msg += f"Traceback:\n{tb}"
-                return None, error_msg
+            exec(transformed_source, {}, local_env)
             
             # Get the last variable assigned
             last_variable = list(local_env.values())[-1]
+            # print("\nGENERATOR: === Last Variable ===")
+            # print(last_variable)
             
             # Convert to DataFrame and then to JSON string
             result_df = pydough.to_df(last_variable)
@@ -323,7 +304,7 @@ class PyDoughExecutionTool(BaseTool):
                 return str(result_df), None
             
         except Exception as e:
-            return None, f"Error in PyDough execution: {str(e)}\nTraceback:\n{traceback.format_exc()}"
+            return None, str(e)
     
     def _run(self, code: str) -> Dict[str, Any]:
         """Execute the PyDough code and return the results."""
@@ -371,9 +352,18 @@ class PydoughGeneratorAgent:
         
         # Initialize LLM
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-lite",
-            temperature=0.99
+            model="gemini-2.0-flash",
+            temperature=0
         )
+
+        # gemini-2.5-flash-preview-04-17
+        # gemini-2.0-flash
+
+        """ self.llm = ChatAnthropicVertex(
+            model_name="claude-3-7-sonnet@20250219",
+            project="solid-drive-448717-p8",
+            location="us-east5",
+        ) """
         
         # Create PyDough execution tool
         self.pydough_tool = PyDoughExecutionTool(
@@ -409,20 +399,24 @@ class PydoughGeneratorAgent:
         # print("\nGENERATOR: === Formatting Prompt ===")
         
         try:
-            # Read the database schema
-            schema_path = os.path.join(os.path.dirname(__file__), "pydough_data", "database", "tcph_graph.md")
-            with open(schema_path, 'r', encoding='utf-8') as f:
-                database_content = f.read()
+        # Ensure metadata path is valid
+            if not self.metadata_path or not os.path.exists(self.metadata_path):
+                raise FileNotFoundError(f"Metadata file not found at: {self.metadata_path}")
             
-            # Read the PyDough cheatsheet
-            cheatsheet_path = os.path.join(os.path.dirname(__file__), "pydough_data", "pydough_files", "cheatsheet_partition_overhaul.md")
-            with open(cheatsheet_path, 'r', encoding='utf-8') as f:
+            with open(self.metadata_path, 'r', encoding='utf-8') as f:
+                database_content = f.read()
+
+            # Ensure cheatsheet path is valid
+            if not self.cheatsheet_path or not os.path.exists(self.cheatsheet_path):
+                raise FileNotFoundError(f"Cheatsheet file not found at: {self.cheatsheet_path}")
+            
+            with open(self.cheatsheet_path, 'r', encoding='utf-8') as f:
                 cheatsheet_content = f.read()
             
             # Read the prompt template
-            template_path = os.path.join(os.path.dirname(__file__), "pydough_data", "prompts", "prompt_overhaul_baseline.md")
-            with open(template_path, 'r', encoding='utf-8') as f:
-                template_content = f.read()
+            #template_path = os.path.join(os.path.dirname(__file__), "pydough_data", "prompts", "prompt_overhaul_baseline.md")
+            #with open(template_path, 'r', encoding='utf-8') as f:
+            #    template_content = f.read()
             
             # Format the prompt using the template
             formatted_prompt = f"""<task_description>
@@ -521,23 +515,28 @@ Please provide your answer in the following format:
 
     def generate_and_execute(self, prompt: str, feedback: Optional[str] = None) -> Dict[str, Any]:
         """Generate and execute PyDough code from a prompt."""
+        # print("\nGENERATOR: === Generating and Executing Code ===")
         try:
             # Format the prompt with database schema and system message
+            # print("GENERATOR: Formatting prompt...")
             formatted_prompt = self._format_prompt(prompt, feedback)
             
             # Create messages for the model
+            # print("GENERATOR: Creating messages for LLM...")
             messages = [
                 SystemMessage(content="You are an expert at generating PyDough code to answer questions about databases."),
                 HumanMessage(content=formatted_prompt)
             ]
             
             # Generate code using the LLM directly
+            # print("GENERATOR: Generating code with LLM...")
             response = self.llm.invoke(messages)
             
             # Extract the generated code from the response
             generated_code = response.content.strip()
             
             # Execute the code using the tool
+            # print("GENERATOR: Executing code with PyDough tool...")
             execution_result = self.pydough_tool._run(generated_code)
             
             # Add the input prompt and feedback to the result
@@ -548,18 +547,14 @@ Please provide your answer in the following format:
             return execution_result
             
         except Exception as e:
-            error_msg = f"Error in generate_and_execute:\n"
-            error_msg += f"Error type: {type(e).__name__}\n"
-            error_msg += f"Error message: {str(e)}\n"
-            error_msg += f"Traceback:\n{traceback.format_exc()}"
-            
+            # print(f"\nGENERATOR: === Generation Error ===")
+            # print(f"GENERATOR: Error in generate_and_execute: {str(e)}")
             return {
                 "input": prompt,
                 "dataframe": None,
-                "error": error_msg,
+                "error": str(e),
                 "code": None,
-                "feedback": feedback,
-                "generator_response": ""
+                "feedback": feedback
             }
 
 if __name__ == "__main__":

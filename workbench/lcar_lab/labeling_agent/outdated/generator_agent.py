@@ -23,9 +23,6 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pydough.unqualified import transform_cell
 from pydantic import Field
-import traceback
-from contextlib import redirect_stdout, redirect_stderr
-import io
 
 pydough.active_session.load_metadata_graph("/mnt/c/Users/david/bodo/TPCH/test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database="/mnt/c/Users/david/bodo/TPCH/test_data/tpch.db",  check_same_thread=False)
@@ -96,8 +93,8 @@ def generate_pydough_graph(db_path: str) -> Dict[str, Any]:
     if os.name == 'posix' and ':' in db_path:
         db_path = convert_windows_to_wsl_path(db_path)
     
-    # print(f"GENERATOR: Attempting to connect to database at: {db_path}")
-    # print(f"GENERATOR: File exists: {os.path.exists(db_path)}")
+    print(f"Attempting to connect to database at: {db_path}")
+    print(f"File exists: {os.path.exists(db_path)}")
     
     engine = create_engine(f"sqlite:///{db_path}")
     tables = {}
@@ -161,7 +158,7 @@ def generate_pydough_graph(db_path: str) -> Dict[str, Any]:
         
         return pydough_graph
     except Exception as e:
-        # print(f"Error connecting to database: {str(e)}")
+        print(f"Error connecting to database: {str(e)}")
         raise
 
 def read_benchmark_questions(csv_path: str) -> pd.Series:
@@ -171,10 +168,10 @@ def read_benchmark_questions(csv_path: str) -> pd.Series:
         if "question" in df.columns:
             return df["question"]
         else:
-            # print("GENERATOR: Error: 'question' column not found in CSV")
+            print("Error: 'question' column not found in CSV")
             return pd.Series(dtype=str)
     except Exception as e:
-        # print(f"GENERATOR: Error reading benchmark CSV: {str(e)}")
+        print(f"Error reading benchmark CSV: {str(e)}")
         return pd.Series(dtype=str)
     
 
@@ -187,39 +184,37 @@ def process_benchmark(db_path: str, metadata_path: str, benchmark_path: str):
         metadata_path = convert_windows_to_wsl_path(metadata_path)
         benchmark_path = convert_windows_to_wsl_path(benchmark_path)
     
-    # print(f"\nGENERATOR: === Processing Benchmark ===")
-    # print(f"GENERATOR: Database path: {db_path}")
-    # print(f"GENERATOR: Metadata path: {metadata_path}")
-    # print(f"GENERATOR: Benchmark path: {benchmark_path}")
+    print(f"\n=== Processing Benchmark ===")
+    print(f"Database path: {db_path}")
+    print(f"Metadata path: {metadata_path}")
+    print(f"Benchmark path: {benchmark_path}")
     
     # Read questions from benchmark CSV
-    # print("\nGENERATOR: Reading benchmark CSV...")
+    print("\nReading benchmark CSV...")
     questions = read_benchmark_questions(benchmark_path)
     if questions.empty:
-        # print("GENERATOR: No questions found in benchmark CSV")
+        print("No questions found in benchmark CSV")
         return
     
     # Take only the first question
     first_question = questions.iloc[0]
-    # print(f"\nGENERATOR: First question: {first_question}")
+    print(f"\nFirst question: {first_question}")
     
     # Initialize the agent with metadata
-    # print("\nGENERATOR: Initializing agent...")
+    print("\nInitializing agent...")
     agent = PydoughGeneratorAgent(db_path, metadata_path)
     
     # Process the first question
-    # print("\nGENERATOR: Processing first question...")
+    print("\nProcessing first question...")
     result = agent.generate_and_execute(first_question)
     
-    # print("\nGENERATOR: === Result ===")
-    # print(f"GENERATOR: Question: {first_question}")
+    print("\n=== Result ===")
+    print(f"Question: {first_question}")
     if 'error' in result:
-        # print(f"GENERATOR: Error: {result['error']}")
-        pass
+        print(f"Error: {result['error']}")
     else:
-        # print(f"GENERATOR: Output: {result['dataframe']}")
-        # print(f"GENERATOR: Code: {result['code']}")
-        pass
+        print(f"Output: {result['dataframe']}")
+        print(f"Code: {result['code']}")
     
     return [{'question': first_question, 'result': result}]
 
@@ -257,23 +252,23 @@ class PyDoughExecutionTool(BaseTool):
     
     def _extract_code(self, response: str) -> str:
         """Extract Python code from triple backticks in text."""
-        # print("\nGENERATOR: === Extracting Code ===")
-        # print("GENERATOR: Complete model response:")
-        # print(response)
+        print("\n=== Extracting Code ===")
+        print("Complete model response:")
+        print(response)
         
         if not isinstance(response, str):
-            # print("GENERATOR: Error: Response is not a string")
+            print("Error: Response is not a string")
             return ""
         
         # Extract code between triple backticks
         match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
         if match:
             python_code = match.group(1).strip()
-            # print("\nGENERATOR: Extracted code:")
-            # print(python_code)
+            print("\nExtracted code:")
+            print(python_code)
             return python_code
         else:
-            # print("\nGENERATOR: No Python code block found in response")
+            print("\nNo Python code block found in response")
             return ""
     
     def _execute_code(self, code: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
@@ -285,45 +280,21 @@ class PyDoughExecutionTool(BaseTool):
                 "datetime": datetime
             }
             
-            # Create string buffers for stdout and stderr
-            stdout_buf = io.StringIO()
-            stderr_buf = io.StringIO()
-            
-            # Transform and execute the code with output redirection
+            # Transform and execute the code
             transformed_source = transform_cell(code, "pydough.active_session.metadata", set(local_env))
-            
-            try:
-                with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-                    exec(transformed_source, {}, local_env)
-            except Exception as e:
-                # Get any output that was printed before the error
-                output = stdout_buf.getvalue()
-                error_output = stderr_buf.getvalue()
-                tb = traceback.format_exc()
-                
-                # Combine all error information
-                error_msg = f"Error executing PyDough code:\n"
-                if output:
-                    error_msg += f"Output before error:\n{output}\n"
-                if error_output:
-                    error_msg += f"Error output:\n{error_output}\n"
-                error_msg += f"Traceback:\n{tb}"
-                return None, error_msg
+            exec(transformed_source, {}, local_env)
             
             # Get the last variable assigned
             last_variable = list(local_env.values())[-1]
+            print("\n=== Last Variable ===")
+            print(last_variable)
             
-            # Convert to DataFrame and then to JSON string
-            result_df = pydough.to_df(last_variable)
-            if isinstance(result_df, pd.DataFrame):
-                result_json = result_df.to_json(orient='records')
-                return result_json, None
-            else:
-                # If not a DataFrame, convert to string
-                return str(result_df), None
+            # Convert to DataFrame
+            result_df = pydough.to_df(last_variable).to_json()#orient='records')
+            return result_df, None
             
         except Exception as e:
-            return None, f"Error in PyDough execution: {str(e)}\nTraceback:\n{traceback.format_exc()}"
+            return None, str(e)
     
     def _run(self, code: str) -> Dict[str, Any]:
         """Execute the PyDough code and return the results."""
@@ -346,7 +317,15 @@ class PyDoughExecutionTool(BaseTool):
                 "code": extracted_code
             }
         
-        # Return the result as a string
+        # Convert DataFrame to JSON if result is a DataFrame
+        if isinstance(result, pd.DataFrame):
+            result_json = result.to_json(orient='records')
+            return {
+                "dataframe": result_json,
+                "result": result,
+                "code": extracted_code
+            }
+        
         return {
             "dataframe": result,
             "code": extracted_code
@@ -371,8 +350,8 @@ class PydoughGeneratorAgent:
         
         # Initialize LLM
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-lite",
-            temperature=0.99
+            model="gemini-2.0-flash",
+            temperature=0
         )
         
         # Create PyDough execution tool
@@ -384,29 +363,15 @@ class PydoughGeneratorAgent:
         # Create tools list
         self.tools = [self.pydough_tool]
         
-        # Create memory for conversation history
-        self.memory = ConversationBufferMemory(
-            memory_key="history",
-            return_messages=False
-        )
-        
         # Create the ReAct agent
         self.agent = create_react_agent(
             model=self.llm,
             tools=self.tools
         )
-        
-        # Create the agent executor with memory
-        self.agent_executor = AgentExecutor(
-            agent=self.agent,
-            tools=self.tools,
-            memory=self.memory,
-            verbose=True
-        )
 
-    def _format_prompt(self, prompt: str, feedback: Optional[str] = None) -> str:
-        """Format the prompt with database schema information and feedback."""
-        # print("\nGENERATOR: === Formatting Prompt ===")
+    def _format_prompt(self, prompt: str) -> str:
+        """Format the prompt with database schema information."""
+        print("\n=== Formatting Prompt ===")
         
         try:
             # Read the database schema
@@ -434,11 +399,6 @@ General Guidelines as a Pydough Generator Agent:
 1. You have access to tools for interacting with the database via Pydough. Only use the below tools. 
 2. You MUST double check your query before executing it.
 3. If you get an error while executing a query, rewrite the query and try again.
-4. Use any feedback provided by the evaluator to improve your code. 
-
-
-{f"Feedback from evaluator about previous attempt: {feedback}" if feedback else "No previous feedback available."}
-
 
 </task_description>
 
@@ -468,8 +428,6 @@ Here are some definitions that may assist in understanding and answering the que
     "Partial Revenue is defined as quantity * extended_price * (1 - discount).",
     "Profit is defined as revenue minus cost."
 ]
-
-
 </context>
 
 <instructions>
@@ -500,7 +458,6 @@ To generate the PyDough code snippet, follow these steps:
 
 5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
 
-6. If there is previous feedback from the evaluator, carefully consider it and make necessary adjustments to your code to address the issues mentioned.
 </instructions>
 
 <question>
@@ -516,50 +473,46 @@ Please provide your answer in the following format:
             return formatted_prompt
             
         except Exception as e:
-            # print(f"GENERATOR: Error formatting prompt: {str(e)}")
+            print(f"Error formatting prompt: {str(e)}")
             raise
 
-    def generate_and_execute(self, prompt: str, feedback: Optional[str] = None) -> Dict[str, Any]:
+    def generate_and_execute(self, prompt: str) -> Dict[str, Any]:
         """Generate and execute PyDough code from a prompt."""
+        print("\n=== Generating and Executing Code ===")
         try:
             # Format the prompt with database schema and system message
-            formatted_prompt = self._format_prompt(prompt, feedback)
+            print("Formatting prompt...")
+            formatted_prompt = self._format_prompt(prompt)
             
             # Create messages for the model
+            print("Creating messages for LLM...")
             messages = [
                 SystemMessage(content="You are an expert at generating PyDough code to answer questions about databases."),
                 HumanMessage(content=formatted_prompt)
             ]
             
-            # Generate code using the LLM directly
+            # Generate code using the LLM
+            print("Generating code with LLM...")
             response = self.llm.invoke(messages)
+
+            # Execute the code, and dataframe using the tool
+            print("Executing code with PyDough tool...")
+            result = self.pydough_tool._run(response.content)
             
-            # Extract the generated code from the response
-            generated_code = response.content.strip()
+            # Add the input prompt to the result
+            result["input"] = prompt
+            result["generator_response"] = response.content
             
-            # Execute the code using the tool
-            execution_result = self.pydough_tool._run(generated_code)
-            
-            # Add the input prompt and feedback to the result
-            execution_result["input"] = prompt
-            execution_result["generator_response"] = generated_code
-            execution_result["feedback"] = feedback
-            
-            return execution_result
+            return result
             
         except Exception as e:
-            error_msg = f"Error in generate_and_execute:\n"
-            error_msg += f"Error type: {type(e).__name__}\n"
-            error_msg += f"Error message: {str(e)}\n"
-            error_msg += f"Traceback:\n{traceback.format_exc()}"
-            
+            print(f"\n=== Generation Error ===")
+            print(f"Error in generate_and_execute: {str(e)}")
             return {
                 "input": prompt,
                 "dataframe": None,
-                "error": error_msg,
-                "code": None,
-                "feedback": feedback,
-                "generator_response": ""
+                "error": str(e),
+                "code": None
             }
 
 if __name__ == "__main__":
@@ -573,12 +526,10 @@ if __name__ == "__main__":
     
     # Print summary of results
     if results:
-        # print("\nGENERATOR: === Benchmark Results Summary ===")
+        print("\n=== Benchmark Results Summary ===")
         for result in results:
-            # print(f"\nGENERATOR: Question: {result['question']}")
+            print(f"\nQuestion: {result['question']}")
             if 'error' in result['result']:
-                # print(f"GENERATOR: Error: {result['result']['error']}")
-                pass
+                print(f"Error: {result['result']['error']}")
             else:
-                # print(f"GENERATOR: Output: {result['result']['dataframe']}")
-                pass 
+                print(f"Output: {result['result']['dataframe']}") 

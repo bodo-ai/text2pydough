@@ -1,13 +1,13 @@
 from typing import Dict, Any, List, Optional, Tuple
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 from langchain_community.utilities import SQLDatabase
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langchain_core.prompts import PromptTemplate
-from langchain.agents import initialize_agent, Tool, AgentExecutor, ZeroShotAgent
+from langchain.agents import initialize_agent, Tool, AgentExecutor
 from langchain.agents.agent_types import AgentType
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
-from langchain.chains import LLMChain
 import pandas as pd
 import re
 import collections
@@ -18,46 +18,6 @@ import json
 import re
 from io import StringIO
 from tqdm import tqdm
-
-# Global variable to control logging backend
-
-USE_MLFLOW = False  # Set to False to use Phoenix instead
-USE_PHOENIX = False
-
-# Configure MLflow
-if USE_MLFLOW:
-    import mlflow
-    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
-    # Enable MLflow LangChain autologging
-    mlflow.langchain.autolog(
-        log_traces=True,
-        log_models=True,
-        log_input_examples=True,
-        log_model_signatures=True,
-        #registered_model_name="pydough_agent"
-    )
-if USE_PHOENIX:
-    # Register a Phoenix tracer
-    from phoenix.otel import register
-    #from openinference.instrumentation.langchain import LangChainInstrumentor
-    
-    try:
-        # Initialize OpenInference instrumentor
-        #instrumentor = LangChainInstrumentor()
-        #instrumentor.instrument()
-        
-        # Register Phoenix tracer
-        tracer_provider = register(
-            #endpoint="http://localhost:6006",
-            project_name=os.getenv("EXPERIMENT_NAME", "labeling-agent-team-debug"),
-            auto_instrument=True
-        )
-        print("Phoenix tracer successfully initialized with OpenInference instrumentor")
-    except Exception as e:
-        print(f"Warning: Failed to initialize Phoenix tracer: {str(e)}")
-        tracer_provider = None
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -168,16 +128,10 @@ def compare_df(
     """
     # drop duplicates to ensure equivalence
     try:
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
+        if df_gold.equals(df_gen):
             return True
     except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
+        pass
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
@@ -195,31 +149,33 @@ def compare_df(
     except:
         return is_equal
     
-class MatchTool(BaseTool):
-    name: str = "get_match_result"
-    description: str = "Returns True if dataframes match, else False."
-    
-    def __init__(self, match_result: bool):
-        super().__init__()
-        self._match_result = match_result
-    
-    def _run(self, *args, **kwargs) -> str:
-        return json.dumps({"match": self._match_result})
-    
-    def _arun(self, *args, **kwargs) -> str:
-        raise NotImplementedError("Async operation not supported")
-
 class SQLEvaluatorAgent:
-    def __init__(self, db_connection_string: str):
+    def __init__(self, db_connection_string: str, cheatsheet_path: str):
         """Initialize the SQL evaluator agent with a database connection."""
         self.db = SQLDatabase.from_uri(db_connection_string)
+
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash",
             temperature=0
         )
+
+        # gemini-2.5-flash-preview-04-17
+        # gemini-2.0-flash
+
+        """ self.llm = ChatAnthropicVertex(
+            model_name="claude-3-7-sonnet@20250219",
+            project="solid-drive-448717-p8",
+            location="us-east5",
+        ) """
+
+        self.cheatsheet_path = cheatsheet_path
         
-        # Create SQL toolkit for database operations
-        self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
+        # Create a simple tool that returns the precomputed match
+        self.match_tool = Tool(
+            name="get_match_result",
+            func=lambda x: x,  # Just returns the input
+            description="Returns the precomputed match result between ground truth and generated response."
+        )
         
         # Create the ReAct agent
         self.agent = self._create_react_agent()
@@ -316,81 +272,47 @@ class SQLEvaluatorAgent:
     
     def _create_react_agent(self):
         """Create a ReAct agent with the necessary tools and prompt template."""
-        # Get all tools from the SQL toolkit
-        sql_tools = self.toolkit.get_tools()
-        
         # Create a ReAct-style prompt template
         prompt = PromptTemplate(
-            input_variables=["input", "agent_scratchpad"],
-            template="""You are an expert database evaluator agent. 
-Your task is to evaluate if a generated Pydough response correctly answers a question based on ground truth SQL results.
-Your feedback in the final explanation must be actionable so that the generator can fix the issue. Describe the issues in detail.
-Use the tools provided to help diagnose issues and provide better feedback.
+            input_variables=["input"],
+            template="""
+You are an expert database evaluator agent. Your task is to evaluate if a generated response correctly answers a question based on ground truth SQL results.
 
-You have access to the following tools:
-- sql_db_list_tables: List all tables in the database
-- sql_db_schema: Get the schema of specific tables
-- sql_db_query_checker: Check if a SQL query is valid
-- sql_db_query: Execute a SQL query
+You have access to the following information:
+- The original question being answered
+- The ground truth SQL query and its results
+- The generated response writen in Pydough syntax, which is similar bit not the same as SQL. 
+- The output dataframes of both the SQL execution and Pydough execution (when available).
+- A precomputed boolean indicating if the ground truth vs generated dataframes match.
 
 Your task is to:
 1. Analyze the ground truth results and the generated response
-2. Consider the precomputed dataframe numerical match result
+2. Consider the precomputed dataframe match result
 3. Make a final judgment about whether the responses match
 4. If they don't match, provide detailed feedback about what went wrong and how to fix it
 
-You MUST follow this exact format for each step, with NO blank lines between the required keys:
-
-Thought: (your reasoning about what to do next)
-Action: (must be one of [sql_db_list_tables, sql_db_schema, sql_db_query_checker, sql_db_query])
-Action Input: (the input to the action)
-Observation: (the result of the action)
-
-After every Thought: you MUST output Action: and Action Input: on the very next lines.
-Do not insert blank lines between the required keys.
-You MUST include ALL three parts (Thought, Action, Action Input) for each step, except the final answer.
-You MUST use only one of the listed tools for each Action.
-You MUST wait for the Observation before proceeding to the next step.
-
-When you have enough information and need no further tool calls, output EXACTLY this format:
-Final Answer: {{"match": false, "explanation": "your explanation here"}}
-
-The match value MUST be a boolean (true or false).
-The explanation MUST be a string explaining your reasoning.
-Do NOT output 'Action: N/A'. Do NOT invent tool names.
-Do NOT add any text before or after the Final Answer JSON.
-
-Begin!
-
 Question: {input}
 
-{agent_scratchpad}"""
+Thought: I should analyze the results and provide a clear evaluation.
+Action: get_match_result
+Action Input: The precomputed match result
+Observation: The match result is available
+Final Answer:
+"""
         )
         
-        # Create the LLM chain
-        llm_chain = LLMChain(llm=self.llm, prompt=prompt)
-        
-        # Build the custom ReAct-style agent manually
-        react_agent = ZeroShotAgent(
-            llm_chain=llm_chain,
-            tools=sql_tools,
-            verbose=True,
-            handle_parsing_errors=True
-        )
-
-        # Wrap in AgentExecutor with proper configuration
-        agent_executor = AgentExecutor.from_agent_and_tools(
-            agent=react_agent,
-            tools=sql_tools,
-            return_intermediate_steps=True,
-            verbose=True,
-            handle_parsing_errors=True,
-            max_iterations=3
+        # Build the agent with the match tool
+        agent = initialize_agent(
+            tools=[self.match_tool],
+            llm=self.llm,
+            agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+            prompt=prompt,
+            verbose=True
         )
         
-        return agent_executor
+        return agent
     
-    def evaluate_responses(self, question: str, ground_truth_sql: str, generated_response: str, generated_df_json: str = None, precomputed_match: bool = None, executor_error: str = None) -> Dict[str, Any]:
+    def evaluate_responses(self, question: str, ground_truth_sql: str, generated_response: str, generated_df_json: str = None, precomputed_match: bool = None) -> Dict[str, Any]:
         """Evaluate if the generated response correctly answers the question based on ground truth SQL.
         
         Args:
@@ -399,26 +321,21 @@ Question: {input}
             generated_response: The text response from the generator agent
             generated_df_json: The JSON string representation of the generated DataFrame (optional)
             precomputed_match: Precomputed boolean result of DataFrame comparison (optional)
-            executor_error: Error message from the executor if any (optional)
         """
         # Convert SQL result to DataFrame JSON
         ground_truth_json = self._convert_sql_to_dataframe(ground_truth_sql)
         
+        with open(self.cheatsheet_path, 'r', encoding='utf-8') as f:
+            cheatsheet_content = f.read()
+
         # If generated_df_json is provided, use it directly
         if generated_df_json:
             generated_json = generated_df_json
         else:
             generated_json = "{}"
             
-        # Create the match tool with the precomputed result
-        match_tool = MatchTool(precomputed_match)
-        
-        # Create a new agent with the match tool
-        self.agent = self._create_react_agent()
-        self.agent.tools.append(match_tool)
-            
         # Create input for the ReAct agent
-        agent_input = f"""Evaluate if the following generated response correctly answers the question:
+        agent_input = f"""Evaluate if the following generated response correctly answers the question and provide feedback:
 
 User Question: {question}
 
@@ -426,76 +343,42 @@ Ground Truth SQL: {ground_truth_sql}
 
 Generated Response: {generated_response}
 
-ResponseGuidelines: 
+The ground truth DataFrame (as JSON) is:
+{ground_truth_json}
+
+The generated response DataFrame (as JSON) is:
+{generated_json}
+
+Direct Full DataFrame Numerical Comparison Result (ground truth vs generated response): {'True' if precomputed_match else 'False' if precomputed_match is not None else 'Not provided'}
+
+Response Guidelines: 
 
 1. If the generated response matches the ground truth, return True. If it does not, return a brief explanation of what went wrong and how it could be fixed. 
 2. When providing feedback be specific and detailed as to what is not matching with the ground truth.
 3. The generated response is executed using Pydough syntax, not SQL.
 4. We are aiming to provide actionable feedback to help generate better Pydough.
 5. Do not generate any code. Provide feedback only in plain english when applicable.
-6. Provided dataframes can be only samples if sized 20 rows as original are too large.
-
-DataFrame Comparison Result: {precomputed_match}
-
-The ground truth DataFrame (as JSON) is:
-{ground_truth_json}
-
-The generated response DataFrame (as JSON) is:
-{generated_json}"""
-
-        if executor_error:
-            agent_input += f"\nPydough Executor Error: {executor_error}"
-            print(f"\nExecutor Error: {executor_error}")
+6. Provided dataframes can be samples if sized 50 rows as original are too large.
+7. Provide sufficient information in the final answer to be actionable and generate better responses from the Pydough generator. 
+8. 5. If this is a Pydough issue, please check the cheatsheet below for Pydough syntax and provide feedback on how to fix it.
+{cheatsheet_content}
+"""
         
-        try:
-            # Run the ReAct agent and get intermediate steps
-            output = self.agent.invoke({
-                "input": agent_input,
-                "agent_scratchpad": ""
-            })
-            final_answer = output["output"]
-            intermediate_steps = output["intermediate_steps"]
-            
-            # Parse the result
-            try:
-                # Extract the JSON part from the final answer
-                json_str = final_answer.split("Final Answer:")[-1].strip()
-                # Remove any leading/trailing whitespace or newlines
-                json_str = json_str.strip()
-                # Ensure we have a valid JSON string
-                if not json_str.startswith("{") or not json_str.endswith("}"):
-                    raise ValueError("Invalid JSON format in agent output")
-                result_dict = json.loads(json_str)
-                if "match" not in result_dict or "explanation" not in result_dict:
-                    raise ValueError("Missing required keys in agent output")
-                match = result_dict["match"]
-                explanation = result_dict["explanation"]
-            except Exception as e:
-                print(f"Error parsing agent output: {str(e)}")
-                print(f"Raw output: {final_answer}")
-                match = False
-                explanation = f"Error parsing agent output: {str(e)}"
-            
-            return {
-                "match": match,
-                "explanation": explanation,
-                "ground_truth_result": ground_truth_json,
-                "ground_truth_response": self.generate_response_from_sql(question, ground_truth_json),
-                "generated_response": generated_response,
-                "generated_df_json": generated_json,
-                "intermediate_steps": intermediate_steps
-            }
-        except Exception as e:
-            print(f"Error in agent execution: {str(e)}")
-            return {
-                "match": False,
-                "explanation": f"Error in agent execution: {str(e)}",
-                "ground_truth_result": ground_truth_json,
-                "ground_truth_response": self.generate_response_from_sql(question, ground_truth_json),
-                "generated_response": generated_response,
-                "generated_df_json": generated_json,
-                "intermediate_steps": []
-            }
+        # Run the ReAct agent
+        result = self.agent.run(agent_input)
+        
+        # Parse the result
+        match = "True" in result
+        explanation = result
+        
+        return {
+            "match": match,
+            "explanation": explanation,
+            "ground_truth_result": ground_truth_json,
+            "ground_truth_response": self.generate_response_from_sql(question, ground_truth_json),
+            "generated_response": generated_response,
+            "generated_df_json": generated_json
+        }
     
     def generate_response_from_sql(self, question: str, sql_results: str) -> str:
         """Generate a natural language response based on the question and SQL results."""
@@ -510,8 +393,6 @@ Please provide a direct answer to the question using the information from the SQ
 The answer should be in natural language and directly address the question."""
         
         response = self.llm.invoke(prompt)
-        #print("\nRESPONSE\n")
-        #print(response.content)
         return response.content
 
 def main():
@@ -525,8 +406,8 @@ def main():
     
     # Verify database exists
     if not os.path.exists(db_path):
-        print(f"Error: Database file not found at {db_path}")
-        print("Please ensure the database file exists at the specified path.")
+        # print(f"Error: Database file not found at {db_path}")
+        # print("Please ensure the database file exists at the specified path.")
         return
 
     db_connection_string = f"sqlite:///{db_path}"
@@ -540,7 +421,7 @@ def main():
         
         # print("\nInitializing LLM...")
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-preview-04-17",#"gemini-2.0-flash",
+            model="gemini-2.0-flash",
             temperature=0
         )
         # print("LLM initialization successful")
@@ -563,14 +444,15 @@ def main():
         # print("\nCreating ReAct prompt template...")
         prompt = PromptTemplate(
             input_variables=["input"],
-            template="""You are an expert database evaluator agent. Your task is to evaluate if a generated response correctly answers a question based on ground truth SQL results.
+            template="""
+You are an expert database evaluator agent. Your task is to evaluate if a generated response correctly answers a question based on ground truth SQL results.
 
-You have access to the following tools:
-- sql_db_list_tables: List all tables in the database
-- sql_db_schema: Get the schema of specific tables
-- sql_db_query_checker: Check if a SQL query is valid
-- sql_db_query: Execute a SQL query
-- get_match_result: Returns True if dataframes match, else False
+You have access to the following information:
+- The original question being answered
+- The ground truth SQL query and its results
+- The generated response writen in Pydough syntax, which is similar bit not the same as SQL. 
+- The output dataframes of both the SQL execution and Pydough execution (when available).
+- A precomputed boolean indicating if the ground truth vs generated dataframes match.
 
 Your task is to:
 1. Analyze the ground truth results and the generated response
@@ -578,29 +460,14 @@ Your task is to:
 3. Make a final judgment about whether the responses match
 4. If they don't match, provide detailed feedback about what went wrong and how to fix it
 
-You MUST follow this exact format for each step, with NO blank lines between the required keys:
+Question: {input}
 
-Thought: (your reasoning about what to do next)
-Action: (must be one of [sql_db_list_tables, sql_db_schema, sql_db_query_checker, sql_db_query, get_match_result])
-Action Input: (the input to the action)
-Observation: (the result of the action)
-
-After every Thought: you MUST output Action: and Action Input: on the very next lines.
-Do not insert blank lines between the required keys.
-You MUST include ALL three parts (Thought, Action, Action Input) for each step.
-You MUST use one of the listed tools for each Action.
-You MUST wait for the Observation before proceeding to the next step.
-
-When you have enough information and need no further tool calls, output EXACTLY this format:
-Final Answer: {{"match": true, "explanation": "your explanation here"}}
-
-The match value MUST be a boolean (true or false).
-The explanation MUST be a string explaining your reasoning.
-Do NOT output 'Action: N/A'. Do NOT invent tool names.
-
-Begin!
-
-Question: {input}"""
+Thought: I should analyze the results and provide a clear evaluation.
+Action: get_match_result
+Action Input: The precomputed match result
+Observation: The match result is available
+Final Answer:
+"""
         )
         # print("ReAct prompt template created successfully")
         
@@ -610,7 +477,6 @@ Question: {input}"""
             llm=llm,
             agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
             prompt=prompt,
-            return_intermediate_steps=True,
             verbose=True
         )
         # print("ReAct agent initialized successfully")
