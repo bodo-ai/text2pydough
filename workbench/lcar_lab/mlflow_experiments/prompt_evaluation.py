@@ -86,7 +86,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"\n\n\nQuestion: {question}\n"]), prompt.format(
+    return "".join([f"{question}\nDatabase Schema:\n\n"],{db_content}), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -207,6 +207,37 @@ def main(git_hash):
         counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
         filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
+            # Filter for non-matches (e.g., "Mismatch", "Error")
+        non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
+        # === Custom Metrics ===
+        matches_per_difficulty = tested_df[tested_df["comparison_result"] == "Match"]["difficulty"].value_counts()
+        matches_per_complexity = tested_df[tested_df["comparison_result"] == "Match"]["complexity"].value_counts()
+        matches_per_combo = tested_df[tested_df["comparison_result"] == "Match"].groupby(["difficulty", "complexity"]).size()
+
+        # Log to MLflow
+        for diff, count in matches_per_difficulty.items():
+            mlflow.log_metric(f"match_count_difficulty_{diff}", count)
+
+        for comp, count in matches_per_complexity.items():
+            mlflow.log_metric(f"match_count_complexity_{comp}", count)
+
+        for (diff, comp), count in matches_per_combo.items():
+            mlflow.log_metric(f"match_count_{diff}_{comp}", count)
+
+        # Count non-matches per difficulty
+        non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
+        for diff, count in non_matches_per_difficulty.items():
+            mlflow.log_metric(f"no_match_count_difficulty_{diff}", count)
+
+        # Count non-matches per complexity
+        non_matches_per_complexity = non_match_df["complexity"].value_counts()
+        for comp, count in non_matches_per_complexity.items():
+            mlflow.log_metric(f"no_match_count_complexity_{comp}", count)
+
+        # Count non-matches per (difficulty, complexity)
+        non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
+        for (diff, comp), count in non_matches_per_combo.items():
+            mlflow.log_metric(f"no_match_count_{diff}_{comp}", count)
 
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
@@ -220,6 +251,9 @@ def main(git_hash):
         metrics_path = "./metrics.json"
         with open(metrics_path, "w") as metrics_file:
             metrics_file.write(metrics_json)
+        matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
+        matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
+        matches_per_combo.to_csv(f"{output_path}/match_count_per_difficulty_complexity.csv")
 
         mlflow.pyfunc.log_model(
             artifact_path=args.model_id,

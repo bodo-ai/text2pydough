@@ -26,7 +26,7 @@ import random
 load_dotenv()
 
 # Get the workspace root directory
-WORKSPACE_ROOT = Path("/home/gerald8525/repositories")
+WORKSPACE_ROOT = Path("/home/arami/bodo")
 
 DATASET = 'kaggledbqa'
 
@@ -39,9 +39,9 @@ _request_lock = asyncio.Lock()  # Lock for request tracking
 
 # Configuration
 CONFIG = {
-    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_with_schema_20250509_135110.csv'),
+    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'spider_kaggle_full_training_only_filtered.csv'),
     'output_file': 'sample_training_data.jsonl',
-    'default_sample_size': 200,
+    'default_sample_size': 4000,
     'filter_field': 'dataframe_match',
     'filter_value': True,
     'question_field': 'question',
@@ -167,7 +167,7 @@ async def process_sample_async(row, client, pbar):
         question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{row[CONFIG['schema_field']]}"
         
         # Generate Pydough context and documentation
-        context = await generate_pydough_context_async(client, row[CONFIG['question_field']], row[CONFIG['code_field']])
+        #context = await generate_pydough_context_async(client, row[CONFIG['question_field']], row[CONFIG['code_field']])
         
         result = {
             'question_id': row.get('question_id', ''),
@@ -175,7 +175,7 @@ async def process_sample_async(row, client, pbar):
             'question': question_with_schema,
             'code': row[CONFIG['code_field']],
             'response': row[CONFIG['response_field']],
-            'context': context
+            'context': {'documentation': ""} 
         }
         
         pbar.update(1)  # Update progress bar
@@ -269,13 +269,7 @@ def load_and_preprocess_data(csv_path, sample_size=None):
 def format_output(code, response, context):
     """Format the output with answer first, then code and context."""
     return f"""Answer:
-{response}
-
-Pydough Code:
-{code}
-
-Code Context:
-{context['documentation']}"""
+{code}"""
 
 def convert_to_json_format(examples):
     """Convert examples to JSON format with context."""

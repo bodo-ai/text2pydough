@@ -39,7 +39,7 @@ def create_testing_dataset(df, unique_db_names, training_df_len):
     test_size = int(training_df_len * 0.1)
 
     # Filter the DataFrame for unmatched rows
-    filtered_test_df = df[(df['dataframe_match'] == False)]
+    filtered_test_df = df
 
     # Calculate proportional distribution for `difficulty` and `complexity`
     difficulty_proportions = filtered_test_df['difficulty'].value_counts(normalize=True).to_dict()
@@ -96,7 +96,7 @@ def create_testing_dataset(df, unique_db_names, training_df_len):
 
 # Save the DataFrame to a CSV file
 def save_to_csv(df, output_path):
-    reformatted_questions = df[['question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
+    reformatted_questions = df \
         .rename(columns={'ground_truth_sql': 'sql'}) \
         .to_dict(orient='records')
         
@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     df = load_csv(args.input_csv)
 
-    filtered_df = filter_dataframe(df)
+    filtered_df = df
     dbs_list = get_relevant_dbs(filtered_df)
 
     testing_dataset = create_testing_dataset(df, dbs_list, len(filtered_df))

@@ -12,7 +12,7 @@ from pandas.api.types import is_numeric_dtype
 from threading import Lock
 metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
-
+import logging
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -100,14 +100,81 @@ def normalize_table(
 
                 sorted_df = sorted_df[other_columns + order_by_columns]
 
-    if not has_order_by:
-        # sort rows using values from first column to last
-        sorted_df = sorted_df.sort_values(by=list(sorted_df.columns))
-
-    # reset index
     sorted_df = deduplicate_columns(sorted_df)
     sorted_df = sorted_df.reset_index(drop=True)
+    if not has_order_by:
+        # sort rows using values from first column to last
+        sorted_df = _sort_by_all_columns(sorted_df)
+
+    # reset index
+
     return sorted_df
+
+def _clean_mixed_type_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean columns with mixed data types (e.g., numeric values mixed with empty strings).
+    
+    This handles common data quality issues like:
+    - Numeric columns with empty strings or whitespace
+    - Mixed numeric/string data
+    - Various representations of missing values
+    """
+    cleaned_df = df
+    
+    for col in cleaned_df.columns:
+        if cleaned_df[col].dtype == 'object':
+            # Convert the column to handle mixed types
+            cleaned_df[col] = _clean_mixed_column(cleaned_df[col])
+    
+    return cleaned_df
+
+
+def _clean_mixed_column(series: pd.Series) -> pd.Series:
+    """
+    Clean a single column with mixed data types.
+    
+    Strategy:
+    1. Try to convert to numeric (handles strings like '45.3')
+    2. Replace empty strings and whitespace with NaN
+    3. If mostly numeric, keep as numeric; otherwise keep as cleaned strings
+    """
+    # First, standardize empty/whitespace values to NaN
+    cleaned_series = series
+    
+    # Replace empty strings, whitespace, and common null representations
+    null_representations = ['', ' ', 'null', 'NULL', 'None', 'nan', 'NaN', 'n/a', 'N/A']
+    cleaned_series = cleaned_series.replace(null_representations, pd.NA)
+    
+    # Try to convert to numeric
+    numeric_series = pd.to_numeric(cleaned_series, errors='coerce')
+    
+    # Count how many values successfully converted to numeric
+    non_null_original = cleaned_series.notna().sum()
+    non_null_numeric = numeric_series.notna().sum()
+    
+    # If most values (>80%) are numeric, use numeric version
+    if non_null_original > 0 and (non_null_numeric / non_null_original) > 0.8:
+        return numeric_series
+    else:
+        # Keep as cleaned strings, but ensure consistent string representation
+        return cleaned_series.astype(str).replace(['nan', 'None', '<NA>'], pd.NA)
+
+
+
+def _sort_by_all_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Sort dataframe by all columns with proper error handling for mixed types."""
+    try:
+        # Clean mixed-type columns before sorting
+        cleaned_df = _clean_mixed_type_columns(df)
+        return cleaned_df.sort_values(
+            by=list(cleaned_df.columns), 
+            ascending=True,
+            na_position='last'
+        )
+    except Exception as e:
+        logging.warning(f"Failed to sort by all columns: {e}. Returning unsorted dataframe.")
+        return df
+    
 
 def hard_match(left, right, atol=1e-6, rtol=1e-6,
                  ignore_order=True, **kwargs) -> bool:
