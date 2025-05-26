@@ -58,13 +58,6 @@ def extract_python_code(text):
     if matches:
         return textwrap.dedent(matches[-1]).strip()
     
-    # Fallback: Extract everything after "Answer:"
-    answer_match = re.search(r"Answer:\s*(.*)", text, flags=re.IGNORECASE | re.DOTALL)
-    print(f"[DEBUG] Extracted answer split: {answer_match.group(1).strip()}")
-
-    if answer_match:
-        answer_text = answer_match.group(1).strip()
-        return answer_text
 
     
     return ""
