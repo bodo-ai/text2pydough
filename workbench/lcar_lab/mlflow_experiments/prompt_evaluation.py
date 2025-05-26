@@ -101,7 +101,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}\nDatabase Schema:\n\n",str(db_content)]), prompt.format(
+    return "".join([f"{question}\nDatabase Schema:\n",str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -190,7 +190,7 @@ def main(git_hash):
     MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"] 
     mlflow.gemini.autolog()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    experiment = mlflow.set_experiment("epoch change")
+    experiment = mlflow.set_experiment(args.experiment_name)
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
         prompt = read_file(args.prompt_file)
