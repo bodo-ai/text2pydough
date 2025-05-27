@@ -228,7 +228,12 @@ def main(git_hash):
 
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
-        mlflow.log_metrics(percentages)
+        counts = tested_df['comparison_result'].value_counts()
+        percentages = counts / total_rows
+
+        for label, frac in percentages.items():
+            mlflow.log_metric(f"comparison_{label.replace(' ', '_')}", float(frac))
+            
         mlflow.log_metric("total_queries", len(tested_df))
         mlflow.log_artifact(tested_file)
 
