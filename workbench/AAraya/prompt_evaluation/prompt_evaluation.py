@@ -146,15 +146,38 @@ def parse_extra_args(extra_args):
     return kwargs
 
 def categorize_error(exception, result):
-    if pd.isna(exception) and result != "Match":
-        return "None/Empty Error"
-    if isinstance(exception, str):
-        if "Unrecognized term" in exception or "is not callable" in exception:
-            return "Unqualified"
-        if "only execute one statement" in exception:
-            return "SQL Syntax Error"
-        if "Unsupported DATETIME modifier" in exception:
-            return "Datetime Modifier"
+    if pd.isna(exception) or exception in [None, ""]:
+        return "No Error" if result != "Match" else "No Error"
+
+    exc = str(exception).strip()
+
+    if "Unrecognized term of graph" in exc:
+        return "Unknown Graph Term"
+    if "Unrecognized term of simple table collection" in exc:
+        return "Unknown Table Term"
+    if "Unrecognized term:" in exc:
+        return "Unknown Collection"
+    if "is not callable" in exc or "not callable" in exc:
+        return "Invalid Function"
+    if "unexpected indent" in exc:
+        return "Unexpected Indent"
+    if "unsupported operand type" in exc:
+        return "Invalid Operation"
+    if "Expected an expression, but received a collection" in exc:
+        return "Invalid Expression Use"
+    if "Unsupported DATETIME modifier" in exc:
+        return "Unsupported Datetime Modifier"
+    if "You can only execute one statement at a time" in exc:
+        return "SQLite Multi-Statement"
+    if exc.startswith("$0.") or "$0." in exc:
+        return "Malformed Name or Symbol"
+    if "PyDough does yet support aggregations" in exc:
+        return "Unsupported Mixed Aggregation"
+    if "Invalid operator invocation 'HAS" in exc:
+        return "Invalid Operator Context"
+    if "Can only coerce list of literals to a literal" in exc:
+        return "Literal Coercion Error"
+
     return "Other"
 
 # === Entry Point ===
@@ -173,7 +196,7 @@ def main(git_hash):
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
 
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri("http://127.0.0.1:5001")
     experiment = mlflow.set_experiment("text2pydough")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
@@ -192,7 +215,6 @@ def main(git_hash):
         df["execution_time"] = [r[1] for r in results]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
-        df["error_category"] = df.apply(lambda row: categorize_error(row["exception"], row["comparison_result"]), axis=1)
 
 
         output_path = f"./results/{args.provider}/{args.model_id}"
@@ -203,20 +225,42 @@ def main(git_hash):
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
         tested_file, tested_df = compare_output(test_path, output_file)
-        total_rows = len(tested_df)
 
+        # Clasificar errores luego de obtener tested_df
+        if "exception" in tested_df.columns and "comparison_result" in tested_df.columns:
+            tested_df["error_category"] = tested_df.apply(
+                lambda row: categorize_error(row["exception"], row["comparison_result"]), axis=1
+            )
+        else:
+            tested_df["error_category"] = "Unknown"
+
+        # Sobrescribimos el CSV original con la versión enriquecida
+        tested_df.to_csv(output_file, index=False)
+
+        # Métricas de comparación
+        total_rows = len(tested_df)
         counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
-        error_counts = df["error_category"].value_counts(normalize=True)
-        filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
+        # Log de parámetros y métricas
+        filtered_args = {
+            key: value for key, value in vars(args).items()
+            if key not in ['name', 'description', 'extra_args']
+        }
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
-        mlflow.log_metric("total_queries", len(tested_df))
-        for error_type, frac in error_counts.items():
-            mlflow.log_metric(f"error_{error_type}", frac)
+        mlflow.log_metric("total_queries", total_rows)
+
+        # Log de errores por categoría (cantidad absoluta)
+        error_counts = tested_df["error_category"].value_counts()
+        for error_type, count in error_counts.items():
+            mlflow.log_metric(f"errors_{error_type.replace(' ', '_')}", int(count))
+
+        # Log del archivo final
         mlflow.log_artifact(tested_file)
+        mlflow.log_artifact(output_file)
+
 
 if __name__ == "__main__":
     cwd = os.getcwd()
