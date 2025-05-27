@@ -1,6 +1,7 @@
 import pandas as pd
 import sqlite3
 import os
+import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -82,5 +83,14 @@ def process_sql_queries(csv_file_path: str, db_base_path: str):
     print(f"Results saved")
 
 # Example usage:
+start_time = time.time()
+print("Starting SQL query processing...")
+print()
+
 process_sql_queries("/home/gerald8525/repositories/text2pydough/workbench/lcar_lab/training/utils/test_execution_2025_05_26-14_43_53_golden_flash25.csv", "/home/gerald8525/repositories/mount-folder/datasets/")
 
+print()
+print("SQL query processing completed.")
+end_time = time.time()
+
+print(f"Total execution time: {end_time - start_time:.2f} seconds")
