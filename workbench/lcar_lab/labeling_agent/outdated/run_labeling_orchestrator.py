@@ -8,49 +8,10 @@ import time
 import argparse
 from io import StringIO
 
-# Global variable to control logging backend
-USE_MLFLOW = False  # Set to False to use Phoenix instead
-USE_PHOENIX = True
-
-# Configure MLflow
-if USE_MLFLOW:
-    import mlflow
-    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
-    # Enable MLflow LangChain autologging
-    mlflow.langchain.autolog(
-        log_traces=True,
-        log_models=True,
-        log_input_examples=True,
-        log_model_signatures=True,
-        #registered_model_name="pydough_agent"
-    )
-if USE_PHOENIX:
-    # Register a Phoenix tracer
-    from phoenix.otel import register
-    from openinference.instrumentation.langchain import LangChainInstrumentor
-    
-    try:
-        # Initialize OpenInference instrumentor
-        instrumentor = LangChainInstrumentor()
-        instrumentor.instrument()
-        
-        # Register Phoenix tracer
-        tracer_provider = register(
-            #endpoint="http://localhost:6006",
-            project_name=os.getenv("EXPERIMENT_NAME", "labeling-agent-team-debug"),
-            auto_instrument=True
-        )
-        print("Phoenix tracer successfully initialized with OpenInference instrumentor")
-    except Exception as e:
-        print(f"Warning: Failed to initialize Phoenix tracer: {str(e)}")
-        tracer_provider = None
-
 # max number of rows used by evaluator to provide feedback. 
 MAX_ROWS = 10 
 # max number of feedback loops between generator and evaluator
-MAX_FEEDBACK_LOOPS = 2
+MAX_FEEDBACK_LOOPS = 3
 
 def process_questions(
     questions_csv_path: str,
@@ -106,13 +67,6 @@ def process_questions(
             feedback = None
             dataframe_comparison_boolean = False
             feedback_loop_count = 0
-            evaluation = {'match': False, 'explanation': '', 'generated_response': ''}  # Initialize evaluation
-            generated_response = ''
-            generated_pydough = ''
-            executor_error = None
-            
-            # List to store history of all attempts
-            attempt_history = []
             
             # Execute the ground truth SQL query once
             print("ORCHESTRATOR: Executing ground truth SQL query...")
@@ -149,7 +103,6 @@ def process_questions(
                             print(f"ORCHESTRATOR: Error parsing generated DataFrame JSON: {str(e)}")
                             print("ORCHESTRATOR: Using empty DataFrame for evaluation")
                             generated_df = pd.DataFrame()
-                            executor_error = str(e)
                     
                 except Exception as e:
                     print(f"ORCHESTRATOR: Error in generator: {str(e)}")
@@ -157,7 +110,6 @@ def process_questions(
                     generated_df = pd.DataFrame()
                     generated_response = "Error in generator: " + str(e)
                     generated_pydough = ""
-                    executor_error = str(e)
                 
                 print(f"ORCHESTRATOR: Generated DataFrame shape: {generated_df.shape}")
                 print(f"ORCHESTRATOR: Generated DataFrame columns: {generated_df.columns.tolist()}")
@@ -173,11 +125,11 @@ def process_questions(
                 # Sample large DataFrames before sending to evaluator
                 if len(generated_df) > MAX_ROWS:
                     print(f"ORCHESTRATOR: Generated DataFrame is large ({len(generated_df)} rows), sampling {MAX_ROWS} rows")
-                    generated_df_json = generated_df.iloc[:MAX_ROWS].to_json(orient='records')
+                    generated_df_json = generated_df.iloc[:MAX_ROWS].to_json()#orient='records')
                 
                 if len(ground_truth_df) > MAX_ROWS:
                     print(f"ORCHESTRATOR: Ground truth DataFrame is large ({len(ground_truth_df)} rows), sampling {MAX_ROWS} rows")
-                    sql_result = ground_truth_df.iloc[:MAX_ROWS].to_json(orient='records')
+                    sql_result = ground_truth_df.iloc[:MAX_ROWS].to_json()#orient='records')
                 
                 # Get feedback from evaluator
                 print("ORCHESTRATOR: Getting feedback from evaluator...")
@@ -186,33 +138,11 @@ def process_questions(
                     ground_truth_sql=sql_query,
                     generated_response=generated_response,
                     generated_df_json=generated_df_json,
-                    precomputed_match=dataframe_comparison_boolean,
-                    executor_error=executor_error
+                    precomputed_match=dataframe_comparison_boolean
                 )
                 
-                # Store this attempt in history
-                attempt_history.append({
-                    'loop': feedback_loop_count + 1,
-                    'response': generated_response,
-                    'pydough': generated_pydough,
-                    'evaluation': evaluation['explanation']
-                })
-                
-                # Construct feedback with complete history
-                feedback = "Previous attempts:\n"
-                for attempt in attempt_history:
-                    feedback += f"\nAttempt {attempt['loop']}:\n"
-                    feedback += f"Response: {attempt['response']}\n"
-                    feedback += f"Pydough: {attempt['pydough']}\n"
-                    feedback += f"Evaluation: {attempt['evaluation']}\n"
-                    feedback += "-" * 50 + "\n"
-                
-                print("\nORCHESTRATOR: ===== Feedback Loop Details =====")
-                print(f"ORCHESTRATOR: Loop {feedback_loop_count + 1}/{MAX_FEEDBACK_LOOPS}")
-                print(f"ORCHESTRATOR: Evaluation Match: {evaluation['match']}")
-                print(f"ORCHESTRATOR: Evaluation Explanation:\n{evaluation['explanation']}")
-                print(f"ORCHESTRATOR: Previous Agent Response:\n{evaluation['generated_response']}")
-                print("ORCHESTRATOR: ================================\n")
+                feedback = evaluation['explanation'] + "\n\n Previous Agent Response:\n" + evaluation['generated_response']
+                print(f"ORCHESTRATOR: Evaluator feedback: {feedback}")
                 
                 feedback_loop_count += 1
             
@@ -284,24 +214,13 @@ def main():
     
     # Set up output directory
     if args.output_dir:
-        base_output_dir = args.output_dir
+        output_dir = args.output_dir
     else:
-        base_output_dir = os.path.join(base_path, "generator_team", "results")
+        output_dir = os.path.join(base_path, "labeling_agent", "results")
     
-    print(f"\nORCHESTRATOR: Base output directory: {base_output_dir}")
-    
-    # Create timestamped folder for this run
+    # Create output filename with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    run_output_dir = os.path.join(base_output_dir, timestamp)
-    print(f"ORCHESTRATOR: Creating run directory: {run_output_dir}")
-    
-    # Create both directories
-    os.makedirs(base_output_dir, exist_ok=True)
-    os.makedirs(run_output_dir, exist_ok=True)
-    
-    # Set up output paths
-    output_csv_path = os.path.join(run_output_dir, "results.csv")
-    print(f"ORCHESTRATOR: Results will be saved to: {output_csv_path}")
+    output_csv_path = os.path.join(output_dir, f"pydough_results_{timestamp}.csv")
     
     # Verify database exists
     if not os.path.exists(db_path):
@@ -330,6 +249,9 @@ def main():
         print("ORCHESTRATOR: Processing all questions")
     print(f"ORCHESTRATOR: Starting from row {args.start_row + 1}")
     
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Process questions
     process_questions(
         questions_csv_path=questions_csv_path,
@@ -341,44 +263,8 @@ def main():
         start_row=args.start_row
     )
     
-    # Calculate accuracy and create metadata
-    results_df = pd.read_csv(output_csv_path)
-    total_samples = len(results_df)
-    correct_matches = results_df['dataframe_match'].sum()
-    accuracy = correct_matches / total_samples if total_samples > 0 else 0
-    
-    metadata = {
-        'timestamp': timestamp,
-        'paths': {
-            'database': db_path,
-            'metadata_graph': metadata_path,
-            'cheatsheet': cheatsheet_path,
-            'questions_csv': questions_csv_path,
-            'results_csv': output_csv_path
-        },
-        'parameters': {
-            'num_questions': args.num_questions,
-            'start_row': args.start_row,
-            'max_feedback_loops': MAX_FEEDBACK_LOOPS
-        },
-        'results': {
-            'total_samples': int(total_samples),
-            'correct_matches': int(correct_matches),
-            'accuracy': float(accuracy)
-        }
-    }
-    
-    # Save metadata
-    metadata_path = os.path.join(run_output_dir, "metadata.json")
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    print(f"\nORCHESTRATOR: Processing complete!")
-    print(f"ORCHESTRATOR: Results directory: {run_output_dir}")
-    print(f"ORCHESTRATOR: Results CSV: {output_csv_path}")
-    print(f"ORCHESTRATOR: Metadata file: {metadata_path}")
-    print(f"ORCHESTRATOR: Total samples: {total_samples}")
-    print(f"ORCHESTRATOR: Accuracy: {accuracy:.2%}")
+    print("\nORCHESTRATOR: Processing complete!")
+    print(f"ORCHESTRATOR: Results saved to: {output_csv_path}")
 
 if __name__ == "__main__":
     main() 

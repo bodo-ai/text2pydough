@@ -1,31 +1,33 @@
 #!/bin/bash
 
 # Set base directory
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-echo $BASE_DIR
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # Set up all required paths
-DB_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/mount-folder/datasets"
-METADATA_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/mount-folder/datasets"
-CHEATSHEET_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
-QUESTIONS_CSV_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/golden_dataset.csv"
-OUTPUT_DIR="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/results"
+DB_PATH="${BASE_DIR}/TPCH/test_data/tpch.db"
+METADATA_PATH="${BASE_DIR}/TPCH/test_data/tpch_demo_graph.json"
+CHEATSHEET_PATH="${BASE_DIR}/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
+QUESTIONS_CSV_PATH="${BASE_DIR}/TPCH/test_data/benchmark.csv"
+OUTPUT_DIR="${BASE_DIR}/labeling_agent/results"
 
 # Default values for optional parameters
-START_ROW=0
-NUM_QUESTIONS=10
+START_ROW=1
+NUM_QUESTIONS=1
 CONCURRENT_QUESTIONS=1
+MAX_FEEDBACK_LOOPS=2
 
 # Create output directory if it doesn't exist
 #mkdir -p "${OUTPUT_DIR}"
 
 # Run the async labeling script with all paths
-python "${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/async_orchestrator.py" \
+python "${BASE_DIR}/labeling_agent/async_orchestrator.py" \
     --output-dir "${OUTPUT_DIR}" \
-    --db-base-path "${DB_PATH}" \
-    --metadata-base-path "${METADATA_PATH}" \
+    --db-path "${DB_PATH}" \
+    --metadata-path "${METADATA_PATH}" \
     --cheatsheet-path "${CHEATSHEET_PATH}" \
     --questions-csv-path "${QUESTIONS_CSV_PATH}" \
     --start-row "${START_ROW}" \
     --num-questions "${NUM_QUESTIONS}" \
     --concurrent-questions "${CONCURRENT_QUESTIONS}" \
+    --max-feedback-loops "${MAX_FEEDBACK_LOOPS}" \
     "$@" 
