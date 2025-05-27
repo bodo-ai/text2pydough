@@ -1,0 +1,1377 @@
+question,sql,db_name,response,execution_time,extracted_python_code,usage,comparison_result,exception
+"For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order.","SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p._id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s._id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;",Dealership,"```python
+# Calculate the start date of the current week and the start date 8 weeks prior.
+date_boundaries = Dealership.CALCULATE(
+    # Get the timestamp for the start of the current calendar week (e.g., Monday or Sunday depending on config)
+    current_week_start=DATETIME('now', 'start of week'),
+    # Calculate the start date for the analysis period (8 full weeks before the current week starts)
+    start_date=DATETIME(DATETIME('now', 'start of week'), '-8 weeks')
+)
+
+# 1. Filter sales with price > $30,000.
+# 2. Access their associated payments.
+# 3. Filter these payments to include only those made within the last 8 full calendar weeks
+#    (i.e., payment_date is on or after start_date and before current_week_start).
+# 4. For each relevant payment, calculate the start date of the week it falls into
+#    and determine if it occurred on a weekend (Saturday or Sunday).
+payments_in_period = date_boundaries.Sales.WHERE(sale_price > 30000).payment.WHERE(
+    (payment_date >= start_date) & (payment_date < current_week_start)
+).CALCULATE(
+    # Truncate the payment date to the start of its calendar week
+    payment_week_start=DATETIME(payment_date, 'start of week'),
+    # Check if the payment day name is Saturday or Sunday, resulting in True (1) or False (0)
+    is_weekend=ISIN(DAYNAME(payment_date), (""Saturday"", ""Sunday""))
+)
+
+# Partition (group) the filtered payments by the calculated start date of their week.
+# For each week group, calculate the total number of payments and the number of weekend payments.
+weekly_payment_counts = payments_in_period.PARTITION(name=""weeks"", by=payment_week_start).CALCULATE(
+    # Output the week start date (which is the partition key)
+    week=payment_week_start,
+    # Count all payments belonging to this week's partition
+    total_payments_received=COUNT(payments_in_period),
+    # Sum the 'is_weekend' boolean flag (True=1, False=0) to count weekend payments within this week
+    weekend_payments_received=SUM(payments_in_period.is_weekend)
+)
+
+# Order the final results by the week start date in ascending order.
+result = weekly_payment_counts.ORDER_BY(week.ASC())
+```
+
+**Explanation:**
+
+1.  **`date_boundaries`**: We first calculate two key dates using the `Dealership` high-level collection:
+    *   `current_week_start`: The exact date/time representing the beginning of the current calendar week (e.g., the most recent Monday or Sunday at 00:00, depending on system configuration).
+    *   `start_date`: The date exactly 8 weeks before `current_week_start`. This defines the beginning of our 8-week analysis window.
+2.  **`payments_in_period`**: This expression chain filters and prepares the payment data:
+    *   `date_boundaries.Sales.WHERE(sale_price > 30000)`: Selects only sales records where the `sale_price` exceeds $30,000.
+    *   `.payment`: Accesses the list of associated `PaymentsReceived` records for these high-value sales.
+    *   `.WHERE((payment_date >= start_date) & (payment_date < current_week_start))`: Filters these payments to include only those made within our target 8-week window (from `start_date` up to, but not including, `current_week_start`).
+    *   `.CALCULATE(...)`: For each payment within the timeframe:
+        *   `payment_week_start=DATETIME(payment_date, 'start of week')`: Calculates the start date of the calendar week in which the payment occurred. This will be used for grouping.
+        *   `is_weekend=ISIN(DAYNAME(payment_date), (""Saturday"", ""Sunday""))`: Checks if the payment date falls on a Saturday or Sunday using `DAYNAME` and `ISIN`. This creates a boolean flag (`True` if weekend, `False` otherwise).
+3.  **`weekly_payment_counts`**: This performs the aggregation:
+    *   `payments_in_period.PARTITION(name=""weeks"", by=payment_week_start)`: Groups the prepared payment records based on the `payment_week_start` date. All payments from the same calendar week will be in the same group.
+    *   `.CALCULATE(...)`: For each weekly group created by the partition:
+        *   `week=payment_week_start`: Includes the week's start date in the output.
+        *   `total_payments_received=COUNT(payments_in_period)`: Counts the total number of payment records within that specific week's group.
+        *   `weekend_payments_received=SUM(payments_in_period.is_weekend)`: Sums the `is_weekend` flag for all payments in the group. Since `True` is treated as 1 and `False` as 0, this effectively counts the weekend payments.
+4.  **`result`**:
+    *   `weekly_payment_counts.ORDER_BY(week.ASC())`: Sorts the final weekly summaries by the `week` start date in ascending chronological order.
+
+The final `result` variable holds a collection where each record represents one of the last 8 full calendar weeks, containing the week's start date, the total number of payments received for sales over $30k during that week, and the count of those payments that occurred on a weekend.",36.061975955963135,"# Calculate the start date of the current week and the start date 8 weeks prior.
+date_boundaries = Dealership.CALCULATE(
+    # Get the timestamp for the start of the current calendar week (e.g., Monday or Sunday depending on config)
+    current_week_start=DATETIME('now', 'start of week'),
+    # Calculate the start date for the analysis period (8 full weeks before the current week starts)
+    start_date=DATETIME(DATETIME('now', 'start of week'), '-8 weeks')
+)
+
+# 1. Filter sales with price > $30,000.
+# 2. Access their associated payments.
+# 3. Filter these payments to include only those made within the last 8 full calendar weeks
+#    (i.e., payment_date is on or after start_date and before current_week_start).
+# 4. For each relevant payment, calculate the start date of the week it falls into
+#    and determine if it occurred on a weekend (Saturday or Sunday).
+payments_in_period = date_boundaries.Sales.WHERE(sale_price > 30000).payment.WHERE(
+    (payment_date >= start_date) & (payment_date < current_week_start)
+).CALCULATE(
+    # Truncate the payment date to the start of its calendar week
+    payment_week_start=DATETIME(payment_date, 'start of week'),
+    # Check if the payment day name is Saturday or Sunday, resulting in True (1) or False (0)
+    is_weekend=ISIN(DAYNAME(payment_date), (""Saturday"", ""Sunday""))
+)
+
+# Partition (group) the filtered payments by the calculated start date of their week.
+# For each week group, calculate the total number of payments and the number of weekend payments.
+weekly_payment_counts = payments_in_period.PARTITION(name=""weeks"", by=payment_week_start).CALCULATE(
+    # Output the week start date (which is the partition key)
+    week=payment_week_start,
+    # Count all payments belonging to this week's partition
+    total_payments_received=COUNT(payments_in_period),
+    # Sum the 'is_weekend' boolean flag (True=1, False=0) to count weekend payments within this week
+    weekend_payments_received=SUM(payments_in_period.is_weekend)
+)
+
+# Order the final results by the week start date in ascending order.
+result = weekly_payment_counts.ORDER_BY(week.ASC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=1312 candidates_tokens_details=None prompt_token_count=18977 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18977)] thoughts_token_count=2109 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22398 traffic_type=None",Query Error,Unrecognized term: 'Dealership'
+"How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.","WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;",Dealership,"```python
+recent_sales_by_salesperson = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    # Count sales made within the last 30 days (inclusive of today)
+    num_sales=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 29))
+).ORDER_BY(num_sales.DESC())
+```
+
+**Explanation:**
+
+1.  **`Salespersons.CALCULATE(...)`**: We start with the `Salespersons` collection and use `CALCULATE` to select existing fields and compute a new one.
+2.  **`salesperson_id=_id, first_name=first_name, last_name=last_name`**: We select the salesperson's ID, first name, and last name, renaming `_id` to `salesperson_id` for clarity.
+3.  **`num_sales=COUNT(...)`**: We calculate a new field `num_sales`.
+4.  **`sales_made.WHERE(...)`**: We access the `sales_made` sub-collection (which contains all sales for the current salesperson) and filter it using `WHERE`.
+5.  **`DATEDIFF(""days"", sale_date, DATETIME('now')) <= 29`**: This condition filters the sales.
+    *   `DATETIME('now')` gets the current date and time.
+    *   `DATEDIFF(""days"", sale_date, DATETIME('now'))` calculates the number of full days between the `sale_date` and today.
+    *   `<= 29` ensures we include sales made today (difference = 0) up to 29 days ago, covering the requested 30-day period inclusive of today.
+6.  **`COUNT(...)`**: This counts the number of sales records remaining after the `WHERE` filter for each salesperson.
+7.  **`.ORDER_BY(num_sales.DESC())`**: Finally, we sort the resulting collection of salespersons in descending order based on the calculated `num_sales`.",19.031944751739506,"recent_sales_by_salesperson = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    # Count sales made within the last 30 days (inclusive of today)
+    num_sales=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 29))
+).ORDER_BY(num_sales.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=484 candidates_tokens_details=None prompt_token_count=18962 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18962)] thoughts_token_count=1271 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20717 traffic_type=None",No Match,
+"How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","SELECT c.make, c.model, COUNT(s._id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;",Dealership,"```python
+# Filter cars whose VIN contains 'M5' (case-insensitive) and have sales records.
+# Partition these cars by make and model.
+# Calculate the make, model, and the count of sales for each group.
+sales_per_model_with_m5_vin = Cars.WHERE(
+    (LIKE(UPPER(vin_number), '%M5%')) &
+    (HAS(sale_records) == 1)
+).PARTITION(
+    name=""model_group"", by=(make, model)
+).CALCULATE(
+    car_make=make,
+    car_model=model,
+    num_sales=COUNT(Cars.sale_records)
+)
+```
+
+**Explanation:**
+
+1.  **`Cars.WHERE(...)`**: We start by filtering the `Cars` collection.
+    *   **`LIKE(UPPER(vin_number), '%M5%')`**: This condition filters cars where the `vin_number`, converted to uppercase using `UPPER()`, contains the substring 'M5'. The `LIKE` function with `%` wildcards allows for partial matching. This ensures case-insensitivity and partial matching as requested.
+    *   **`HAS(sale_records) == 1`**: This ensures that we only consider cars that have at least one associated sale record.
+    *   **`&`**: Both conditions must be true for a car to be included.
+2.  **`.PARTITION(name=""model_group"", by=(make, model))`**: The filtered cars are then partitioned (grouped) based on their `make` and `model`. Each group represents a unique combination of car make and model that meets the initial filter criteria.
+3.  **`.CALCULATE(...)`**: For each partition group (each unique make and model):
+    *   **`car_make=make`**: Selects the car make from the partition key.
+    *   **`car_model=model`**: Selects the car model from the partition key.
+    *   **`num_sales=COUNT(Cars.sale_records)`**: Counts the total number of sales records associated with all cars belonging to the current partition group (i.e., the total sales for that specific make and model among the filtered cars).",11.77324080467224,"# Filter cars whose VIN contains 'M5' (case-insensitive) and have sales records.
+# Partition these cars by make and model.
+# Calculate the make, model, and the count of sales for each group.
+sales_per_model_with_m5_vin = Cars.WHERE(
+    (LIKE(UPPER(vin_number), '%M5%')) &
+    (HAS(sale_records) == 1)
+).PARTITION(
+    name=""model_group"", by=(make, model)
+).CALCULATE(
+    car_make=make,
+    car_model=model,
+    num_sales=COUNT(Cars.sale_records)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=497 candidates_tokens_details=None prompt_token_count=18980 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18980)] thoughts_token_count=560 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20037 traffic_type=None",Match,
+How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,"SELECT COUNT(s._id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');",Dealership,"```python
+# Filter sales records to include only Toyota cars sold within the last 30 days (inclusive of today)
+recent_toyota_sales = Sales.WHERE(
+    (car.make == 'Toyota') &
+    (DATEDIFF(""days"", sale_date, DATETIME('now')) < 30)
+)
+
+# Calculate the total number of sales and the sum of their sale prices
+result = Dealership.CALCULATE(
+    number_of_sales = COUNT(recent_toyota_sales),
+    total_revenue = SUM(recent_toyota_sales.sale_price)
+)
+```
+
+**Explanation:**
+
+1.  **`recent_toyota_sales = Sales.WHERE(...)`**: This line filters the `Sales` collection.
+    *   `car.make == 'Toyota'`: It selects sales where the associated car's make is 'Toyota'.
+    *   `DATEDIFF(""days"", sale_date, DATETIME('now')) < 30`: It selects sales where the difference in days between the `sale_date` and the current date/time (`DATETIME('now')`) is less than 30. This effectively includes sales from today up to 29 days ago, covering the last 30 days inclusive of today.
+    *   The `&` combines these two conditions, so only sales meeting both criteria are kept in the `recent_toyota_sales` variable.
+2.  **`result = Dealership.CALCULATE(...)`**: This line calculates the final aggregate results at the top `Dealership` level.
+    *   `number_of_sales = COUNT(recent_toyota_sales)`: It counts the number of records in the filtered `recent_toyota_sales` collection.
+    *   `total_revenue = SUM(recent_toyota_sales.sale_price)`: It sums the `sale_price` for all sales records within the filtered `recent_toyota_sales` collection.
+3.  The final `result` variable holds a single record containing the `number_of_sales` and `total_revenue` for Toyota cars sold in the specified period.",15.409236192703249,"# Filter sales records to include only Toyota cars sold within the last 30 days (inclusive of today)
+recent_toyota_sales = Sales.WHERE(
+    (car.make == 'Toyota') &
+    (DATEDIFF(""days"", sale_date, DATETIME('now')) < 30)
+)
+
+# Calculate the total number of sales and the sum of their sale prices
+result = Dealership.CALCULATE(
+    number_of_sales = COUNT(recent_toyota_sales),
+    total_revenue = SUM(recent_toyota_sales.sale_price)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=474 candidates_tokens_details=None prompt_token_count=18944 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18944)] thoughts_token_count=934 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20352 traffic_type=None",No Match,
+"Return the first name, last name, total sales amount, number of sales, and SR for each salespersonSR = sales rank of each salesperson ordered by their total sales amount descending","WITH salesperson_sales AS (SELECT salesperson_id, SUM(sale_price) AS total_sales, COUNT(*) AS num_sales FROM sales GROUP BY salesperson_id) SELECT s.first_name, s.last_name, ss.total_sales, ss.num_sales, RANK() OVER (ORDER BY CASE WHEN ss.total_sales IS NULL THEN 1 ELSE 0 END DESC, ss.total_sales DESC) AS sales_rank FROM salesperson_sales AS ss JOIN salespersons AS s ON ss.salesperson_id = s._id;",Dealership,"```python
+# Calculate sales statistics for each salesperson
+salesperson_stats = Salespersons.CALCULATE(
+    sp_first_name=first_name,
+    sp_last_name=last_name,
+    # Calculate total sales amount by summing sale_price from related sales
+    total_sales_amount=SUM(sales_made.sale_price),
+    # Calculate the number of sales by counting related sales records
+    number_of_sales=COUNT(sales_made)
+)
+
+# Calculate the sales rank (SR) for each salesperson based on their total sales amount
+result = salesperson_stats.CALCULATE(
+    first_name=sp_first_name,
+    last_name=sp_last_name,
+    total_sales_amount=total_sales_amount,
+    number_of_sales=number_of_sales,
+    # Rank salespersons by total_sales_amount in descending order (highest sales = rank 1)
+    SR=RANKING(by=total_sales_amount.DESC())
+).ORDER_BY(SR.ASC()) # Order the final result by rank
+```
+
+**Explanation:**
+
+1.  **`salesperson_stats = Salespersons.CALCULATE(...)`**: This line starts with the `Salespersons` collection and calculates intermediate statistics for each salesperson.
+    *   `sp_first_name=first_name`, `sp_last_name=last_name`: Selects the first and last names, renaming them to avoid conflicts in the next step.
+    *   `total_sales_amount=SUM(sales_made.sale_price)`: Calculates the total sales amount for each salesperson by summing the `sale_price` from their associated sales records (`sales_made` sub-collection).
+    *   `number_of_sales=COUNT(sales_made)`: Counts the total number of sales made by each salesperson using the `sales_made` sub-collection.
+2.  **`result = salesperson_stats.CALCULATE(...)`**: This line takes the intermediate `salesperson_stats` and calculates the final required fields, including the sales rank (SR).
+    *   `first_name=sp_first_name`, `last_name=sp_last_name`, `total_sales_amount=total_sales_amount`, `number_of_sales=number_of_sales`: Selects the previously calculated fields for the final output.
+    *   `SR=RANKING(by=total_sales_amount.DESC())`: Calculates the sales rank (`SR`) for each salesperson. The `RANKING` function is applied to the `salesperson_stats` collection, ordering by the `total_sales_amount` in descending order (`DESC()`), so the salesperson with the highest sales gets rank 1.
+3.  **`.ORDER_BY(SR.ASC())`**: This sorts the final result based on the calculated sales rank (`SR`) in ascending order, presenting the top-ranked salesperson first.",15.345932722091677,"# Calculate sales statistics for each salesperson
+salesperson_stats = Salespersons.CALCULATE(
+    sp_first_name=first_name,
+    sp_last_name=last_name,
+    # Calculate total sales amount by summing sale_price from related sales
+    total_sales_amount=SUM(sales_made.sale_price),
+    # Calculate the number of sales by counting related sales records
+    number_of_sales=COUNT(sales_made)
+)
+
+# Calculate the sales rank (SR) for each salesperson based on their total sales amount
+result = salesperson_stats.CALCULATE(
+    first_name=sp_first_name,
+    last_name=sp_last_name,
+    total_sales_amount=total_sales_amount,
+    number_of_sales=number_of_sales,
+    # Rank salespersons by total_sales_amount in descending order (highest sales = rank 1)
+    SR=RANKING(by=total_sales_amount.DESC())
+).ORDER_BY(SR.ASC()) # Order the final result by rank","cache_tokens_details=None cached_content_token_count=None candidates_token_count=653 candidates_tokens_details=None prompt_token_count=18953 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18953)] thoughts_token_count=724 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20330 traffic_type=None",No Match,
+"Return the highest sale price for each make and model of cars that have been sold and are no longer in inventory, ordered by the sale price from highest to lowest. Use the most recent date in the inventory_snapshots table to determine that car's inventory status.When getting a car's inventory status, always take the latest status from the inventory_snapshots table","WITH latest_inventory_status AS (SELECT car_id, is_in_inventory, ROW_NUMBER() OVER (PARTITION BY car_id ORDER BY CASE WHEN snapshot_date IS NULL THEN 1 ELSE 0 END DESC, snapshot_date DESC) AS rn FROM inventory_snapshots) SELECT c.make, c.model, MAX(s.sale_price) AS highest_sale_price FROM cars AS c JOIN sales AS s ON c._id = s.car_id JOIN latest_inventory_status AS lis ON c._id = lis.car_id WHERE lis.is_in_inventory = FALSE AND lis.rn = 1 GROUP BY c.make, c.model ORDER BY CASE WHEN highest_sale_price IS NULL THEN 1 ELSE 0 END DESC, highest_sale_price DESC;",Dealership,"```python
+# Filter cars that have been sold and whose latest inventory snapshot indicates they are not in inventory.
+filtered_cars = Cars.WHERE(
+    (HAS(sale_records) == 1) &
+    (
+        # Get the latest inventory snapshot for each car using RANKING
+        # Check if 'is_in_inventory' is False for that latest snapshot
+        inventory_snapshots.WHERE(
+            RANKING(by=snapshot_date.DESC(), per=""Cars"") == 1
+        ).SINGULAR().is_in_inventory == False
+    )
+)
+
+# Partition the filtered cars by make and model
+# Calculate the maximum sale price for each group
+# Order the results by the highest sale price descending
+result = filtered_cars.PARTITION(name=""make_model_group"", by=(make, model)).CALCULATE(
+    car_make=make,
+    car_model=model,
+    # Find the maximum sale price among all sales records for cars in this make/model group
+    highest_sale_price=MAX(Cars.sale_records.sale_price)
+).ORDER_BY(highest_sale_price.DESC())
+```
+
+**Explanation:**
+
+1.  **`filtered_cars = Cars.WHERE(...)`**: We start by filtering the `Cars` collection.
+2.  **`HAS(sale_records) == 1`**: This ensures we only consider cars that have at least one sales record, meaning they have been sold.
+3.  **`inventory_snapshots.WHERE(RANKING(by=snapshot_date.DESC(), per=""Cars"") == 1)`**: For each car, this accesses its `inventory_snapshots`, ranks them by `snapshot_date` in descending order (`DESC`), assigning rank 1 to the latest snapshot (`per=""Cars""` ensures ranking is done independently for each car). The `WHERE` clause keeps only the latest snapshot (rank 1).
+4.  **`.SINGULAR().is_in_inventory == False`**: Since the ranking filter guarantees only one snapshot per car, `SINGULAR()` is used to treat it as a single record. We then check if the `is_in_inventory` field for this latest snapshot is `False`.
+5.  **`.PARTITION(name=""make_model_group"", by=(make, model))`**: The filtered cars are then grouped (partitioned) based on their unique `make` and `model` combinations.
+6.  **`.CALCULATE(...)`**: For each group (partition):
+    *   `car_make=make`: Selects the make.
+    *   `car_model=model`: Selects the model.
+    *   `highest_sale_price=MAX(Cars.sale_records.sale_price)`: Calculates the maximum `sale_price` by looking at all `sale_records` associated with the cars (`Cars`) within the current `make_model_group`.
+7.  **`.ORDER_BY(highest_sale_price.DESC())`**: Finally, the results (one row per make/model group) are sorted based on the calculated `highest_sale_price` in descending order.",25.599404096603397,"# Filter cars that have been sold and whose latest inventory snapshot indicates they are not in inventory.
+filtered_cars = Cars.WHERE(
+    (HAS(sale_records) == 1) &
+    (
+        # Get the latest inventory snapshot for each car using RANKING
+        # Check if 'is_in_inventory' is False for that latest snapshot
+        inventory_snapshots.WHERE(
+            RANKING(by=snapshot_date.DESC(), per=""Cars"") == 1
+        ).SINGULAR().is_in_inventory == False
+    )
+)
+
+# Partition the filtered cars by make and model
+# Calculate the maximum sale price for each group
+# Order the results by the highest sale price descending
+result = filtered_cars.PARTITION(name=""make_model_group"", by=(make, model)).CALCULATE(
+    car_make=make,
+    car_model=model,
+    # Find the maximum sale price among all sales records for cars in this make/model group
+    highest_sale_price=MAX(Cars.sale_records.sale_price)
+).ORDER_BY(highest_sale_price.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=688 candidates_tokens_details=None prompt_token_count=18991 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18991)] thoughts_token_count=1793 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21472 traffic_type=None",Match,
+"What are the details and average sale price for cars that have 'Ford' in their make name or 'Mustang' in the model name? Return make, model, year, color, vin_number and avg_sale_price.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.","SELECT c.make, c.model, c.year, c.color, c.vin_number, AVG(s.sale_price) AS avg_sale_price FROM cars AS c JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.make) LIKE '%ford%' OR LOWER(c.model) LIKE '%mustang%' GROUP BY c.make, c.model, c.year, c.color, c.vin_number;",Dealership,"```python
+# Filter cars based on make containing 'Ford' or model containing 'Mustang' (case-insensitive, partial match)
+# and ensure they have at least one sale record.
+filtered_cars = Cars.WHERE(
+    (LIKE(LOWER(make), '%ford%') | LIKE(LOWER(model), '%mustang%'))
+    & (HAS(sale_records) == 1)
+)
+
+# Calculate the required details and the average sale price for the filtered cars.
+result = filtered_cars.CALCULATE(
+    make=make,
+    model=model,
+    year=year,
+    color=color,
+    vin_number=vin_number,
+    avg_sale_price=AVG(sale_records.sale_price)
+)
+```
+
+**Explanation:**
+
+1.  **`Cars.WHERE(...)`**: We start with the `Cars` collection and apply filters using the `WHERE` clause.
+2.  **`(LIKE(LOWER(make), '%ford%') | LIKE(LOWER(model), '%mustang%'))`**: This condition filters cars where the lowercase version of the `make` field contains 'ford' OR the lowercase version of the `model` field contains 'mustang'. The `LIKE` function with `%` wildcards allows for partial matches, and `LOWER` ensures case-insensitivity.
+3.  **`& (HAS(sale_records) == 1)`**: This ensures that we only consider cars that have at least one associated sale record in the `sale_records` sub-collection, allowing us to calculate a meaningful average sale price.
+4.  **`.CALCULATE(...)`**: After filtering, we use `CALCULATE` to select the desired fields.
+5.  **`make=make, model=model, year=year, color=color, vin_number=vin_number`**: These select the basic car details directly from the filtered `Cars` collection.
+6.  **`avg_sale_price=AVG(sale_records.sale_price)`**: This calculates the average sale price for each car by applying the `AVG` aggregation function to the `sale_price` field within the `sale_records` sub-collection associated with each filtered car.",13.921587944030762,"# Filter cars based on make containing 'Ford' or model containing 'Mustang' (case-insensitive, partial match)
+# and ensure they have at least one sale record.
+filtered_cars = Cars.WHERE(
+    (LIKE(LOWER(make), '%ford%') | LIKE(LOWER(model), '%mustang%'))
+    & (HAS(sale_records) == 1)
+)
+
+# Calculate the required details and the average sale price for the filtered cars.
+result = filtered_cars.CALCULATE(
+    make=make,
+    model=model,
+    year=year,
+    color=color,
+    vin_number=vin_number,
+    avg_sale_price=AVG(sale_records.sale_price)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=493 candidates_tokens_details=None prompt_token_count=18998 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18998)] thoughts_token_count=721 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20212 traffic_type=None",Match,
+"What are the PMSPS and PMSR in the last 6 months excluding the current month, for salespersons hired between 2022 and 2023 (both inclusive)? Return all months in your answer, including those where metrics are 0. Order by month ascending.PMSPS = per month salesperson sales count. PMSR = per month sales revenue in dollars. Truncate date to month for aggregation.","WITH RECURSIVE date_range(month_start) AS (SELECT DATE('now', '-6 months', 'start of month') AS month_start UNION ALL SELECT DATE(month_start, '+1 month') FROM date_range WHERE month_start < DATE('now', '-1 month', 'start of month')), sales_metrics AS (SELECT strftime('%Y-%m', s.sale_date) AS sale_month, COUNT(s._id) AS PMSPS, SUM(s.sale_price) AS PMSR FROM sales AS s JOIN salespersons AS sp ON s.salesperson_id = sp._id WHERE strftime('%Y', sp.hire_date) BETWEEN '2022' AND '2023' AND s.sale_date >= DATE('now', '-6 months', 'start of month') AND s.sale_date < DATE('now', 'start of month') GROUP BY sale_month) SELECT dr.month_start, COALESCE(sm.PMSPS, 0) AS PMSPS, COALESCE(sm.PMSR, 0) AS PMSR FROM date_range AS dr LEFT JOIN sales_metrics AS sm ON strftime('%Y-%m', dr.month_start) = sm.sale_month ORDER BY dr.month_start ASC;",Dealership,"```python
+# Define the start and end dates for the 6-month period excluding the current month
+start_date = DATETIME(DATETIME('now', 'start of month'), '-6 months')
+end_date = DATETIME('now', 'start of month')
+
+# Filter all sales to include only those within the calculated date range
+# Also, calculate the sale month and retrieve the salesperson's hire year
+sales_info = Sales.WHERE(
+    (sale_date >= start_date) & (sale_date < end_date)
+).CALCULATE(
+    sale_month = DATETIME(sale_date, 'start of month'),
+    salesperson_hire_year = YEAR(salesperson.hire_date),
+    sale_price = sale_price # Keep sale_price for aggregation
+)
+
+# Partition the filtered sales data by the calculated sale month
+monthly_sales_partition = sales_info.PARTITION(name=""months"", by=sale_month)
+
+# Calculate the required metrics (PMSPS and PMSR) for each month
+# Filter the sales within each month partition to include only those made by
+# salespersons hired between 2022 and 2023 (inclusive) before aggregating.
+result = monthly_sales_partition.CALCULATE(
+    month = sale_month,
+    # PMSPS: Count sales within the month partition where the salesperson hire year is in the range
+    PMSPS = COUNT(
+        Sales.WHERE(
+            (salesperson_hire_year >= 2022) & (salesperson_hire_year <= 2023)
+        )
+    ),
+    # PMSR: Sum sale_price for sales within the month partition where the salesperson hire year is in the range
+    PMSR = SUM(
+        Sales.WHERE(
+            (salesperson_hire_year >= 2022) & (salesperson_hire_year <= 2023)
+        ).sale_price
+    )
+).ORDER_BY(month.ASC()) # Order the final results by month ascending
+```
+
+**Explanation:**
+
+1.  **Define Date Range:** We first calculate the `start_date` (6 months before the start of the current month) and `end_date` (the start of the current month) using `DATETIME` functions.
+2.  **Filter and Prepare Sales Data:** We access the `Sales` collection and filter it to include only sales falling within the `start_date` (inclusive) and `end_date` (exclusive). We then use `CALCULATE` to:
+    *   Truncate the `sale_date` to the start of the month (`sale_month`).
+    *   Extract the `YEAR` from the associated salesperson's `hire_date`.
+    *   Keep the `sale_price` for later aggregation.
+3.  **Partition by Month:** The prepared `sales_info` is partitioned by `sale_month`. This groups all sales data from the specified period by the month they occurred in. This step ensures that all months within the 6-month range are represented in the output, even if no sales occurred in a particular month (or no sales by the target salespersons).
+4.  **Calculate Metrics per Month:** We apply a `CALCULATE` operation on the partitioned data (`monthly_sales_partition`). For each month partition:
+    *   We select the `sale_month` as `month`.
+    *   We calculate `PMSPS` (Per Month Salesperson Sales Count) by counting the `Sales` records *within that month's partition* where the `salesperson_hire_year` is between 2022 and 2023.
+    *   We calculate `PMSR` (Per Month Sales Revenue) by summing the `sale_price` of `Sales` records *within that month's partition* where the `salesperson_hire_year` is between 2022 and 2023. If a month has sales, but none from salespersons hired in 2022-2023, these aggregations will correctly return 0.
+5.  **Order Results:** Finally, the results are ordered by `month` in ascending order using `ORDER_BY`.",31.08633065223694,"# Define the start and end dates for the 6-month period excluding the current month
+start_date = DATETIME(DATETIME('now', 'start of month'), '-6 months')
+end_date = DATETIME('now', 'start of month')
+
+# Filter all sales to include only those within the calculated date range
+# Also, calculate the sale month and retrieve the salesperson's hire year
+sales_info = Sales.WHERE(
+    (sale_date >= start_date) & (sale_date < end_date)
+).CALCULATE(
+    sale_month = DATETIME(sale_date, 'start of month'),
+    salesperson_hire_year = YEAR(salesperson.hire_date),
+    sale_price = sale_price # Keep sale_price for aggregation
+)
+
+# Partition the filtered sales data by the calculated sale month
+monthly_sales_partition = sales_info.PARTITION(name=""months"", by=sale_month)
+
+# Calculate the required metrics (PMSPS and PMSR) for each month
+# Filter the sales within each month partition to include only those made by
+# salespersons hired between 2022 and 2023 (inclusive) before aggregating.
+result = monthly_sales_partition.CALCULATE(
+    month = sale_month,
+    # PMSPS: Count sales within the month partition where the salesperson hire year is in the range
+    PMSPS = COUNT(
+        Sales.WHERE(
+            (salesperson_hire_year >= 2022) & (salesperson_hire_year <= 2023)
+        )
+    ),
+    # PMSR: Sum sale_price for sales within the month partition where the salesperson hire year is in the range
+    PMSR = SUM(
+        Sales.WHERE(
+            (salesperson_hire_year >= 2022) & (salesperson_hire_year <= 2023)
+        ).sale_price
+    )
+).ORDER_BY(month.ASC()) # Order the final results by month ascending","cache_tokens_details=None cached_content_token_count=None candidates_token_count=932 candidates_tokens_details=None prompt_token_count=19005 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19005)] thoughts_token_count=2005 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21942 traffic_type=None",No Match,
+What is the ASP for sales made in the first quarter of 2023?ASP = Average Sale Price in the first quarter of 2023.,SELECT AVG(sale_price) AS ASP FROM sales WHERE sale_date >= '2023-01-01' AND sale_date <= '2023-03-31';,Dealership,"```python
+# Calculate the Average Sale Price (ASP) for sales in Q1 2023
+asp_q1_2023 = Dealership.CALCULATE(
+    average_sale_price_q1_2023=AVG(
+        Sales.WHERE(
+            (YEAR(sale_date) == 2023) & 
+            ISIN(MONTH(sale_date), (1, 2, 3))
+        ).sale_price
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`Dealership.CALCULATE(...)`**: We start at the top-level `Dealership` collection because we want a single aggregate result (the overall ASP).
+2.  **`average_sale_price_q1_2023=AVG(...)`**: We define a new field `average_sale_price_q1_2023` and calculate its value using the `AVG` aggregation function.
+3.  **`Sales.WHERE(...)`**: We access the `Sales` collection and filter it using `WHERE`.
+4.  **`(YEAR(sale_date) == 2023) & ISIN(MONTH(sale_date), (1, 2, 3))`**: This is the filter condition. It selects sales where the `sale_date` year is 2023 AND the month is within the first quarter (1 for January, 2 for February, 3 for March), using `ISIN` for concise month checking.
+5.  **`.sale_price`**: After filtering the `Sales` collection, we select the `sale_price` field from the resulting records.
+6.  **`AVG(...)`**: The `AVG` function then calculates the average of these selected `sale_price` values.",13.297483205795288,"# Calculate the Average Sale Price (ASP) for sales in Q1 2023
+asp_q1_2023 = Dealership.CALCULATE(
+    average_sale_price_q1_2023=AVG(
+        Sales.WHERE(
+            (YEAR(sale_date) == 2023) & 
+            ISIN(MONTH(sale_date), (1, 2, 3))
+        ).sale_price
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=397 candidates_tokens_details=None prompt_token_count=18952 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18952)] thoughts_token_count=696 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20045 traffic_type=None",Match,
+"What is the average number of days between the sale date and payment received date, rounded to 2 decimal places?","WITH sale_payments AS (SELECT s._id AS sale_id, s.sale_date, MAX(p.payment_date) AS latest_payment_date FROM sales AS s JOIN payments_received AS p ON s._id = p.sale_id GROUP BY s._id, s.sale_date) SELECT ROUND(AVG(julianday(latest_payment_date) - julianday(sale_date)), 2) AS avg_days_to_paymen FROM sale_payments;",Dealership,"```python
+# Calculate the average number of days between the sale date and the payment received date, rounded to 2 decimal places.
+avg_payment_time = Dealership.CALCULATE(
+    avg_days_to_payment=ROUND(
+        AVG(
+            # For each payment received, calculate the difference in days from the sale date
+            PaymentsReceived.CALCULATE(
+                days_diff=DATEDIFF(""days"", sale_record.sale_date, payment_date)
+            ).days_diff # Access the calculated difference
+        ),
+        2 # Round the final average to 2 decimal places
+    )
+)
+```
+
+**Explanation:**
+
+1.  We start at the top-level `Dealership` collection because we need a single average value across all payments.
+2.  We use `CALCULATE` to define the final output field `avg_days_to_payment`.
+3.  Inside `CALCULATE`, we use the `AVG` aggregation function to compute the average.
+4.  `AVG` operates on the results of an inner calculation performed on the `PaymentsReceived` collection.
+5.  For each record in `PaymentsReceived`, we use an inner `CALCULATE` to compute `days_diff`. This is done using the `DATEDIFF` function with `""days""` as the unit, comparing the `payment_date` of the payment record with the `sale_date` from its linked `sale_record`.
+6.  `.days_diff` accesses the result of this inner calculation for the `AVG` function.
+7.  Finally, the `ROUND` function takes the calculated average and rounds it to 2 decimal places as requested.",15.86061406135559,"# Calculate the average number of days between the sale date and the payment received date, rounded to 2 decimal places.
+avg_payment_time = Dealership.CALCULATE(
+    avg_days_to_payment=ROUND(
+        AVG(
+            # For each payment received, calculate the difference in days from the sale date
+            PaymentsReceived.CALCULATE(
+                days_diff=DATEDIFF(""days"", sale_record.sale_date, payment_date)
+            ).days_diff # Access the calculated difference
+        ),
+        2 # Round the final average to 2 decimal places
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=367 candidates_tokens_details=None prompt_token_count=18941 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18941)] thoughts_token_count=1131 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20439 traffic_type=None",No Match,
+What is the GPM for all car sales in 2023?GPM (gross profit margin) = (total revenue - total cost) / total cost * 100,"SELECT (SUM(sale_price) - SUM(cars.cost)) / SUM(cars.cost) * 100 AS gpm FROM sales JOIN cars ON sales.car_id = cars._id WHERE strftime('%Y', sale_date) = '2023';",Dealership,"```python
+# Filter sales for the year 2023
+sales_in_2023 = Sales.WHERE(YEAR(sale_date) == 2023)
+
+# Calculate total revenue and total cost for these sales at the Dealership level
+gpm_calculation = Dealership.CALCULATE(
+    total_revenue_2023=SUM(sales_in_2023.sale_price),
+    total_cost_2023=SUM(sales_in_2023.car.cost)
+).CALCULATE(
+    # Calculate GPM using the provided formula, handling potential division by zero
+    gpm_2023 = IFF(
+        total_cost_2023 != 0,
+        (total_revenue_2023 - total_cost_2023) / total_cost_2023 * 100.0,
+        None  # Return None if total cost is zero to avoid division error
+    )
+)
+
+# Assign the final calculation to the result variable
+result = gpm_calculation.CALCULATE(gpm_2023=gpm_2023)
+```
+
+**Explanation:**
+
+1.  **`sales_in_2023 = Sales.WHERE(YEAR(sale_date) == 2023)`**: This line filters the `Sales` collection to include only sales records where the year of the `sale_date` is 2023.
+2.  **`gpm_calculation = Dealership.CALCULATE(...)`**: This starts a calculation at the top `Dealership` level to compute aggregate values.
+    *   **`total_revenue_2023=SUM(sales_in_2023.sale_price)`**: Calculates the sum of `sale_price` for all sales that occurred in 2023.
+    *   **`total_cost_2023=SUM(sales_in_2023.car.cost)`**: Calculates the sum of the `cost` for all cars associated with the sales that occurred in 2023. It accesses the cost through the `car` relationship from the filtered sales.
+3.  **`.CALCULATE(...)`**: This subsequent `CALCULATE` uses the previously computed totals to calculate the Gross Profit Margin (GPM).
+    *   **`gpm_2023 = IFF(...)`**: The `IFF` function is used to apply the GPM formula `(total revenue - total cost) / total cost * 100.0`.
+    *   **`total_cost_2023 != 0`**: This condition checks if the `total_cost_2023` is not zero to prevent division by zero errors.
+    *   **`(total_revenue_2023 - total_cost_2023) / total_cost_2023 * 100.0`**: If the cost is not zero, this calculates the GPM percentage. Using `100.0` ensures the result is a float.
+    *   **`None`**: If the `total_cost_2023` is zero, the GPM is set to `None`.
+4.  **`result = gpm_calculation.CALCULATE(gpm_2023=gpm_2023)`**: This final step selects only the calculated `gpm_2023` value and assigns it to the `result` variable.",17.590620040893555,"# Filter sales for the year 2023
+sales_in_2023 = Sales.WHERE(YEAR(sale_date) == 2023)
+
+# Calculate total revenue and total cost for these sales at the Dealership level
+gpm_calculation = Dealership.CALCULATE(
+    total_revenue_2023=SUM(sales_in_2023.sale_price),
+    total_cost_2023=SUM(sales_in_2023.car.cost)
+).CALCULATE(
+    # Calculate GPM using the provided formula, handling potential division by zero
+    gpm_2023 = IFF(
+        total_cost_2023 != 0,
+        (total_revenue_2023 - total_cost_2023) / total_cost_2023 * 100.0,
+        None  # Return None if total cost is zero to avoid division error
+    )
+)
+
+# Assign the final calculation to the result variable
+result = gpm_calculation.CALCULATE(gpm_2023=gpm_2023)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=788 candidates_tokens_details=None prompt_token_count=18957 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18957)] thoughts_token_count=1048 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20793 traffic_type=None",Match,
+"What is the make, model and sale price of the car with the highest sale price that was sold on the same day it went out of inventory?","SELECT c.make, c.model, s.sale_price FROM cars AS c JOIN sales AS s ON c._id = s.car_id JOIN inventory_snapshots AS i ON c._id = i.car_id AND DATE(s.sale_date) = DATE(i.snapshot_date) WHERE i.is_in_inventory = 0 ORDER BY s.sale_price DESC LIMIT 1;",Dealership,"```python
+highest_priced_car_sold_on_exit_day = Sales.WHERE(
+    # Check if there exists an inventory snapshot for the car associated with this sale...
+    HAS(
+        car.inventory_snapshots.WHERE(
+            # ...where the car is marked as NOT in inventory...
+            (is_in_inventory == False) &
+            # ...and the snapshot date is the same as the sale date.
+            (snapshot_date == sale_date)
+        )
+    ) == 1 # Ensure at least one such snapshot exists
+).TOP_K(
+    # Find the single sale with the highest price among those that meet the criteria
+    1, by=sale_price.DESC()
+).CALCULATE(
+    # Select the make, model, and sale price
+    car_make=car.make,
+    car_model=car.model,
+    car_sale_price=sale_price
+)
+```
+
+**Explanation:**
+
+1.  **`Sales.WHERE(...)`**: We start with the `Sales` collection and filter it based on a condition.
+2.  **`HAS(car.inventory_snapshots.WHERE(...)) == 1`**: This is the core filtering condition. For each `Sale`, it checks if the associated `car` has at least one (`HAS(...) == 1`) `inventory_snapshots` record that meets the inner `WHERE` criteria.
+3.  **`inventory_snapshots.WHERE((is_in_inventory == False) & (snapshot_date == sale_date))`**: This inner filter selects inventory snapshots for the specific car where `is_in_inventory` is `False` (meaning it left inventory) *and* the `snapshot_date` of that inventory record is exactly the same as the `sale_date` of the current `Sale` being evaluated.
+4.  **`.TOP_K(1, by=sale_price.DESC())`**: After filtering the sales to only include those where the car was sold on the same day it was marked out of inventory, this selects the single (`1`) sale record with the highest (`DESC()`) `sale_price`.
+5.  **`.CALCULATE(...)`**: Finally, for the top sale found, we select the `make` and `model` from the related `car` and the `sale_price` from the sale record itself, renaming them for clarity.",19.549438953399655,"highest_priced_car_sold_on_exit_day = Sales.WHERE(
+    # Check if there exists an inventory snapshot for the car associated with this sale...
+    HAS(
+        car.inventory_snapshots.WHERE(
+            # ...where the car is marked as NOT in inventory...
+            (is_in_inventory == False) &
+            # ...and the snapshot date is the same as the sale date.
+            (snapshot_date == sale_date)
+        )
+    ) == 1 # Ensure at least one such snapshot exists
+).TOP_K(
+    # Find the single sale with the highest price among those that meet the criteria
+    1, by=sale_price.DESC()
+).CALCULATE(
+    # Select the make, model, and sale price
+    car_make=car.make,
+    car_model=car.model,
+    car_sale_price=sale_price
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=524 candidates_tokens_details=None prompt_token_count=18948 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18948)] thoughts_token_count=1430 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20902 traffic_type=None",Query Error,Unrecognized term of simple table collection 'InventorySnapshots' in graph 'Dealership': 'sale_date'
+"What is the total payments received per month? Also calculate the MoM change for each month.MoM change = (current month value - prev month value). Return all months in your answer, including those where there were no payments.","WITH monthly_totals AS (SELECT strftime('%Y-%m', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;WITH monthly_totals AS (SELECT strftime('%Y-%m-01', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m-01', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m-01', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m-01', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;WITH monthly_totals AS (SELECT strftime('%Y-%m-01 00:00:00', payment_date) AS dt, SUM(payment_amount) AS total_payments FROM payments_received GROUP BY dt), monthly_totals_with_zero AS (SELECT dt, total_payments FROM monthly_totals UNION ALL SELECT strftime('%Y-%m-01 00:00:00', date(payment_date, 'start of month', '+' || (n || ' month'))) AS dt, 0 AS total_payments FROM payments_received, (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11) WHERE strftime('%Y-%m-01 00:00:00', date(payment_date, 'start of month', '+' || (n || ' month'))) <= strftime('%Y-%m-01 00:00:00', 'now') GROUP BY dt) SELECT dt AS MONTH, SUM(total_payments) AS total_payments, SUM(total_payments) - LAG(SUM(total_payments), 1) OVER (ORDER BY dt) AS mom_change FROM monthly_totals_with_zero GROUP BY dt ORDER BY dt;",Dealership,"```python
+# Step 1: Prepare payment data with a year_month identifier
+payments_info = PaymentsReceived.CALCULATE(
+    # Create a sortable string YYYY-MM for each payment
+    year_month_str=JOIN_STRINGS(""-"", YEAR(payment_date), LPAD(MONTH(payment_date), 2, ""0"")),
+    # Keep the payment amount for aggregation
+    payment_val=payment_amount
+)
+
+# Step 2: Partition by the year_month identifier and calculate the total payments for each month
+monthly_grouped_payments = payments_info.PARTITION(name=""monthly_groups"", by=(year_month_str)).CALCULATE(
+    # Select the month identifier
+    month_id=year_month_str,
+    # Calculate the sum of payments for this month group
+    total_monthly_payments=SUM(payments_info.payment_val)
+)
+
+# Step 3: Order the monthly totals chronologically and calculate the MoM change
+# Order by the month identifier (YYYY-MM) to ensure PREV function works correctly
+result = monthly_grouped_payments.ORDER_BY(month_id.ASC()).CALCULATE(
+    # Rename month_id to year_month for the final output
+    year_month=month_id,
+    # Include the total payments for the month
+    total_payments=total_monthly_payments,
+    # Calculate the MoM change using the PREV window function
+    # PREV gets the total_monthly_payments from the previous record based on the month_id ordering
+    # default=0.0 handles the first month in the dataset, where there's no previous month
+    mom_change=total_monthly_payments - PREV(total_monthly_payments, by=month_id.ASC(), default=0.0)
+)
+```
+
+**Explanation:**
+
+1.  **`payments_info = PaymentsReceived.CALCULATE(...)`**: This step accesses the `PaymentsReceived` collection and prepares the data.
+    *   It creates a `year_month_str` field by combining the year and month (padded with a leading zero if needed) from the `payment_date`. This creates a string like ""YYYY-MM"" which is essential for correct chronological sorting and grouping.
+    *   It renames `payment_amount` to `payment_val` for use in the next step.
+2.  **`monthly_grouped_payments = payments_info.PARTITION(...)`**: This step groups the prepared payment data.
+    *   `PARTITION(name=""monthly_groups"", by=(year_month_str))` groups the records based on the unique `year_month_str` values.
+    *   `.CALCULATE(...)` then operates on each group:
+        *   `month_id=year_month_str` selects the identifier for the group.
+        *   `total_monthly_payments=SUM(payments_info.payment_val)` calculates the sum of all `payment_val` within that specific month's group.
+3.  **`result = monthly_grouped_payments.ORDER_BY(...).CALCULATE(...)`**: This final step calculates the MoM change.
+    *   `ORDER_BY(month_id.ASC())` sorts the aggregated monthly totals chronologically based on the ""YYYY-MM"" string. This is crucial for the `PREV` function to correctly identify the *previous* month.
+    *   `.CALCULATE(...)` computes the final output fields:
+        *   `year_month=month_id` presents the month identifier.
+        *   `total_payments=total_monthly_payments` includes the calculated total for the month.
+        *   `mom_change=total_monthly_payments - PREV(...)` calculates the Month-over-Month change.
+            *   `PREV(total_monthly_payments, by=month_id.ASC(), default=0.0)` retrieves the `total_monthly_payments` value from the immediately preceding row in the sorted data.
+            *   The `by=month_id.ASC()` argument reinforces the order used for finding the previous record (though `ORDER_BY` already sorted it).
+            *   `default=0.0` ensures that for the very first month in the dataset (which has no preceding month), the previous value is treated as 0, so the MoM change is simply the total payment for that first month.
+
+This query calculates the total payments for each month found in the `PaymentsReceived` data and the change compared to the previous month present in the data.",33.343485832214355,"# Step 1: Prepare payment data with a year_month identifier
+payments_info = PaymentsReceived.CALCULATE(
+    # Create a sortable string YYYY-MM for each payment
+    year_month_str=JOIN_STRINGS(""-"", YEAR(payment_date), LPAD(MONTH(payment_date), 2, ""0"")),
+    # Keep the payment amount for aggregation
+    payment_val=payment_amount
+)
+
+# Step 2: Partition by the year_month identifier and calculate the total payments for each month
+monthly_grouped_payments = payments_info.PARTITION(name=""monthly_groups"", by=(year_month_str)).CALCULATE(
+    # Select the month identifier
+    month_id=year_month_str,
+    # Calculate the sum of payments for this month group
+    total_monthly_payments=SUM(payments_info.payment_val)
+)
+
+# Step 3: Order the monthly totals chronologically and calculate the MoM change
+# Order by the month identifier (YYYY-MM) to ensure PREV function works correctly
+result = monthly_grouped_payments.ORDER_BY(month_id.ASC()).CALCULATE(
+    # Rename month_id to year_month for the final output
+    year_month=month_id,
+    # Include the total payments for the month
+    total_payments=total_monthly_payments,
+    # Calculate the MoM change using the PREV window function
+    # PREV gets the total_monthly_payments from the previous record based on the month_id ordering
+    # default=0.0 handles the first month in the dataset, where there's no previous month
+    mom_change=total_monthly_payments - PREV(total_monthly_payments, by=month_id.ASC(), default=0.0)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=1010 candidates_tokens_details=None prompt_token_count=18965 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18965)] thoughts_token_count=2159 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22134 traffic_type=None",SQL error,You can only execute one statement at a time.
+"What is the TSC in the past 7 days, inclusive of today?TSC = Total Sales Count.","SELECT COUNT(_id) AS TSC FROM sales WHERE sale_date >= DATE('now', '-7 days');",Dealership,"```python
+result = Dealership.CALCULATE(
+    TSC=COUNT(Sales.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 6))
+)
+```
+
+**Explanation:**
+
+1.  **`Dealership.CALCULATE(...)`**: We start at the top-level `Dealership` collection because we want a single aggregated result (the total count).
+2.  **`COUNT(Sales.WHERE(...))`**: We count the records in the `Sales` collection after applying a filter.
+3.  **`DATEDIFF(""days"", sale_date, DATETIME('now')) <= 6`**: This is the filter condition.
+    *   `DATETIME('now')` gets the current date and time.
+    *   `DATEDIFF(""days"", sale_date, DATETIME('now'))` calculates the number of full days between the `sale_date` of each sale and the current date.
+    *   `<= 6` ensures we include sales from today (0 days difference) up to 6 days ago (6 days difference), covering the last 7 days inclusive of today.
+4.  **`TSC=...`**: The final count is assigned to the field named `TSC` (Total Sales Count) as requested.",10.864379405975342,"result = Dealership.CALCULATE(
+    TSC=COUNT(Sales.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 6))
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=281 candidates_tokens_details=None prompt_token_count=18939 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18939)] thoughts_token_count=727 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19947 traffic_type=None",Match,
+"Who are the top 3 salespersons by ASP? Return their first name, last name and ASP.ASP (average selling price) = total sales amount / number of sales","SELECT salespersons.first_name, salespersons.last_name, AVG(sales.sale_price) AS ASP FROM sales JOIN salespersons ON sales.salesperson_id = salespersons._id GROUP BY salespersons.first_name, salespersons.last_name ORDER BY ASP DESC LIMIT 3;",Dealership,"```python
+top_salespersons_by_asp = Salespersons.WHERE(
+    HAS(sales_made)==1 # Filter to include only salespersons with at least one sale
+).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    # Calculate total sales amount for each salesperson
+    total_sales_amount=SUM(sales_made.sale_price),
+    # Calculate the number of sales for each salesperson
+    num_sales=COUNT(sales_made)
+).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    # Calculate Average Selling Price (ASP) using the previously calculated fields
+    asp = total_sales_amount / num_sales
+).TOP_K(
+    3, by=asp.DESC() # Select the top 3 salespersons based on their ASP in descending order
+)
+```
+
+**Explanation:**
+
+1.  **`Salespersons.WHERE(HAS(sales_made)==1)`**: Starts with the `Salespersons` collection and filters it to include only those who have made at least one sale (`sales_made` sub-collection is not empty). This prevents potential division by zero errors when calculating ASP.
+2.  **`.CALCULATE(...)`**: The first `CALCULATE` computes intermediate values for each salesperson:
+    *   `first_name=first_name`, `last_name=last_name`: Selects the salesperson's name.
+    *   `total_sales_amount=SUM(sales_made.sale_price)`: Calculates the sum of `sale_price` for all sales made by the salesperson.
+    *   `num_sales=COUNT(sales_made)`: Counts the total number of sales made by the salesperson.
+3.  **`.CALCULATE(...)`**: The second `CALCULATE` uses the results from the previous step:
+    *   `first_name=first_name`, `last_name=last_name`: Keeps the name fields.
+    *   `asp = total_sales_amount / num_sales`: Calculates the Average Selling Price (ASP) using the defined formula.
+4.  **`.TOP_K(3, by=asp.DESC())`**: Selects the top 3 records from the result, ordered by the calculated `asp` field in descending order (highest ASP first). The final result includes `first_name`, `last_name`, and `asp` for these top 3 salespersons.",17.262975215911865,"top_salespersons_by_asp = Salespersons.WHERE(
+    HAS(sales_made)==1 # Filter to include only salespersons with at least one sale
+).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    # Calculate total sales amount for each salesperson
+    total_sales_amount=SUM(sales_made.sale_price),
+    # Calculate the number of sales for each salesperson
+    num_sales=COUNT(sales_made)
+).CALCULATE(
+    first_name=first_name,
+    last_name=last_name,
+    # Calculate Average Selling Price (ASP) using the previously calculated fields
+    asp = total_sales_amount / num_sales
+).TOP_K(
+    3, by=asp.DESC() # Select the top 3 salespersons based on their ASP in descending order
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=552 candidates_tokens_details=None prompt_token_count=18953 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18953)] thoughts_token_count=1182 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20687 traffic_type=None",Match,
+"Who are the top 5 salespersons by total sales amount? Return their ID, first name, last name and total sales amount.To get the total sales amount per salesperson, join the salespersons and sales tables, group by salesperson, and sum the sale_price. Always order results with NULLS last.","WITH salesperson_sales AS (SELECT s._id, s.first_name, s.last_name, SUM(sa.sale_price) AS total_sales FROM salespersons AS s LEFT JOIN sales AS sa ON s._id = sa.salesperson_id GROUP BY s._id) SELECT _id, first_name, last_name, total_sales FROM salesperson_sales ORDER BY total_sales DESC LIMIT 5;",Dealership,"```python
+top_salespersons = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    s_first_name=first_name,
+    s_last_name=last_name,
+    # Calculate the total sales amount by summing the sale_price
+    # from the 'sales_made' sub-collection for each salesperson.
+    total_sales_amount=SUM(sales_made.sale_price)
+).TOP_K(
+    5,
+    # Order by the calculated total_sales_amount in descending order.
+    # Place any NULL values last as requested.
+    by=total_sales_amount.DESC(na_pos='last')
+)
+
+```
+
+**Explanation:**
+
+1.  **`Salespersons.CALCULATE(...)`**: We start with the `Salespersons` collection and use `CALCULATE` to select and compute fields for each salesperson.
+2.  **`salesperson_id=_id, s_first_name=first_name, s_last_name=last_name`**: We select the salesperson's ID, first name, and last name, renaming them for clarity in the output.
+3.  **`total_sales_amount=SUM(sales_made.sale_price)`**: For each salesperson, we calculate the sum of the `sale_price` from all their associated sales records found in the `sales_made` sub-collection. This gives us the total sales amount per salesperson.
+4.  **`.TOP_K(5, by=total_sales_amount.DESC(na_pos='last'))`**: We then use `TOP_K` to select the top 5 salespersons based on the `total_sales_amount` we just calculated.
+    *   `5`: Specifies that we want the top 5 records.
+    *   `by=total_sales_amount.DESC(na_pos='last')`: Sorts the salespersons by their `total_sales_amount` in descending order (highest sales first) and ensures that any potential NULL values are placed at the end of the sorted list.",18.51426339149475,"top_salespersons = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    s_first_name=first_name,
+    s_last_name=last_name,
+    # Calculate the total sales amount by summing the sale_price
+    # from the 'sales_made' sub-collection for each salesperson.
+    total_sales_amount=SUM(sales_made.sale_price)
+).TOP_K(
+    5,
+    # Order by the calculated total_sales_amount in descending order.
+    # Place any NULL values last as requested.
+    by=total_sales_amount.DESC(na_pos='last')
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=461 candidates_tokens_details=None prompt_token_count=18981 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18981)] thoughts_token_count=1248 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20690 traffic_type=None",Match,
+"Return the car ID, make, model and year for cars that have no sales records, by doing a left join from the cars to sales table.","SELECT c._id AS car_id, c.make, c.model, c.year FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE s.car_id IS NULL;",Dealership,"```python
+cars_without_sales = Cars.WHERE(HASNOT(sale_records) == 1).CALCULATE(
+    car_id=_id,
+    car_make=make,
+    car_model=model,
+    car_year=year
+)
+```
+
+**Explanation:**
+
+1.  **`Cars`**: We start with the `Cars` collection.
+2.  **`.WHERE(HASNOT(sale_records) == 1)`**: This filters the `Cars` collection. The `HASNOT(sale_records)` function checks if the `sale_records` sub-collection (which links to `Sales`) is empty for each car. We keep only those cars where this condition is true (i.e., they have no associated sales records).
+3.  **`.CALCULATE(...)`**: This selects and renames the required fields (`_id`, `make`, `model`, `year`) for the cars that passed the filter. We rename `_id` to `car_id`, `make` to `car_make`, `model` to `car_model`, and `year` to `car_year` for clarity.",8.89285659790039,"cars_without_sales = Cars.WHERE(HASNOT(sale_records) == 1).CALCULATE(
+    car_id=_id,
+    car_make=make,
+    car_model=model,
+    car_year=year
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=253 candidates_tokens_details=None prompt_token_count=18948 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18948)] thoughts_token_count=424 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19625 traffic_type=None",Match,
+"Return the distinct list of customer IDs that have made a purchase, based on joining the customers and sales tables.",SELECT DISTINCT c._id AS customer_id FROM customers AS c JOIN sales AS s ON c._id = s.customer_id;,Dealership,"```python
+import Dealership
+
+# Filter customers who have made at least one purchase and select their IDs.
+distinct_customer_ids = Dealership.Customers.WHERE(HAS(car_purchases) == 1).CALCULATE(
+    customer_id=_id
+)
+```
+
+**Explanation:**
+
+1.  `Dealership.Customers`: Accesses the `Customers` collection within the `Dealership` graph.
+2.  `.WHERE(HAS(car_purchases) == 1)`: Filters the `Customers` collection. The `HAS(car_purchases)` function checks if the `car_purchases` sub-collection (which links to `Sales`) for each customer is non-empty. `== 1` ensures we only keep customers who have made at least one purchase.
+3.  `.CALCULATE(customer_id=_id)`: Selects the `_id` field from the filtered customers and renames it to `customer_id`. Since customer `_id` values are inherently unique, this results in a distinct list of customer IDs who have made purchases.",8.779152154922485,"import Dealership
+
+# Filter customers who have made at least one purchase and select their IDs.
+distinct_customer_ids = Dealership.Customers.WHERE(HAS(car_purchases) == 1).CALCULATE(
+    customer_id=_id
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=235 candidates_tokens_details=None prompt_token_count=18940 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18940)] thoughts_token_count=513 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19688 traffic_type=None",Query Error,No module named 'Dealership'
+"Return the distinct list of salesperson IDs that have received a cash payment, based on joining the salespersons, sales and payments_received tables.",SELECT DISTINCT s._id AS salesperson_id FROM salespersons AS s JOIN sales AS sa ON s._id = sa.salesperson_id JOIN payments_received AS p ON sa._id = p.sale_id WHERE p.payment_method = 'cash';,Dealership,"```python
+# Start with PaymentsReceived and filter for cash payments
+cash_payments = PaymentsReceived.WHERE(payment_method == 'cash')
+
+# Access the related Sale record for each cash payment
+# Since sale_record is a singular relationship (one payment belongs to one sale),
+# we can directly access its fields.
+sales_with_cash = cash_payments.sale_record
+
+# Select the salesperson_id from these sales
+salesperson_ids_from_cash_sales = sales_with_cash.CALCULATE(
+    sp_id=salesperson_id
+)
+
+# Use PARTITION by the salesperson_id to get the distinct list
+distinct_salespersons = salesperson_ids_from_cash_sales.PARTITION(
+    name=""distinct_sps"", by=(sp_id)
+).CALCULATE(
+    salesperson_id=sp_id # Output the distinct salesperson_id
+)
+
+# Assign the final result to the variable
+result = distinct_salespersons
+```
+
+**Explanation:**
+
+1.  **`cash_payments = PaymentsReceived.WHERE(payment_method == 'cash')`**: This line filters the `PaymentsReceived` collection to find all records where the `payment_method` field is exactly 'cash'.
+2.  **`sales_with_cash = cash_payments.sale_record`**: For each cash payment found, this navigates to the corresponding `Sales` record using the `sale_record` relationship.
+3.  **`salesperson_ids_from_cash_sales = sales_with_cash.CALCULATE(sp_id=salesperson_id)`**: From the relevant `Sales` records, this line selects the `salesperson_id` and assigns it to a temporary variable `sp_id`.
+4.  **`distinct_salespersons = salesperson_ids_from_cash_sales.PARTITION(name=""distinct_sps"", by=(sp_id)).CALCULATE(salesperson_id=sp_id)`**: This performs the distinct operation.
+    *   `PARTITION(name=""distinct_sps"", by=(sp_id))` groups the records based on the unique values of `sp_id` (the salesperson ID).
+    *   `.CALCULATE(salesperson_id=sp_id)` then selects the `sp_id` from each group, resulting in a collection containing only the distinct salesperson IDs who received at least one cash payment.
+5.  **`result = distinct_salespersons`**: The final collection of distinct salesperson IDs is assigned to the `result` variable.",18.68971562385559,"# Start with PaymentsReceived and filter for cash payments
+cash_payments = PaymentsReceived.WHERE(payment_method == 'cash')
+
+# Access the related Sale record for each cash payment
+# Since sale_record is a singular relationship (one payment belongs to one sale),
+# we can directly access its fields.
+sales_with_cash = cash_payments.sale_record
+
+# Select the salesperson_id from these sales
+salesperson_ids_from_cash_sales = sales_with_cash.CALCULATE(
+    sp_id=salesperson_id
+)
+
+# Use PARTITION by the salesperson_id to get the distinct list
+distinct_salespersons = salesperson_ids_from_cash_sales.PARTITION(
+    name=""distinct_sps"", by=(sp_id)
+).CALCULATE(
+    salesperson_id=sp_id # Output the distinct salesperson_id
+)
+
+# Assign the final result to the variable
+result = distinct_salespersons","cache_tokens_details=None cached_content_token_count=None candidates_token_count=560 candidates_tokens_details=None prompt_token_count=18946 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18946)] thoughts_token_count=1269 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20775 traffic_type=None",Match,
+"Return the salesperson ID, first name and last name for salespersons that have no sales records, by doing a left join from the salespersons to sales table.","SELECT s._id AS salesperson_id, s.first_name, s.last_name FROM salespersons AS s LEFT JOIN sales AS sa ON s._id = sa.salesperson_id WHERE sa.salesperson_id IS NULL;",Dealership,"```python
+inactive_salespersons = Salespersons.WHERE(HASNOT(sales_made) == 1).CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name
+)
+```
+
+**Explanation:**
+
+1.  **`Salespersons`**: Starts with the `Salespersons` collection.
+2.  **`.WHERE(HASNOT(sales_made) == 1)`**: Filters the `Salespersons` collection to include only those records where the `sales_made` sub-collection (representing their sales) is empty. The `HASNOT()` function returns true if the sub-collection has no records. This effectively performs the ""left join"" logic by finding salespersons without corresponding entries in the sales data.
+3.  **`.CALCULATE(...)`**: Selects the required fields:
+    *   `salesperson_id=_id`: Selects the `_id` field and renames it to `salesperson_id`.
+    *   `first_name=first_name`: Selects the `first_name`.
+    *   `last_name=last_name`: Selects the `last_name`.
+4.  **`inactive_salespersons = ...`**: Assigns the resulting collection of inactive salespersons to the variable `inactive_salespersons`.",9.092832565307615,"inactive_salespersons = Salespersons.WHERE(HASNOT(sales_made) == 1).CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=294 candidates_tokens_details=None prompt_token_count=18950 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18950)] thoughts_token_count=434 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19678 traffic_type=None",Match,
+"Return the top 5 salespersons by number of sales in the past 30 days? Return their first and last name, total sales count and total revenue amount.","SELECT sp.first_name, sp.last_name, COUNT(s._id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN salespersons AS sp ON s.salesperson_id = sp._id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp.first_name, sp.last_name, sp._id ORDER BY total_sales DESC LIMIT 5;",Dealership,"```python
+# Calculate sales count and revenue for salespersons with sales in the last 30 days
+salesperson_recent_stats = Salespersons.WHERE(
+    # Filter for salespersons who have at least one sale in the last 30 days
+    HAS(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30)) == 1
+).CALCULATE(
+    # Select salesperson's first and last name
+    s_first_name=first_name,
+    s_last_name=last_name,
+    # Count the number of sales made in the last 30 days
+    total_sales_count=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30)),
+    # Calculate the total revenue from sales made in the last 30 days
+    total_revenue_amount=SUM(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30).sale_price)
+)
+
+# Select the top 5 salespersons based on the total number of sales in the last 30 days
+top_5_salespersons = salesperson_recent_stats.TOP_K(5, by=total_sales_count.DESC())
+
+# Assign the final result to the 'result' variable
+result = top_5_salespersons
+```
+
+**Explanation:**
+
+1.  **`Salespersons.WHERE(...)`**: We start with the `Salespersons` collection and filter it to include only those who have made at least one sale within the last 30 days.
+    *   **`HAS(sales_made.WHERE(...)) == 1`**: Checks if the `sales_made` sub-collection (representing sales linked to the salesperson) is not empty after filtering for recent sales.
+    *   **`DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30`**: This condition filters the `sales_made` to include only sales where the difference between the `sale_date` and the current date/time (`DATETIME('now')`) is 30 days or less.
+2.  **`.CALCULATE(...)`**: For the filtered salespersons, we calculate the required information:
+    *   **`s_first_name=first_name`, `s_last_name=last_name`**: Selects the first and last names, renaming them to avoid conflicts.
+    *   **`total_sales_count=COUNT(...)`**: Counts the number of sales records within the `sales_made` sub-collection that satisfy the 30-day filter.
+    *   **`total_revenue_amount=SUM(...)`**: Sums the `sale_price` for all sales records within the `sales_made` sub-collection that satisfy the 30-day filter.
+3.  **`.TOP_K(5, by=total_sales_count.DESC())`**: Takes the results from the `CALCULATE` step and selects the top 5 records based on the `total_sales_count` in descending order (highest count first).
+4.  **`result = top_5_salespersons`**: Assigns the final collection containing the top 5 salespersons and their calculated stats to the `result` variable.",31.36882710456848,"# Calculate sales count and revenue for salespersons with sales in the last 30 days
+salesperson_recent_stats = Salespersons.WHERE(
+    # Filter for salespersons who have at least one sale in the last 30 days
+    HAS(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30)) == 1
+).CALCULATE(
+    # Select salesperson's first and last name
+    s_first_name=first_name,
+    s_last_name=last_name,
+    # Count the number of sales made in the last 30 days
+    total_sales_count=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30)),
+    # Calculate the total revenue from sales made in the last 30 days
+    total_revenue_amount=SUM(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30).sale_price)
+)
+
+# Select the top 5 salespersons based on the total number of sales in the last 30 days
+top_5_salespersons = salesperson_recent_stats.TOP_K(5, by=total_sales_count.DESC())
+
+# Assign the final result to the 'result' variable
+result = top_5_salespersons","cache_tokens_details=None cached_content_token_count=None candidates_token_count=737 candidates_tokens_details=None prompt_token_count=18952 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18952)] thoughts_token_count=2460 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22149 traffic_type=None",Match,
+"Return the top 5 states by total revenue, showing the number of unique customers and total revenue (based on sale price) for each state.","SELECT c.state, COUNT(DISTINCT s.customer_id) AS unique_customers, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN customers AS c ON s.customer_id = c._id GROUP BY c.state ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC LIMIT 5;",Dealership,"```python
+# Partition customers by their state
+state_customer_groups = Customers.PARTITION(name=""state_groups"", by=(state))
+
+# Calculate the number of unique customers and total revenue for each state
+state_revenue_summary = state_customer_groups.CALCULATE(
+    state_name=state,  # The state name (partition key)
+    num_unique_customers=COUNT(Customers),  # Count unique customers within this state partition
+    total_revenue=SUM(Customers.car_purchases.sale_price)  # Sum the sale_price from all purchases made by customers in this state
+)
+
+# Select the top 5 states based on the calculated total revenue
+top_states_by_revenue = state_revenue_summary.TOP_K(5, by=total_revenue.DESC())
+```
+
+**Explanation:**
+
+1.  **`Customers.PARTITION(name=""state_groups"", by=(state))`**: This groups the `Customers` collection by their `state`. Each group within the `state_groups` partition represents a unique state.
+2.  **`.CALCULATE(...)`**: This step calculates aggregated values for each state group created by the partition:
+    *   `state_name=state`: Retrieves the state name, which is the key used for partitioning.
+    *   `num_unique_customers=COUNT(Customers)`: Counts the number of unique customer records within each state's partition group.
+    *   `total_revenue=SUM(Customers.car_purchases.sale_price)`: Calculates the total revenue for each state by summing the `sale_price` from all `car_purchases` (which links to the `Sales` collection) associated with the customers in that state group.
+3.  **`.TOP_K(5, by=total_revenue.DESC())`**: This selects the top 5 records (states) from the `state_revenue_summary` based on the `total_revenue`, ordered in descending order (highest revenue first). The final result includes the `state_name`, `num_unique_customers`, and `total_revenue` for these top 5 states.",19.36502170562744,"# Partition customers by their state
+state_customer_groups = Customers.PARTITION(name=""state_groups"", by=(state))
+
+# Calculate the number of unique customers and total revenue for each state
+state_revenue_summary = state_customer_groups.CALCULATE(
+    state_name=state,  # The state name (partition key)
+    num_unique_customers=COUNT(Customers),  # Count unique customers within this state partition
+    total_revenue=SUM(Customers.car_purchases.sale_price)  # Sum the sale_price from all purchases made by customers in this state
+)
+
+# Select the top 5 states based on the calculated total revenue
+top_states_by_revenue = state_revenue_summary.TOP_K(5, by=total_revenue.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=469 candidates_tokens_details=None prompt_token_count=18947 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18947)] thoughts_token_count=1254 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20670 traffic_type=None",No Match,
+"What are the top 3 payment methods by total payment amount received? Return the payment method, total number of payments and total amount.","SELECT payment_method, COUNT(*) AS total_payments, SUM(payment_amount) AS total_amount FROM payments_received GROUP BY payment_method ORDER BY CASE WHEN total_amount IS NULL THEN 1 ELSE 0 END DESC, total_amount DESC LIMIT 3;",Dealership,"```python
+result = PaymentsReceived.PARTITION(name=""payment_methods"", by=(payment_method)).CALCULATE(
+    payment_method=payment_method,
+    total_payments=COUNT(PaymentsReceived),
+    total_amount=SUM(PaymentsReceived.payment_amount)
+).TOP_K(3, by=total_amount.DESC())
+```
+
+**Explanation:**
+
+1.  **`PaymentsReceived.PARTITION(name=""payment_methods"", by=(payment_method))`**: This groups the `PaymentsReceived` collection by the unique values in the `payment_method` field. Each group represents a distinct payment method.
+2.  **`.CALCULATE(...)`**: For each payment method group created by the partition:
+    *   `payment_method=payment_method`: Selects the payment method name (which is the partition key).
+    *   `total_payments=COUNT(PaymentsReceived)`: Counts the number of payment records within that specific payment method group.
+    *   `total_amount=SUM(PaymentsReceived.payment_amount)`: Calculates the sum of `payment_amount` for all payments within that specific payment method group.
+3.  **`.TOP_K(3, by=total_amount.DESC())`**: This selects the top 3 payment method groups based on the calculated `total_amount`, sorting them in descending order (highest total amount first). The final result includes the `payment_method`, `total_payments`, and `total_amount` for these top 3 methods.",13.1940176486969,"result = PaymentsReceived.PARTITION(name=""payment_methods"", by=(payment_method)).CALCULATE(
+    payment_method=payment_method,
+    total_payments=COUNT(PaymentsReceived),
+    total_amount=SUM(PaymentsReceived.payment_amount)
+).TOP_K(3, by=total_amount.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=332 candidates_tokens_details=None prompt_token_count=18945 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18945)] thoughts_token_count=969 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20246 traffic_type=None",Match,
+"What are the top 5 best selling car models by total revenue? Return the make, model, total number of sales and total revenue.","SELECT c.make, c.model, COUNT(s._id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id GROUP BY c.make, c.model ORDER BY CASE WHEN total_revenue IS NULL THEN 1 ELSE 0 END DESC, total_revenue DESC LIMIT 5;",Dealership,"```python
+# Partition cars by make and model
+car_models = Cars.PARTITION(name=""model_group"", by=(make, model))
+
+# Calculate total sales count and total revenue for each model group
+model_sales_revenue = car_models.CALCULATE(
+    car_make=make,
+    car_model=model,
+    total_sales_count=COUNT(Cars.sale_records),
+    total_revenue=SUM(Cars.sale_records.sale_price)
+)
+
+# Select the top 5 models based on total revenue
+top_5_models_by_revenue = model_sales_revenue.TOP_K(5, by=total_revenue.DESC())
+
+# Assign the final result to the variable
+result = top_5_models_by_revenue
+```
+
+**Explanation:**
+
+1.  **`Cars.PARTITION(name=""model_group"", by=(make, model))`**: This groups all cars based on their unique `make` and `model` combinations. Each group is named `model_group`.
+2.  **`.CALCULATE(...)`**: This step operates on each `model_group`.
+    *   `car_make=make`, `car_model=model`: Selects the make and model (which are the partition keys).
+    *   `total_sales_count=COUNT(Cars.sale_records)`: Counts the number of sales records associated with all cars within the current make/model group. We access `Cars.sale_records` because `sale_records` is a sub-collection of the `Cars` collection being processed within the partition.
+    *   `total_revenue=SUM(Cars.sale_records.sale_price)`: Calculates the sum of the `sale_price` for all sales records associated with the cars in the current make/model group.
+3.  **`.TOP_K(5, by=total_revenue.DESC())`**: This selects the top 5 make/model groups based on the calculated `total_revenue`, ordered from highest revenue to lowest.
+4.  **`result = top_5_models_by_revenue`**: The final result containing the make, model, total sales count, and total revenue for the top 5 selling models is assigned to the `result` variable.",18.500772714614868,"# Partition cars by make and model
+car_models = Cars.PARTITION(name=""model_group"", by=(make, model))
+
+# Calculate total sales count and total revenue for each model group
+model_sales_revenue = car_models.CALCULATE(
+    car_make=make,
+    car_model=model,
+    total_sales_count=COUNT(Cars.sale_records),
+    total_revenue=SUM(Cars.sale_records.sale_price)
+)
+
+# Select the top 5 models based on total revenue
+top_5_models_by_revenue = model_sales_revenue.TOP_K(5, by=total_revenue.DESC())
+
+# Assign the final result to the variable
+result = top_5_models_by_revenue","cache_tokens_details=None cached_content_token_count=None candidates_token_count=502 candidates_tokens_details=None prompt_token_count=18946 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18946)] thoughts_token_count=1190 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20638 traffic_type=None",Match,
+"What are the total number of customer signups for the top 2 states? Return the state and total signups, starting from the top.","SELECT state, COUNT(*) AS total_signups FROM customers GROUP BY state ORDER BY CASE WHEN total_signups IS NULL THEN 1 ELSE 0 END DESC, total_signups DESC LIMIT 2;",Dealership,"```python
+top_states_signups = Customers.PARTITION(name=""state_groups"", by=(state)).CALCULATE(
+    state=state,
+    total_signups=COUNT(Customers)
+).TOP_K(2, by=total_signups.DESC())
+```
+
+**Explanation:**
+
+1.  **`Customers.PARTITION(name=""state_groups"", by=(state))`**: This groups the `Customers` collection by the `state` field. Each group represents a unique state.
+2.  **`.CALCULATE(state=state, total_signups=COUNT(Customers))`**: For each state group created by the partition, this calculates:
+    *   `state=state`: Selects the state name (which was the partition key).
+    *   `total_signups=COUNT(Customers)`: Counts the number of customers within that specific state group, effectively giving the total signups for that state.
+3.  **`.TOP_K(2, by=total_signups.DESC())`**: This takes the results from the previous step (one row per state with its signup count) and selects the top 2 rows based on the `total_signups` field in descending order (highest count first).
+
+The final result stored in `top_states_signups` will contain two rows, each with the `state` and its corresponding `total_signups`, ordered from the state with the most signups to the second most.",14.91161584854126,"top_states_signups = Customers.PARTITION(name=""state_groups"", by=(state)).CALCULATE(
+    state=state,
+    total_signups=COUNT(Customers)
+).TOP_K(2, by=total_signups.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=319 candidates_tokens_details=None prompt_token_count=18947 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18947)] thoughts_token_count=1090 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20356 traffic_type=None",Match,
+"Who were the top 3 sales representatives by total revenue in the past 3 months, inclusive of today's date? Return their first name, last name, total number of sales and total revenue. Note that revenue refers to the sum of sale_price in the sales table.","SELECT c.first_name, c.last_name, COUNT(s._id) AS total_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN salespersons AS c ON s.salesperson_id = c._id WHERE s.sale_date >= DATE('now', '-3 months') GROUP BY c.first_name, c.last_name ORDER BY total_revenue DESC LIMIT 3;",Dealership,"```python
+# Calculate the start date for the 3-month period (inclusive of today)
+start_date_3_months_ago = DATETIME('now', '-3 months')
+
+# Find the top 3 salespersons based on revenue in the last 3 months
+top_salespersons = Salespersons.CALCULATE(
+    # Select salesperson's first and last name
+    rep_first_name=first_name,
+    rep_last_name=last_name,
+    # Calculate total revenue from sales made on or after the start date
+    total_revenue=SUM(sales_made.WHERE(sale_date >= start_date_3_months_ago).sale_price),
+    # Count the number of sales made on or after the start date
+    total_sales_count=COUNT(sales_made.WHERE(sale_date >= start_date_3_months_ago))
+).WHERE(
+    # Filter out salespersons with no sales in the specified period
+    total_sales_count > 0
+).TOP_K(
+    # Select the top 3
+    3,
+    # Order by total revenue in descending order
+    by=total_revenue.DESC()
+)
+```
+
+**Explanation:**
+
+1.  **`start_date_3_months_ago = DATETIME('now', '-3 months')`**: This line defines a variable `start_date_3_months_ago` representing the date exactly 3 months prior to the current moment (`'now'`). This will be used to filter sales within the desired time frame.
+2.  **`Salespersons.CALCULATE(...)`**: We start with the `Salespersons` collection and use `CALCULATE` to compute new fields for each salesperson.
+3.  **`rep_first_name=first_name, rep_last_name=last_name`**: Selects the first and last names of the salespersons, renaming them for clarity.
+4.  **`total_revenue=SUM(sales_made.WHERE(sale_date >= start_date_3_months_ago).sale_price)`**:
+    *   Accesses the `sales_made` sub-collection for each salesperson.
+    *   Filters these sales using `WHERE` to include only those where the `sale_date` is greater than or equal to `start_date_3_months_ago`.
+    *   Calculates the `SUM` of the `sale_price` for these filtered sales, representing the total revenue for the period.
+5.  **`total_sales_count=COUNT(sales_made.WHERE(sale_date >= start_date_3_months_ago))`**:
+    *   Similarly, accesses and filters `sales_made` based on the `sale_date`.
+    *   Counts the number of sales (`COUNT`) within the specified 3-month period.
+6.  **`.WHERE(total_sales_count > 0)`**: This filters the results to ensure that only salespersons who actually made sales during the last 3 months are considered for the ranking.
+7.  **`.TOP_K(3, by=total_revenue.DESC())`**: Selects the top 3 salespersons based on the calculated `total_revenue`, ordering them in descending order (highest revenue first).",26.643659591674805,"# Calculate the start date for the 3-month period (inclusive of today)
+start_date_3_months_ago = DATETIME('now', '-3 months')
+
+# Find the top 3 salespersons based on revenue in the last 3 months
+top_salespersons = Salespersons.CALCULATE(
+    # Select salesperson's first and last name
+    rep_first_name=first_name,
+    rep_last_name=last_name,
+    # Calculate total revenue from sales made on or after the start date
+    total_revenue=SUM(sales_made.WHERE(sale_date >= start_date_3_months_ago).sale_price),
+    # Count the number of sales made on or after the start date
+    total_sales_count=COUNT(sales_made.WHERE(sale_date >= start_date_3_months_ago))
+).WHERE(
+    # Filter out salespersons with no sales in the specified period
+    total_sales_count > 0
+).TOP_K(
+    # Select the top 3
+    3,
+    # Order by total revenue in descending order
+    by=total_revenue.DESC()
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=724 candidates_tokens_details=None prompt_token_count=18975 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18975)] thoughts_token_count=1922 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21621 traffic_type=None",Match,
+Return the name and phone number of the salesperson with the shortest time from being hired to getting fired. Return the number of days he/she was employed for.,"SELECT s.first_name, s.last_name, s.phone, julianday(s.termination_date) - julianday(s.hire_date) AS days_employed FROM salespersons AS s ORDER BY CASE WHEN days_employed IS NULL THEN 1 ELSE 0 END, days_employed ASC LIMIT 1;",Dealership,"```python
+# Filter for salespersons who have both a hire date and a termination date
+# Calculate the duration of their employment in days
+# Select the salesperson's full name, phone number, and their employment duration
+salesperson_tenure = Salespersons.WHERE(termination_date != None).CALCULATE(
+    full_name=JOIN_STRINGS(' ', first_name, last_name),
+    phone_number=phone,
+    employment_duration_days=DATEDIFF(""days"", hire_date, termination_date)
+)
+
+# Find the salesperson with the minimum employment duration using TOP_K
+shortest_tenure_salesperson = salesperson_tenure.TOP_K(
+    1, by=employment_duration_days.ASC()
+)
+```
+
+**Explanation:**
+
+1.  **`Salespersons.WHERE(termination_date != None)`**: This starts with the `Salespersons` collection and filters it to include only those records where the `termination_date` field is not null, ensuring we only consider salespersons who have actually been terminated.
+2.  **`.CALCULATE(...)`**: This step calculates new fields for the filtered salespersons:
+    *   `full_name=JOIN_STRINGS(' ', first_name, last_name)`: Creates a full name by combining the `first_name` and `last_name` fields with a space in between.
+    *   `phone_number=phone`: Selects the `phone` field and renames it to `phone_number`.
+    *   `employment_duration_days=DATEDIFF(""days"", hire_date, termination_date)`: Calculates the difference between the `termination_date` and `hire_date` in days using the `DATEDIFF` function and assigns it to the `employment_duration_days` field.
+3.  **`.TOP_K(1, by=employment_duration_days.ASC())`**: This selects the top 1 record from the results of the `CALCULATE` step, ordered by the `employment_duration_days` in ascending order (`ASC()`). This effectively finds the salesperson with the shortest employment duration.
+4.  **`shortest_tenure_salesperson = ...`**: The final result, containing the full name, phone number, and employment duration (in days) of the salesperson with the shortest tenure, is assigned to the `shortest_tenure_salesperson` variable.",20.15216445922852,"# Filter for salespersons who have both a hire date and a termination date
+# Calculate the duration of their employment in days
+# Select the salesperson's full name, phone number, and their employment duration
+salesperson_tenure = Salespersons.WHERE(termination_date != None).CALCULATE(
+    full_name=JOIN_STRINGS(' ', first_name, last_name),
+    phone_number=phone,
+    employment_duration_days=DATEDIFF(""days"", hire_date, termination_date)
+)
+
+# Find the salesperson with the minimum employment duration using TOP_K
+shortest_tenure_salesperson = salesperson_tenure.TOP_K(
+    1, by=employment_duration_days.ASC()
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=528 candidates_tokens_details=None prompt_token_count=18950 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18950)] thoughts_token_count=1422 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20900 traffic_type=None",No Match,
+Return the number of payments made on weekends to the vendor named 'Utility Company',"SELECT COUNT(*) AS weekend_payments FROM payments_made WHERE vendor_name = 'Utility Company' AND strftime('%w', payment_date) IN ('0', '6');",Dealership,"```python
+# Filter payments made to 'Utility Company' on weekends (Saturday or Sunday)
+weekend_utility_payments = PaymentsMade.WHERE(
+    (vendor_name == 'Utility Company') &
+    ISIN(DAYNAME(payment_date), (""Saturday"", ""Sunday""))
+)
+
+# Count the number of these filtered payments
+result = Dealership.CALCULATE(
+    num_weekend_utility_payments=COUNT(weekend_utility_payments)
+)
+```
+
+**Explanation:**
+
+1.  **`weekend_utility_payments = PaymentsMade.WHERE(...)`**: This line starts with the `PaymentsMade` collection and filters it based on two conditions combined with `&` (AND):
+    *   `vendor_name == 'Utility Company'`: Selects payments where the `vendor_name` is exactly 'Utility Company'.
+    *   `ISIN(DAYNAME(payment_date), (""Saturday"", ""Sunday""))`: Selects payments where the day name of the `payment_date` is either ""Saturday"" or ""Sunday"". `DAYNAME()` extracts the day name from the date, and `ISIN()` checks if it's in the provided list.
+2.  **`result = Dealership.CALCULATE(...)`**: This line calculates the final result at the top `Dealership` level.
+    *   `num_weekend_utility_payments=COUNT(weekend_utility_payments)`: It counts the number of records in the previously filtered `weekend_utility_payments` collection and assigns the count to the new field `num_weekend_utility_payments`.",10.149611949920654,"# Filter payments made to 'Utility Company' on weekends (Saturday or Sunday)
+weekend_utility_payments = PaymentsMade.WHERE(
+    (vendor_name == 'Utility Company') &
+    ISIN(DAYNAME(payment_date), (""Saturday"", ""Sunday""))
+)
+
+# Count the number of these filtered payments
+result = Dealership.CALCULATE(
+    num_weekend_utility_payments=COUNT(weekend_utility_payments)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=343 candidates_tokens_details=None prompt_token_count=18934 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18934)] thoughts_token_count=605 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19882 traffic_type=None",Match,
+"show me the daily total amount of payments received in the whole of the previous ISO week not including the current week, split by the payment_method","SELECT payment_date, payment_method, SUM(payment_amount) AS total_amount FROM payments_received WHERE payment_date >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND payment_date < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY payment_date, payment_method ORDER BY payment_date DESC, payment_method ASC;",Dealership,"```python
+# Define the start and end dates for the previous ISO week
+# ISO weeks start on Monday. 'start of week' gives the current Monday.
+# Subtracting 7 days gives the previous Monday (start of last week).
+# Subtracting 1 day gives the previous Sunday (end of last week).
+date_info = Dealership.CALCULATE(
+    prev_week_start=DATETIME('now', 'start of week', '-7 days'),
+    prev_week_end=DATETIME('now', 'start of week', '-1 day')
+)
+
+# Filter payments received within the previous week
+# Also, extract the date part (day) from the payment_date for daily grouping
+payments_last_week = date_info.PaymentsReceived.WHERE(
+    (payment_date >= prev_week_start) & (payment_date <= prev_week_end)
+).CALCULATE(
+    payment_day=DATETIME(payment_date, 'start of day'), # Extract just the date part
+    payment_method=payment_method,
+    payment_amount=payment_amount # Carry amount forward for aggregation
+)
+
+# Partition the filtered payments by the day and payment method
+# Then, calculate the sum of payment amounts for each group (day + method)
+daily_payment_totals_by_method = payments_last_week.PARTITION(
+    name=""day_method_groups"", by=(payment_day, payment_method)
+).CALCULATE(
+    payment_date=payment_day, # Use the partition key 'payment_day' for the date
+    payment_method=payment_method, # Use the partition key 'payment_method'
+    total_daily_amount=SUM(payments_last_week.payment_amount) # Sum amounts from the filtered collection within the group
+).ORDER_BY(payment_date.ASC(), payment_method.ASC()) # Order results for clarity
+
+# Assign the final result to the variable 'result'
+result = daily_payment_totals_by_method
+```
+
+**Explanation:**
+
+1.  **`date_info = Dealership.CALCULATE(...)`**: We first calculate the start and end dates of the previous ISO week using the `DATETIME` function relative to the current moment (`'now'`). `DATETIME('now', 'start of week', '-7 days')` finds the Monday of the previous week, and `DATETIME('now', 'start of week', '-1 day')` finds the Sunday of the previous week.
+2.  **`payments_last_week = date_info.PaymentsReceived.WHERE(...)`**: We access the `PaymentsReceived` collection through the `date_info` context (which contains the calculated dates) and filter the records where the `payment_date` falls within the calculated `prev_week_start` and `prev_week_end`.
+3.  **`.CALCULATE(...)`**: Within the filtered payments, we calculate `payment_day` by truncating `payment_date` to the start of the day using `DATETIME(payment_date, 'start of day')`. We also select `payment_method` and `payment_amount` to be used in the next step.
+4.  **`.PARTITION(name=""day_method_groups"", by=(payment_day, payment_method))`**: We partition the `payments_last_week` data into groups based on the unique combinations of `payment_day` and `payment_method`.
+5.  **`.CALCULATE(...)`**: For each group created by the partition, we calculate the final output:
+    *   `payment_date=payment_day`: Selects the date (from the partition key).
+    *   `payment_method=payment_method`: Selects the payment method (from the partition key).
+    *   `total_daily_amount=SUM(payments_last_week.payment_amount)`: Calculates the sum of `payment_amount` for all records belonging to that specific day and payment method group, referencing the amounts carried forward in the `payments_last_week` collection.
+6.  **`.ORDER_BY(payment_date.ASC(), payment_method.ASC())`**: Sorts the final results first by date and then by payment method for better readability.
+7.  **`result = daily_payment_totals_by_method`**: Assigns the final computed collection to the `result` variable.",28.249122381210327,"# Define the start and end dates for the previous ISO week
+# ISO weeks start on Monday. 'start of week' gives the current Monday.
+# Subtracting 7 days gives the previous Monday (start of last week).
+# Subtracting 1 day gives the previous Sunday (end of last week).
+date_info = Dealership.CALCULATE(
+    prev_week_start=DATETIME('now', 'start of week', '-7 days'),
+    prev_week_end=DATETIME('now', 'start of week', '-1 day')
+)
+
+# Filter payments received within the previous week
+# Also, extract the date part (day) from the payment_date for daily grouping
+payments_last_week = date_info.PaymentsReceived.WHERE(
+    (payment_date >= prev_week_start) & (payment_date <= prev_week_end)
+).CALCULATE(
+    payment_day=DATETIME(payment_date, 'start of day'), # Extract just the date part
+    payment_method=payment_method,
+    payment_amount=payment_amount # Carry amount forward for aggregation
+)
+
+# Partition the filtered payments by the day and payment method
+# Then, calculate the sum of payment amounts for each group (day + method)
+daily_payment_totals_by_method = payments_last_week.PARTITION(
+    name=""day_method_groups"", by=(payment_day, payment_method)
+).CALCULATE(
+    payment_date=payment_day, # Use the partition key 'payment_day' for the date
+    payment_method=payment_method, # Use the partition key 'payment_method'
+    total_daily_amount=SUM(payments_last_week.payment_amount) # Sum amounts from the filtered collection within the group
+).ORDER_BY(payment_date.ASC(), payment_method.ASC()) # Order results for clarity
+
+# Assign the final result to the variable 'result'
+result = daily_payment_totals_by_method","cache_tokens_details=None cached_content_token_count=None candidates_token_count=968 candidates_tokens_details=None prompt_token_count=18947 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18947)] thoughts_token_count=1891 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21806 traffic_type=None",Query Error,Unrecognized term: 'Dealership'
+What were the total quarterly sales in 2023 grouped by customer's state? Represent each quarter as the first date in the quarter.,"SELECT CASE WHEN strftime('%m', s.sale_date) BETWEEN '01' AND '03' THEN '2023-01-01' WHEN strftime('%m', s.sale_date) BETWEEN '04' AND '06' THEN '2023-04-01' WHEN strftime('%m', s.sale_date) BETWEEN '07' AND '09' THEN '2023-07-01' ELSE '2023-10-01' END AS quarter, c.state, SUM(s.sale_price) AS total_sales FROM sales AS s JOIN customers AS c ON s.customer_id = c._id WHERE strftime('%Y', s.sale_date) = '2023' GROUP BY c.state, quarter HAVING SUM(s.sale_price) > 0 ORDER BY quarter, c.state;",Dealership,"```python
+# Filter sales records for the year 2023 and calculate necessary fields
+sales_info_2023 = Sales.WHERE(YEAR(sale_date) == 2023).CALCULATE(
+    # Get the customer's state from the related customer record
+    cust_state=customer.state,
+    # Determine the starting date of the quarter based on the sale month
+    quarter_start_date=IFF(MONTH(sale_date) <= 3, ""2023-01-01"",
+                         IFF(MONTH(sale_date) <= 6, ""2023-04-01"",
+                         IFF(MONTH(sale_date) <= 9, ""2023-07-01"", ""2023-10-01""))),
+    # Keep the sale price for later aggregation
+    sale_amount=sale_price
+)
+
+# Partition the filtered sales data by customer state and quarter start date
+# Then calculate the total sales for each group
+result = sales_info_2023.PARTITION(
+    name=""state_quarter_groups"",
+    by=(cust_state, quarter_start_date)
+).CALCULATE(
+    # Select the customer state (partition key)
+    customer_state=cust_state,
+    # Select the quarter start date (partition key)
+    quarter_start=quarter_start_date,
+    # Calculate the sum of sales amounts for all sales within this state/quarter group
+    total_sales=SUM(Sales.sale_price)
+)
+```
+
+**Explanation:**
+
+1.  **`sales_info_2023 = Sales.WHERE(...)`**: This line starts by accessing the `Sales` collection and filters it to include only sales records where the `sale_date` falls within the year 2023 using `YEAR(sale_date) == 2023`.
+2.  **`.CALCULATE(...)`**: For each filtered sale record, it calculates:
+    *   `cust_state=customer.state`: Retrieves the state from the associated `customer` record.
+    *   `quarter_start_date=IFF(...)`: Determines the first day of the quarter ('YYYY-MM-DD' format) based on the month of the `sale_date`. It uses nested `IFF` functions to check the month range (1-3 for Q1, 4-6 for Q2, 7-9 for Q3, 10-12 for Q4) and assigns the corresponding start date string for 2023.
+    *   `sale_amount=sale_price`: Selects the `sale_price` to be used in the subsequent aggregation.
+3.  **`result = sales_info_2023.PARTITION(...)`**: This takes the prepared `sales_info_2023` data and partitions it.
+    *   `name=""state_quarter_groups""`: Assigns a temporary name to the partition groups.
+    *   `by=(cust_state, quarter_start_date)`: Specifies that the data should be grouped based on unique combinations of the customer's state and the calculated quarter start date.
+4.  **`.CALCULATE(...)`**: After partitioning, this calculates the final output for each group:
+    *   `customer_state=cust_state`: Includes the state for the group.
+    *   `quarter_start=quarter_start_date`: Includes the quarter start date for the group.
+    *   `total_sales=SUM(Sales.sale_price)`: Calculates the sum of `sale_price` for all the original `Sales` records that fall into the current partition group (i.e., the total sales for that specific state and quarter).",28.624591588974,"# Filter sales records for the year 2023 and calculate necessary fields
+sales_info_2023 = Sales.WHERE(YEAR(sale_date) == 2023).CALCULATE(
+    # Get the customer's state from the related customer record
+    cust_state=customer.state,
+    # Determine the starting date of the quarter based on the sale month
+    quarter_start_date=IFF(MONTH(sale_date) <= 3, ""2023-01-01"",
+                         IFF(MONTH(sale_date) <= 6, ""2023-04-01"",
+                         IFF(MONTH(sale_date) <= 9, ""2023-07-01"", ""2023-10-01""))),
+    # Keep the sale price for later aggregation
+    sale_amount=sale_price
+)
+
+# Partition the filtered sales data by customer state and quarter start date
+# Then calculate the total sales for each group
+result = sales_info_2023.PARTITION(
+    name=""state_quarter_groups"",
+    by=(cust_state, quarter_start_date)
+).CALCULATE(
+    # Select the customer state (partition key)
+    customer_state=cust_state,
+    # Select the quarter start date (partition key)
+    quarter_start=quarter_start_date,
+    # Calculate the sum of sales amounts for all sales within this state/quarter group
+    total_sales=SUM(Sales.sale_price)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=838 candidates_tokens_details=None prompt_token_count=18948 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18948)] thoughts_token_count=2041 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21827 traffic_type=None",No Match,
+"Which cars were in inventory in the latest snapshot for march 2023? Return the car _id, make, model, and year. Cars are considered to be in inventory"" if is_in_inventory is True.""","WITH latest_snapshot AS (SELECT MAX(snapshot_date) AS snapshot_date FROM inventory_snapshots WHERE snapshot_date BETWEEN '2023-03-01' AND '2023-03-31'), latest_snapshot_data AS (SELECT inv.car_id FROM inventory_snapshots AS inv JOIN latest_snapshot AS ls ON inv.snapshot_date = ls.snapshot_date WHERE inv.is_in_inventory = TRUE) SELECT c._id, c.make, c.model, c.year FROM cars AS c JOIN latest_snapshot_data AS lsd ON c._id = lsd.car_id;",Dealership,"```python
+# Filter inventory snapshots to include only those from March 2023 where the car is marked as in inventory.
+# Then, for each car, find the snapshot with the latest date within that month using RANKING.
+# Finally, select the cars that have such a snapshot and retrieve their details.
+latest_inventory_cars = Cars.WHERE(
+    HAS(
+        inventory_snapshots.WHERE(
+            (YEAR(snapshot_date) == 2023) &
+            (MONTH(snapshot_date) == 3) &
+            (is_in_inventory == True) &
+            # Rank snapshots within March 2023 for this specific car by date descending
+            # and keep only the latest one (rank 1)
+            (RANKING(by=snapshot_date.DESC(), per=""Cars"") == 1)
+        )
+    ) == 1 # Ensure the car has at least one matching snapshot (the latest one)
+).CALCULATE(
+    car_id=_id,
+    car_make=make,
+    car_model=model,
+    car_year=year
+)
+
+result = latest_inventory_cars
+```
+
+**Explanation:**
+
+1.  **`Cars.WHERE(...)`**: We start with the `Cars` collection and filter it based on conditions related to their inventory snapshots.
+2.  **`HAS(inventory_snapshots.WHERE(...)) == 1`**: This checks if a car has at least one related record in the `inventory_snapshots` sub-collection that meets the specified criteria.
+3.  **`YEAR(snapshot_date) == 2023`**: Filters snapshots to include only those from the year 2023.
+4.  **`MONTH(snapshot_date) == 3`**: Further filters snapshots to include only those from March (the 3rd month).
+5.  **`is_in_inventory == True`**: Filters snapshots to include only those where the car was marked as being in inventory.
+6.  **`RANKING(by=snapshot_date.DESC(), per=""Cars"") == 1`**: This is the key part for finding the *latest* snapshot.
+    *   It ranks the filtered snapshots (March 2023, in inventory) for *each car* (`per=""Cars""`).
+    *   The ranking is done by `snapshot_date` in descending order (`DESC()`), so the most recent snapshot gets rank 1.
+    *   `== 1` selects only the latest snapshot for that car within March 2023.
+7.  **`.CALCULATE(...)`**: After filtering the `Cars` collection to include only those that were in inventory in the latest March 2023 snapshot, this step selects and renames the required fields: `_id` (as `car_id`), `make`, `model`, and `year`.
+8.  **`result = latest_inventory_cars`**: Assigns the final result to the `result` variable.",28.42232298851013,"# Filter inventory snapshots to include only those from March 2023 where the car is marked as in inventory.
+# Then, for each car, find the snapshot with the latest date within that month using RANKING.
+# Finally, select the cars that have such a snapshot and retrieve their details.
+latest_inventory_cars = Cars.WHERE(
+    HAS(
+        inventory_snapshots.WHERE(
+            (YEAR(snapshot_date) == 2023) &
+            (MONTH(snapshot_date) == 3) &
+            (is_in_inventory == True) &
+            # Rank snapshots within March 2023 for this specific car by date descending
+            # and keep only the latest one (rank 1)
+            (RANKING(by=snapshot_date.DESC(), per=""Cars"") == 1)
+        )
+    ) == 1 # Ensure the car has at least one matching snapshot (the latest one)
+).CALCULATE(
+    car_id=_id,
+    car_make=make,
+    car_model=model,
+    car_year=year
+)
+
+result = latest_inventory_cars","cache_tokens_details=None cached_content_token_count=None candidates_token_count=664 candidates_tokens_details=None prompt_token_count=18965 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18965)] thoughts_token_count=2201 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21830 traffic_type=None",Match,
