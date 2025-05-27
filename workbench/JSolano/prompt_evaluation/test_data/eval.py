@@ -189,6 +189,10 @@ def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance
     """
 
     if is_numeric_dtype(s_gold) and is_numeric_dtype(s_gen):
+        
+        # If gold series is bigger than generated series, they cannot be equal
+        if len(s_gold) > len(s_gen):
+            return False
         # Check if the numeric values are equal within a small tolerance
         float_gold = pd.to_numeric(s_gold, errors='coerce').reset_index(drop=True)
         float_gen = pd.to_numeric(s_gen, errors='coerce').reset_index(drop=True)
