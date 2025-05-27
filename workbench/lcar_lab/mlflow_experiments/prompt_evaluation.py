@@ -59,9 +59,10 @@ def extract_python_code(text):
         return textwrap.dedent(matches[-1]).strip()
     
     answer_match = re.search(r"Answer:\s*(.*)", text, flags=re.IGNORECASE | re.DOTALL)
-    print(f"[DEBUG] Extracted answer split: {answer_match.group(1).strip()}")
 
     if answer_match:
+        print(f"[DEBUG] Extracted answer split: {answer_match.group(1).strip()}")
+
         answer_text = answer_match.group(1).strip()
         return answer_text
     
