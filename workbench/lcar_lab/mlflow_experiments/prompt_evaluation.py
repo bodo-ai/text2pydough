@@ -316,14 +316,14 @@ def main(git_hash):
             count_combo['percentage'] = (count_combo['count'] / total_combo) * 100
 
             # Group by db_name and complexity
-            count_complexity = df.groupby(['db_name', 'complexity']).size().reset_index(name='count')
-            total_complexity = count_complexity['count'].sum()
-            count_complexity['percentage'] = (count_complexity['count'] / total_complexity) * 100
+            count_complexity_db = df.groupby(['db_name', 'complexity']).size().reset_index(name='count')
+            total_complexity = count_complexity_db['count'].sum()
+            count_complexity_db['percentage'] = (count_complexity_db['count'] / total_complexity) * 100
 
             # Group by db_name and difficulty (optional)
-            count_difficulty = df.groupby(['db_name', 'difficulty']).size().reset_index(name='count')
-            total_difficulty = count_difficulty['count'].sum()
-            count_difficulty['percentage'] = (count_difficulty['count'] / total_difficulty) * 100
+            count_difficulty_db = df.groupby(['db_name', 'difficulty']).size().reset_index(name='count')
+            total_difficulty = count_difficulty_db['count'].sum()
+            count_difficulty_db['percentage'] = (count_difficulty_db['count'] / total_difficulty) * 100
 
             # === Group and Calculate Percentage by difficulty
             count_difficulty = df.groupby('difficulty').size().reset_index(name='count')
@@ -339,9 +339,13 @@ def main(git_hash):
             os.makedirs(output_dir, exist_ok=True)
 
             combo_path = f"{output_dir}/distribution_difficulty_complexity.csv"
-            complexity_path = f"{output_dir}/distribution_complexity.csv"
-            difficulty_path = f"{output_dir}/distribution_difficulty.csv"
+            complexity_path = f"{output_dir}/distribution_complexity_db.csv"
+            difficulty_path = f"{output_dir}/distribution_difficulty_db.csv"
+            count_complexity_db.to_csv(complexity_path, index=False)
+            count_difficulty_db.to_csv(difficulty_path, index=False)
 
+            mlflow.log_artifact(difficulty_path)
+            mlflow.log_artifact(complexity_path)
             count_combo.to_csv(combo_path, index=False)
             count_complexity.to_csv(complexity_path, index=False)
             count_difficulty.to_csv(difficulty_path, index=False)
