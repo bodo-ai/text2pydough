@@ -1,91 +1,129 @@
 import json
 import sys
-from collections import defaultdict
+from pydough import parse_json_metadata_from_file
 
-def json_to_markdown(metadata: list) -> str:
-    graph = metadata[0]
-    graph_name = graph.get("name", "Unknown")
-    version = graph.get("version", "Unknown")
-    collections = {col["name"]: col for col in graph.get("collections", [])}
-    relationships = graph.get("relationships", [])
+def generate_markdown_from_metadata(graph):
+    """
+    Converts a pydough graph metadata object into a formatted Markdown string.
 
-    # Track where to insert join/reverse relationships
-    rel_map = defaultdict(list)
+    Args:
+        graph: A pydough Graph object, typically obtained from
+               pydough.parse_json_metadata_from_file().
 
-    # Index joins to help with reverse placement
-    join_lookup = {}
-    for rel in relationships:
-        if rel["type"] == "simple join":
-            parent = rel["parent collection"]
-            child = rel["child collection"]
-            name = rel["name"]
-            join_lookup[(parent, name)] = child
-            rel_map[parent].append({
-                "field": name,
-                "from": parent,
-                "to": child,
-                "description": rel.get("description", ""),
-                "synonyms": rel.get("synonyms", []),
-                "type": "join"
-            })
+    Returns:
+        str: A Markdown string representing the metadata overview.
+    """
+    markdown_output = []
 
-    for rel in relationships:
-        if rel["type"] == "reverse":
-            original_parent = rel["original parent"]
-            original_property = rel["original property"]
-            reverse_name = rel["name"]
-            # Look up the child collection using the original join
-            child = join_lookup.get((original_parent, original_property))
-            if child:
-                rel_map[child].append({
-                    "field": reverse_name,
-                    "from": original_parent,
-                    "to": child,
-                    "description": rel.get("description", ""),
-                    "synonyms": rel.get("synonyms", []),
-                    "type": "reverse"
-                })
+    # Add main header and version
+    markdown_output.append(f"# Metadata Overview: {graph.name} (Graph Name)")
+    if hasattr(graph, 'version') and graph.version:
+        markdown_output.append(f"**Version**: {graph.version}")
+    markdown_output.append("")
 
-    md = [f"# Metadata Overview: {graph_name} (Graph Name)", f"**Version**: {version}\n"]
+    # Iterate through each collection (table) in the graph
+    for collection_name in graph.get_collection_names():
+        collection = graph.get_collection(collection_name)
+        markdown_output.append(f"### The `{collection.name}` collection contains the following columns:")
 
-    for cname, col in collections.items():
-        md.append(f"### The `{cname}` collection contains the following columns:")
-        props = col.get("properties", [])
-
-        for prop in props:
-            if prop["type"] != "table column":
+        # Iterate through each property (column or relationship) within the collection
+        for prop_name in collection.get_property_names():
+            prop = collection.get_property(prop_name)
+            if not prop:
                 continue
-            line = f"- **{prop['name']}**: {prop.get('description', 'No description.')}"
-            md.append(line)
-            if "synonyms" in prop:
-                md.append(f"  - Synonyms: {', '.join(prop['synonyms'])}")
-            if "sample values" in prop:
-                values = ', '.join([repr(x) for x in prop['sample values']])
-                md.append(f"  - Sample values: {values}")
 
-        # Add relationships assigned to this collection
-        for rel in rel_map.get(cname, []):
-            md.append(f"- **{rel['field']}**: {rel['description']} (reverse of `{rel['from']}.{rel['field']}`)" if rel["type"] == "reverse" else f"- **{rel['field']}**: {rel['description']}")
-            if rel.get("synonyms"):
-                md.append(f"  - Synonyms: {', '.join(rel['synonyms'])}")
+            # Handle scalar properties (regular columns)
+            if not prop.is_subcollection:
+                description_text = prop.description if prop.description else "No description available."
+                markdown_output.append(f"- **{prop.name}**: {description_text}")
 
-        md.append("")
+                if hasattr(prop, 'synonyms') and prop.synonyms:
+                    markdown_output.append(f"  - Synonyms: {', '.join(prop.synonyms)}")
+                if hasattr(prop, 'sample_values') and prop.sample_values:
+                    sample_values_str = ', '.join(map(str, prop.sample_values))
+                    markdown_output.append(f"  - Sample values: {sample_values_str}")
+            # Handle sub-collection properties (relationships)
+            else:
+                description_text = prop.description if prop.description else "No description available."
+                reverse_info_suffix = ""
 
-    return "\n".join(md)
+                # Determine the "reverse of" text for relationships
+                if hasattr(graph, 'relationships'):
+                    for rel_entry in graph.relationships:
+                        # If the current property is a 'reverse' relationship itself
+                        if rel_entry.get("type") == "reverse" and rel_entry.get("name") == prop.name:
+                            is_relevant_reverse = False
+                            for sj_rel in graph.relationships:
+                                if sj_rel.get("type") == "simple join" and \
+                                   sj_rel.get("parent collection") == rel_entry.get("original parent") and \
+                                   sj_rel.get("name") == rel_entry.get("original property") and \
+                                   sj_rel.get("child collection") == collection.name:
+                                    is_relevant_reverse = True
+                                    break
+                            if is_relevant_reverse:
+                                reverse_info_suffix = f" (reverse of `{rel_entry['original parent']}.{rel_entry['original property']}`)"
+                                break
+                        # If the current property is a 'simple join' relationship
+                        elif rel_entry.get("type") == "simple join" and rel_entry.get("name") == prop.name and \
+                             rel_entry.get("parent collection") == collection.name and \
+                             rel_entry.get("child collection") == prop.child_collection.name:
+                            
+                            # Find the corresponding reverse relationship
+                            for rev_rel_entry in graph.relationships:
+                                if rev_rel_entry.get("type") == "reverse" and \
+                                   rev_rel_entry.get("original parent") == rel_entry.get("child collection") and \
+                                   rev_rel_entry.get("original property") == rel_entry.get("name"):
+                                    reverse_info_suffix = f" (reverse of `{rel_entry['child collection']}.{rev_rel_entry['name']}`)"
+                                    break
+                            if reverse_info_suffix:
+                                break
 
+                markdown_output.append(f"- **{prop.name}**: {description_text}{reverse_info_suffix}")
+
+                if hasattr(prop, 'synonyms') and prop.synonyms:
+                    if isinstance(prop.synonyms, str):
+                        markdown_output.append(f"  - Synonyms: {prop.synonyms}")
+                    else:
+                        markdown_output.append(f"  - Synonyms: {', '.join(prop.synonyms)}")
+        markdown_output.append("") # Add a blank line between collections
+
+    return "\n".join(markdown_output)
+
+# Command-line interface (CLI) usage
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python mdgen.py <input.json> <output.md>")
+    # Check for correct number of arguments
+    if len(sys.argv) != 2:
+        print("Usage: python your_script_name.py <input_json_file_path>")
         sys.exit(1)
 
-    input_file, output_file = sys.argv[1], sys.argv[2]
+    input_file_path = sys.argv[1]
 
-    with open(input_file, "r") as f:
-        metadata = json.load(f)
+    try:
+        # Load JSON to extract graph name for pydough parsing
+        with open(input_file_path, 'r', encoding='utf-8') as f:
+            metadata_json = json.load(f)
 
-    markdown = json_to_markdown(metadata)
+        # Extract graph name (assuming it's in the first object of the JSON array)
+        graph_name = metadata_json[0].get('name', 'default_graph')
 
-    with open(output_file, "w") as f:
-        f.write(markdown)
+        # Parse the metadata file using pydough
+        my_graph = parse_json_metadata_from_file(input_file_path, graph_name)
 
-    print(f"✅ Markdown written to {output_file}")
+        # Generate the markdown content
+        markdown_content = generate_markdown_from_metadata(my_graph)
+
+        # Define output file name
+        output_file_name = f"{graph_name}_graph.md"
+
+        # Save the markdown content to a file
+        with open(output_file_name, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+
+        print(f"Markdown successfully generated and saved to '{output_file_name}'")
+
+    except FileNotFoundError:
+        print(f"Error: The file '{input_file_path}' was not found. Please check the path.")
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from '{input_file_path}'. Please ensure it's a valid JSON file.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
