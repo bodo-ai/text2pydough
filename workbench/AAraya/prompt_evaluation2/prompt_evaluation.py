@@ -252,15 +252,15 @@ def main(git_hash):
         mlflow.log_artifact(metrics_path)
 
         # Log del modelo (último paso)
-        mlflow.pyfunc.log_model(
-            artifact_path="model",
-            python_model=GeminiWrapper(model_id=args.model_id),
-            artifacts={
-                "prompt_file": args.prompt_file,
-                "pydough_file": args.pydough_file,
-                "metrics": metrics_path
-            }
-        )
+        #mlflow.pyfunc.log_model(
+        #    artifact_path="model",
+        #    python_model=GeminiWrapper(model_id=args.model_id),
+        #    artifacts={
+        #        "prompt_file": args.prompt_file,
+        #        "pydough_file": args.pydough_file,
+        #        "metrics": metrics_path
+        #    }
+        #)
 
 if __name__ == "__main__":
     cwd = os.getcwd()
