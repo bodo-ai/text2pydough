@@ -58,7 +58,12 @@ def extract_python_code(text):
     if matches:
         return textwrap.dedent(matches[-1]).strip()
     
+    answer_match = re.search(r"Answer:\s*(.*)", text, flags=re.IGNORECASE | re.DOTALL)
+    print(f"[DEBUG] Extracted answer split: {answer_match.group(1).strip()}")
 
+    if answer_match:
+        answer_text = answer_match.group(1).strip()
+        return answer_text
     
     return ""
 
@@ -94,7 +99,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}"]), prompt.format(
+    return "".join([f"{question}\nDatabase Schema:\n\n",str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -161,15 +166,22 @@ def parse_extra_args(extra_args):
 
 # === Entry Point ===
 
+import argparse
+import os
+import json
+import mlflow
+import pandas as pd
+from datetime import datetime
+# import your helper functions here, such as:
+# read_file, parse_extra_args, process_questions, extract_python_code, etc.
+
 def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
     parser.add_argument("--experiment_name", type=str)
-    parser.add_argument('--db-base-path', type=str, required=True,
-                      help='Path to the SQLite database file')
-    parser.add_argument('--metadata-base-path', type=str, required=True,
-                      help='Path to the metadata graph JSON file')
+    parser.add_argument('--db-base-path', type=str, required=True)
+    parser.add_argument('--metadata-base-path', type=str, required=True)
     parser.add_argument("--pydough_file", type=str)
     parser.add_argument("--prompt_file", type=str)
     parser.add_argument("--questions", type=str)
@@ -179,11 +191,13 @@ def main(git_hash):
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
+
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
-    MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"] 
+    MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"]
     mlflow.gemini.autolog()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment(args.experiment_name)
+
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
         prompt = read_file(args.prompt_file)
@@ -210,58 +224,106 @@ def main(git_hash):
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
         tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
-        total_rows = len(tested_df)
 
+        total_rows = len(tested_df)
         counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
-        filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
-            # Filter for non-matches (e.g., "Mismatch", "Error")
-        non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
-        # === Custom Metrics ===
-        matches_per_difficulty = tested_df[tested_df["comparison_result"] == "Match"]["difficulty"].value_counts()
-        matches_per_complexity = tested_df[tested_df["comparison_result"] == "Match"]["complexity"].value_counts()
-        matches_per_combo = tested_df[tested_df["comparison_result"] == "Match"].groupby(["difficulty", "complexity"]).size()
+        filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description', 'extra_args']}
 
-        # Log to MLflow
-        for diff, count in matches_per_difficulty.items():
-            mlflow.log_metric(f"match_count_difficulty_{diff}", count)
+        # === Conditional Custom Metrics ===
+        if "difficulty" in tested_df.columns and "complexity" in tested_df.columns:
+            total_per_difficulty = tested_df["difficulty"].value_counts()
+            total_per_complexity = tested_df["complexity"].value_counts()
+            total_per_combo = tested_df.groupby(["difficulty", "complexity"]).size()
 
-        for comp, count in matches_per_complexity.items():
-            mlflow.log_metric(f"match_count_complexity_{comp}", count)
+            match_df = tested_df[tested_df["comparison_result"] == "Match"]
+            non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
 
-        for (diff, comp), count in matches_per_combo.items():
-            mlflow.log_metric(f"match_count_{diff}_{comp}", count)
+            matches_per_difficulty = match_df["difficulty"].value_counts()
+            matches_per_complexity = match_df["complexity"].value_counts()
+            matches_per_combo = match_df.groupby(["difficulty", "complexity"]).size()
 
-        # Count non-matches per difficulty
-        non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
-        for diff, count in non_matches_per_difficulty.items():
-            mlflow.log_metric(f"no_match_count_difficulty_{diff}", count)
+            match_pct_difficulty = matches_per_difficulty / total_per_difficulty
+            match_pct_complexity = matches_per_complexity / total_per_complexity
+            match_pct_combo = matches_per_combo / total_per_combo
 
-        # Count non-matches per complexity
-        non_matches_per_complexity = non_match_df["complexity"].value_counts()
-        for comp, count in non_matches_per_complexity.items():
-            mlflow.log_metric(f"no_match_count_complexity_{comp}", count)
+            for diff, pct in match_pct_difficulty.items():
+                mlflow.log_metric(f"match_pct_difficulty_{diff}", pct)
 
-        # Count non-matches per (difficulty, complexity)
-        non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
-        for (diff, comp), count in non_matches_per_combo.items():
-            mlflow.log_metric(f"no_match_count_{diff}_{comp}", count)
+            for comp, pct in match_pct_complexity.items():
+                mlflow.log_metric(f"match_pct_complexity_{comp}", pct)
+
+            for (diff, comp), pct in match_pct_combo.items():
+                mlflow.log_metric(f"match_pct_{diff}_{comp}", pct)
+
+            non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
+            non_matches_per_complexity = non_match_df["complexity"].value_counts()
+            non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
+
+            no_match_pct_difficulty = non_matches_per_difficulty / total_per_difficulty
+            no_match_pct_complexity = non_matches_per_complexity / total_per_complexity
+            no_match_pct_combo = non_matches_per_combo / total_per_combo
+
+            for diff, pct in no_match_pct_difficulty.items():
+                mlflow.log_metric(f"no_match_pct_difficulty_{diff}", pct)
+
+            for comp, pct in no_match_pct_complexity.items():
+                mlflow.log_metric(f"no_match_pct_complexity_{comp}", pct)
+
+            for (diff, comp), pct in no_match_pct_combo.items():
+                mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct)
+            total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
+            total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
+            total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
+            non_matches_per_combo_per_database = non_match_df.groupby(["difficulty","complexity", "db_name"]).size()
+            matches_per_combo_db  = match_df.groupby(["difficulty", "complexity","db_name"]).size()
+            non_matches_difficulty_per_database = non_match_df.groupby(["difficulty", "db_name"]).size()
+            matches_per_difficulty_db  = match_df.groupby(["difficulty", "db_name"]).size()
+            non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
+            matches_per_complexity_db  = match_df.groupby(["complexity", "db_name"]).size()
+
+            # Combo (difficulty + complexity + db)
+            match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
+            match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
+            match_pct_combo_csv = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
+            match_pct_combo_df.to_csv(match_pct_combo_csv, index=False)
+            mlflow.log_artifact(match_pct_combo_csv)
+
+            # Difficulty + db
+            match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
+            match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
+            match_pct_difficulty_csv = f"{output_path}/match_percentage_per_difficulty_db.csv"
+            match_pct_difficulty_df.to_csv(match_pct_difficulty_csv, index=False)
+            mlflow.log_artifact(match_pct_difficulty_csv)
+
+            # Complexity + db
+            match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
+            match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
+            match_pct_complexity_csv = f"{output_path}/match_percentage_per_complexity_db.csv"
+            match_pct_complexity_df.to_csv(match_pct_complexity_csv, index=False)
+            mlflow.log_artifact(match_pct_complexity_csv)
+            # Save raw counts as CSV artifacts if needed
+            matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
+            matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
+            matches_per_combo.to_csv(f"{output_path}/match_count_per_difficulty_complexity.csv")
+
+            mlflow.log_artifact(f"{output_path}/match_count_per_difficulty.csv")
+            mlflow.log_artifact(f"{output_path}/match_count_per_complexity.csv")
+            mlflow.log_artifact(f"{output_path}/match_count_per_difficulty_complexity.csv")
+
 
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
-        mlflow.log_metric("total_queries", len(tested_df))
+        mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
-
         metrics_path = "./metrics.json"
+
         with open(metrics_path, "w") as metrics_file:
             metrics_file.write(metrics_json)
-        matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
-        matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
-        matches_per_combo.to_csv(f"{output_path}/match_count_per_difficulty_complexity.csv")
 
         mlflow.pyfunc.log_model(
             artifact_path=args.model_id,
