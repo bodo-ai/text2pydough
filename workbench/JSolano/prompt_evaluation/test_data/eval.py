@@ -147,6 +147,8 @@ def compare_df(
     Compares two dataframes and returns True if they are the same, else False.
     query_gold and query_gen are the original queries that generated the respective dataframes.
     """
+    original_gold = df_gold.copy()
+    original_gen = df_gen.copy()
     try:
         is_equal = df_gold.values == df_gen.values
         if is_equal.all():
@@ -179,7 +181,7 @@ def compare_df(
         except:
             pass
     print("Info: Proceeding with secondary check.")
-    return secondary_check(df_gold, df_gen)
+    return secondary_check(original_gold, original_gen)
     
 def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) -> bool:
     """
