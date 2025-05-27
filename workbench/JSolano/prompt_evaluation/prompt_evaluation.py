@@ -23,6 +23,23 @@ from dynamic_prompt.generate_pydough_metadata import generate_metadata
 from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
+import getpass
+
+# 1. Get the directory of the script itself
+script_dir = os.path.dirname(os.path.abspath(__file__))
+print(f"DEBUG: Script is located at: {script_dir}")
+
+# 2. **IMPORTANT: Update this to your actual .db filename**
+db_filename = "YOUR_ACTUAL_DATABASE_FILE.db" # <--- **CHANGE THIS LINE**
+db_absolute_path = os.path.join(script_dir, db_filename)
+
+print(f"DEBUG: Calculated absolute DB path: {db_absolute_path}")
+print(f"DEBUG: Current Working Directory (CWD): {os.getcwd()}")
+print(f"DEBUG: Running as user: {getpass.getuser()}")
+
+# 3. Construct the SQLAlchemy URL with 4 slashes for absolute path
+DATABASE_URL = f"sqlite:////{db_absolute_path}"
+print(f"DEBUG: SQLAlchemy Connection URL: {DATABASE_URL}")
 
 # === Helper Functions ===
 
