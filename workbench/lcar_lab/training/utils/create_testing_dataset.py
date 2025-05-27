@@ -8,7 +8,7 @@ def load_csv(file_path):
 
 # Filter the DataFrame for False values (data outside of the training set)
 def filter_dataframe(df):
-    filtered_df = df[(df['dataframe_match'] == True)]
+    filtered_df = df[(df['dataframe_match'] != True)]
     return filtered_df
 
 # Get unique values for db_name, difficulty, and complexity
@@ -39,7 +39,7 @@ def create_testing_dataset(df, unique_db_names, training_df_len):
     test_size = int(training_df_len * 0.1)
 
     # Filter the DataFrame for unmatched rows
-    filtered_test_df = df
+    filtered_test_df = df[(df['dataframe_match'] == False)]
 
     # Calculate proportional distribution for `difficulty` and `complexity`
     difficulty_proportions = filtered_test_df['difficulty'].value_counts(normalize=True).to_dict()
@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     df = load_csv(args.input_csv)
 
-    filtered_df = df
+    filtered_df = filter_dataframe(df)
     dbs_list = get_relevant_dbs(filtered_df)
 
     testing_dataset = create_testing_dataset(df, dbs_list, len(filtered_df))
