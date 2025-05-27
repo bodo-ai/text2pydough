@@ -60,11 +60,6 @@ def extract_python_code(text):
     
     answer_match = re.search(r"Answer:\s*(.*)", text, flags=re.IGNORECASE | re.DOTALL)
 
-    if answer_match:
-        print(f"[DEBUG] Extracted answer split: {answer_match.group(1).strip()}")
-
-        answer_text = answer_match.group(1).strip()
-        return answer_text
     
     return ""
 
@@ -100,7 +95,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}\nDatabase Schema:\n\n",str(db_content)]), prompt.format(
+    return "".join([f"{question}"]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
