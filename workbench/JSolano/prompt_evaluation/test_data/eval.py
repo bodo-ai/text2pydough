@@ -147,7 +147,6 @@ def compare_df(
     Compares two dataframes and returns True if they are the same, else False.
     query_gold and query_gen are the original queries that generated the respective dataframes.
     """
-    # drop duplicates to ensure equivalence
     try:
         is_equal = df_gold.values == df_gen.values
         if is_equal.all():
@@ -160,25 +159,26 @@ def compare_df(
         except:
             pass
 
-    df_gold = normalize_table(df_gold, query_category, question, query_gold)
-    df_gen = normalize_table(df_gen, query_category, question, query_gen)
+    normalized_gold = normalize_table(df_gold, query_category, question, query_gold)
+    normalized_gen = normalize_table(df_gen, query_category, question, query_gen)
 
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
-    df_gen.fillna(-99999, inplace=True)
-    df_gold.fillna(-99999, inplace=True)
+    normalized_gold.fillna(-99999, inplace=True)
+    normalized_gen.fillna(-99999, inplace=True)
     
     try:
-        is_equal = df_gold.values == df_gen.values
+        print("Info: Comparing DataFrames using hard match.")
+        is_equal = normalized_gold.values == normalized_gen.values
         if is_equal.all():
             return True
     except:
         try:
-            is_equal = df_gold.values == df_gen.values
+            is_equal = normalized_gold.values == normalized_gen.values
             if is_equal:
                 return True
         except:
             pass
-    
+    print("Info: Proceeding with secondary check.")
     return secondary_check(df_gold, df_gen)
     
 def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) -> bool:
@@ -190,20 +190,25 @@ def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance
 
     if is_numeric_dtype(s_gold) and is_numeric_dtype(s_gen):
         # Check if the numeric values are equal within a small tolerance
-        float_gold = pd.to_numeric(s_gold, errors='coerce').sort_values(na_position='last')
-        float_gen = pd.to_numeric(s_gen, errors='coerce').sort_values(na_position='last')
+        float_gold = pd.to_numeric(s_gold, errors='coerce')
+        float_gen = pd.to_numeric(s_gen, errors='coerce')
         for i in range(len(float_gold)):
             if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
+                print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[i]}")
                 return False
         print("Info: Numeric series contents are equal within tolerance.")
         return True
     # If they are not numeric, check if they are equal directly
-    if s_gold.dtype != s_gen.dtype:
+    sorted_gold = s_gold.sort_values(na_position='last')
+    sorted_gen = s_gen.sort_values(na_position='last')
+    if sorted_gold.dtype != sorted_gen.dtype:
         return False
-    if s_gold.isin(s_gen).all():
+    if sorted_gold.isin(sorted_gen).all():
         print("Info: Series contents are equal.")
         return True
     else:
+        print("Info: Series contents are not equal.")
+        print(sorted_gold.isin(sorted_gen).all())
         return False
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
@@ -234,12 +239,9 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
             result = num_gold_rows == num_gen_rows
             return result
 
-    # 2. Row count mismatch (unless df_gold was 0x0, handled above)
-    if num_gold_rows != num_gen_rows:
-        return False
-
-    # 3. Not enough columns in df_gen to match all of df_gold's columns
+    # 2. Not enough columns in df_gen to match all of df_gold's columns
     if num_gold_cols > num_gen_cols:
+        print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
         return False
     
     # --- Greedy Matching ---
@@ -252,12 +254,14 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
         for j in range(num_gen_cols):
             if not b_cols_used[j]: # If df_gen's j-th column is not yet used
                 series_gen = df_gen.iloc[:, j]
+                print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
                 if series_contents_equal(series_gold, series_gen):
                     b_cols_used[j] = True
                     found_match_for_s_gold = True
                     break # Move to the next column in df_gold
         
         if not found_match_for_s_gold:
+            print(f"Info: No match found for column {i} of df_gold in df_gen.")
             return False
     print("Info: All columns in df_gold matched with df_gen.")    
     return True    
@@ -374,3 +378,28 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     df.to_csv(output_file, index=False)
 
     return output_file, df
+
+data_5_people = {
+    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
+    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90]  # Heights in meters
+}
+df_5_people = pd.DataFrame(data_5_people)
+
+print("DataFrame 1 (5 people):")
+print(df_5_people)
+print("-" * 30) # Separator
+
+# --- DataFrame 2: Same 5 people + 2 more ---
+
+# Option 1: Define all data from scratch
+data_7_people_v1 = {
+    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
+    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90, 1.62, 1.85]
+}
+df_7_people_v1 = pd.DataFrame(data_7_people_v1)
+
+print("DataFrame 2 (7 people):")
+print(df_7_people_v1)
+print("-" * 30) # Separator
+
+print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
