@@ -187,13 +187,13 @@ def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance
     Their original indices/names are ignored for the comparison itself, but they must
     have the same length (which should be pre-checked at the DataFrame level).
     """
-
+    print(f"Comparing Series")
     if is_numeric_dtype(s_gold) and is_numeric_dtype(s_gen):
         # Check if the numeric values are equal within a small tolerance
-        foat_gold = pd.to_numeric(s_gold, errors='coerce').sort_values(na_position='last')
+        float_gold = pd.to_numeric(s_gold, errors='coerce').sort_values(na_position='last')
         float_gen = pd.to_numeric(s_gen, errors='coerce').sort_values(na_position='last')
-        for i in range(len(foat_gold)):
-            if not (abs(foat_gold[i] - float_gen[i]) < numeric_tolerance):
+        for i in range(len(float_gold)):
+            if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
                 return False
         
         return True
@@ -215,7 +215,7 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     Returns:
         bool: True if all column contents of df_gold can be uniquely matched in df_gen, False otherwise.
     """
-
+    print(f"Secondary check for DataFrame equivalence")
     num_gold_cols = df_gold.shape[1]
     num_gen_cols = df_gen.shape[1]
     num_gold_rows = df_gold.shape[0]
