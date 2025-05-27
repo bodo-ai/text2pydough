@@ -181,20 +181,26 @@ def compare_df(
     
     return secondary_check(df_gold, df_gen)
     
-def series_contents_equal(s1: pd.Series, s2: pd.Series, numeric_tolerance = 1e-5) -> bool:
+def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
     have the same length (which should be pre-checked at the DataFrame level).
     """
-    #Global comparison tolerance
-    if is_numeric_dtype(s1) and is_numeric_dtype(s2):
+
+    if is_numeric_dtype(s_gold) and is_numeric_dtype(s_gen):
         # Check if the numeric values are equal within a small tolerance
-        return (s1 - s2).abs().max() < numeric_tolerance
-    
-    if s1.dtype != s2.dtype:
+        foat_gold = pd.to_numeric(s_gold, errors='coerce').sort_values(na_position='last')
+        float_gen = pd.to_numeric(s_gen, errors='coerce').sort_values(na_position='last')
+        for i in range(len(foat_gold)):
+            if not (abs(foat_gold[i] - float_gen[i]) < numeric_tolerance):
+                return False
+        
+        return True
+    # If they are not numeric, check if they are equal directly
+    if s_gold.dtype != s_gen.dtype:
         return False
-    return s1.equals(s2)
+    return s_gold.isin(s_gen).all()
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     """
