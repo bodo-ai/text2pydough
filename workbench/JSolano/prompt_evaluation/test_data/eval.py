@@ -190,8 +190,8 @@ def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance
 
     if is_numeric_dtype(s_gold) and is_numeric_dtype(s_gen):
         # Check if the numeric values are equal within a small tolerance
-        float_gold = pd.to_numeric(s_gold, errors='coerce')
-        float_gen = pd.to_numeric(s_gen, errors='coerce')
+        float_gold = pd.to_numeric(s_gold, errors='coerce').reset_index(drop=True)
+        float_gen = pd.to_numeric(s_gen, errors='coerce').reset_index(drop=True)
         for i in range(len(float_gold)):
             if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
                 print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[i]}")
@@ -378,3 +378,28 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     df.to_csv(output_file, index=False)
 
     return output_file, df
+
+data_5_people = {
+    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
+    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90]  # Heights in meters
+}
+df_5_people = pd.DataFrame(data_5_people)
+
+print("DataFrame 1 (5 people):")
+print(df_5_people)
+print("-" * 30) # Separator
+
+# --- DataFrame 2: Same 5 people + 2 more ---
+
+# Option 1: Define all data from scratch
+data_7_people_v1 = {
+    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
+    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90, 1.60, 1.85]  # Heights in meters
+}
+df_7_people_v1 = pd.DataFrame(data_7_people_v1)
+
+print("DataFrame 2 (7 people):")
+print(df_7_people_v1)
+print("-" * 30) # Separator
+
+print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
