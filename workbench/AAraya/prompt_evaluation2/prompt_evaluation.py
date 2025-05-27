@@ -216,41 +216,49 @@ def main(git_hash):
         os.makedirs(output_path, exist_ok=True)
         output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         df.to_csv(output_file, index=False)
-
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
         tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
         total_rows = len(tested_df)
 
+        # Calcula métricas y parámetros
         counts = tested_df['comparison_result'].value_counts()
         percentages = counts / total_rows
         filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
 
+        # Log de parámetros y métricas
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
-        counts = tested_df['comparison_result'].value_counts()
-        percentages = counts / total_rows
 
         for label, frac in percentages.items():
             mlflow.log_metric(f"comparison_{label.replace(' ', '_')}", float(frac))
-            
-        mlflow.log_metric("total_queries", len(tested_df))
-        mlflow.log_artifact(tested_file)
 
-        percentages_dict = percentages.to_dict()
-        metrics_json = json.dumps(percentages_dict, indent=4)
+        mlflow.log_metric("total_queries", total_rows)
+
+        # Guardar como JSON también
+        metrics_dict = {
+            f"comparison_{label.replace(' ', '_')}": float(frac)
+            for label, frac in percentages.items()
+        }
+        metrics_dict["total_queries"] = total_rows
 
         metrics_path = "./metrics.json"
-        with open(metrics_path, "w") as metrics_file:
-            metrics_file.write(metrics_json)
+        with open(metrics_path, "w") as f:
+            json.dump(metrics_dict, f, indent=4)
 
+        # Subir artifacts importantes
+        mlflow.log_artifact(tested_file)
+        mlflow.log_artifact(output_file)
+        mlflow.log_artifact(metrics_path)
+
+        # Log del modelo (último paso)
         mlflow.pyfunc.log_model(
-            artifact_path=args.model_id,
+            artifact_path="model",
             python_model=GeminiWrapper(model_id=args.model_id),
             artifacts={
                 "prompt_file": args.prompt_file,
                 "pydough_file": args.pydough_file,
-                "metrics.json": metrics_path
+                "metrics": metrics_path
             }
         )
 
