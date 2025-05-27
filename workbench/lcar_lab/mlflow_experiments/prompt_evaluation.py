@@ -310,8 +310,53 @@ def main(git_hash):
             mlflow.log_artifact(f"{output_path}/match_count_per_difficulty.csv")
             mlflow.log_artifact(f"{output_path}/match_count_per_complexity.csv")
             mlflow.log_artifact(f"{output_path}/match_count_per_difficulty_complexity.csv")
+            # Group by db_name, difficulty, and complexity
+            count_combo = df.groupby(['db_name', 'difficulty', 'complexity']).size().reset_index(name='count')
+            total_combo = count_combo['count'].sum()
+            count_combo['percentage'] = (count_combo['count'] / total_combo) * 100
 
+            # Group by db_name and complexity
+            count_complexity = df.groupby(['db_name', 'complexity']).size().reset_index(name='count')
+            total_complexity = count_complexity['count'].sum()
+            count_complexity['percentage'] = (count_complexity['count'] / total_complexity) * 100
 
+            # Group by db_name and difficulty (optional)
+            count_difficulty = df.groupby(['db_name', 'difficulty']).size().reset_index(name='count')
+            total_difficulty = count_difficulty['count'].sum()
+            count_difficulty['percentage'] = (count_difficulty['count'] / total_difficulty) * 100
+
+            # === Group and Calculate Percentage by difficulty
+            count_difficulty = df.groupby('difficulty').size().reset_index(name='count')
+            total_difficulty = count_difficulty['count'].sum()
+            count_difficulty['percentage'] = (count_difficulty['count'] / total_difficulty) * 100
+
+            # === Group and Calculate Percentage by complexity
+            count_complexity = df.groupby('complexity').size().reset_index(name='count')
+            total_complexity = count_complexity['count'].sum()
+            count_complexity['percentage'] = (count_complexity['count'] / total_complexity) * 100
+
+            output_dir = f"{output_path}/distribution_reports"
+            os.makedirs(output_dir, exist_ok=True)
+
+            combo_path = f"{output_dir}/distribution_difficulty_complexity.csv"
+            complexity_path = f"{output_dir}/distribution_complexity.csv"
+            difficulty_path = f"{output_dir}/distribution_difficulty.csv"
+
+            count_combo.to_csv(combo_path, index=False)
+            count_complexity.to_csv(complexity_path, index=False)
+            count_difficulty.to_csv(difficulty_path, index=False)
+            difficulty_path = f"{output_dir}/overall_distribution_difficulty.csv"
+            complexity_path = f"{output_dir}/overall_distribution_complexity.csv"
+
+            count_difficulty.to_csv(difficulty_path, index=False)
+            count_complexity.to_csv(complexity_path, index=False)
+
+            mlflow.log_artifact(difficulty_path)
+            mlflow.log_artifact(complexity_path)
+
+            mlflow.log_artifact(combo_path)
+            mlflow.log_artifact(complexity_path)
+            mlflow.log_artifact(difficulty_path)
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
