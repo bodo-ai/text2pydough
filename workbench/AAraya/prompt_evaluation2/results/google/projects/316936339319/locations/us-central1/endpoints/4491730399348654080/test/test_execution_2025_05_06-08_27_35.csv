@@ -1,0 +1,403 @@
+question,sql,db_name,response,execution_time,extracted_python_code,usage,comparison_result,exception
+"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;",Broker,"Answer:
+1. Analysis of the question
+The question asks for customers who have made at least 5 total transactions, and for each such customer we need to calculate their transaction success rate. The success rate is defined as the number of successful transactions divided by the total number of transactions. The result should contain the customer name and their success rate, ordered from lowest to highest success rate.
+
+2. Step-by-step explanation of the solution approach
+We can approach this by first filtering customers who have at least 5 transactions using the HAS function. Then, for each customer, we can calculate the total number of transactions and the number of successful transactions. Finally, we calculate the success rate as the ratio of successful transactions to total transactions and order the results from lowest to highest success rate.
+
+3. The PyDough code in a Python code block
+```python
+result = customers.WHERE(COUNT(transactions_made) >= 5).CALCULATE(
+    customer_name=name,
+    total_transactions=COUNT(transactions_made),
+    successful_transactions=SUM(IFF(transactions_made.status == 'SUCCESS', 1, 0)),
+    success_rate=100.0 * successful_transactions / total_transactions
+).ORDER_BY(success_rate.ASC())
+```
+
+4. Explanation of how the code works
+- We start with the `customers` collection
+- We filter customers using WHERE(COUNT(transactions_made) >= 5) to only include customers who have at least 5 transactions
+- For each filtered customer, we calculate:
+    - `customer_name`: the name of the customer
+    - `total_transactions`: the total number of transactions made by the customer
+    - `successful_transactions`: the number of successful transactions made by the customer (using IFF to count transactions with status == 'SUCCESS')
+    - `success_rate`: the percentage of successful transactions out of the total transactions
+- Finally, we order the results from lowest to highest success rate using ORDER_BY(success_rate.ASC())
+
+5. Key PyDough functions and patterns used
+- WHERE: for filtering the customer collection
+- CALCULATE: for deriving new fields and renaming existing ones
+- COUNT: for counting the number of transactions
+- SUM: for summing the number of successful transactions
+- IFF: for conditional counting of successful transactions
+- ORDER_BY: for sorting the results in ascending order of success rate
+
+This code follows the PyDough conventions and best practices demonstrated in the reference examples. It uses appropriate aggregation functions (COUNT, SUM) to work with the plural sub-collections. The code is concise, readable, and directly addresses the question requirements.",6.006682872772217,"result = customers.WHERE(COUNT(transactions_made) >= 5).CALCULATE(
+    customer_name=name,
+    total_transactions=COUNT(transactions_made),
+    successful_transactions=SUM(IFF(transactions_made.status == 'SUCCESS', 1, 0)),
+    success_rate=100.0 * successful_transactions / total_transactions
+).ORDER_BY(success_rate.ASC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=562 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=562)] prompt_token_count=17997 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=17997)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=18559 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",Query Error,Unrecognized term of graph 'Broker': 'customers'
+"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,Broker,"Answer:
+1. **Analyze the requirements**
+   - Count distinct customers who:
+     - Have a '.com' email address
+     - Bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)
+     - FAANG tickers: 'AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX'
+
+2. **Identify the appropriate collections**
+   - Customers collection for customer information
+   - Transactions collection to identify stock purchases
+   - Tickers collection to filter for FAANG stocks
+
+3. **Develop the PyDough code**
+   ```python
+   customers_with_com_email = Customers.WHERE(ENDSWITH(email, "".com""))
+
+   faang_tickers = Tickers.WHERE(
+       symbol.LIKE(""AMZN%"") | 
+       symbol.LIKE(""AAPL%"") | 
+       symbol.LIKE(""GOOGL%"") | 
+       symbol.LIKE(""META%"") | 
+       symbol.LIKE(""NFLX%"")
+   )
+
+   distinct_faang_buyers = Transactions.WHERE(
+       ISIN(customer_id, customers_with_com_email._id) &
+       ISIN(ticker_id, faang_tickers._id)
+   ).NDISTINCT(customer_id)
+
+   result = Broker.CALCULATE(
+       num_customers=distinct_faang_buyers
+   )
+   ```
+
+4. **Explain how the code works**
+   - First, filter Customers to get those with a '.com' email address.
+   - Then, filter Tickers to get FAANG stocks using LIKE with wildcard %.
+   - Next, filter Transactions to include only transactions by customers with '.com' emails (using ISIN with customer_id) and transactions of FAANG stocks (using ISIN with ticker_id).
+   - Use NDISTINCT to count unique customer_ids to avoid double-counting customers who bought multiple FAANG stocks.
+   - Finally, store the count in a result variable.
+
+5. **Confirm the code follows PyDough best practices**
+   - Uses appropriate filtering and aggregation functions
+   - Uses ISIN with collections instead of multiple conditions
+   - Uses meaningful variable names
+   - Follows the pattern of filtering → calculating → aggregation
+   - Uses NDISTINCT for counting unique values
+
+The final PyDough code is:
+```python
+customers_with_com_email = Customers.WHERE(ENDSWITH(email, "".com""))
+
+faang_tickers = Tickers.WHERE(
+    symbol.LIKE(""AMZN%"") | 
+    symbol.LIKE(""AAPL%"") | 
+    symbol.LIKE(""GOOGL%"") | 
+    symbol.LIKE(""META%"") | 
+    symbol.LIKE(""NFLX%"")
+)
+
+distinct_faang_buyers = Transactions.WHERE(
+    ISIN(customer_id, customers_with_com_email._id) &
+    ISIN(ticker_id, faang_tickers._id)
+).NDISTINCT(customer_id)
+
+result = Broker.CALCULATE(
+    num_customers=distinct_faang_buyers
+)
+```
+
+The code efficiently answers the question by:
+1. Selecting relevant customers
+2. Identifying FAANG stocks
+3. Finding transactions that match both criteria
+4. Counting distinct customers who meet the requirements
+
+This approach is more efficient than joining collections because it filters each collection independently before combining them. It also leverages the NDISTINCT function for accurate counting of unique customers.",6.797219753265381,"customers_with_com_email = Customers.WHERE(ENDSWITH(email, "".com""))
+
+faang_tickers = Tickers.WHERE(
+    symbol.LIKE(""AMZN%"") | 
+    symbol.LIKE(""AAPL%"") | 
+    symbol.LIKE(""GOOGL%"") | 
+    symbol.LIKE(""META%"") | 
+    symbol.LIKE(""NFLX%"")
+)
+
+distinct_faang_buyers = Transactions.WHERE(
+    ISIN(customer_id, customers_with_com_email._id) &
+    ISIN(ticker_id, faang_tickers._id)
+).NDISTINCT(customer_id)
+
+result = Broker.CALCULATE(
+    num_customers=distinct_faang_buyers
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=758 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=758)] prompt_token_count=18029 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18029)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=18787 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",Query Error,PyDough nodes symbol.LIKE is not callable. Did you mean to use a function?
+"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;",Broker,"Answer:
+1. **Analysis of the question**
+The question asks for the number of total active customers (TAC) from each country who joined on or after January 1, 2023. This requires filtering customers by join date and status (active), then grouping them by country and counting them.
+
+2. **Step-by-step explanation of the solution**
+   - Filter customers to include only those who joined on or after January 1, 2023, and have an active status.
+   - Partition these customers by country.
+   - For each country, count the number of customers in that country.
+   - Return the country name and the count of customers.
+
+3. **The PyDough code**
+```python
+active_customers_since_2023 = Customers.WHERE(
+    (join_date >= DATETIME('2023-01-01')) & (status == ""Active"")
+)
+country_counts = PARTITION(
+    active_customers_since_2023,
+    name=""countries"",
+    by=country
+).CALCULATE(
+    country,
+    tac=COUNT(countries)
+)
+result = country_counts.CALCULATE(country, tac)
+```
+
+4. **Explanation of how the code works**
+   - First, the code filters the `Customers` collection to include only customers who joined on or after January 1, 2023, and have an ""Active"" status. This is stored in `active_customers_since_2023`.
+   - Next, it partitions these customers by country using the `PARTITION` function.
+   - The `CALCULATE` function is then used to count the number of customers in each country and rename the count to `tac` (Total Active Customers).
+   - Finally, the code selects the `country` and `tac` fields from the resulting collection and stores it in `result`.
+
+Pydough Code:
+active_customers_since_2023 = Customers.WHERE(
+    (join_date >= DATETIME('2023-01-01')) & (status == ""Active"")
+)
+country_counts = PARTITION(
+    active_customers_since_2023,
+    name=""countries"",
+    by=country
+).CALCULATE(
+    country,
+    tac=COUNT(countries)
+)
+result = country_counts.CALCULATE(country, tac)
+
+Code Context:
+# Explanation of PyDough Code for TAC per Country
+
+## Code Overview
+
+```python
+active_customers_since_2023 = Customers.WHERE(
+    (join_date >= DATETIME('2023-01-01')) & (status == ""Active"")
+)
+
+country_counts = PARTITION(
+    active_customers_since_2023,
+    name=""countries"",
+    by=country
+).CALCULATE(
+    country,
+    tac=COUNT(countries)
+)
+
+result = country_counts.CALCULATE(country, tac)
+```
+
+This PyDough code answers the question: ""How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count. TAC = Total Active Customers who joined on or after January 1, 2023.""
+
+## PyDough-Specific Functions and Patterns Used
+
+### WHERE Function
+The code uses the `WHERE` function to filter data based on conditions [711c879]:
+```python
+active_customers_since_2023 = Customers.WHERE(
+    (join_date >= DATETIME('2023-01-01')) & (status == ""Active"")
+)
+```
+This filters the `Customers` collection to only include customers who joined on or after January 1, 2023, and have ""Active"" status.
+
+### DATETIME Function
+The code uses the `DATETIME` function to create a date value for comparison [711c879]:
+```python
+DATETIME('2023-01-01')
+```
+This converts the string '2023-01-01' into a date object that can be used for date comparisons.
+
+### PARTITION Function
+The code uses the `PARTITION` function to group customers by country [8ad1551]:
+```python
+PARTITION(
+    active_customers_since_2023,
+    name=""countries"",
+    by=country
+)
+```
+This groups the filtered customers by their country, creating a partition named ""countries"" that can be used in subsequent calculations.
+
+### CALCULATE Function
+The `CALCULATE` function is used multiple times to define fields in the output [8ad1551]:
+- In the first instance, it calculates the filtered customers
+- In the second instance, it calculates the count per country
+- In the final instance, it selects the specific fields to return
+
+### COUNT Function
+The code uses the `COUNT` function to count the number of customers in each country [8ad1551]:
+```python
+tac=COUNT(countries)
+```
+This counts the number of customers in each country group, assigning it to the variable `tac` (Total Active Customers).
+
+## Data Flow and Transformations
+
+The code follows this sequence of transformations:
+
+1. **Filtering Customers**: First, the code filters the `Customers` collection to only include active customers who joined on or after January 1, 2023.
+
+2. **Grouping by Country**: The filtered customers are then grouped by their country.
+
+3. **Counting Customers per Country**: For each country group, the code counts how many customers belong to that country.
+
+4. **Selecting Fields**: Finally, the code selects the country name and the total count for each country to be returned as the result.
+
+## PyDough Best Practices Demonstrated
+
+1. **Descriptive Variable Names**: The code uses meaningful variable names like `active_customers_since_2023` and `country_counts` that clearly indicate what data they contain [711c879].
+
+2. **Hierarchical Approach**: The code builds the query in a step-by-step manner, first filtering, then grouping, then calculating [8ad1551].
+
+3. **Reusing Intermediate Results**: The code creates intermediate results that are reused in subsequent steps [8ad1551].
+
+## How This Code Follows PyDough Conventions
+
+1. **Logical Operators**: The code correctly uses the `&` operator for logical AND operations [711c879].
+
+2. **Date Comparisons**: The code uses the `DATETIME` function to properly compare date values [711c879].
+
+3. **Hierarchical Thinking**: The code uses PyDough's hierarchical document model to navigate through collections (Customers → Countries) [8ad1551].
+
+4. **Appropriate Function Usage**: The code uses functions like `WHERE`, `PARTITION`, `CALCULATE`, and `COUNT` appropriately for their intended purposes [8ad1551].
+
+## How the Code Addresses the Original Question
+
+The original question asks for:
+1. The number of TAC (Total Active Customers)
+2. From each country
+3. For customers who joined on or after January 1, 2023
+4. Return the country and the count
+
+The code directly addresses these points:
+1. Identifies TAC by filtering for active customers with join dates on or after January 1, 2023
+2. Groups customers by country
+3. Counts customers in each country
+4. Returns both the country name and the count (TAC) for each country
+
+The final result contains exactly what was requested - the number of active customers per country for customers who joined after the specified date, along with the country names.",12.92418098449707,tac=COUNT(countries),"cache_tokens_details=None cached_content_token_count=None candidates_token_count=1703 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=1703)] prompt_token_count=18016 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18016)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19719 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",Query Error,Unrecognized term of graph 'Broker': 'countries'
+How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday.,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Broker,"Answer:
+1. Analysis of the question:
+   The question asks for two counts related to stock transactions over the last 8 weeks (excluding the current week):
+   - Total number of transactions per week
+   - Number of weekend transactions per week (Saturday and Sunday)
+   The data needs to be grouped by week and aggregated for each count.
+
+2. Step-by-step explanation of the solution:
+   - Start with the Transactions collection
+   - Calculate the week number and year for each transaction using WEEK and YEAR functions
+   - Filter to only include transactions from the last 8 weeks excluding the current week
+   - Partition/group the transactions by week and year
+   - For each week, calculate the total number of transactions and the number of weekend transactions
+   - Convert day names to uppercase before comparison
+
+3. The PyDough code in a Python code block:
+```python
+import datetime
+
+# Define the current date
+current_date = datetime.date.today()
+
+# Calculate the date 8 weeks ago
+eight_weeks_ago = current_date - datetime.timedelta(weeks=8)
+
+# Calculate transactions grouped by week
+weekly_transactions = Transactions.CALCULATE(
+    week_number=WEEK(date_time),
+    year=YEAR(date_time),
+    day_name=UPPER(DAYNAME(date_time))
+).WHERE(
+    (date_time >= eight_weeks_ago) & (date_time < current_date)
+).PARTITION(
+    name=""weeks"", by=(year, week_number)
+).CALCULATE(
+    year=year,
+    week_number=week_number,
+    total_transactions=COUNT(Transactions),
+    weekend_transactions=SUM(IFF((day_name == 'SATURDAY') | (day_name == 'SUNDAY'), 1, 0))
+)
+
+result = weekly_transactions.ORDER_BY(year.DESC(), week_number.DESC())
+```
+
+4. Explanation of how the code works:
+   - The code starts by calculating the date 8 weeks ago from the current date using datetime operations.
+   - It then uses the Transactions collection and calculates the week number and year for each transaction using the WEEK and YEAR functions. It also calculates the day of the week using the DAYNAME function and converts it to uppercase.
+   - The WHERE clause filters transactions to only include those from the last 8 weeks excluding the current week by comparing the transaction date to the calculated dates.
+   - The transactions are then partitioned (grouped) by year and week number using PARTITION.
+   - Finally, for each group (week), the code calculates:
+     - The year and week number
+     - The total number of transactions (total_transactions) using COUNT(Transactions)
+     - The number of weekend transactions (weekend_transactions) using SUM with a conditional check for Saturday or Sunday
+   - The result is then ordered by year in descending order and week number in descending order to show most recent weeks first.
+
+5. PyDough-specific functions and patterns used:
+   - WEEK: Extracts the week number from a date
+   - YEAR: Extracts the year from a date
+   - DAYNAME: Extracts the name of the day from a date
+   - PARTITION: Groups data by specified fields
+   - CALCULATE: Creates new fields or performs calculations
+   - COUNT: Counts the number of records
+   - SUM: Sums the values of a field
+   - IFF: Conditional function that returns one value if a condition is true, and another value if it is false
+   - WHERE: Filters data based on a condition
+   - ORDER_BY: Sorts the results
+
+6. How the code follows PyDough conventions:
+   - The code follows the pattern of starting with a collection, applying transformations and aggregations, and then ordering the results.
+   - It uses the proper syntax for functions like WEEK, YEAR, DAYNAME, COUNT, SUM, IFF, and ORDER_BY.
+   - It uses the correct operators for logical operations (| for OR, == for equality).
+   - It adheres to the convention of using uppercase for PyDough operations and lowercase for variable names.
+
+7. How the code addresses the original question:
+   The code directly addresses the original question by:
+   - Grouping transactions by week
+   - Counting the total number of transactions per week
+   - Counting the number of weekend transactions per week
+   - Providing the results in a clear, structured format that can be easily understood
+
+8. Examples from the search results or similar code patterns:
+   Similar code patterns can be seen in examples of PARTITION and aggregation in the provided documentation:
+
+   Good Example #2: For every city/state, count how many people live in that city/state.
+   ```
+   Addresses.PARTITION(name=""cities"", by=(city, state)).CALCULATE(
+       state,
+       city,
+       n_people=COUNT(Addresses.current_occupants)
+   )
+   ```
+
+   Good Example #10: For each state, finds the largest number of packages shipped to a single city in that state.
+   ```
+   pack_info = Addresses.CALCULATE(city, state).packages_shipped_to
+   city_groups = pack_info.PARTITION(
+       name=""cities"", by=(city, state)
+   ).CALCULATE(n_packages=COUNT(packages_shipped_to))
+   city_groups.PARTITION(
+       name=""states"", by=state
+   ).CALCULATE(state, max_packs=MAX(cities.n_packages))
+   ```
+
+This solution uses PARTITION to group transactions by week, COUNT to count total transactions, and SUM with IFF to count weekend transactions, which are all common patterns in PyDough queries.",9.84010934829712,"pack_info = Addresses.CALCULATE(city, state).packages_shipped_to
+city_groups = pack_info.PARTITION(
+    name=""cities"", by=(city, state)
+).CALCULATE(n_packages=COUNT(packages_shipped_to))
+city_groups.PARTITION(
+    name=""states"", by=state
+).CALCULATE(state, max_packs=MAX(cities.n_packages))","cache_tokens_details=None cached_content_token_count=None candidates_token_count=1235 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=1235)] prompt_token_count=17999 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=17999)] thoughts_token_count=None tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19234 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",Query Error,Unrecognized term of graph 'Broker': 'Addresses'

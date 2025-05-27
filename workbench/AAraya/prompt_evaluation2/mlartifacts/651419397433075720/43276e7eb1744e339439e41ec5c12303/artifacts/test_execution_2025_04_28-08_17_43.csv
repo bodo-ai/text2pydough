@@ -1,0 +1,1326 @@
+question,sql,db_name,response,execution_time,extracted_python_code,usage,comparison_result,exception
+"Calculate the average DDD for each drug. Return the drug name and average DDD value.DDD (defined daily dose) = total drug amount consumed during one treatment / total days of treatment (end - start date in days), where end date is not null","SELECT d.drug_name, AVG(t.tot_drug_amt / NULLIF((JULIANDAY(t.end_dt) - JULIANDAY(t.start_dt)), 0)) AS ddd FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE NOT t.end_dt IS NULL GROUP BY d.drug_name;",DermTreatment,"```python
+# Calculate DDD for each relevant treatment first
+treatment_ddd_info = Treatments.WHERE(
+    # Ensure end_dt is not null and duration is not zero to avoid errors
+    (HAS(end_dt) == 1) & (start_dt != end_dt)
+).CALCULATE(
+    drug_name=drug.drug_name, # Get drug name for partitioning
+    # Calculate DDD for this specific treatment
+    ddd_per_treatment=(
+        tot_drug_amt / DATEDIFF(""days"", start_dt, end_dt)
+    )
+)
+
+# Partition by drug name to group treatments for the same drug
+drug_groups = treatment_ddd_info.PARTITION(
+    name=""drug_group"", by=(drug_name)
+)
+
+# Calculate the average DDD for each drug group
+avg_ddd_per_drug = drug_groups.CALCULATE(
+    drug_name=drug_name,
+    # Average the pre-calculated DDD values for treatments within this drug group
+    # Access the original collection 'Treatments' within the partition context
+    avg_ddd=AVG(Treatments.ddd_per_treatment)
+)
+
+# Assign the final result to the variable 'result'
+result = avg_ddd_per_drug
+```
+
+**Explanation:**
+
+1.  **`treatment_ddd_info = Treatments.WHERE(...)`**: We start with the `Treatments` collection and filter it to include only treatments where:
+    *   `HAS(end_dt) == 1`: The `end_dt` (end date) is not null, as required by the definition.
+    *   `start_dt != end_dt`: The start and end dates are different, ensuring the treatment duration is not zero to prevent division by zero errors when calculating DDD.
+2.  **`.CALCULATE(...)`**: For each filtered treatment, we calculate:
+    *   `drug_name=drug.drug_name`: We retrieve the name of the drug associated with the treatment via the `drug` relationship. This is needed for grouping later.
+    *   `ddd_per_treatment=(...)`: We calculate the Defined Daily Dose (DDD) for this specific treatment according to the provided formula: `tot_drug_amt` divided by the treatment duration in days (`DATEDIFF(""days"", start_dt, end_dt)`).
+3.  **`drug_groups = treatment_ddd_info.PARTITION(...)`**: We partition the `treatment_ddd_info` collection.
+    *   `name=""drug_group""`: We name the partitions (groups) ""drug\_group"".
+    *   `by=(drug_name)`: We group the treatments based on their `drug_name`. All treatments for the same drug will be in the same partition.
+4.  **`avg_ddd_per_drug = drug_groups.CALCULATE(...)`**: We perform calculations on each partition (each drug group).
+    *   `drug_name=drug_name`: We select the `drug_name` (which is the partition key).
+    *   `avg_ddd=AVG(Treatments.ddd_per_treatment)`: We calculate the average DDD for the drug. `AVG()` operates on the `ddd_per_treatment` values calculated earlier for all treatments belonging to the current partition (drug group). We access these values through `Treatments.ddd_per_treatment` because the `PARTITION` context allows accessing the original collection's data within the group.
+5.  **`result = avg_ddd_per_drug`**: The final result, containing the drug name and its corresponding average DDD, is assigned to the `result` variable.",29.79942297935486,"# Calculate DDD for each relevant treatment first
+treatment_ddd_info = Treatments.WHERE(
+    # Ensure end_dt is not null and duration is not zero to avoid errors
+    (HAS(end_dt) == 1) & (start_dt != end_dt)
+).CALCULATE(
+    drug_name=drug.drug_name, # Get drug name for partitioning
+    # Calculate DDD for this specific treatment
+    ddd_per_treatment=(
+        tot_drug_amt / DATEDIFF(""days"", start_dt, end_dt)
+    )
+)
+
+# Partition by drug name to group treatments for the same drug
+drug_groups = treatment_ddd_info.PARTITION(
+    name=""drug_group"", by=(drug_name)
+)
+
+# Calculate the average DDD for each drug group
+avg_ddd_per_drug = drug_groups.CALCULATE(
+    drug_name=drug_name,
+    # Average the pre-calculated DDD values for treatments within this drug group
+    # Access the original collection 'Treatments' within the partition context
+    avg_ddd=AVG(Treatments.ddd_per_treatment)
+)
+
+# Assign the final result to the variable 'result'
+result = avg_ddd_per_drug","cache_tokens_details=None cached_content_token_count=None candidates_token_count=809 candidates_tokens_details=None prompt_token_count=19844 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19844)] thoughts_token_count=2054 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22707 traffic_type=None",Query Error,"Invalid operator invocation 'HAS(end_dt)': Expected a collection as an argument, received an expression"
+"How many distinct patients had treatments in each of the last 3 months, not including the current month? Out of these, how many had treatments with biologic drugs? Return the month, patient count, and biologic treatment count.Biologic drugs have drug_type = 'biologic'. ","SELECT strftime('%Y-%m', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;SELECT strftime('%Y-%m-01', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;SELECT strftime('%Y-%m-01 %H:%M:%S', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;",DermTreatment,"```python
+# Calculate the start date of the current month and the start date of the month 3 months prior.
+date_boundaries = DermTreatment.CALCULATE(
+    current_month_start = DATETIME('now', 'start of month'),
+    # Calculate the start of the month 3 months ago
+    prev_month_3_start = DATETIME(DATETIME('now', 'start of month'), '-3 months')
+)
+
+# Filter treatments to include only those within the last 3 full months (excluding the current month).
+# Calculate the month string ('YYYY-MM') and identify the patient for each relevant treatment.
+treatments_in_period = date_boundaries.Treatments.WHERE(
+    (start_dt >= prev_month_3_start) & (start_dt < current_month_start)
+).CALCULATE(
+    # Format month as 'YYYY-MM' for partitioning
+    treatment_month = JOIN_STRINGS('-', YEAR(start_dt), LPAD(MONTH(start_dt), 2, '0')),
+    # Get the patient ID for distinct counting
+    patient_key = patient.patient_id,
+    # Get the drug type to filter for biologics
+    treatment_drug_type = drug.drug_type
+)
+
+# Partition the filtered treatments by month.
+# For each month, calculate the distinct count of all patients and the distinct count of patients receiving biologic drugs.
+monthly_patient_counts = treatments_in_period.PARTITION(name=""months"", by=treatment_month).CALCULATE(
+    month = treatment_month,
+    # Count distinct patients within this month's partition
+    patient_count = NDISTINCT(Treatments.patient_key),
+    # Count distinct patients who received a biologic drug within this month's partition
+    biologic_patient_count = NDISTINCT(Treatments.WHERE(treatment_drug_type == 'biologic').patient_key)
+).ORDER_BY(month.ASC()) # Order results by month ascending
+
+# Assign the final result to a variable
+result = monthly_patient_counts
+```
+
+**Explanation:**
+
+1.  **`date_boundaries`**: We first calculate the necessary date boundaries using the `DermTreatment` high-level collection. `current_month_start` is the first day of the current month, and `prev_month_3_start` is the first day of the month three months prior to the current month.
+2.  **`treatments_in_period`**: We access the `Treatments` collection via `date_boundaries` (to use the calculated dates). We filter treatments using `WHERE` to include only those whose `start_dt` falls within the desired range (from `prev_month_3_start` up to, but not including, `current_month_start`). We then use `CALCULATE` to:
+    *   Create a `treatment_month` string in 'YYYY-MM' format.
+    *   Extract the `patient_id` as `patient_key` for later distinct counting.
+    *   Extract the `drug_type` as `treatment_drug_type` for filtering biologics.
+3.  **`monthly_patient_counts`**: We partition the `treatments_in_period` collection by the calculated `treatment_month`. Within each partition (each month):
+    *   We use `CALCULATE` to output the `month`.
+    *   `NDISTINCT(Treatments.patient_key)` counts the unique patient IDs among all treatments within that month's partition.
+    *   `NDISTINCT(Treatments.WHERE(treatment_drug_type == 'biologic').patient_key)` first filters the treatments within the partition to only include those where the `treatment_drug_type` is 'biologic', and *then* counts the unique patient IDs associated with those filtered biologic treatments.
+4.  **`.ORDER_BY(month.ASC())`**: Sorts the final results chronologically by month.
+5.  **`result = monthly_patient_counts`**: Assigns the final computed collection to the `result` variable.",28.87743449211121,"# Calculate the start date of the current month and the start date of the month 3 months prior.
+date_boundaries = DermTreatment.CALCULATE(
+    current_month_start = DATETIME('now', 'start of month'),
+    # Calculate the start of the month 3 months ago
+    prev_month_3_start = DATETIME(DATETIME('now', 'start of month'), '-3 months')
+)
+
+# Filter treatments to include only those within the last 3 full months (excluding the current month).
+# Calculate the month string ('YYYY-MM') and identify the patient for each relevant treatment.
+treatments_in_period = date_boundaries.Treatments.WHERE(
+    (start_dt >= prev_month_3_start) & (start_dt < current_month_start)
+).CALCULATE(
+    # Format month as 'YYYY-MM' for partitioning
+    treatment_month = JOIN_STRINGS('-', YEAR(start_dt), LPAD(MONTH(start_dt), 2, '0')),
+    # Get the patient ID for distinct counting
+    patient_key = patient.patient_id,
+    # Get the drug type to filter for biologics
+    treatment_drug_type = drug.drug_type
+)
+
+# Partition the filtered treatments by month.
+# For each month, calculate the distinct count of all patients and the distinct count of patients receiving biologic drugs.
+monthly_patient_counts = treatments_in_period.PARTITION(name=""months"", by=treatment_month).CALCULATE(
+    month = treatment_month,
+    # Count distinct patients within this month's partition
+    patient_count = NDISTINCT(Treatments.patient_key),
+    # Count distinct patients who received a biologic drug within this month's partition
+    biologic_patient_count = NDISTINCT(Treatments.WHERE(treatment_drug_type == 'biologic').patient_key)
+).ORDER_BY(month.ASC()) # Order results by month ascending
+
+# Assign the final result to a variable
+result = monthly_patient_counts","cache_tokens_details=None cached_content_token_count=None candidates_token_count=908 candidates_tokens_details=None prompt_token_count=19852 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19852)] thoughts_token_count=1952 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22712 traffic_type=None",SQL error,You can only execute one statement at a time.
+How many patients have a Gmail or Yahoo email address?Patients with gmail or yahoo email addresses,SELECT COUNT(*) FROM patients WHERE email LIKE '%@gmail.com' OR email LIKE '%@yahoo.com';,DermTreatment,"```python
+# Filter patients whose email ends with '@gmail.com' or '@yahoo.com'
+gmail_yahoo_patients = Patients.WHERE(
+    ENDSWITH(email, ""@gmail.com"") | ENDSWITH(email, ""@yahoo.com"")
+)
+
+# Count the number of patients matching the criteria
+result = DermTreatment.CALCULATE(
+    num_patients_gmail_or_yahoo = COUNT(gmail_yahoo_patients)
+)
+```
+
+**Explanation:**
+
+1.  `gmail_yahoo_patients = Patients.WHERE(...)`: This line starts with the `Patients` collection and filters it using the `WHERE` clause.
+2.  `ENDSWITH(email, ""@gmail.com"") | ENDSWITH(email, ""@yahoo.com"")`: This condition checks if the `email` field ends with either ""@gmail.com"" or ""@yahoo.com"". The `|` operator represents the logical OR.
+3.  `result = DermTreatment.CALCULATE(...)`: This line uses the top-level `DermTreatment` collection to calculate a single aggregated value.
+4.  `num_patients_gmail_or_yahoo = COUNT(gmail_yahoo_patients)`: Inside `CALCULATE`, the `COUNT` function is used on the previously filtered `gmail_yahoo_patients` collection to get the total number of patients who meet the email criteria. The result is assigned to the field `num_patients_gmail_or_yahoo`.",10.352882146835327,"# Filter patients whose email ends with '@gmail.com' or '@yahoo.com'
+gmail_yahoo_patients = Patients.WHERE(
+    ENDSWITH(email, ""@gmail.com"") | ENDSWITH(email, ""@yahoo.com"")
+)
+
+# Count the number of patients matching the criteria
+result = DermTreatment.CALCULATE(
+    num_patients_gmail_or_yahoo = COUNT(gmail_yahoo_patients)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=319 candidates_tokens_details=None prompt_token_count=19812 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19812)] thoughts_token_count=588 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20719 traffic_type=None",Match,
+How many patients have been diagnosed with 'Psoriasis vulgaris' and treated with a biologic drug? Return the distinct count of patients.,WITH patient_diagnosis_treatment AS (SELECT p.patient_id FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id JOIN diagnoses AS d ON t.diag_id = d.diag_id JOIN drugs AS dr ON t.drug_id = dr.drug_id WHERE d.diag_name = 'Psoriasis vulgaris' AND dr.drug_type = 'biologic') SELECT COUNT(DISTINCT patient_id) FROM patient_diagnosis_treatment;,DermTreatment,"```python
+result = DermTreatment.CALCULATE(
+    num_patients=COUNT(
+        Patients.WHERE(
+            HAS(treatments_received.WHERE(
+                (diagnosis.diag_name == 'Psoriasis vulgaris') &
+                (drug.drug_type == 'Biologic')
+            )) == 1
+        )
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`DermTreatment.CALCULATE(...)`**: We start at the top-level `DermTreatment` collection because we need a single aggregated count.
+2.  **`num_patients=COUNT(...)`**: We define a field `num_patients` and assign it the result of the `COUNT` function, which will count the number of records in the collection passed to it.
+3.  **`Patients.WHERE(...)`**: We access the `Patients` collection and filter it using `WHERE`.
+4.  **`HAS(treatments_received.WHERE(...)) == 1`**: This is the core filtering condition.
+    *   `treatments_received`: For each patient, we look at their list of received treatments.
+    *   `.WHERE(...)`: We filter these treatments based on the conditions inside.
+    *   `(diagnosis.diag_name == 'Psoriasis vulgaris')`: Checks if the diagnosis linked to the treatment has the name 'Psoriasis vulgaris'.
+    *   `&`: Logical AND combines the two conditions.
+    *   `(drug.drug_type == 'Biologic')`: Checks if the drug linked to the treatment has the type 'Biologic'.
+    *   `HAS(...) == 1`: This function checks if the inner `WHERE` clause returns at least one treatment record for the current patient that satisfies both conditions.
+5.  The `COUNT` function then counts how many `Patients` records satisfy the `WHERE` condition (i.e., have received at least one treatment matching both criteria). The result is the distinct count of such patients.",19.152591466903687,"result = DermTreatment.CALCULATE(
+    num_patients=COUNT(
+        Patients.WHERE(
+            HAS(treatments_received.WHERE(
+                (diagnosis.diag_name == 'Psoriasis vulgaris') &
+                (drug.drug_type == 'Biologic')
+            )) == 1
+        )
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=431 candidates_tokens_details=None prompt_token_count=19821 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19821)] thoughts_token_count=1470 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21722 traffic_type=None",No Match,
+"How many treatments did the patient Alice have in the last 6 months, not including the current month?","SELECT COUNT(t.treatment_id) FROM treatments AS t JOIN patients AS p ON t.patient_id = p.patient_id WHERE p.first_name = 'Alice' AND t.start_dt BETWEEN date('now', 'start of month', '-6 months') AND date('now', 'start of month', '-1 day');",DermTreatment,"```python
+# Calculate the start date of the current month and the start date of the month 6 months prior.
+time_boundaries = DermTreatment.CALCULATE(
+    current_month_start = DATETIME('now', 'start of month'),
+    six_months_ago_start = DATETIME(DATETIME('now', 'start of month'), '-6 months')
+)
+
+# Count the treatments for patients named 'Alice' that started within the calculated time frame.
+# The time frame is from the start of the month 6 months ago up to (but not including) the start of the current month.
+result = time_boundaries.CALCULATE(
+    num_treatments_last_6m = COUNT(
+        Patients.WHERE(first_name == ""Alice"").treatments_received.WHERE(
+            (start_dt >= six_months_ago_start) & (start_dt < current_month_start)
+        )
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`time_boundaries = DermTreatment.CALCULATE(...)`**: We first define the time boundaries using the top-level `DermTreatment` collection.
+    *   `current_month_start = DATETIME('now', 'start of month')`: Calculates the timestamp for the very beginning of the current month.
+    *   `six_months_ago_start = DATETIME(DATETIME('now', 'start of month'), '-6 months')`: Calculates the timestamp for the beginning of the month that was exactly 6 months before the start of the current month.
+2.  **`result = time_boundaries.CALCULATE(...)`**: We perform the main calculation.
+    *   **`Patients.WHERE(first_name == ""Alice"")`**: Filters the `Patients` collection to find records where the `first_name` is ""Alice"".
+    *   **`.treatments_received`**: Accesses the list of treatments associated with the filtered patient(s).
+    *   **`.WHERE((start_dt >= six_months_ago_start) & (start_dt < current_month_start))`**: Filters these treatments to include only those whose `start_dt` falls within the desired range: greater than or equal to the start of the month 6 months ago, and strictly less than the start of the current month.
+    *   **`COUNT(...)`**: Counts the number of treatments that satisfy all the preceding conditions (patient name is Alice and treatment start date is within the specified 6-month window before the current month).
+    *   **`num_treatments_last_6m = ...`**: Assigns the final count to the field `num_treatments_last_6m`.",22.952280521392822,"# Calculate the start date of the current month and the start date of the month 6 months prior.
+time_boundaries = DermTreatment.CALCULATE(
+    current_month_start = DATETIME('now', 'start of month'),
+    six_months_ago_start = DATETIME(DATETIME('now', 'start of month'), '-6 months')
+)
+
+# Count the treatments for patients named 'Alice' that started within the calculated time frame.
+# The time frame is from the start of the month 6 months ago up to (but not including) the start of the current month.
+result = time_boundaries.CALCULATE(
+    num_treatments_last_6m = COUNT(
+        Patients.WHERE(first_name == ""Alice"").treatments_received.WHERE(
+            (start_dt >= six_months_ago_start) & (start_dt < current_month_start)
+        )
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=592 candidates_tokens_details=None prompt_token_count=19815 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19815)] thoughts_token_count=1506 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21913 traffic_type=None",Match,
+"I want the adverse events that have been reported for treatments involving topical drugs. Give me the description, treatment _id, drug _id and name.","SELECT a.description, a.treatment_id, d.drug_id, d.drug_name FROM adverse_events AS a JOIN treatments AS t ON a.treatment_id = t.treatment_id JOIN drugs AS d ON t.drug_id = d.drug_id WHERE d.drug_type = 'topical';",DermTreatment,"```python
+# Find adverse events related to treatments using topical drugs
+topical_drug_adverse_events = AdverseEvents.WHERE(
+    treatment.drug.drug_type == 'Topical'
+).CALCULATE(
+    event_description=description,
+    treatment_identifier=treatment_id,
+    drug_identifier=treatment.drug.drug_id,
+    drug_name_field=treatment.drug.drug_name
+)
+```
+
+**Explanation:**
+
+1.  **`AdverseEvents`**: We start with the `AdverseEvents` collection, as the primary goal is to retrieve information about adverse events.
+2.  **`.WHERE(treatment.drug.drug_type == 'Topical')`**: We filter these events. For each adverse event, we navigate through its associated `treatment` to the `drug` used in that treatment. We then check if the `drug_type` of that drug is equal to 'Topical'. Only adverse events linked to treatments involving topical drugs are kept.
+3.  **`.CALCULATE(...)`**: Finally, we select the required fields for the filtered adverse events:
+    *   `event_description=description`: Selects the `description` from the `AdverseEvents` collection and renames it to `event_description`.
+    *   `treatment_identifier=treatment_id`: Selects the `treatment_id` directly from the `AdverseEvents` collection and renames it to `treatment_identifier`.
+    *   `drug_identifier=treatment.drug.drug_id`: Accesses the `drug_id` from the `drug` associated with the `treatment` linked to the adverse event and renames it to `drug_identifier`.
+    *   `drug_name_field=treatment.drug.drug_name`: Accesses the `drug_name` from the `drug` associated with the `treatment` linked to the adverse event and renames it to `drug_name_field`.
+
+The result `topical_drug_adverse_events` will contain a list of adverse events that occurred during treatments using topical drugs, including their description, the treatment ID, the drug ID, and the drug name.",13.579546213150024,"# Find adverse events related to treatments using topical drugs
+topical_drug_adverse_events = AdverseEvents.WHERE(
+    treatment.drug.drug_type == 'Topical'
+).CALCULATE(
+    event_description=description,
+    treatment_identifier=treatment_id,
+    drug_identifier=treatment.drug.drug_id,
+    drug_name_field=treatment.drug.drug_name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=472 candidates_tokens_details=None prompt_token_count=19824 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19824)] thoughts_token_count=740 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21036 traffic_type=None",Match,
+"Return each doctor's doc_id, specialty, number of distinct drugs prescribed, and SDRSDR = a doctor's rank within their specialty by number of distinct drugs prescribed. Doctors prescribing more drugs will have a higher rank","WITH doc_drug_counts AS (SELECT d.doc_id, d.specialty, COUNT(DISTINCT t.drug_id) AS num_drugs_prescribed FROM doctors AS d JOIN treatments AS t ON d.doc_id = t.doc_id GROUP BY d.doc_id) SELECT doc_id, specialty, num_drugs_prescribed, DENSE_RANK() OVER (PARTITION BY specialty ORDER BY CASE WHEN num_drugs_prescribed IS NULL THEN 1 ELSE 0 END DESC, num_drugs_prescribed DESC) AS specialty_drug_rank FROM doc_drug_counts;",DermTreatment,"```python
+# Partition doctors by their specialty
+specialty_groups = Doctors.PARTITION(name=""spec_group"", by=(speciality))
+
+# For each doctor within their specialty group:
+# 1. Calculate the number of distinct drugs they prescribed.
+# 2. Calculate their rank (SDRSDR) within that specialty based on the distinct drug count.
+result = specialty_groups.Doctors.CALCULATE(
+    # Calculate the distinct drug count first
+    doc_id=doc_id,
+    speciality=speciality, # Access specialty from the partition key
+    num_distinct_drugs=NDISTINCT(prescribed_treatments.drug.drug_id)
+).CALCULATE(
+    # Select the final fields and calculate the rank
+    doc_id=doc_id,
+    speciality=speciality,
+    num_distinct_drugs=num_distinct_drugs,
+    # Rank doctors within their specialty ('spec_group') based on descending distinct drug count
+    SDRSDR=RANKING(by=num_distinct_drugs.DESC(), per=""spec_group"")
+)
+```
+
+**Explanation:**
+
+1.  **`Doctors.PARTITION(name=""spec_group"", by=(speciality))`**: This groups the `Doctors` collection into partitions based on their `speciality`. Each partition (`spec_group`) contains all doctors belonging to a specific specialty.
+2.  **`.Doctors`**: After partitioning, we access the doctors *within* each `spec_group`.
+3.  **`.CALCULATE(...)` (first one)**: For each doctor within a specialty group, we calculate:
+    *   `doc_id=doc_id`: Selects the doctor's ID.
+    *   `speciality=speciality`: Selects the doctor's specialty (available because it's the partition key).
+    *   `num_distinct_drugs=NDISTINCT(prescribed_treatments.drug.drug_id)`: Calculates the count of unique drugs prescribed by navigating through the doctor's `prescribed_treatments` to the associated `drug` and counting the distinct `drug_id`s.
+4.  **`.CALCULATE(...)` (second one)**: This takes the results from the previous step and calculates the final rank:
+    *   It selects `doc_id`, `speciality`, and `num_distinct_drugs` again.
+    *   `SDRSDR=RANKING(by=num_distinct_drugs.DESC(), per=""spec_group"")`: This calculates the rank (`SDRSDR`) for each doctor.
+        *   `by=num_distinct_drugs.DESC()`: Specifies that the ranking should be based on the `num_distinct_drugs` calculated earlier, in descending order (higher count gets rank 1).
+        *   `per=""spec_group""`: Crucially, this ensures the ranking is performed *within* each specialty partition created earlier, fulfilling the requirement to rank doctors relative to others in the same specialty.",30.93435215950012,"# Partition doctors by their specialty
+specialty_groups = Doctors.PARTITION(name=""spec_group"", by=(speciality))
+
+# For each doctor within their specialty group:
+# 1. Calculate the number of distinct drugs they prescribed.
+# 2. Calculate their rank (SDRSDR) within that specialty based on the distinct drug count.
+result = specialty_groups.Doctors.CALCULATE(
+    # Calculate the distinct drug count first
+    doc_id=doc_id,
+    speciality=speciality, # Access specialty from the partition key
+    num_distinct_drugs=NDISTINCT(prescribed_treatments.drug.drug_id)
+).CALCULATE(
+    # Select the final fields and calculate the rank
+    doc_id=doc_id,
+    speciality=speciality,
+    num_distinct_drugs=num_distinct_drugs,
+    # Rank doctors within their specialty ('spec_group') based on descending distinct drug count
+    SDRSDR=RANKING(by=num_distinct_drugs.DESC(), per=""spec_group"")
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=663 candidates_tokens_details=None prompt_token_count=19840 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19840)] thoughts_token_count=2255 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22758 traffic_type=None",No Match,
+"Return the first name, last name and specialty of doctors whose first name starts with 'J' or last name contains 'son', case-insensitive.Doctors whose first name starts with 'J' or last name contains 'son', case-insensitive","SELECT first_name, last_name, specialty FROM doctors WHERE LOWER(first_name) LIKE 'J%' OR LOWER(last_name) LIKE '%son%';",DermTreatment,"```python
+result = Doctors.WHERE(
+    STARTSWITH(UPPER(first_name), 'J') | CONTAINS(UPPER(last_name), 'SON')
+).CALCULATE(
+    doc_first_name=first_name,
+    doc_last_name=last_name,
+    doc_speciality=speciality
+)
+```
+
+**Explanation:**
+
+1.  **`Doctors`**: Starts with the `Doctors` collection.
+2.  **`.WHERE(...)`**: Filters the doctors based on the specified conditions.
+3.  **`STARTSWITH(UPPER(first_name), 'J')`**: Checks if the uppercase version of the `first_name` starts with 'J'. Using `UPPER` ensures case-insensitivity.
+4.  **`CONTAINS(UPPER(last_name), 'SON')`**: Checks if the uppercase version of the `last_name` contains the substring 'SON'. Using `UPPER` ensures case-insensitivity.
+5.  **`|`**: The logical OR operator combines the two conditions, selecting doctors that satisfy either condition.
+6.  **`.CALCULATE(...)`**: Selects and renames the required fields for the final output: `first_name` as `doc_first_name`, `last_name` as `doc_last_name`, and `speciality` as `doc_speciality`.",13.221906185150146,"result = Doctors.WHERE(
+    STARTSWITH(UPPER(first_name), 'J') | CONTAINS(UPPER(last_name), 'SON')
+).CALCULATE(
+    doc_first_name=first_name,
+    doc_last_name=last_name,
+    doc_speciality=speciality
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=310 candidates_tokens_details=None prompt_token_count=19843 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19843)] thoughts_token_count=839 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20992 traffic_type=None",Match,
+"What are the PMPD and PMTC for each of the last 12 months, not including the current monthPMPD = per month patient diagnoses. PMTC = per month treatment count. Truncate start_dt to month for aggregation.","SELECT strftime('%Y-%m', t.start_dt) AS month, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT t.treatment_id) AS treatment_count FROM treatments AS t JOIN diagnoses AS d ON t.diag_id = d.diag_id WHERE t.start_dt >= date('now', '-12 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;",DermTreatment,"```python
+# Define the start and end dates for the 12-month period preceding the current month
+date_info = DermTreatment.CALCULATE(
+    start_of_current_month = DATETIME('now', 'start of month'),
+    start_date_12_months_ago = DATETIME('now', 'start of month', '-12 months')
+)
+
+# Filter treatments that started within the defined date range
+# Calculate the month (YYYY-MM format) for each treatment
+treatments_filtered = date_info.Treatments.WHERE(
+    (start_dt >= start_date_12_months_ago) & (start_dt < start_of_current_month)
+).CALCULATE(
+    treatment_month = JOIN_STRINGS(""-"", YEAR(start_dt), LPAD(MONTH(start_dt), 2, ""0"")),
+    # Include patient_id to count distinct patients later
+    patient_identifier = patient.patient_id
+)
+
+# Partition the filtered treatments by month
+# Calculate PMPD (Per Month Patient Diagnoses - count of distinct patients)
+# Calculate PMTC (Per Month Treatment Count - count of treatments)
+monthly_metrics = treatments_filtered.PARTITION(name=""monthly_groups"", by=treatment_month).CALCULATE(
+    month = treatment_month,
+    PMPD = NDISTINCT(Treatments.patient_identifier),
+    PMTC = COUNT(Treatments)
+).ORDER_BY(month.ASC()) # Order results chronologically by month
+
+# Assign the final result to the variable
+result = monthly_metrics
+```
+
+**Explanation:**
+
+1.  **`date_info = DermTreatment.CALCULATE(...)`**: Defines the time window. It calculates the first day of the current month (`start_of_current_month`) and the first day of the month 12 months prior (`start_date_12_months_ago`).
+2.  **`treatments_filtered = date_info.Treatments.WHERE(...)`**: Accesses the `Treatments` collection via `date_info` (to use the calculated dates) and filters them to include only those whose `start_dt` falls within the desired 12-month period (greater than or equal to `start_date_12_months_ago` and less than `start_of_current_month`).
+3.  **`.CALCULATE(...)`**: For the filtered treatments, it calculates:
+    *   `treatment_month`: Extracts the year and month from `start_dt` and formats it as ""YYYY-MM"" using `JOIN_STRINGS` and `LPAD` for consistent sorting.
+    *   `patient_identifier`: Retrieves the `patient_id` from the related `patient` record, which is needed for the distinct patient count (PMPD).
+4.  **`.PARTITION(name=""monthly_groups"", by=treatment_month)`**: Groups the `treatments_filtered` data by the calculated `treatment_month`.
+5.  **`.CALCULATE(...)`**: Within each monthly group created by the partition:
+    *   `month = treatment_month`: Selects the month identifier.
+    *   `PMPD = NDISTINCT(Treatments.patient_identifier)`: Calculates the Per Month Patient Diagnoses by counting the number of unique `patient_identifier` values within that month's treatments.
+    *   `PMTC = COUNT(Treatments)`: Calculates the Per Month Treatment Count by counting the total number of treatments within that month's group.
+6.  **`.ORDER_BY(month.ASC())`**: Sorts the final results chronologically by month.
+7.  **`result = monthly_metrics`**: Assigns the computed monthly statistics to the `result` variable.",23.761032104492188,"# Define the start and end dates for the 12-month period preceding the current month
+date_info = DermTreatment.CALCULATE(
+    start_of_current_month = DATETIME('now', 'start of month'),
+    start_date_12_months_ago = DATETIME('now', 'start of month', '-12 months')
+)
+
+# Filter treatments that started within the defined date range
+# Calculate the month (YYYY-MM format) for each treatment
+treatments_filtered = date_info.Treatments.WHERE(
+    (start_dt >= start_date_12_months_ago) & (start_dt < start_of_current_month)
+).CALCULATE(
+    treatment_month = JOIN_STRINGS(""-"", YEAR(start_dt), LPAD(MONTH(start_dt), 2, ""0"")),
+    # Include patient_id to count distinct patients later
+    patient_identifier = patient.patient_id
+)
+
+# Partition the filtered treatments by month
+# Calculate PMPD (Per Month Patient Diagnoses - count of distinct patients)
+# Calculate PMTC (Per Month Treatment Count - count of treatments)
+monthly_metrics = treatments_filtered.PARTITION(name=""monthly_groups"", by=treatment_month).CALCULATE(
+    month = treatment_month,
+    PMPD = NDISTINCT(Treatments.patient_identifier),
+    PMTC = COUNT(Treatments)
+).ORDER_BY(month.ASC()) # Order results chronologically by month
+
+# Assign the final result to the variable
+result = monthly_metrics","cache_tokens_details=None cached_content_token_count=None candidates_token_count=836 candidates_tokens_details=None prompt_token_count=19846 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19846)] thoughts_token_count=1427 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22109 traffic_type=None",Match,
+What is the average weight in kg of patients treated with the drug named 'Drugalin'? Return the average weight.,"WITH patient_treatment AS (SELECT p.patient_id, p.weight_kg FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id WHERE t.drug_id = (SELECT drug_id FROM drugs WHERE drug_name = 'Drugalin')) SELECT AVG(weight_kg) FROM patient_treatment;",DermTreatment,"```python
+# Calculate the average weight for patients treated with 'Drugalin'
+result = DermTreatment.CALCULATE(
+    avg_weight_drugalin_patients=AVG(
+        # Filter drugs to find 'Drugalin'
+        Drugs.WHERE(drug_name == 'Drugalin')
+        # Access treatments where 'Drugalin' was used
+        .treatments_used_in
+        # Access the patient associated with each treatment
+        .patient
+        # Get the weight of each patient
+        .weight_kg
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`DermTreatment.CALCULATE(...)`**: We start at the top-level `DermTreatment` collection because we need to calculate a single aggregate value (the average weight) across relevant patients.
+2.  **`avg_weight_drugalin_patients=AVG(...)`**: We define a new field `avg_weight_drugalin_patients` and assign the result of the `AVG` aggregation function to it.
+3.  **`Drugs.WHERE(drug_name == 'Drugalin')`**: Inside the `AVG` function, we first access the `Drugs` collection and filter it to find the specific drug named 'Drugalin'.
+4.  **`.treatments_used_in`**: From the filtered 'Drugalin' drug record, we navigate to the `treatments_used_in` sub-collection, which contains all treatments where this drug was administered.
+5.  **`.patient`**: For each of these treatments, we navigate to the associated `patient`.
+6.  **`.weight_kg`**: Finally, we access the `weight_kg` field for each patient found through this path.
+7.  **`AVG(...)`**: The `AVG` function calculates the average of all the `weight_kg` values obtained from the patients who received 'Drugalin'.",13.51973295211792,"# Calculate the average weight for patients treated with 'Drugalin'
+result = DermTreatment.CALCULATE(
+    avg_weight_drugalin_patients=AVG(
+        # Filter drugs to find 'Drugalin'
+        Drugs.WHERE(drug_name == 'Drugalin')
+        # Access treatments where 'Drugalin' was used
+        .treatments_used_in
+        # Access the patient associated with each treatment
+        .patient
+        # Get the weight of each patient
+        .weight_kg
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=408 candidates_tokens_details=None prompt_token_count=19817 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19817)] thoughts_token_count=750 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20975 traffic_type=None",Match,
+What is the CAW for male patientsCAW = cohort average weight in kilograms,SELECT AVG(weight_kg) AS caw FROM patients WHERE gender = 'Male';,DermTreatment,"```python
+# Filter patients to include only males
+male_patients = Patients.WHERE(gender == 'M')
+
+# Calculate the average weight for the filtered male patients
+result = DermTreatment.CALCULATE(
+    CAW = AVG(male_patients.weight_kg)
+)
+```
+
+**Explanation:**
+
+1.  **`male_patients = Patients.WHERE(gender == 'M')`**: This line filters the `Patients` collection to select only those records where the `gender` field is equal to 'M' (representing male). The result is stored in the `male_patients` variable.
+2.  **`result = DermTreatment.CALCULATE(...)`**: This line calculates a single result at the top level of the database (`DermTreatment`).
+3.  **`CAW = AVG(male_patients.weight_kg)`**: Inside the `CALCULATE`, it computes the average (`AVG`) of the `weight_kg` field for all patients included in the previously filtered `male_patients` collection. The result is assigned to the variable `CAW` (Cohort Average Weight).",9.475650310516356,"# Filter patients to include only males
+male_patients = Patients.WHERE(gender == 'M')
+
+# Calculate the average weight for the filtered male patients
+result = DermTreatment.CALCULATE(
+    CAW = AVG(male_patients.weight_kg)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=239 candidates_tokens_details=None prompt_token_count=19810 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19810)] thoughts_token_count=589 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20638 traffic_type=None",No Match,
+"What is the NPI for each year? Return the year, number of new patients, and NPINPI (new patients increase) = the increase in number of new patients compared to the previous year. New patients are defined as patients starting their first treatment ","WITH FirstTreatment AS (SELECT p.patient_id, MIN(t.start_dt) AS first_treatment_date FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id GROUP BY p.patient_id), NewPatientsPerYear AS (SELECT strftime('%Y', first_treatment_date) AS year, COUNT(patient_id) AS new_patients FROM FirstTreatment GROUP BY strftime('%Y', first_treatment_date)), NPI AS (SELECT year, new_patients, new_patients - LAG(new_patients, 1) OVER (ORDER BY year) AS npi FROM NewPatientsPerYear) SELECT year, new_patients, npi FROM NPI ORDER BY year;",DermTreatment,"```python
+# Step 1: Find the year of the first treatment for each patient
+# Filter patients to ensure they have received at least one treatment
+# Calculate the minimum start date of their treatments and extract the year
+patient_first_treatment_info = Patients.WHERE(HAS(treatments_received) == 1).CALCULATE(
+    patient_id = patient_id,
+    first_treatment_year = YEAR(MIN(treatments_received.start_dt))
+)
+
+# Step 2: Group by the first treatment year and count the number of new patients for each year
+# Partition the results by the calculated first treatment year
+# Calculate the year and the count of patients (new patients) for that year
+# Order the results by year to prepare for the PREV function
+yearly_new_patients_count = patient_first_treatment_info.PARTITION(
+    name=""year_group"", by=first_treatment_year
+).CALCULATE(
+    year = first_treatment_year,
+    num_new_patients = COUNT(patient_first_treatment_info) # Count records from the input collection within this partition group
+).ORDER_BY(year.ASC())
+
+# Step 3: Calculate the New Patient Increase (NPI) compared to the previous year
+# Use the PREV window function to get the number of new patients from the previous year
+# Subtract the previous year's count from the current year's count to get the NPI
+# Use default=0 for the PREV function to handle the first year gracefully
+npi_result = yearly_new_patients_count.CALCULATE(
+    year = year,
+    num_new_patients = num_new_patients,
+    npi = num_new_patients - PREV(num_new_patients, by=year.ASC(), default=0)
+)
+
+```
+
+**Explanation:**
+
+1.  **`patient_first_treatment_info`**: This variable calculates the year each patient received their *first* treatment.
+    *   It starts with the `Patients` collection.
+    *   `WHERE(HAS(treatments_received) == 1)` filters out patients who have never received any treatment.
+    *   `CALCULATE` computes `first_treatment_year` by finding the minimum (`MIN`) `start_dt` among all `treatments_received` for each patient and extracting the `YEAR` from that date. It also keeps `patient_id` for counting purposes later.
+2.  **`yearly_new_patients_count`**: This variable groups the patients by their first treatment year and counts them.
+    *   It takes the `patient_first_treatment_info` collection as input.
+    *   `PARTITION(name=""year_group"", by=first_treatment_year)` groups the records based on the `first_treatment_year`.
+    *   `CALCULATE` then computes:
+        *   `year`: The first treatment year for the group.
+        *   `num_new_patients`: The count (`COUNT`) of patients within each year's partition group, representing the number of new patients for that year. We count the records from the input collection (`patient_first_treatment_info`) that fall into this partition.
+    *   `ORDER_BY(year.ASC())` sorts the results chronologically, which is necessary for the `PREV` function to work correctly in the next step.
+3.  **`npi_result`**: This final variable calculates the New Patient Increase (NPI).
+    *   It takes the sorted `yearly_new_patients_count` collection.
+    *   `CALCULATE` computes:
+        *   `year`: The year.
+        *   `num_new_patients`: The number of new patients for that year.
+        *   `npi`: The New Patient Increase. This is calculated by subtracting the number of new patients from the previous year (`PREV(num_new_patients, by=year.ASC(), default=0)`) from the current year's `num_new_patients`. `PREV` looks back one record based on the ascending order of `year`. `default=0` ensures that for the very first year in the dataset, the NPI is calculated as `num_new_patients - 0`.",26.093152046203613,"# Step 1: Find the year of the first treatment for each patient
+# Filter patients to ensure they have received at least one treatment
+# Calculate the minimum start date of their treatments and extract the year
+patient_first_treatment_info = Patients.WHERE(HAS(treatments_received) == 1).CALCULATE(
+    patient_id = patient_id,
+    first_treatment_year = YEAR(MIN(treatments_received.start_dt))
+)
+
+# Step 2: Group by the first treatment year and count the number of new patients for each year
+# Partition the results by the calculated first treatment year
+# Calculate the year and the count of patients (new patients) for that year
+# Order the results by year to prepare for the PREV function
+yearly_new_patients_count = patient_first_treatment_info.PARTITION(
+    name=""year_group"", by=first_treatment_year
+).CALCULATE(
+    year = first_treatment_year,
+    num_new_patients = COUNT(patient_first_treatment_info) # Count records from the input collection within this partition group
+).ORDER_BY(year.ASC())
+
+# Step 3: Calculate the New Patient Increase (NPI) compared to the previous year
+# Use the PREV window function to get the number of new patients from the previous year
+# Subtract the previous year's count from the current year's count to get the NPI
+# Use default=0 for the PREV function to handle the first year gracefully
+npi_result = yearly_new_patients_count.CALCULATE(
+    year = year,
+    num_new_patients = num_new_patients,
+    npi = num_new_patients - PREV(num_new_patients, by=year.ASC(), default=0)
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=948 candidates_tokens_details=None prompt_token_count=19846 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19846)] thoughts_token_count=1571 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22365 traffic_type=None",No Match,
+What is the overall D7D100PIR across all treatments? Return the percentage value.D7D100PIR (day 7 to day 100 PASI improvement rate) = (avg PASI score on day 100 - avg PASI score on day 7) / avg PASI score on day 7 * 100. This should only include patients who have non-null PASI scores for both timepoints.,SELECT (AVG(day100_pasi_score) - AVG(day7_pasi_score)) / AVG(day7_pasi_score) * 100 AS d7d100pir FROM outcomes WHERE NOT day7_pasi_score IS NULL AND NOT day100_pasi_score IS NULL;,DermTreatment,"```python
+# Filter outcomes to include only those with non-null PASI scores for both day 7 and day 100
+filtered_outcomes = Outcomes.WHERE((day7_pasi_score != None) & (day100_pasi_score != None))
+
+# Calculate the overall average PASI scores for day 7 and day 100 from the filtered outcomes
+overall_pasi_averages = DermTreatment.CALCULATE(
+    avg_d7_pasi = AVG(filtered_outcomes.day7_pasi_score),
+    avg_d100_pasi = AVG(filtered_outcomes.day100_pasi_score)
+)
+
+# Calculate the D7D100PIR percentage using the calculated averages
+# Handle potential division by zero if avg_d7_pasi is 0
+result = overall_pasi_averages.CALCULATE(
+    d7d100pir_percentage = IFF(
+        avg_d7_pasi != 0, # Check if the denominator is non-zero
+        (avg_d100_pasi - avg_d7_pasi) / avg_d7_pasi * 100.0, # Calculate PIR if safe
+        None # Return None (or potentially 0 or another indicator) if division by zero would occur
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`filtered_outcomes = Outcomes.WHERE(...)`**: This line filters the `Outcomes` collection to retain only records where both `day7_pasi_score` and `day100_pasi_score` are not null, as required by the definition.
+2.  **`overall_pasi_averages = DermTreatment.CALCULATE(...)`**: This starts at the top `DermTreatment` level to calculate overall aggregates.
+    *   `avg_d7_pasi = AVG(filtered_outcomes.day7_pasi_score)`: Calculates the average `day7_pasi_score` using only the records from the `filtered_outcomes`.
+    *   `avg_d100_pasi = AVG(filtered_outcomes.day100_pasi_score)`: Calculates the average `day100_pasi_score` using only the records from the `filtered_outcomes`.
+3.  **`result = overall_pasi_averages.CALCULATE(...)`**: This takes the previously calculated averages and applies the D7D100PIR formula.
+    *   `IFF(avg_d7_pasi != 0, ..., None)`: This checks if `avg_d7_pasi` is not zero to prevent division by zero errors.
+    *   `(avg_d100_pasi - avg_d7_pasi) / avg_d7_pasi * 100.0`: If the check passes, this calculates the PASI improvement rate percentage according to the provided formula. We use `100.0` to ensure floating-point division.
+    *   `None`: If `avg_d7_pasi` is zero, the result is set to `None` (null).
+4.  The final `result` variable holds a collection with a single row containing the calculated `d7d100pir_percentage`.",26.601213455200195,"# Filter outcomes to include only those with non-null PASI scores for both day 7 and day 100
+filtered_outcomes = Outcomes.WHERE((day7_pasi_score != None) & (day100_pasi_score != None))
+
+# Calculate the overall average PASI scores for day 7 and day 100 from the filtered outcomes
+overall_pasi_averages = DermTreatment.CALCULATE(
+    avg_d7_pasi = AVG(filtered_outcomes.day7_pasi_score),
+    avg_d100_pasi = AVG(filtered_outcomes.day100_pasi_score)
+)
+
+# Calculate the D7D100PIR percentage using the calculated averages
+# Handle potential division by zero if avg_d7_pasi is 0
+result = overall_pasi_averages.CALCULATE(
+    d7d100pir_percentage = IFF(
+        avg_d7_pasi != 0, # Check if the denominator is non-zero
+        (avg_d100_pasi - avg_d7_pasi) / avg_d7_pasi * 100.0, # Calculate PIR if safe
+        None # Return None (or potentially 0 or another indicator) if division by zero would occur
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=753 candidates_tokens_details=None prompt_token_count=19893 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19893)] thoughts_token_count=1968 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22614 traffic_type=None",No Match,
+What is the PIC for female patients?PIC = private insured patient count,SELECT COUNT(patient_id) AS pic FROM patients WHERE gender = 'Female' AND ins_type = 'private';,DermTreatment,"```python
+result = DermTreatment.CALCULATE(
+    PIC=COUNT(Patients.WHERE((gender == 'F') & (ins_type == 'Private')))
+)
+```
+
+**Explanation:**
+
+1.  **`DermTreatment.CALCULATE(...)`**: We start at the top-level `DermTreatment` collection because we need a single aggregated count across all patients.
+2.  **`PIC=COUNT(...)`**: We define the output field `PIC` (private insured patient count) using the `COUNT` aggregation function.
+3.  **`Patients.WHERE(...)`**: We access the `Patients` collection and filter it using the `WHERE` clause.
+4.  **`(gender == 'F') & (ins_type == 'Private')`**: This is the filtering condition. It selects patients where the `gender` field is equal to 'F' (female) AND the `ins_type` field is equal to 'Private'.
+5.  The `COUNT` function then counts the number of patients remaining after the filter is applied, giving the total count of female patients with private insurance.",7.707593679428101,"result = DermTreatment.CALCULATE(
+    PIC=COUNT(Patients.WHERE((gender == 'F') & (ins_type == 'Private')))
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=240 candidates_tokens_details=None prompt_token_count=19808 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19808)] thoughts_token_count=433 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20481 traffic_type=None",No Match,
+Which drug had the highest number of adverse events reported within the same month as the treatment start date (adverse event or treatment can be earlier than the other)? Return the number of adverse events along with the drug's _id and name.,"WITH adverse_events_per_drug AS (SELECT d.drug_id, COUNT(ae._id) AS num_events FROM adverse_events AS ae JOIN treatments AS t ON ae.treatment_id = t.treatment_id AND strftime('%Y-%m', ae.reported_dt) = strftime('%Y-%m', t.start_dt) JOIN drugs AS d ON t.drug_id = d.drug_id GROUP BY d.drug_id) SELECT ae.drug_id, d.drug_name, ae.num_events FROM adverse_events_per_drug AS ae JOIN drugs AS d USING (drug_id) ORDER BY ae.num_events DESC LIMIT 1;",DermTreatment,"```python
+# Calculate the count of relevant adverse events for each drug
+drug_ae_counts = Drugs.CALCULATE(
+    # Assign drug_id and drug_name to temporary variables
+    d_id=drug_id,
+    d_name=drug_name,
+    # Count adverse events associated with treatments using this drug
+    # where the adverse event's reported month/year matches the treatment's start month/year
+    num_relevant_aes=SUM(
+        # Navigate through treatments_used_in to adverse_events
+        treatments_used_in.adverse_events.CALCULATE(
+            # Calculate 1 if the condition is met, 0 otherwise
+            is_same_month_event=IFF(
+                # Check if year and month of reported_dt match the treatment's start_dt
+                (YEAR(reported_dt) == YEAR(treatment.start_dt)) & (MONTH(reported_dt) == MONTH(treatment.start_dt)),
+                1,
+                0
+            )
+        # Sum the calculated 1s and 0s to get the count
+        ).is_same_month_event
+    )
+)
+
+# Select the top 1 drug based on the calculated count in descending order
+top_drug_by_ae = drug_ae_counts.TOP_K(1, by=num_relevant_aes.DESC())
+
+# Final calculation to select and rename the required fields
+result = top_drug_by_ae.CALCULATE(
+    drug_id=d_id,
+    drug_name=d_name,
+    num_adverse_events=num_relevant_aes
+)
+```
+
+**Explanation:**
+
+1.  **`drug_ae_counts = Drugs.CALCULATE(...)`**: We start with the `Drugs` collection and calculate new fields for each drug.
+2.  **`d_id=drug_id, d_name=drug_name`**: We temporarily store `drug_id` and `drug_name` in new variables (`d_id`, `d_name`) to avoid naming conflicts in the final output step.
+3.  **`num_relevant_aes=SUM(...)`**: This calculates the total count of relevant adverse events for the current drug.
+4.  **`treatments_used_in.adverse_events.CALCULATE(...)`**: We navigate from the drug to its associated treatments (`treatments_used_in`) and then to the adverse events (`adverse_events`) linked to those treatments. Inside this nested `CALCULATE`, we evaluate each adverse event individually.
+5.  **`is_same_month_event=IFF(...)`**: For each adverse event, we use the `IFF` function to check the condition:
+    *   `(YEAR(reported_dt) == YEAR(treatment.start_dt)) & (MONTH(reported_dt) == MONTH(treatment.start_dt))`: This checks if the year and month of the adverse event's `reported_dt` are the same as the year and month of the corresponding treatment's `start_dt`.
+    *   If the condition is true, `IFF` returns `1`; otherwise, it returns `0`.
+6.  **`).is_same_month_event`**: After the nested `CALCULATE`, we access the `is_same_month_event` result (which is 1 or 0).
+7.  **`SUM(...)`**: The `SUM` function aggregates these 1s and 0s across all adverse events associated with the current drug via its treatments, effectively counting only those events that meet the same-month condition.
+8.  **`top_drug_by_ae = drug_ae_counts.TOP_K(1, by=num_relevant_aes.DESC())`**: We take the results from the previous step (`drug_ae_counts`) and use `TOP_K(1)` to select the single drug (`k=1`) that has the highest `num_relevant_aes` count. `.DESC()` ensures we get the highest value.
+9.  **`result = top_drug_by_ae.CALCULATE(...)`**: Finally, we select the required fields from the top drug record, renaming `d_id` back to `drug_id`, `d_name` to `drug_name`, and `num_relevant_aes` to `num_adverse_events` for the final output.",32.461629152297974,"# Calculate the count of relevant adverse events for each drug
+drug_ae_counts = Drugs.CALCULATE(
+    # Assign drug_id and drug_name to temporary variables
+    d_id=drug_id,
+    d_name=drug_name,
+    # Count adverse events associated with treatments using this drug
+    # where the adverse event's reported month/year matches the treatment's start month/year
+    num_relevant_aes=SUM(
+        # Navigate through treatments_used_in to adverse_events
+        treatments_used_in.adverse_events.CALCULATE(
+            # Calculate 1 if the condition is met, 0 otherwise
+            is_same_month_event=IFF(
+                # Check if year and month of reported_dt match the treatment's start_dt
+                (YEAR(reported_dt) == YEAR(treatment.start_dt)) & (MONTH(reported_dt) == MONTH(treatment.start_dt)),
+                1,
+                0
+            )
+        # Sum the calculated 1s and 0s to get the count
+        ).is_same_month_event
+    )
+)
+
+# Select the top 1 drug based on the calculated count in descending order
+top_drug_by_ae = drug_ae_counts.TOP_K(1, by=num_relevant_aes.DESC())
+
+# Final calculation to select and rename the required fields
+result = top_drug_by_ae.CALCULATE(
+    drug_id=d_id,
+    drug_name=d_name,
+    num_adverse_events=num_relevant_aes
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=980 candidates_tokens_details=None prompt_token_count=19843 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19843)] thoughts_token_count=2114 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22937 traffic_type=None",SQL error,no such column: ae._id
+Which states do doctors who have prescribed biologic drugs reside in? Return the distinct states.,"WITH doctor_treatment AS (SELECT d.doc_id, d.loc_state FROM doctors AS d JOIN treatments AS t ON d.doc_id = t.doc_id JOIN drugs AS dr ON t.drug_id = dr.drug_id WHERE dr.drug_type = 'biologic') SELECT DISTINCT loc_state FROM doctor_treatment;",DermTreatment,"```python
+# Filter doctors who have prescribed at least one treatment involving a 'Biologic' drug.
+# Then, partition these doctors by their state to get unique states.
+# Finally, select the state name.
+biologic_prescribing_doctors_states = Doctors.WHERE(
+    HAS(prescribed_treatments.WHERE(drug.drug_type == 'Biologic')) == 1
+).PARTITION(
+    name=""states"", by=loc_state
+).CALCULATE(
+    state=loc_state
+)
+```
+
+**Explanation:**
+
+1.  `Doctors.WHERE(...)`: We start with the `Doctors` collection and filter it.
+2.  `HAS(prescribed_treatments.WHERE(drug.drug_type == 'Biologic')) == 1`: This is the filter condition. It checks if a doctor `HAS` at least one (`== 1`) record in their `prescribed_treatments` sub-collection that satisfies the inner `WHERE` clause.
+3.  `prescribed_treatments.WHERE(drug.drug_type == 'Biologic')`: This inner filter selects only those treatments (`prescribed_treatments`) where the associated `drug` has a `drug_type` equal to 'Biologic'.
+4.  `.PARTITION(name=""states"", by=loc_state)`: After filtering the doctors, we partition the remaining doctors based on their `loc_state`. This groups doctors by state.
+5.  `.CALCULATE(state=loc_state)`: From each partition (each unique state), we select the `loc_state` value, renaming it to `state`. This results in a collection containing the distinct states where doctors who prescribed biologic drugs reside.",13.060734272003174,"# Filter doctors who have prescribed at least one treatment involving a 'Biologic' drug.
+# Then, partition these doctors by their state to get unique states.
+# Finally, select the state name.
+biologic_prescribing_doctors_states = Doctors.WHERE(
+    HAS(prescribed_treatments.WHERE(drug.drug_type == 'Biologic')) == 1
+).PARTITION(
+    name=""states"", by=loc_state
+).CALCULATE(
+    state=loc_state
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=374 candidates_tokens_details=None prompt_token_count=19811 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19811)] thoughts_token_count=807 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20992 traffic_type=None",No Match,
+"For treatments that ended in the year 2022 (from Jan 1st to Dec 31st inclusive), what is the average PASI score at day 100 and number of distinct patients per insurance type? Return the top 5 insurance types sorted by lowest average PASI score first.","SELECT p.ins_type, COUNT(DISTINCT t.patient_id) AS num_patients, AVG(o.day100_pasi_score) AS avg_pasi_score FROM treatments AS t JOIN patients AS p ON t.patient_id = p.patient_id JOIN outcomes AS o ON t.treatment_id = o.treatment_id WHERE t.end_dt BETWEEN '2022-01-01' AND '2022-12-31' GROUP BY p.ins_type ORDER BY CASE WHEN avg_pasi_score IS NULL THEN 1 ELSE 0 END, avg_pasi_score LIMIT 5;",DermTreatment,"```python
+# Filter treatments that ended within the year 2022
+treatments_2022 = Treatments.WHERE(YEAR(end_dt) == 2022)
+
+# Add the insurance type from the related patient for partitioning
+treatments_with_details = treatments_2022.CALCULATE(
+    ins_type = patient.ins_type,
+    patient_id = patient.patient_id # Needed for distinct count later
+    # outcome_records are implicitly carried forward for aggregation
+)
+
+# Partition the treatments by insurance type
+partitioned_by_insurance = treatments_with_details.PARTITION(
+    name=""insurance_groups"",
+    by=(ins_type)
+)
+
+# Calculate the average day 100 PASI score and the count of distinct patients for each insurance type
+insurance_stats = partitioned_by_insurance.CALCULATE(
+    insurance_type = ins_type, # The partition key
+    avg_pasi_day100 = AVG(Treatments.outcome_records.day100_pasi_score), # Average PASI score from outcomes within the group
+    num_distinct_patients = NDISTINCT(Treatments.patient_id) # Distinct count of patients within the group
+)
+
+# Select the top 5 insurance types based on the lowest average PASI score
+top_5_ins_types = insurance_stats.TOP_K(5, by=avg_pasi_day100.ASC())
+
+# Assign the final result to the variable
+result = top_5_ins_types
+```
+
+**Explanation:**
+
+1.  **`treatments_2022 = Treatments.WHERE(YEAR(end_dt) == 2022)`**: This line filters the `Treatments` collection to include only those records where the `end_dt` (end date) falls within the year 2022.
+2.  **`treatments_with_details = treatments_2022.CALCULATE(...)`**: This step takes the filtered treatments and calculates two new fields necessary for the next steps:
+    *   `ins_type = patient.ins_type`: Retrieves the insurance type from the related `patient` record for each treatment.
+    *   `patient_id = patient.patient_id`: Retrieves the patient ID, which will be used later to count distinct patients.
+3.  **`partitioned_by_insurance = treatments_with_details.PARTITION(...)`**: This partitions the intermediate results (`treatments_with_details`) into groups based on the `ins_type` field calculated previously. Each group (`insurance_groups`) contains all treatments associated with a specific insurance type.
+4.  **`insurance_stats = partitioned_by_insurance.CALCULATE(...)`**: This step operates on each partition (each insurance type group) created in the previous step:
+    *   `insurance_type = ins_type`: Selects the insurance type (the partition key).
+    *   `avg_pasi_day100 = AVG(Treatments.outcome_records.day100_pasi_score)`: Calculates the average `day100_pasi_score` by accessing the `outcome_records` associated with the treatments within the current insurance type group. The `AVG` function handles the aggregation across potentially multiple outcome records per treatment and multiple treatments per group.
+    *   `num_distinct_patients = NDISTINCT(Treatments.patient_id)`: Counts the number of unique `patient_id` values within the current insurance type group, giving the distinct patient count for that insurance type.
+5.  **`top_5_ins_types = insurance_stats.TOP_K(5, by=avg_pasi_day100.ASC())`**: This selects the top 5 records from the `insurance_stats` collection, ordering them by the `avg_pasi_day100` in ascending order (`ASC()`), meaning the lowest average scores come first.
+6.  **`result = top_5_ins_types`**: Assigns the final result (the top 5 insurance types with their stats) to the `result` variable.",34.18560457229614,"# Filter treatments that ended within the year 2022
+treatments_2022 = Treatments.WHERE(YEAR(end_dt) == 2022)
+
+# Add the insurance type from the related patient for partitioning
+treatments_with_details = treatments_2022.CALCULATE(
+    ins_type = patient.ins_type,
+    patient_id = patient.patient_id # Needed for distinct count later
+    # outcome_records are implicitly carried forward for aggregation
+)
+
+# Partition the treatments by insurance type
+partitioned_by_insurance = treatments_with_details.PARTITION(
+    name=""insurance_groups"",
+    by=(ins_type)
+)
+
+# Calculate the average day 100 PASI score and the count of distinct patients for each insurance type
+insurance_stats = partitioned_by_insurance.CALCULATE(
+    insurance_type = ins_type, # The partition key
+    avg_pasi_day100 = AVG(Treatments.outcome_records.day100_pasi_score), # Average PASI score from outcomes within the group
+    num_distinct_patients = NDISTINCT(Treatments.patient_id) # Distinct count of patients within the group
+)
+
+# Select the top 5 insurance types based on the lowest average PASI score
+top_5_ins_types = insurance_stats.TOP_K(5, by=avg_pasi_day100.ASC())
+
+# Assign the final result to the variable
+result = top_5_ins_types","cache_tokens_details=None cached_content_token_count=None candidates_token_count=923 candidates_tokens_details=None prompt_token_count=19858 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19858)] thoughts_token_count=2349 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23130 traffic_type=None",Match,
+"Return the distinct list of doctor IDs, first names and last names that have prescribed treatments.","SELECT DISTINCT d.doc_id, d.first_name, d.last_name FROM treatments AS t JOIN doctors AS d ON t.doc_id = d.doc_id;",DermTreatment,"```python
+# Select doctors who have prescribed treatments
+active_doctors = Doctors.WHERE(HAS(prescribed_treatments) == 1).CALCULATE(
+    doc_id=doc_id,
+    first_name=first_name,
+    last_name=last_name
+)
+```
+
+**Explanation:**
+
+1.  **`Doctors`**: Starts with the `Doctors` collection.
+2.  **`.WHERE(HAS(prescribed_treatments) == 1)`**: Filters the `Doctors` collection to include only those doctors who have at least one entry in their `prescribed_treatments` sub-collection. The `HAS()` function checks for the existence of related records.
+3.  **`.CALCULATE(doc_id=doc_id, first_name=first_name, last_name=last_name)`**: Selects the `doc_id`, `first_name`, and `last_name` fields for the filtered doctors. Since we are operating on the `Doctors` collection directly and filtering, the resulting list of doctors will be distinct.",9.772922277450562,"# Select doctors who have prescribed treatments
+active_doctors = Doctors.WHERE(HAS(prescribed_treatments) == 1).CALCULATE(
+    doc_id=doc_id,
+    first_name=first_name,
+    last_name=last_name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=236 candidates_tokens_details=None prompt_token_count=19812 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19812)] thoughts_token_count=608 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20656 traffic_type=None",Match,
+"Return the distinct list of patient IDs, first names and last names that have outcome assessments.","SELECT DISTINCT p.patient_id, p.first_name, p.last_name FROM outcomes AS o JOIN treatments AS t ON o.treatment_id = t.treatment_id JOIN patients AS p ON t.patient_id = p.patient_id;",DermTreatment,"```python
+import DermTreatment
+
+# Find patients who have at least one outcome assessment recorded.
+patients_with_outcomes = DermTreatment.Patients.WHERE(
+    HAS(treatments_received.outcome_records) == 1
+).CALCULATE(
+    patient_id=patient_id,
+    first_name=first_name,
+    last_name=last_name
+)
+```
+
+**Explanation:**
+
+1.  **`DermTreatment.Patients`**: Starts with the `Patients` collection.
+2.  **`.WHERE(HAS(treatments_received.outcome_records) == 1)`**: Filters the patients. The `HAS()` function checks if a patient has at least one related record in the `outcome_records` sub-collection, accessed through the `treatments_received` relationship. This effectively selects only patients who have received treatments for which outcome assessments exist.
+3.  **`.CALCULATE(patient_id=patient_id, first_name=first_name, last_name=last_name)`**: Selects the `patient_id`, `first_name`, and `last_name` for the patients who met the filter criteria. Since we are selecting from the `Patients` collection directly after filtering, the list of patients will be distinct.",12.169353723526,"import DermTreatment
+
+# Find patients who have at least one outcome assessment recorded.
+patients_with_outcomes = DermTreatment.Patients.WHERE(
+    HAS(treatments_received.outcome_records) == 1
+).CALCULATE(
+    patient_id=patient_id,
+    first_name=first_name,
+    last_name=last_name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=279 candidates_tokens_details=None prompt_token_count=19812 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19812)] thoughts_token_count=685 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20776 traffic_type=None",Query Error,No module named 'DermTreatment'
+Return the drug IDs and names of drugs that have not been used in any treatments.,"SELECT d.drug_id, d.drug_name FROM drugs AS d LEFT JOIN treatments AS t ON d.drug_id = t.drug_id WHERE t.drug_id IS NULL;",DermTreatment,"```python
+unused_drugs = Drugs.WHERE(HASNOT(treatments_used_in) == 1).CALCULATE(
+    drug_id=drug_id,
+    drug_name=drug_name
+)
+```
+
+**Explanation:**
+
+1.  **`Drugs`**: Starts with the `Drugs` collection.
+2.  **`.WHERE(HASNOT(treatments_used_in) == 1)`**: Filters the `Drugs` collection to include only those drugs for which the `treatments_used_in` sub-collection is empty. The `HASNOT()` function returns true if the specified sub-collection has no records.
+3.  **`.CALCULATE(drug_id=drug_id, drug_name=drug_name)`**: Selects the `drug_id` and `drug_name` fields from the filtered drugs.",6.541924238204956,"unused_drugs = Drugs.WHERE(HASNOT(treatments_used_in) == 1).CALCULATE(
+    drug_id=drug_id,
+    drug_name=drug_name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=189 candidates_tokens_details=None prompt_token_count=19811 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19811)] thoughts_token_count=335 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20335 traffic_type=None",Match,
+"Return the patient IDs, first names and last names of patients who have not received any treatments.","SELECT p.patient_id, p.first_name, p.last_name FROM patients AS p LEFT JOIN treatments AS t ON p.patient_id = t.patient_id WHERE t.patient_id IS NULL;",DermTreatment,"```python
+inactive_patients = Patients.WHERE(HASNOT(treatments_received) == 1).CALCULATE(
+    patient_id=patient_id,
+    first_name=first_name,
+    last_name=last_name
+)
+```
+
+**Explanation:**
+
+1.  **`Patients`**: Starts with the `Patients` collection.
+2.  **`.WHERE(HASNOT(treatments_received) == 1)`**: Filters the `Patients` collection to include only those patients for whom the `treatments_received` sub-collection is empty (meaning they have no associated treatments). The `HASNOT()` function returns `True` (or `1` in this context) if the sub-collection is empty.
+3.  **`.CALCULATE(...)`**: Selects and returns the specified fields (`patient_id`, `first_name`, `last_name`) for the filtered patients.",7.249570369720459,"inactive_patients = Patients.WHERE(HASNOT(treatments_received) == 1).CALCULATE(
+    patient_id=patient_id,
+    first_name=first_name,
+    last_name=last_name
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=201 candidates_tokens_details=None prompt_token_count=19813 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19813)] thoughts_token_count=468 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20482 traffic_type=None",Match,
+What are the top 2 specialties by number of doctors? Return the specialty and number of doctors.,"SELECT specialty, COUNT(*) AS num_doctors FROM doctors GROUP BY specialty ORDER BY CASE WHEN num_doctors IS NULL THEN 1 ELSE 0 END DESC, num_doctors DESC LIMIT 2;",DermTreatment,"```python
+# Partition doctors by specialty, count doctors in each specialty, and select the top 2.
+top_specialties = Doctors.PARTITION(name=""specialty_group"", by=speciality).CALCULATE(
+    specialty_name=speciality,  # Select the specialty name (partition key)
+    doctor_count=COUNT(Doctors) # Count the number of doctors within each specialty group
+).TOP_K(2, by=doctor_count.DESC()) # Select the top 2 specialties based on the doctor count in descending order
+```
+
+**Explanation:**
+
+1.  `Doctors.PARTITION(name=""specialty_group"", by=speciality)`: This groups the `Doctors` collection by the `speciality` field. Each group represents a unique specialty.
+2.  `.CALCULATE(specialty_name=speciality, doctor_count=COUNT(Doctors))`: For each specialty group created by the partition, this calculates:
+    *   `specialty_name`: The name of the specialty (which is the partition key).
+    *   `doctor_count`: The total number of doctors belonging to that specific specialty group using the `COUNT(Doctors)` aggregation function.
+3.  `.TOP_K(2, by=doctor_count.DESC())`: This selects the top 2 resulting rows (specialties) based on the `doctor_count`, ordered from the highest count to the lowest (descending).",8.809677362442017,"# Partition doctors by specialty, count doctors in each specialty, and select the top 2.
+top_specialties = Doctors.PARTITION(name=""specialty_group"", by=speciality).CALCULATE(
+    specialty_name=speciality,  # Select the specialty name (partition key)
+    doctor_count=COUNT(Doctors) # Count the number of doctors within each specialty group
+).TOP_K(2, by=doctor_count.DESC()) # Select the top 2 specialties based on the doctor count in descending order","cache_tokens_details=None cached_content_token_count=None candidates_token_count=313 candidates_tokens_details=None prompt_token_count=19814 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19814)] thoughts_token_count=480 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20607 traffic_type=None",Match,
+"What are the top 3 diagnoses by maximum itch VAS score at day 100 and number of distinct patients? Return the diagnosis name, number of patients, and maximum itch score.","SELECT di.diag_name, COUNT(DISTINCT t.patient_id) AS num_patients, MAX(o.day100_itch_vas) AS max_itch_score FROM treatments AS t JOIN diagnoses AS di ON t.diag_id = di.diag_id JOIN outcomes AS o ON t.treatment_id = o.treatment_id GROUP BY di.diag_name ORDER BY CASE WHEN max_itch_score IS NULL THEN 1 ELSE 0 END DESC, max_itch_score DESC, CASE WHEN num_patients IS NULL THEN 1 ELSE 0 END DESC, num_patients DESC LIMIT 3;",DermTreatment,"```python
+# Partition diagnoses by name to calculate aggregates per diagnosis
+diag_groups = Diagnoses.WHERE(
+    # Ensure the diagnosis has associated treatments with outcome records containing a day 100 itch score
+    HAS(treatments_for.outcome_records.day100_itch_vas) == 1
+).PARTITION(
+    name=""diag_group"", by=(diag_name)  # Group by diagnosis name
+).CALCULATE(
+    # Select the diagnosis name (partition key)
+    diagnosis_name=diag_name,
+    # Calculate the maximum day 100 itch VAS score for this diagnosis
+    max_itch_score=MAX(Diagnoses.treatments_for.outcome_records.day100_itch_vas),
+    # Count the number of distinct patients treated for this diagnosis
+    num_patients=NDISTINCT(Diagnoses.treatments_for.patient.patient_id)
+)
+
+# Select the top 3 diagnoses based on the calculated maximum itch score in descending order
+top_diagnoses_by_itch = diag_groups.TOP_K(3, by=max_itch_score.DESC())
+
+# Assign the final result to the specified variable
+# The CALCULATE within the PARTITION already selected the required fields.
+result = top_diagnoses_by_itch
+```
+
+**Explanation:**
+
+1.  **`Diagnoses.WHERE(...)`**: Starts with the `Diagnoses` collection and filters it to include only those diagnoses that have at least one associated treatment (`treatments_for`) which in turn has at least one outcome record (`outcome_records`) where the `day100_itch_vas` score is present (not null). This ensures we only consider diagnoses with relevant data for the ranking.
+2.  **`.PARTITION(name=""diag_group"", by=(diag_name))`**: Groups the filtered diagnoses by their `diag_name`. Each group (`diag_group`) represents a unique diagnosis name.
+3.  **`.CALCULATE(...)`**: For each diagnosis group created by the partition:
+    *   `diagnosis_name=diag_name`: Selects the diagnosis name (which is the partition key).
+    *   `max_itch_score=MAX(Diagnoses.treatments_for.outcome_records.day100_itch_vas)`: Calculates the maximum `day100_itch_vas` score found across all outcome records linked to treatments for this specific diagnosis.
+    *   `num_patients=NDISTINCT(Diagnoses.treatments_for.patient.patient_id)`: Counts the number of unique patients (`patient_id`) associated with treatments for this specific diagnosis.
+4.  **`.TOP_K(3, by=max_itch_score.DESC())`**: Takes the results from the `CALCULATE` step (which contains one row per diagnosis with its name, max score, and patient count) and selects the top 3 rows based on the `max_itch_score` in descending order.
+5.  **`result = top_diagnoses_by_itch`**: Assigns the final collection containing the top 3 diagnoses and their calculated metrics to the `result` variable.",31.288547039031982,"# Partition diagnoses by name to calculate aggregates per diagnosis
+diag_groups = Diagnoses.WHERE(
+    # Ensure the diagnosis has associated treatments with outcome records containing a day 100 itch score
+    HAS(treatments_for.outcome_records.day100_itch_vas) == 1
+).PARTITION(
+    name=""diag_group"", by=(diag_name)  # Group by diagnosis name
+).CALCULATE(
+    # Select the diagnosis name (partition key)
+    diagnosis_name=diag_name,
+    # Calculate the maximum day 100 itch VAS score for this diagnosis
+    max_itch_score=MAX(Diagnoses.treatments_for.outcome_records.day100_itch_vas),
+    # Count the number of distinct patients treated for this diagnosis
+    num_patients=NDISTINCT(Diagnoses.treatments_for.patient.patient_id)
+)
+
+# Select the top 3 diagnoses based on the calculated maximum itch score in descending order
+top_diagnoses_by_itch = diag_groups.TOP_K(3, by=max_itch_score.DESC())
+
+# Assign the final result to the specified variable
+# The CALCULATE within the PARTITION already selected the required fields.
+result = top_diagnoses_by_itch","cache_tokens_details=None cached_content_token_count=None candidates_token_count=701 candidates_tokens_details=None prompt_token_count=19832 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19832)] thoughts_token_count=2260 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22793 traffic_type=None",Query Error,"Invalid operator invocation 'HAS(treatments_for.outcome_records.day100_itch_vas)': Expected a collection as an argument, received an expression"
+"What are the top 3 doctor specialties by total drug amount prescribed for treatments started in the past 6 calendar months? Return the specialty, number of treatments, and total drug amount.","SELECT d.specialty, COUNT(*) AS num_treatments, SUM(t.tot_drug_amt) AS total_drug_amt FROM treatments AS t JOIN doctors AS d ON t.doc_id = d.doc_id WHERE t.start_dt >= DATE('now', '-6 months') GROUP BY d.specialty ORDER BY total_drug_amt DESC LIMIT 3;",DermTreatment,"```python
+# Define the date 6 months ago from the current date
+start_date_cutoff = DATETIME('now', '-6 months')
+
+# Filter treatments started within the last 6 months and calculate necessary fields
+treatments_in_period = Treatments.WHERE(start_dt >= start_date_cutoff).CALCULATE(
+    doc_specialty = doctor.speciality,
+    treatment_drug_amount = tot_drug_amt # Keep original amount for summation
+)
+
+# Partition by doctor specialty
+specialty_groups = treatments_in_period.PARTITION(name=""specialty_partition"", by=doc_specialty)
+
+# Calculate the number of treatments and total drug amount for each specialty
+specialty_stats = specialty_groups.CALCULATE(
+    specialty = doc_specialty, # Get the specialty name from the partition key
+    num_treatments = COUNT(Treatments), # Count treatments within this specialty group
+    total_drug_amount = SUM(Treatments.tot_drug_amt) # Sum the total drug amount for treatments in this group
+)
+
+# Select the top 3 specialties based on the total drug amount prescribed
+top_3_specialties = specialty_stats.TOP_K(3, by=total_drug_amount.DESC())
+
+# Assign the final result to the output variable
+result = top_3_specialties
+```
+
+**Explanation:**
+
+1.  **`start_date_cutoff = DATETIME('now', '-6 months')`**: Defines a variable `start_date_cutoff` representing the date exactly 6 calendar months before the current date.
+2.  **`treatments_in_period = Treatments.WHERE(...)`**: Filters the `Treatments` collection to include only those records where the `start_dt` is on or after the `start_date_cutoff`.
+3.  **`.CALCULATE(doc_specialty = doctor.speciality, treatment_drug_amount = tot_drug_amt)`**: For the filtered treatments, it calculates two new fields: `doc_specialty` by accessing the specialty of the linked doctor, and `treatment_drug_amount` which is just the `tot_drug_amt` for use in later aggregation.
+4.  **`specialty_groups = treatments_in_period.PARTITION(...)`**: Partitions the filtered and calculated treatment data into groups based on the `doc_specialty`. Each group represents a unique doctor specialty.
+5.  **`specialty_stats = specialty_groups.CALCULATE(...)`**: For each specialty group created by the partition:
+    *   `specialty = doc_specialty`: Selects the specialty name (which was the partition key).
+    *   `num_treatments = COUNT(Treatments)`: Counts the number of treatments belonging to this specialty group by referring back to the `Treatments` collection within the partition's context.
+    *   `total_drug_amount = SUM(Treatments.tot_drug_amt)`: Calculates the sum of `tot_drug_amt` for all treatments within this specialty group.
+6.  **`top_3_specialties = specialty_stats.TOP_K(3, by=total_drug_amount.DESC())`**: Selects the top 3 records from `specialty_stats` based on the `total_drug_amount` in descending order.
+7.  **`result = top_3_specialties`**: Assigns the final result containing the top 3 specialties, their treatment counts, and total drug amounts to the `result` variable.",20.78451681137085,"# Define the date 6 months ago from the current date
+start_date_cutoff = DATETIME('now', '-6 months')
+
+# Filter treatments started within the last 6 months and calculate necessary fields
+treatments_in_period = Treatments.WHERE(start_dt >= start_date_cutoff).CALCULATE(
+    doc_specialty = doctor.speciality,
+    treatment_drug_amount = tot_drug_amt # Keep original amount for summation
+)
+
+# Partition by doctor specialty
+specialty_groups = treatments_in_period.PARTITION(name=""specialty_partition"", by=doc_specialty)
+
+# Calculate the number of treatments and total drug amount for each specialty
+specialty_stats = specialty_groups.CALCULATE(
+    specialty = doc_specialty, # Get the specialty name from the partition key
+    num_treatments = COUNT(Treatments), # Count treatments within this specialty group
+    total_drug_amount = SUM(Treatments.tot_drug_amt) # Sum the total drug amount for treatments in this group
+)
+
+# Select the top 3 specialties based on the total drug amount prescribed
+top_3_specialties = specialty_stats.TOP_K(3, by=total_drug_amount.DESC())
+
+# Assign the final result to the output variable
+result = top_3_specialties","cache_tokens_details=None cached_content_token_count=None candidates_token_count=781 candidates_tokens_details=None prompt_token_count=19831 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19831)] thoughts_token_count=1192 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21804 traffic_type=None",Match,
+"What are the top 3 insurance types by average patient height in cm? Return the insurance type, average height and average weight.","SELECT ins_type, AVG(height_cm) AS avg_height, AVG(weight_kg) AS avg_weight FROM patients GROUP BY ins_type ORDER BY CASE WHEN avg_height IS NULL THEN 1 ELSE 0 END DESC, avg_height DESC LIMIT 3;",DermTreatment,"```python
+# Partition patients by insurance type
+# Calculate the average height and average weight for each insurance type group
+# Select the top 3 insurance types based on the descending order of average height
+top_ins_types_by_height = Patients.PARTITION(name=""ins_groups"", by=(ins_type)).CALCULATE(
+    insurance_type = ins_type,
+    average_height = AVG(Patients.height_cm),
+    average_weight = AVG(Patients.weight_kg)
+).TOP_K(3, by=average_height.DESC())
+```
+
+**Explanation:**
+
+1.  **`Patients.PARTITION(name=""ins_groups"", by=(ins_type))`**: This groups the `Patients` collection by their `ins_type`. Each group represents a unique insurance type.
+2.  **`.CALCULATE(...)`**: For each insurance type group created by the partition:
+    *   `insurance_type = ins_type`: Selects the insurance type (the partition key).
+    *   `average_height = AVG(Patients.height_cm)`: Calculates the average `height_cm` for all patients within that specific insurance type group.
+    *   `average_weight = AVG(Patients.weight_kg)`: Calculates the average `weight_kg` for all patients within that specific insurance type group.
+3.  **`.TOP_K(3, by=average_height.DESC())`**: This selects the top 3 resulting records (insurance types with their average height and weight) based on the `average_height`, sorted in descending order (highest average height first).",16.487306833267212,"# Partition patients by insurance type
+# Calculate the average height and average weight for each insurance type group
+# Select the top 3 insurance types based on the descending order of average height
+top_ins_types_by_height = Patients.PARTITION(name=""ins_groups"", by=(ins_type)).CALCULATE(
+    insurance_type = ins_type,
+    average_height = AVG(Patients.height_cm),
+    average_weight = AVG(Patients.weight_kg)
+).TOP_K(3, by=average_height.DESC())","cache_tokens_details=None cached_content_token_count=None candidates_token_count=353 candidates_tokens_details=None prompt_token_count=19820 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19820)] thoughts_token_count=1214 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21387 traffic_type=None",Match,
+"What are the top 5 drugs by number of treatments and average drug amount per treatment? Return the drug name, number of treatments, and average drug amount.","SELECT d.drug_name, COUNT(*) AS num_treatments, AVG(t.tot_drug_amt) AS avg_drug_amt FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id GROUP BY d.drug_name ORDER BY CASE WHEN num_treatments IS NULL THEN 1 ELSE 0 END DESC, num_treatments DESC, CASE WHEN avg_drug_amt IS NULL THEN 1 ELSE 0 END DESC, avg_drug_amt DESC LIMIT 5;",DermTreatment,"```python
+# Calculate the number of treatments and average total drug amount for each drug,
+# then select the top 5 drugs based on the number of treatments.
+top_drugs_by_treatment = Drugs.WHERE(
+    # Ensure the drug has been used in at least one treatment
+    HAS(treatments_used_in) == 1
+).CALCULATE(
+    # Select the drug name
+    drug_name=drug_name,
+    # Count the number of treatments this drug was used in
+    num_treatments=COUNT(treatments_used_in),
+    # Calculate the average total drug amount across those treatments
+    avg_drug_amount=AVG(treatments_used_in.tot_drug_amt)
+).TOP_K(
+    # Select the top 5 drugs
+    5,
+    # Order by the number of treatments in descending order
+    by=num_treatments.DESC()
+)
+
+```
+
+**Explanation:**
+
+1.  **`Drugs.WHERE(HAS(treatments_used_in) == 1)`**: Starts with the `Drugs` collection and filters it to include only drugs that have been associated with at least one treatment using the `HAS` function on the `treatments_used_in` sub-collection.
+2.  **`.CALCULATE(...)`**: For each remaining drug, calculates three fields:
+    *   `drug_name=drug_name`: Selects the name of the drug.
+    *   `num_treatments=COUNT(treatments_used_in)`: Counts the total number of treatments associated with the drug using the `COUNT` aggregation function on the `treatments_used_in` sub-collection.
+    *   `avg_drug_amount=AVG(treatments_used_in.tot_drug_amt)`: Calculates the average of the `tot_drug_amt` field from all associated treatments using the `AVG` aggregation function.
+3.  **`.TOP_K(5, by=num_treatments.DESC())`**: Selects the top 5 drugs from the calculated results, ordering them in descending order based on the `num_treatments` calculated in the previous step.",15.647825717926024,"# Calculate the number of treatments and average total drug amount for each drug,
+# then select the top 5 drugs based on the number of treatments.
+top_drugs_by_treatment = Drugs.WHERE(
+    # Ensure the drug has been used in at least one treatment
+    HAS(treatments_used_in) == 1
+).CALCULATE(
+    # Select the drug name
+    drug_name=drug_name,
+    # Count the number of treatments this drug was used in
+    num_treatments=COUNT(treatments_used_in),
+    # Calculate the average total drug amount across those treatments
+    avg_drug_amount=AVG(treatments_used_in.tot_drug_amt)
+).TOP_K(
+    # Select the top 5 drugs
+    5,
+    # Order by the number of treatments in descending order
+    by=num_treatments.DESC()
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=479 candidates_tokens_details=None prompt_token_count=19826 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19826)] thoughts_token_count=1081 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21386 traffic_type=None",No Match,
+How many treatments for diagnoses containing 'psoriasis' (match with wildcards case-insensitively) involve drugs that have been FDA-approved and the treatments have ended within the last 6 months from today?,"SELECT COUNT(*) FROM treatments t JOIN diagnoses d ON t.diag_id = d.diag_id JOIN drugs dr ON t.drug_id = dr.drug_id WHERE d.diag_name LIKE '%psoriasis%' AND dr.fda_appr_dt IS NOT NULL AND t.end_dt >= DATE('now', '-6 months');",DermTreatment,"```python
+result = DermTreatment.CALCULATE(
+    num_qualifying_treatments=COUNT(
+        Treatments.WHERE(
+            # Filter 1: Diagnosis name contains 'psoriasis' (case-insensitive wildcard match)
+            LIKE(LOWER(diagnosis.diag_name), '%psoriasis%')
+            # Filter 2: Associated drug has an FDA approval date (is not null)
+            & (drug.fda_appr_dt != None)
+            # Filter 3: Treatment end date is within the last 6 months from today
+            & (end_dt >= DATETIME('now', '-6 months'))
+            & (end_dt <= DATETIME('now'))
+        )
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`DermTreatment.CALCULATE(...)`**: We start at the top-level `DermTreatment` collection because we want a single aggregated result (the count).
+2.  **`num_qualifying_treatments=COUNT(...)`**: We define a field `num_qualifying_treatments` and assign it the count of treatments that meet the specified criteria.
+3.  **`Treatments.WHERE(...)`**: We access the `Treatments` collection and apply a filter using `WHERE`.
+4.  **`LIKE(LOWER(diagnosis.diag_name), '%psoriasis%')`**: This condition filters treatments based on their associated diagnosis.
+    *   `diagnosis.diag_name`: Accesses the name of the diagnosis linked to the treatment.
+    *   `LOWER(...)`: Converts the diagnosis name to lowercase for case-insensitive matching.
+    *   `LIKE(..., '%psoriasis%')`: Checks if the lowercase diagnosis name contains the substring 'psoriasis'. The `%` acts as a wildcard.
+5.  **`(drug.fda_appr_dt != None)`**: This condition filters treatments based on their associated drug. It checks if the `fda_appr_dt` (FDA approval date) field for the linked drug is not null, implying the drug has been FDA-approved.
+6.  **`(end_dt >= DATETIME('now', '-6 months')) & (end_dt <= DATETIME('now'))`**: This condition filters treatments based on their end date (`end_dt`).
+    *   `DATETIME('now', '-6 months')`: Calculates the date and time exactly 6 months prior to the current moment.
+    *   `DATETIME('now')`: Gets the current date and time.
+    *   The combined condition ensures that the treatment's `end_dt` falls within the range from 6 months ago up to and including the current moment.
+7.  **`&`**: The logical AND operator combines all three conditions, meaning a treatment must satisfy all of them to be included in the count.
+8.  **`COUNT(...)`**: Finally, `COUNT` counts the number of `Treatments` records that remain after applying all the filters.",23.0241596698761,"result = DermTreatment.CALCULATE(
+    num_qualifying_treatments=COUNT(
+        Treatments.WHERE(
+            # Filter 1: Diagnosis name contains 'psoriasis' (case-insensitive wildcard match)
+            LIKE(LOWER(diagnosis.diag_name), '%psoriasis%')
+            # Filter 2: Associated drug has an FDA approval date (is not null)
+            & (drug.fda_appr_dt != None)
+            # Filter 3: Treatment end date is within the last 6 months from today
+            & (end_dt >= DATETIME('now', '-6 months'))
+            & (end_dt <= DATETIME('now'))
+        )
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=655 candidates_tokens_details=None prompt_token_count=19838 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19838)] thoughts_token_count=1630 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22123 traffic_type=None",No Match,
+"List the last name, year of registration, and first treatment (date and _id) by doctors who were registered 2 years ago.","WITH doc_first_treatment AS (SELECT d.doc_id, d.last_name, d.year_reg, t.treatment_id, t.start_dt, ROW_NUMBER() OVER (PARTITION BY d.doc_id ORDER BY t.start_dt ASC) AS rn FROM doctors AS d JOIN treatments AS t ON d.doc_id = t.doc_id WHERE d.year_reg = strftime('%Y', 'now', '-2 years')) SELECT last_name, year_reg, start_dt AS first_treatment_date, treatment_id AS first_treatment_id FROM doc_first_treatment WHERE rn = 1;",DermTreatment,"```python
+# Calculate the target registration year (current year - 2)
+target_reg_year_calc = DermTreatment.CALCULATE(target_year = YEAR(DATETIME('now')) - 2)
+
+# Filter doctors registered in the target year and who have prescribed treatments
+doctors_filtered = target_reg_year_calc.Doctors.WHERE(
+    (year_reg == target_year) & (HAS(prescribed_treatments) == 1)
+)
+
+# Identify the first treatment (earliest start_dt) for each of these doctors using RANKING
+# Use SINGULAR() because the RANKING filter ensures only one treatment per doctor is selected,
+# making it accessible as a singular record in the subsequent CALCULATE.
+first_treatment_for_doctor = doctors_filtered.prescribed_treatments.WHERE(
+    RANKING(by=start_dt.ASC(), per=""Doctors"") == 1
+).SINGULAR()
+
+# Select the doctor's last name, registration year, and the ID and start date of their first treatment
+result = doctors_filtered.CALCULATE(
+    doc_last_name=last_name,
+    registration_year=year_reg,
+    first_treatment_id=first_treatment_for_doctor.treatment_id,
+    first_treatment_start_date=first_treatment_for_doctor.start_dt
+)
+```
+
+**Explanation:**
+
+1.  **`target_reg_year_calc = DermTreatment.CALCULATE(target_year = YEAR(DATETIME('now')) - 2)`**: Calculates the target registration year by subtracting 2 from the current year obtained using `YEAR(DATETIME('now'))`. This value is stored in the `target_year` variable within the `target_reg_year_calc` context.
+2.  **`doctors_filtered = target_reg_year_calc.Doctors.WHERE(...)`**: Accesses the `Doctors` collection through the context containing the `target_year`. It filters doctors based on two conditions:
+    *   `year_reg == target_year`: Selects doctors whose registration year matches the calculated target year.
+    *   `HAS(prescribed_treatments) == 1`: Ensures that only doctors who have prescribed at least one treatment are included.
+3.  **`first_treatment_for_doctor = doctors_filtered.prescribed_treatments.WHERE(...)`**: Navigates to the `prescribed_treatments` for the filtered doctors. It then filters these treatments using:
+    *   `RANKING(by=start_dt.ASC(), per=""Doctors"") == 1`: Ranks the treatments for *each doctor* (`per=""Doctors""`) based on their `start_dt` in ascending order. The `WHERE` clause selects only the treatment with rank 1 (the earliest one).
+    *   `.SINGULAR()`: Since the ranking filter guarantees only one treatment (the first) per doctor, `SINGULAR()` is used to treat this result as a single record, allowing its fields to be accessed directly in the final `CALCULATE`.
+4.  **`result = doctors_filtered.CALCULATE(...)`**: Selects the final output fields from the `doctors_filtered` collection:
+    *   `doc_last_name=last_name`: Retrieves the doctor's last name.
+    *   `registration_year=year_reg`: Retrieves the doctor's registration year.
+    *   `first_treatment_id=first_treatment_for_doctor.treatment_id`: Retrieves the `treatment_id` from the singular `first_treatment_for_doctor` context.
+    *   `first_treatment_start_date=first_treatment_for_doctor.start_dt`: Retrieves the `start_dt` from the singular `first_treatment_for_doctor` context.",24.75843334197998,"# Calculate the target registration year (current year - 2)
+target_reg_year_calc = DermTreatment.CALCULATE(target_year = YEAR(DATETIME('now')) - 2)
+
+# Filter doctors registered in the target year and who have prescribed treatments
+doctors_filtered = target_reg_year_calc.Doctors.WHERE(
+    (year_reg == target_year) & (HAS(prescribed_treatments) == 1)
+)
+
+# Identify the first treatment (earliest start_dt) for each of these doctors using RANKING
+# Use SINGULAR() because the RANKING filter ensures only one treatment per doctor is selected,
+# making it accessible as a singular record in the subsequent CALCULATE.
+first_treatment_for_doctor = doctors_filtered.prescribed_treatments.WHERE(
+    RANKING(by=start_dt.ASC(), per=""Doctors"") == 1
+).SINGULAR()
+
+# Select the doctor's last name, registration year, and the ID and start date of their first treatment
+result = doctors_filtered.CALCULATE(
+    doc_last_name=last_name,
+    registration_year=year_reg,
+    first_treatment_id=first_treatment_for_doctor.treatment_id,
+    first_treatment_start_date=first_treatment_for_doctor.start_dt
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=845 candidates_tokens_details=None prompt_token_count=19822 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19822)] thoughts_token_count=1648 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22315 traffic_type=None",Query Error,Unrecognized term of simple table collection 'Doctors' in graph 'DermTreatment': 'DermTreatment'
+"Return the treatment _id, treatment start date, adverse event date and description of all adverse events that occured within 10 days after starting treatment","SELECT t.treatment_id, t.start_dt, ae.reported_dt, ae.description FROM adverse_events AS ae JOIN treatments AS t ON ae.treatment_id = t.treatment_id WHERE ae.reported_dt BETWEEN t.start_dt AND date(t.start_dt, '+10 days');",DermTreatment,"```python
+# Start with the AdverseEvents collection
+# Filter events where the difference in days between the treatment start date and the event reported date is between 0 and 10 (inclusive)
+# Calculate the required fields: treatment_id, treatment start date, adverse event date, and description
+result = AdverseEvents.WHERE(
+    (DATEDIFF(""days"", treatment.start_dt, reported_dt) >= 0) &
+    (DATEDIFF(""days"", treatment.start_dt, reported_dt) <= 10)
+).CALCULATE(
+    treatment_id=treatment.treatment_id,
+    treatment_start_date=treatment.start_dt,
+    adverse_event_date=reported_dt,
+    adverse_event_description=description
+)
+```
+
+**Explanation:**
+
+1.  **`AdverseEvents`**: We begin by accessing the `AdverseEvents` collection, as the primary focus is on the adverse events themselves.
+2.  **`WHERE(...)`**: We filter these events based on their timing relative to the associated treatment's start date.
+    *   **`treatment.start_dt`**: We access the `start_dt` field from the related `Treatments` record using the `treatment` relationship.
+    *   **`reported_dt`**: This is the date the adverse event was reported, directly available in the `AdverseEvents` collection.
+    *   **`DATEDIFF(""days"", treatment.start_dt, reported_dt)`**: This function calculates the number of full days between the treatment start date and the adverse event reported date.
+    *   **`(DATEDIFF(...) >= 0) & (DATEDIFF(...) <= 10)`**: This combined condition selects events where the reported date is on or after the treatment start date, but no more than 10 days later.
+3.  **`CALCULATE(...)`**: For the filtered adverse events, we select and rename the required fields:
+    *   **`treatment_id=treatment.treatment_id`**: Retrieves the `treatment_id` from the related treatment record.
+    *   **`treatment_start_date=treatment.start_dt`**: Retrieves the `start_dt` from the related treatment record.
+    *   **`adverse_event_date=reported_dt`**: Selects the `reported_dt` of the adverse event.
+    *   **`adverse_event_description=description`**: Selects the `description` of the adverse event.",18.56743741035461,"# Start with the AdverseEvents collection
+# Filter events where the difference in days between the treatment start date and the event reported date is between 0 and 10 (inclusive)
+# Calculate the required fields: treatment_id, treatment start date, adverse event date, and description
+result = AdverseEvents.WHERE(
+    (DATEDIFF(""days"", treatment.start_dt, reported_dt) >= 0) &
+    (DATEDIFF(""days"", treatment.start_dt, reported_dt) <= 10)
+).CALCULATE(
+    treatment_id=treatment.treatment_id,
+    treatment_start_date=treatment.start_dt,
+    adverse_event_date=reported_dt,
+    adverse_event_description=description
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=554 candidates_tokens_details=None prompt_token_count=19823 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19823)] thoughts_token_count=1152 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21529 traffic_type=None",Match,
+"show all placebo treatment _id, start and end date, where there concomitant_meds were started within 2 weeks of starting the treatment. also return the start and end dates of all concomitant drug usage.","SELECT t.treatment_id, t.start_dt AS treatment_start_date, t.end_dt AS treatment_end_date, cm.start_dt AS concomitant_med_start_date, cm.end_dt AS concomitant_med_end_date FROM treatments AS t JOIN concomitant_meds AS cm ON t.treatment_id = cm.treatment_id WHERE t.is_placebo = 1 AND cm.start_dt BETWEEN t.start_dt AND date(t.start_dt, '+14 days') ORDER BY t.treatment_id;",DermTreatment,"```python
+# Filter treatments to find those that are placebos and have at least one concomitant med starting within 14 days of the treatment start date.
+qualifying_treatments = Treatments.WHERE(
+    (is_placebo == True) &
+    (HAS(concomitant_meds) == 1) &
+    (HAS(concomitant_meds.WHERE(DATEDIFF(""days"", Treatments.start_dt, start_dt) <= 14)) == 1)
+)
+
+# From these qualifying treatments, access all their associated concomitant meds.
+relevant_concomitant_meds = qualifying_treatments.concomitant_meds
+
+# Select the required information: treatment ID, treatment start/end dates, and the start/end dates for each concomitant med.
+result = relevant_concomitant_meds.CALCULATE(
+    treatment_id = treatment.treatment_id,
+    treatment_start_date = treatment.start_dt,
+    treatment_end_date = treatment.end_dt,
+    concomitant_med_start_date = start_dt,
+    concomitant_med_end_date = end_dt
+)
+```
+
+**Explanation:**
+
+1.  **`qualifying_treatments = Treatments.WHERE(...)`**: This line starts by selecting the `Treatments` collection and applies filters:
+    *   `is_placebo == True`: Filters for treatments that are placebos.
+    *   `HAS(concomitant_meds) == 1`: Ensures the treatment has at least one associated concomitant medication record.
+    *   `HAS(concomitant_meds.WHERE(DATEDIFF(""days"", Treatments.start_dt, start_dt) <= 14)) == 1`: This is the core condition. It checks if there exists (`HAS(...) == 1`) at least one record within the `concomitant_meds` sub-collection where the difference in days (`DATEDIFF(""days"", ...)` ) between the treatment's start date (`Treatments.start_dt`) and the concomitant med's start date (`start_dt`) is less than or equal to 14 days (2 weeks).
+2.  **`relevant_concomitant_meds = qualifying_treatments.concomitant_meds`**: After filtering the treatments, this line accesses the `concomitant_meds` sub-collection *for only those treatments* that met the criteria. This gives us all concomitant medications associated with the qualifying placebo treatments.
+3.  **`result = relevant_concomitant_meds.CALCULATE(...)`**: This final step selects the desired output fields for each concomitant medication record obtained in the previous step:
+    *   `treatment_id = treatment.treatment_id`: Retrieves the ID of the parent treatment.
+    *   `treatment_start_date = treatment.start_dt`: Retrieves the start date of the parent treatment.
+    *   `treatment_end_date = treatment.end_dt`: Retrieves the end date of the parent treatment.
+    *   `concomitant_med_start_date = start_dt`: Retrieves the start date of the specific concomitant medication record.
+    *   `concomitant_med_end_date = end_dt`: Retrieves the end date of the specific concomitant medication record.
+
+The final `result` will contain one row for each concomitant medication associated with a placebo treatment where at least one of the concomitant meds started within two weeks of the treatment's start date. Each row includes details about the treatment and the specific concomitant med.",23.89808940887451,"# Filter treatments to find those that are placebos and have at least one concomitant med starting within 14 days of the treatment start date.
+qualifying_treatments = Treatments.WHERE(
+    (is_placebo == True) &
+    (HAS(concomitant_meds) == 1) &
+    (HAS(concomitant_meds.WHERE(DATEDIFF(""days"", Treatments.start_dt, start_dt) <= 14)) == 1)
+)
+
+# From these qualifying treatments, access all their associated concomitant meds.
+relevant_concomitant_meds = qualifying_treatments.concomitant_meds
+
+# Select the required information: treatment ID, treatment start/end dates, and the start/end dates for each concomitant med.
+result = relevant_concomitant_meds.CALCULATE(
+    treatment_id = treatment.treatment_id,
+    treatment_start_date = treatment.start_dt,
+    treatment_end_date = treatment.end_dt,
+    concomitant_med_start_date = start_dt,
+    concomitant_med_end_date = end_dt
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=786 candidates_tokens_details=None prompt_token_count=19836 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19836)] thoughts_token_count=1551 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22173 traffic_type=None",Query Error,Unrecognized term of simple table collection 'ConcomitantMeds' in graph 'DermTreatment': 'Treatments'
+what is average age (in integer years) of all registered male patients with private insurance currently?,"SELECT AVG(strftime('%Y', 'now') - strftime('%Y', date_of_birth)) AS avg_age FROM patients WHERE gender = 'Male' AND ins_type = 'private';",DermTreatment,"```python
+# Calculate the average age for male patients with private insurance
+avg_male_private_ins_age = DermTreatment.CALCULATE(
+    average_age=AVG(
+        Patients.WHERE(
+            (gender == 'Male') & (ins_type == 'Private')
+        # Calculate age in years for each filtered patient
+        ).CALCULATE(
+            age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+        # Access the calculated age for averaging
+        ).age_in_years
+    )
+)
+```
+
+**Explanation:**
+
+1.  **`DermTreatment.CALCULATE(...)`**: We start at the top-level `DermTreatment` collection because we want to compute a single aggregate value (the average age) across a subset of patients.
+2.  **`average_age=AVG(...)`**: We define the output field `average_age` using the `AVG` aggregation function.
+3.  **`Patients.WHERE(...)`**: Inside `AVG`, we target the `Patients` collection and filter it using `WHERE`.
+4.  **`(gender == 'Male') & (ins_type == 'Private')`**: The filter condition selects only patients whose `gender` is 'Male' AND whose `ins_type` is 'Private'.
+5.  **`.CALCULATE(age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now')))`**: For each patient passing the filter, we calculate their current age in full years using `DATEDIFF`. We compare their `date_of_birth` with the current timestamp (`DATETIME('now')`) and specify ""years"" as the unit. This calculated age is stored temporarily as `age_in_years`.
+6.  **`.age_in_years`**: We access the `age_in_years` value calculated in the previous step. The `AVG` function then computes the average of these `age_in_years` values from all the filtered male patients with private insurance. `DATEDIFF` with ""years"" naturally provides the integer age.",19.658382415771484,"# Calculate the average age for male patients with private insurance
+avg_male_private_ins_age = DermTreatment.CALCULATE(
+    average_age=AVG(
+        Patients.WHERE(
+            (gender == 'Male') & (ins_type == 'Private')
+        # Calculate age in years for each filtered patient
+        ).CALCULATE(
+            age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+        # Access the calculated age for averaging
+        ).age_in_years
+    )
+)","cache_tokens_details=None cached_content_token_count=None candidates_token_count=466 candidates_tokens_details=None prompt_token_count=19813 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=19813)] thoughts_token_count=1361 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21640 traffic_type=None",No Match,
