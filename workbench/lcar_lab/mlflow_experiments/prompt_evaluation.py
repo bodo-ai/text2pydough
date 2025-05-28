@@ -60,6 +60,11 @@ def extract_python_code(text):
     
     answer_match = re.search(r"Answer:\s*(.*)", text, flags=re.IGNORECASE | re.DOTALL)
 
+    if answer_match:
+        print(f"[DEBUG] Extracted answer split: {answer_match.group(1).strip()}")
+
+        answer_text = answer_match.group(1).strip()
+        return answer_text
     
     return ""
 
