@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import sqlite3
 import os
@@ -32,6 +33,8 @@ def process_query(row, db_base_path):
     sql_query = row['sql']
     db_name = row['db_name']
     dataset_name = row['dataset_name']
+    if dataset_name == "kaggleDBQA":
+        dataset_name = "KaggleDBQA"
     db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}", f"{db_name}.sqlite")
 
     print(f"Processing SQL query for DB: {db_name}")
@@ -83,14 +86,22 @@ def process_sql_queries(csv_file_path: str, db_base_path: str):
     print(f"Results saved")
 
 # Example usage:
-start_time = time.time()
-print("Starting SQL query processing...")
-print()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_csv')
+    args = parser.parse_args() 
+    start_time = time.time()
+    print("Starting SQL query processing...")
+    print()
+    time.sleep(1)
 
-process_sql_queries("/home/gerald8525/repositories/text2pydough/workbench/lcar_lab/training/utils/test_execution_2025_05_26-14_43_53_golden_flash25.csv", "/home/gerald8525/repositories/mount-folder/datasets/")
+    input_csv = args.input_csv
+    db_base_path = "/home/gerald8525/repositories/mount-folder/datasets/"
 
-print()
-print("SQL query processing completed.")
-end_time = time.time()
+    process_sql_queries(input_csv, db_base_path)
 
-print(f"Total execution time: {end_time - start_time:.2f} seconds")
+    print()
+    print("SQL query processing completed.")
+    end_time = time.time()
+
+    print(f"Total execution time: {end_time - start_time:.2f} seconds")

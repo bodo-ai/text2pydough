@@ -203,16 +203,15 @@ def series_contents_equal(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance
         print("Info: Numeric series contents are equal within tolerance.")
         return True
     # If they are not numeric, check if they are equal directly
-    sorted_gold = s_gold.sort_values(na_position='last')
-    sorted_gen = s_gen.sort_values(na_position='last')
-    if sorted_gold.dtype != sorted_gen.dtype:
+    reset_gold = s_gold.reset_index(drop=True)
+    reset_gen = s_gen.reset_index(drop=True)
+    if reset_gold.dtype != reset_gen.dtype:
         return False
-    if sorted_gold.isin(sorted_gen).all():
+    if reset_gold.isin(reset_gen).all():
         print("Info: Series contents are equal.")
         return True
     else:
         print("Info: Series contents are not equal.")
-        print(sorted_gold.isin(sorted_gen).all())
         return False
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
@@ -246,6 +245,10 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     # 2. Not enough columns in df_gen to match all of df_gold's columns
     if num_gold_cols > num_gen_cols:
         print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
+        return False
+    
+    if num_gold_rows > num_gen_rows:
+        print(f"Info: Not enough rows in df_gen to match all of df_gold's rows: {num_gold_rows} vs {num_gen_rows}.")
         return False
     
     # --- Greedy Matching ---
@@ -383,27 +386,34 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
 
     return output_file, df
 
-data_5_people = {
-    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
-    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90]  # Heights in meters
-}
-df_5_people = pd.DataFrame(data_5_people)
-
-print("DataFrame 1 (5 people):")
-print(df_5_people)
-print("-" * 30) # Separator
+#data_5_people = {
+#    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
+#    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90],  # Heights in meters
+#    'number': [1, 2, 3, 4, 5]  # Adding a numeric column for testing
+#}
+#df_5_people = pd.DataFrame(data_5_people)
+#
+#print("DataFrame 1 (5 people):")
+#print(df_5_people)
+#print("-" * 30) # Separator
 
 # --- DataFrame 2: Same 5 people + 2 more ---
 
 # Option 1: Define all data from scratch
-data_7_people_v1 = {
-    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
-    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90, 1.60, 1.85]  # Heights in meters
-}
-df_7_people_v1 = pd.DataFrame(data_7_people_v1)
+#data_7_people_v1 = {
+#    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
+#    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90, 1.60, 1.85],  # Heights in meters
+#    'number': [1.00000000001, 2, 3, 4, 5, 100.1, 7]  # Adding a numeric column for testing
+#}
+#df_7_people_v1 = pd.DataFrame(data_7_people_v1)
 
-print("DataFrame 2 (7 people):")
-print(df_7_people_v1)
-print("-" * 30) # Separator
+#print("DataFrame 2 (7 people):")
+#print(df_7_people_v1)
+#print("-" * 30) # Separator
 
-print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
+#print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
+
+#gold = pd.read_csv('testDF/cust_tx_counts.csv')  
+#gen = pd.read_csv('testDF/customer_ranking_and_details.csv')
+
+#print(compare_df(gold, gen, query_category="a", question="Does this table contain the same customers?"))
