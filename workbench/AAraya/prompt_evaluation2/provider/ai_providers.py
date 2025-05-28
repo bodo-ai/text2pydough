@@ -63,51 +63,39 @@ class DeepSeekAIProvider(AIProvider):
 
 # === Gemini & Claude Provider ===
 class GeminiAIProvider(AIProvider):
-    def __init__(self, model_id, api_key=None, project=None, region=None):
-        self.model_id = model_id
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        self.project = project or os.getenv("GOOGLE_PROJECT_ID")
-        self.region = region or os.getenv("GOOGLE_REGION")
-
-        if not self.api_key or not self.project:
-            raise RuntimeError("Missing Gemini/Claude credentials.")
-
-        if "claude" in self.model_id:
-            self.region = self.region or "us-east5"
-            self.client = AnthropicVertex(project_id=self.project, region=self.region)
-            self.is_claude = True
-        else:
-            self.region = self.region or "us-central1"
-            self.client = genai.Client(project=self.project, location=self.region)
-            self.is_claude = False
+    def __init__(self, model_id):
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]  
+            self.project = os.environ["GOOGLE_PROJECT_ID"]
+            self.location = os.environ["GOOGLE_REGION"]
+            self.model_id = model_id
+            if "claude" in model_id:
+                self.location = "us-east5"
+                self.client = AnthropicVertex(project_id=self.project, region=self.location)
+                self.is_claude = True
+            else:
+                self.client = genai.Client(project=self.project, location=self.location)
+                self.is_claude = False
+        except KeyError:
+            raise RuntimeError("Missing Google Gemini credentials (GOOGLE_API_KEY, etc).")
 
     @mlflow.trace
     def ask(self, question, prompt, **kwargs):
         if self.is_claude:
-            # Claude acepta max_tokens directamente
             response = self.client.messages.create(
                 messages=[{"role": "user", "content": question}],
                 model=self.model_id,
                 system=prompt,
-                **kwargs
             )
             return response.content[0].text, response.usage
         else:
-            # Gemini requiere mapping a generation_config y NO acepta max_tokens
-            generation_config = types.GenerationConfig(
-                temperature=kwargs.get("temperature", 1.0),
-                top_p=kwargs.get("top_p", 1.0),
-                top_k=kwargs.get("top_k", 1),
-                max_output_tokens=kwargs.get("max_tokens", 2048),  # mapping correcto
-            )
-
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=question,
-                generation_config=generation_config,
-                system_instruction=prompt
+                system_instruction=prompt,
             )
             return response.text, response.usage_metadata
+
 
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
