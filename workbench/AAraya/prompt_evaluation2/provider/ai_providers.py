@@ -80,34 +80,35 @@ class GeminiAIProvider(AIProvider):
             raise RuntimeError("Missing Google Gemini credentials (GOOGLE_API_KEY, etc).")
 
     @mlflow.trace
-    def ask(self, question, prompt, **kwargs):
-        if self.is_claude:
+    def ask(self, prompt, system_instruction, **kwargs):
+        if "claude" in self.model_id:
             response = self.client.messages.create(
-                messages=[{"role": "user", "content": question}],
+                messages=[
+           
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+                ],
                 model=self.model_id,
-                system=prompt,
-            )
-            return response.content[0].text, response.usage
-        else:
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=question,
-                system_instruction=prompt,
-            )
-            return response.text, response.usage_metadata
-
-
-    def chat(self, question, prompt, chat=None, **kwargs):
-        if not chat:
-            chat = self.client.chats.create(model=self.model_id)
-        response = chat.send_message(
-            question,
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
+                system=system_instruction,
                 **kwargs
             )
-        )
-        return response, chat
+            
+            text_message = response.content[0].text
+            usage = response.usage 
+            return text_message, usage
+        else:    
+            response = self.client.models.generate_content(
+                model=self.model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    **kwargs
+                ),
+            
+            )
+            return response.text, response.usage_metadata
 
 # === AI Suite Provider ===
 class OtherAIProvider(AIProvider):
