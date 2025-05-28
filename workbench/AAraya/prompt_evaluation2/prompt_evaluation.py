@@ -230,11 +230,12 @@ def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, 
     return results
 
 def evaluate_models(row, responses, db_base_path, metadata_base_path):
-    print(f"[DEBUG] Entrando a evaluate_models para: {question}")
     question = row["question"]
     db_name = row["db_name"]
     dataset_name = row["dataset_name"]
     sql_gold = row["sql"]
+    
+    print(f"[DEBUG] Entrando a evaluate_models para: {question}")
 
     db_path = os.path.join(db_base_path, "databases", dataset_name, f"{db_name}.db")
     metadata_path = os.path.join(metadata_base_path, "metadata", dataset_name, f"{db_name}_graph.json")
