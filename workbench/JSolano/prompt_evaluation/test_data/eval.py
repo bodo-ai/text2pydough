@@ -201,9 +201,11 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
         # Check if the numeric values are equal within a small tolerance
         float_gold = pd.to_numeric(s_gold, errors='coerce').reset_index(drop=True)
         float_gen = pd.to_numeric(s_gen, errors='coerce').reset_index(drop=True)
+        '''
         if float_gold.isin(float_gen).all():
             print("Info: Numeric series contents Match.")
             return True
+        '''
         # If they are not equal, check if they are within the numeric tolerance
         for i in range(len(float_gold)):
             if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
@@ -395,34 +397,34 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
 
     return output_file, df
 
-#data_5_people = {
-#    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
-#    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90],  # Heights in meters
-#    'number': [1, 2, 3, 4, 5]  # Adding a numeric column for testing
-#}
-#df_5_people = pd.DataFrame(data_5_people)
-#
-#print("DataFrame 1 (5 people):")
-#print(df_5_people)
-#print("-" * 30) # Separator
+if __name__ == "__main__":
+    data_5_people = {
+        'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
+        'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90],  # Heights in meters
+        'number': [1, 2, 3, 4, 5]  # Adding a numeric column for testing
+    }
+    df_5_people = pd.DataFrame(data_5_people)
 
-# --- DataFrame 2: Same 5 people + 2 more ---
+    print("DataFrame 1 (5 people):")
+    print(df_5_people)
+    print("-" * 30) # Separator
 
-# Option 1: Define all data from scratch
-#data_7_people_v1 = {
-#    'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
-#    'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90, 1.60, 1.85],  # Heights in meters
-#    'number': [1.00000000001, 2, 3, 4, 5, 100.1, 7]  # Adding a numeric column for testing
-#}
-#df_7_people_v1 = pd.DataFrame(data_7_people_v1)
+    data_7_people_v1 = {
+        'Name': ['Bob', 'Alice', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
+        'Height_m': [1.80, 1.65, 1.75, 1.70, 1.90, 1.60, 1.85],  # Heights in meters
+        'number': [1.001, 2, 3, 4, 5, 100.1, 7]  # Adding a numeric column for testing
+    }
+    df_7_people_v1 = pd.DataFrame(data_7_people_v1)
 
-#print("DataFrame 2 (7 people):")
-#print(df_7_people_v1)
-#print("-" * 30) # Separator
+    print("DataFrame 2 (7 people):")
+    print(df_7_people_v1)
+    print("-" * 30) # Separator
 
-#print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
+    print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
 
-#gold = pd.read_csv('testDF/cust_tx_counts.csv')  
-#gen = pd.read_csv('testDF/customer_ranking_and_details.csv')
+    gold = pd.read_csv('testDF/sql_output.csv')  
+    gen = pd.read_csv('testDF/pydough_output.csv')
+    print(gold)
+    print(gen)
 
-#print(compare_df(gold, gen, query_category="a", question="Does this table contain the same customers?"))
+    print(compare_df(gold, gen, query_category="a", question="Does this table contain the same customers?"))
