@@ -84,6 +84,7 @@ class GeminiAIProvider(AIProvider):
     @mlflow.trace
     def ask(self, question, prompt, **kwargs):
         if self.is_claude:
+            # Claude acepta max_tokens directamente
             response = self.client.messages.create(
                 messages=[{"role": "user", "content": question}],
                 model=self.model_id,
@@ -92,13 +93,19 @@ class GeminiAIProvider(AIProvider):
             )
             return response.content[0].text, response.usage
         else:
+            # Gemini requiere mapping a generation_config y NO acepta max_tokens
+            generation_config = types.GenerationConfig(
+                temperature=kwargs.get("temperature", 1.0),
+                top_p=kwargs.get("top_p", 1.0),
+                top_k=kwargs.get("top_k", 1),
+                max_output_tokens=kwargs.get("max_tokens", 2048),  # mapping correcto
+            )
+
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=question,
-                config=types.GenerateContentConfig(
-                    system_instruction=prompt,
-                    **kwargs
-                ),
+                generation_config=generation_config,
+                system_instruction=prompt
             )
             return response.text, response.usage_metadata
 
