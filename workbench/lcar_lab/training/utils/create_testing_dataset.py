@@ -8,7 +8,7 @@ def load_csv(file_path):
 
 # Filter the DataFrame for False values (data outside of the training set)
 def filter_dataframe(df):
-    filtered_df = df[(df['dataframe_match'] == True)]
+    filtered_df = df[(df['dataframe_match'] != True)]
     return filtered_df
 
 # Get unique values for db_name, difficulty, and complexity
@@ -96,7 +96,7 @@ def create_testing_dataset(df, unique_db_names, training_df_len):
 
 # Save the DataFrame to a CSV file
 def save_to_csv(df, output_path):
-    reformatted_questions = df[['question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
+    reformatted_questions = df \
         .rename(columns={'ground_truth_sql': 'sql'}) \
         .to_dict(orient='records')
         
