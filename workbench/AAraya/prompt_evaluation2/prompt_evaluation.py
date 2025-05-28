@@ -143,9 +143,9 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None
 
-def process_questions(data, prompt, questions_df, script, threads, models_to_evaluate, db_markdown_map=None, **kwargs):
+def process_questions(data, prompt, questions_df, script, threads, models_to_evaluate, db_base_path, metadata_base_path, db_markdown_map=None, **kwargs):
     def thread_wrapper(row):
-        # Ejecuta todos los modelos en paralelo para una pregunta
+        # 1. Ejecutar modelos en paralelo
         responses = run_models_parallel(
             row,
             models_to_evaluate,
@@ -155,17 +155,33 @@ def process_questions(data, prompt, questions_df, script, threads, models_to_eva
             db_markdown_map=db_markdown_map,
             **kwargs
         )
+
+        # 2. Evaluar resultados
+        evaluation = evaluate_models(
+            row=row,
+            responses=responses,
+            db_base_path=db_base_path,
+            metadata_base_path=metadata_base_path
+        )
+
+        # 3. Consolidar información por fila
         return {
             "question": row["question"],
             "db_name": row.get("db_name"),
             "dataset_name": row.get("dataset_name"),
-            "responses": responses 
+            "responses": responses,  # raw output por modelo
+            "winner_model": evaluation["winner"],
+            "comparison_result": evaluation["result"],
+            "code": evaluation["code"],
+            "exception": evaluation["exception"],
+            "all_model_results": evaluation["all_results"]
         }
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
     return results
+
 
 
 def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, db_markdown_map=None, **kwargs):
