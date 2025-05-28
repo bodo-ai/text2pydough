@@ -333,8 +333,6 @@ def query_sqlite_db(
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
         # round floats to decimal_points
-        if decimal_points:
-            df = df.round(decimal_points)
         return df, None
     except Exception as e:
         if cur:
