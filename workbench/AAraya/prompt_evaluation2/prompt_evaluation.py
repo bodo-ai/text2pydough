@@ -1,4 +1,4 @@
-# main.py
+# prompt_evaluation.py
 
 import argparse
 import json
@@ -23,35 +23,40 @@ from dynamic_prompt.generate_pydough_metadata import generate_metadata
 from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
-import getpass
-
-# 1. Get the directory of the script itself
-script_dir = os.path.dirname(os.path.abspath(__file__))
-print(f"DEBUG: Script is located at: {script_dir}")
-
-# 2. **IMPORTANT: Update this to your actual .db filename**
-db_filename = "YOUR_ACTUAL_DATABASE_FILE.db" # <--- **CHANGE THIS LINE**
-db_absolute_path = os.path.join(script_dir, db_filename)
-
-print(f"DEBUG: Calculated absolute DB path: {db_absolute_path}")
-print(f"DEBUG: Current Working Directory (CWD): {os.getcwd()}")
-print(f"DEBUG: Running as user: {getpass.getuser()}")
-
-# 3. Construct the SQLAlchemy URL with 4 slashes for absolute path
-DATABASE_URL = f"sqlite:////{db_absolute_path}"
-print(f"DEBUG: SQLAlchemy Connection URL: {DATABASE_URL}")
 
 # === Helper Functions ===
+
+models_to_evaluate = [
+    {
+        "name": "claude",
+        "provider": "google",
+        "model_id": "claude-3-sonnet@20240229",
+        "config": {
+            "api_key": os.getenv("GOOGLE_API_KEY"),
+            "project": os.getenv("GOOGLE_PROJECT_ID"),
+            "region": "us-east5"
+        }
+    },
+    {
+        "name": "gemini",
+        "provider": "google",
+        "model_id": "gemini-2.5-pro-preview-05-06",
+        "config": {
+            "api_key": os.getenv("GOOGLE_API_KEY"),
+            "project": os.getenv("GOOGLE_PROJECT_ID"),
+            "region": "us-central1"
+        }
+    }
+]
+
 
 def get_provider(provider, model_id, config=None):
     if provider == "azure":
         return AzureAIProvider(model_id)
-    elif provider == "aws-thinking":
-        return ClaudeAIProvider(model_id)
     elif provider == "aws-deepseek":
         return DeepSeekAIProvider(model_id)
     elif provider == "google":
-        return GeminiAIProvider(model_id)
+        return GeminiAIProvider(model_id, **(config or {}))
     elif provider == "mistral":
         return MistralAIProvider(model_id)
     else:
@@ -138,15 +143,150 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, **kwargs):
+def process_questions(data, prompt, questions_df, script, threads, models_to_evaluate, db_markdown_map=None, **kwargs):
     def thread_wrapper(row):
-        client = get_provider(provider, model_id)
-        return get_response(client, prompt, data, row, script, db_markdown_map=db_markdown_map, **kwargs)
+        # Ejecuta todos los modelos en paralelo para una pregunta
+        responses = run_models_parallel(
+            row,
+            models_to_evaluate,
+            prompt_template=prompt,
+            data=data,
+            script=script,
+            db_markdown_map=db_markdown_map,
+            **kwargs
+        )
+        return {
+            "question": row["question"],
+            "db_name": row.get("db_name"),
+            "dataset_name": row.get("dataset_name"),
+            "responses": responses 
+        }
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
     return results
+
+
+def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, db_markdown_map=None, **kwargs):
+    question = row["question"]
+    db_name = row.get("db_name", None)
+
+    # Formatear el prompt
+    formatted_q, formatted_prompt = format_prompt(prompt_template, data, question, script, db_name, db_markdown_map)
+
+    # Función interna para pedir a un modelo
+    def ask_model(model_entry):
+        name = model_entry["name"]
+        provider = model_entry["provider"]
+        model_id = model_entry["model_id"]
+        config = model_entry.get("config", {})
+
+        try:
+            client = get_provider(provider, model_id, config)
+            response = client.ask(formatted_q, formatted_prompt, **kwargs)
+            if isinstance(response, tuple):
+                code, usage = response
+            else:
+                code, usage = response, None
+            return name, {
+                "code": code,
+                "usage": usage,
+                "exception": None
+            }
+        except Exception as e:
+            return name, {
+                "code": None,
+                "usage": None,
+                "exception": str(e)
+            }
+
+    # Ejecutar todos los modelos en paralelo
+    with ThreadPoolExecutor(max_workers=len(models_to_evaluate)) as executor:
+        futures = [executor.submit(ask_model, model) for model in models_to_evaluate]
+        results = dict(f.result() for f in futures)
+
+    return results
+
+def evaluate_models(row, responses, db_base_path, metadata_base_path):
+    question = row["question"]
+    db_name = row["db_name"]
+    dataset_name = row["dataset_name"]
+    sql_gold = row["sql"]
+
+    db_path = os.path.join(db_base_path, "databases", dataset_name, f"{db_name}.db")
+    metadata_path = os.path.join(metadata_base_path, "metadata", dataset_name, f"{db_name}_graph.json")
+
+    model_results = {}
+
+    for model_name, response in responses.items():
+        code = response.get("code")
+        local_env = {"pydough": pydough, "datetime": datetime}
+
+        if code is None:
+            model_results[model_name] = {
+                "result": "Query Error",
+                "exception": response.get("exception"),
+                "code": None
+            }
+            continue
+
+        result_df, exception = execute_code_and_extract_result(code, local_env, metadata_path, db_name, db_path)
+
+        if result_df is None:
+            model_results[model_name] = {
+                "result": "Query Error",
+                "exception": str(exception),
+                "code": code
+            }
+            continue
+
+        sql_df, sql_error = query_sqlite_db(sql_gold, db_path)
+        if sql_df is None:
+            model_results[model_name] = {
+                "result": "SQL Error",
+                "exception": sql_error,
+                "code": code
+            }
+            continue
+
+        match = compare_df(result_df, sql_df, query_category="a", question=question, query_gold=sql_gold, query_gen=code)
+        model_results[model_name] = {
+            "result": "Match" if match else "No Match",
+            "exception": None,
+            "code": code
+        }
+
+    # decidir cuál usar
+    if len(model_results) == 1:
+        # Solo hay un modelo, devolver directamente
+        only_model = list(model_results.keys())[0]
+        return {
+            "winner": only_model,
+            **model_results[only_model],
+            "all_results": model_results
+        }
+
+    # Si hay múltiples, escoger el mejor resultado
+    priority = ["Match", "No Match", "SQL Error", "Query Error"]
+    for label in priority:
+        for model, result in model_results.items():
+            if result["result"] == label:
+                return {
+                    "winner": model,
+                    **result,
+                    "all_results": model_results
+                }
+
+    # fallback
+    return {
+        "winner": None,
+        "result": "Unknown",
+        "code": None,
+        "exception": "No valid response",
+        "all_results": model_results
+    }
+
 
 def parse_extra_args(extra_args):
     kwargs = {}
@@ -205,62 +345,86 @@ def main(git_hash):
         df = pd.read_csv(args.questions)
         db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
+    results = process_questions(
+        data=data,
+        prompt=prompt,
+        questions_df=df,
+        script=script,
+        threads=args.num_threads,
+        models_to_evaluate=models_to_evaluate,
+        db_base_path=args.db_base_path,
+        metadata_base_path=args.metadata_base_path,
+        db_markdown_map=db_markdown_map,
+        **kwargs
+    )
 
-        df["response"] = [r[0] for r in results]
-        df["execution_time"] = [r[1] for r in results]
-        df["extracted_python_code"] = df["response"].apply(extract_python_code)
-        df["usage"] = [r[2] if len(r) > 2 else None for r in results]
+    # === OUTPUT DIR ===
+    output_path = f"./results/ensemble_eval"
+    os.makedirs(output_path, exist_ok=True)
 
-        output_path = f"./results/{args.provider}/{args.model_id}"
-        os.makedirs(output_path, exist_ok=True)
-        output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        df.to_csv(output_file, index=False)
-        test_path = f"{output_path}/test"
-        os.makedirs(test_path, exist_ok=True)
-        tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
-        total_rows = len(tested_df)
+    # === CSV 1: RAW RESPONSES ===
+    raw_rows = []
+    for r in results:
+        for model_name, data in r["responses"].items():
+            raw_rows.append({
+                "question": r["question"],
+                "db_name": r["db_name"],
+                "dataset_name": r["dataset_name"],
+                "model": model_name,
+                "code": data.get("code"),
+                "exception": data.get("exception"),
+                "usage": data.get("usage")
+            })
+    raw_df = pd.DataFrame(raw_rows)
+    raw_output_file = f"{output_path}/raw_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+    raw_df.to_csv(raw_output_file, index=False)
+    mlflow.log_artifact(raw_output_file)
 
-        # Calcula métricas y parámetros
-        counts = tested_df['comparison_result'].value_counts()
-        percentages = counts / total_rows
-        filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description','extra_args']}
+    # === CSV 2: EVALUATED RESPONSES ===
+    final_df = pd.DataFrame(results)
 
-        # Log de parámetros y métricas
-        mlflow.log_params(filtered_args)
-        mlflow.log_params(kwargs)
+    # Extraer modelos dinámicamente
+    all_models = set()
+    for r in results:
+        all_models.update(r.get("all_model_results", {}).keys())
 
-        for label, frac in percentages.items():
-            mlflow.log_metric(f"comparison_{label.replace(' ', '_')}", float(frac))
+    for model in sorted(all_models):
+        final_df[f"{model}_code"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("code"))
+        final_df[f"{model}_result"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("result"))
+        final_df[f"{model}_exception"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("exception"))
 
-        mlflow.log_metric("total_queries", total_rows)
+    evaluated_output_file = f"{output_path}/evaluated_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+    final_df.to_csv(evaluated_output_file, index=False)
+    mlflow.log_artifact(evaluated_output_file)
 
-        # Guardar como JSON también
-        metrics_dict = {
-            f"comparison_{label.replace(' ', '_')}": float(frac)
-            for label, frac in percentages.items()
+    # === MÉTRICAS Y LOGGING ===
+    total_rows = len(final_df)
+    counts = final_df["comparison_result"].value_counts()
+    percentages = counts / total_rows
+
+    for label, frac in percentages.items():
+        mlflow.log_metric(f"comparison_{label.replace(' ', '_')}", float(frac))
+
+    mlflow.log_metric("total_queries", total_rows)
+    mlflow.log_param("models_used", list(sorted(all_models)))
+
+    metrics_dict = {f"comparison_{label.replace(' ', '_')}": float(frac) for label, frac in percentages.items()}
+    metrics_dict["total_queries"] = total_rows
+    metrics_path = "./metrics.json"
+    with open(metrics_path, "w") as f:
+        json.dump(metrics_dict, f, indent=4)
+    mlflow.log_artifact(metrics_path)
+
+    # === REGISTRO DEL MODELO USADO (si se quiere)
+    mlflow.pyfunc.log_model(
+        artifact_path="model",
+        python_model=GeminiWrapper(model_id=args.model_id),
+        artifacts={
+            "prompt_file": args.prompt_file,
+            "pydough_file": args.pydough_file,
+            "metrics": metrics_path
         }
-        metrics_dict["total_queries"] = total_rows
-
-        metrics_path = "./metrics.json"
-        with open(metrics_path, "w") as f:
-            json.dump(metrics_dict, f, indent=4)
-
-        # Subir artifacts importantes
-        mlflow.log_artifact(tested_file)
-        mlflow.log_artifact(output_file)
-        mlflow.log_artifact(metrics_path)
-
-        #Log del modelo (último paso)
-        mlflow.pyfunc.log_model(
-            artifact_path="model",
-            python_model=GeminiWrapper(model_id=args.model_id),
-            artifacts={
-                "prompt_file": args.prompt_file,
-                "pydough_file": args.pydough_file,
-                "metrics": metrics_path
-            }
-        )
+    )
 
 if __name__ == "__main__":
     cwd = os.getcwd()

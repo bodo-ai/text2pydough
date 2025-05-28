@@ -44,56 +44,6 @@ class AzureAIProvider(AIProvider):
             print(f"Azure error: {e}")
             return None
 
-# === Claude, Deepseek, Gemini, AI Suite Providers ===
-class ClaudeAIProvider(AIProvider):
-    def __init__(self, model_id):
-        config = Config(read_timeout=800)
-        self.brt = boto3.client(service_name='bedrock-runtime', config=config)
-        self.model_id = model_id
-
-    def ask(self, question, prompt, **kwargs):
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": kwargs.get("max_tokens", 20000),
-            "thinking": {
-                "type": "enabled",
-                "budget_tokens": kwargs.get("budget_tokens", 5000)
-            },
-            "system": prompt,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": question
-                }
-            ],
-            "temperature": kwargs.get("temperature", 1),
-        })
-
-        modelId = self.model_id
-        accept = 'application/json'
-        contentType = 'application/json'
-
-        response = self.brt.invoke_model_with_response_stream(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
-        )
-        
-        text_delta = []
-        thinking_delta = []
-        stream = response.get('body')
-        if stream:
-            for event in stream:
-                chunk = event.get('chunk')
-                if chunk:
-                    bytes_data = json.loads(chunk.get('bytes').decode())
-                    if 'delta' in bytes_data:
-                        delta = bytes_data['delta']
-                        text_delta.append(delta.get('text', ''))
-                        thinking_delta.append(delta.get('thinking', ''))
-        return ''.join(text_delta)
-
 class DeepSeekAIProvider(AIProvider):
     def __init__(self, model_id):
         config = Config(read_timeout=500)
@@ -124,52 +74,51 @@ class DeepSeekAIProvider(AIProvider):
         return response_text
 
 class GeminiAIProvider(AIProvider):
+    def __init__(self, model_id, api_key=None, project=None, region=None):
+        self.model_id = model_id
 
-    def __init__(self, model_id):
-        try:
-            self.api_key = os.environ["GOOGLE_API_KEY"]  
-            self.project = os.environ["GOOGLE_PROJECT_ID"]
-            self.location = os.environ["GOOGLE_REGION"]
-            self.model_id = model_id
-            if "claude" in model_id:
-                self.location="us-east5"
-                self.client = AnthropicVertex(project_id=self.project, region=self.location)
-            else:   
-                self.client = genai.Client(project=self.project, location=self.location)    
-        except KeyError:
-            raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        
-    
-    @mlflow.trace
-    def ask(self, prompt, system_instruction, **kwargs):
+        # Prefer credenciales explícitas, si no usar las de entorno
+        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        self.project = project or os.getenv("GOOGLE_PROJECT_ID")
+        self.region = region or os.getenv("GOOGLE_REGION")
+
+        if not self.api_key or not self.project:
+            raise RuntimeError("Missing Gemini/Claude credentials.")
+
+        genai.configure(api_key=self.api_key)
+
+        # Claude via Vertex usa AnthropicVertex
         if "claude" in self.model_id:
+            self.region = self.region or "us-east5"
+            self.client = AnthropicVertex(project_id=self.project, region=self.region)
+            self.is_claude = True
+        else:
+            self.region = self.region or "us-central1"
+            self.client = genai.Client(project=self.project, location=self.region)
+            self.is_claude = False
+
+    @mlflow.trace
+    def ask(self, question, prompt, **kwargs):
+        if self.is_claude:
             response = self.client.messages.create(
-                messages=[
-           
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-                ],
+                messages=[{"role": "user", "content": question}],
                 model=self.model_id,
-                system=system_instruction,
+                system=prompt,
                 **kwargs
             )
-            
-            text_message = response.content[0].text
-            usage = response.usage 
-            return text_message, usage
-        else:    
+            return response.content[0].text, response.usage
+        else:
             response = self.client.models.generate_content(
                 model=self.model_id,
-                contents=prompt,
+                contents=question,
                 config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
+                    system_instruction=prompt,
                     **kwargs
                 ),
-            
             )
             return response.text, response.usage_metadata
+
+
     
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
