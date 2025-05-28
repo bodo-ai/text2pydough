@@ -361,86 +361,86 @@ def main(git_hash):
         df = pd.read_csv(args.questions)
         db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
-    results = process_questions(
-        data=data,
-        prompt=prompt,
-        questions_df=df,
-        script=script,
-        threads=args.num_threads,
-        models_to_evaluate=models_to_evaluate,
-        db_base_path=args.db_base_path,
-        metadata_base_path=args.metadata_base_path,
-        db_markdown_map=db_markdown_map,
-        **kwargs
-    )
+        results = process_questions(
+            data=data,
+            prompt=prompt,
+            questions_df=df,
+            script=script,
+            threads=args.num_threads,
+            models_to_evaluate=models_to_evaluate,
+            db_base_path=args.db_base_path,
+            metadata_base_path=args.metadata_base_path,
+            db_markdown_map=db_markdown_map,
+            **kwargs
+        )
 
-    # === OUTPUT DIR ===
-    output_path = f"./results/ensemble_eval"
-    os.makedirs(output_path, exist_ok=True)
+        # === OUTPUT DIR ===
+        output_path = f"./results/ensemble_eval"
+        os.makedirs(output_path, exist_ok=True)
 
-    # === CSV 1: RAW RESPONSES ===
-    raw_rows = []
-    for r in results:
-        for model_name, data in r["responses"].items():
-            raw_rows.append({
-                "question": r["question"],
-                "db_name": r["db_name"],
-                "dataset_name": r["dataset_name"],
-                "model": model_name,
-                "code": data.get("code"),
-                "exception": data.get("exception"),
-                "usage": data.get("usage")
-            })
-    raw_df = pd.DataFrame(raw_rows)
-    raw_output_file = f"{output_path}/raw_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-    raw_df.to_csv(raw_output_file, index=False)
-    mlflow.log_artifact(raw_output_file)
+        # === CSV 1: RAW RESPONSES ===
+        raw_rows = []
+        for r in results:
+            for model_name, data in r["responses"].items():
+                raw_rows.append({
+                    "question": r["question"],
+                    "db_name": r["db_name"],
+                    "dataset_name": r["dataset_name"],
+                    "model": model_name,
+                    "code": data.get("code"),
+                    "exception": data.get("exception"),
+                    "usage": data.get("usage")
+                })
+        raw_df = pd.DataFrame(raw_rows)
+        raw_output_file = f"{output_path}/raw_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+        raw_df.to_csv(raw_output_file, index=False)
+        mlflow.log_artifact(raw_output_file)
 
-    # === CSV 2: EVALUATED RESPONSES ===
-    final_df = pd.DataFrame(results)
+        # === CSV 2: EVALUATED RESPONSES ===
+        final_df = pd.DataFrame(results)
 
-    # Extraer modelos dinámicamente
-    all_models = set()
-    for r in results:
-        all_models.update(r.get("all_model_results", {}).keys())
+        # Extraer modelos dinámicamente
+        all_models = set()
+        for r in results:
+            all_models.update(r.get("all_model_results", {}).keys())
 
-    for model in sorted(all_models):
-        final_df[f"{model}_code"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("code"))
-        final_df[f"{model}_result"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("result"))
-        final_df[f"{model}_exception"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("exception"))
+        for model in sorted(all_models):
+            final_df[f"{model}_code"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("code"))
+            final_df[f"{model}_result"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("result"))
+            final_df[f"{model}_exception"] = final_df["all_model_results"].apply(lambda d: d.get(model, {}).get("exception"))
 
-    evaluated_output_file = f"{output_path}/evaluated_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-    final_df.to_csv(evaluated_output_file, index=False)
-    mlflow.log_artifact(evaluated_output_file)
+        evaluated_output_file = f"{output_path}/evaluated_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+        final_df.to_csv(evaluated_output_file, index=False)
+        mlflow.log_artifact(evaluated_output_file)
 
-    # === MÉTRICAS Y LOGGING ===
-    total_rows = len(final_df)
-    counts = final_df["comparison_result"].value_counts()
-    percentages = counts / total_rows
+        # === MÉTRICAS Y LOGGING ===
+        total_rows = len(final_df)
+        counts = final_df["comparison_result"].value_counts()
+        percentages = counts / total_rows
 
-    for label, frac in percentages.items():
-        mlflow.log_metric(f"comparison_{label.replace(' ', '_')}", float(frac))
+        for label, frac in percentages.items():
+            mlflow.log_metric(f"comparison_{label.replace(' ', '_')}", float(frac))
 
-    mlflow.log_metric("total_queries", total_rows)
-    mlflow.log_param("models_used", list(sorted(all_models)))
+        mlflow.log_metric("total_queries", total_rows)
+        mlflow.log_param("models_used", list(sorted(all_models)))
 
-    metrics_dict = {f"comparison_{label.replace(' ', '_')}": float(frac) for label, frac in percentages.items()}
-    metrics_dict["total_queries"] = total_rows
-    metrics_path = "./metrics.json"
-    with open(metrics_path, "w") as f:
-        json.dump(metrics_dict, f, indent=4)
-    mlflow.log_artifact(metrics_path)
+        metrics_dict = {f"comparison_{label.replace(' ', '_')}": float(frac) for label, frac in percentages.items()}
+        metrics_dict["total_queries"] = total_rows
+        metrics_path = "./metrics.json"
+        with open(metrics_path, "w") as f:
+            json.dump(metrics_dict, f, indent=4)
+        mlflow.log_artifact(metrics_path)
 
-    # === REGISTRO DEL MODELO USADO (si se quiere)
-    mlflow.pyfunc.log_model(
-        artifact_path="model",
-        python_model=GeminiWrapper(model_id=args.model_id),
-        artifacts={
-            "prompt_file": args.prompt_file,
-            "pydough_file": args.pydough_file,
-            "metrics": metrics_path
-        }
-    )
+        # === REGISTRO DEL MODELO USADO (si se quiere)
+        mlflow.pyfunc.log_model(
+            artifact_path="model",
+            python_model=GeminiWrapper(model_id=args.model_id),
+            artifacts={
+                "prompt_file": args.prompt_file,
+                "pydough_file": args.pydough_file,
+                "metrics": metrics_path
+            }
+        )
 
 if __name__ == "__main__":
     cwd = os.getcwd()
