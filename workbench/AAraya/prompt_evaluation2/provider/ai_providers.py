@@ -3,12 +3,11 @@ from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
 from abc import ABC, abstractmethod
-import os
 import boto3
 import json
 import pandas as pd
 from botocore.config import Config
-import google.generativeai as genai
+import google.genai as genai
 from google.genai import types
 import aisuite as ai
 from mistralai import Mistral
@@ -44,6 +43,7 @@ class AzureAIProvider(AIProvider):
             print(f"Azure error: {e}")
             return None
 
+# === DeepSeek Provider ===
 class DeepSeekAIProvider(AIProvider):
     def __init__(self, model_id):
         config = Config(read_timeout=500)
@@ -52,32 +52,19 @@ class DeepSeekAIProvider(AIProvider):
 
     def ask(self, question, prompt, **kwargs):
         system_messages = [{"text": prompt}]
-        messages = [
-            {
-                "role": "user",  
-                "content": [{"text": question}]
-            }
-        ]
-
-        modelId = self.model_id
-
+        messages = [{"role": "user", "content": [{"text": question}]}]
         response = self.brt.converse(
-            modelId=modelId,
-            inferenceConfig={
-                "maxTokens": kwargs.get("max_tokens", 30000),
-                **kwargs
-            },
+            modelId=self.model_id,
+            inferenceConfig={"maxTokens": kwargs.get("max_tokens", 30000), **kwargs},
             system=system_messages,
             messages=messages
         )
-        response_text = response["output"]["message"]["content"][0]["text"]
-        return response_text
+        return response["output"]["message"]["content"][0]["text"]
 
+# === Gemini & Claude Provider ===
 class GeminiAIProvider(AIProvider):
     def __init__(self, model_id, api_key=None, project=None, region=None):
         self.model_id = model_id
-
-        # Prefer credenciales explícitas, si no usar las de entorno
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
         self.project = project or os.getenv("GOOGLE_PROJECT_ID")
         self.region = region or os.getenv("GOOGLE_REGION")
@@ -85,9 +72,6 @@ class GeminiAIProvider(AIProvider):
         if not self.api_key or not self.project:
             raise RuntimeError("Missing Gemini/Claude credentials.")
 
-        genai.configure(api_key=self.api_key)
-
-        # Claude via Vertex usa AnthropicVertex
         if "claude" in self.model_id:
             self.region = self.region or "us-east5"
             self.client = AnthropicVertex(project_id=self.project, region=self.region)
@@ -118,13 +102,11 @@ class GeminiAIProvider(AIProvider):
             )
             return response.text, response.usage_metadata
 
-
-    
     def chat(self, question, prompt, chat=None, **kwargs):
         if not chat:
             chat = self.client.chats.create(model=self.model_id)
         response = chat.send_message(
-            question,        
+            question,
             config=types.GenerateContentConfig(
                 system_instruction=prompt,
                 **kwargs
@@ -132,12 +114,13 @@ class GeminiAIProvider(AIProvider):
         )
         return response, chat
 
+# === AI Suite Provider ===
 class OtherAIProvider(AIProvider):
     def __init__(self, provider, model_id, config=None):
         self.client = ai.Client(config) if config else ai.Client()
         self.provider = provider
         self.model_id = model_id
-    
+
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
@@ -151,21 +134,23 @@ class OtherAIProvider(AIProvider):
             print(f"AI Suite error: {e}")
             return None
 
+# === Mistral Provider ===
 class MistralAIProvider(AIProvider):
     def __init__(self, model_id):
-        self.api_key = os.environ["MISTRAL_API_KEY"]  
+        self.api_key = os.environ["MISTRAL_API_KEY"]
         self.model_id = model_id
-        self.client= Mistral(api_key=self.api_key)
-    
+        self.client = Mistral(api_key=self.api_key)
+
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
             response = self.client.chat.complete(
-                model=f"{self.model_id}",
+                model=self.model_id,
                 messages=messages,
                 **kwargs
             )
             return response.choices[0].message.content
         except Exception as e:
-            print(f"AI Suite error: {e}")
+            print(f"Mistral error: {e}")
             return None
+
