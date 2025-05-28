@@ -1,4 +1,5 @@
 import argparse
+import math
 import pandas as pd
 
 # Read CSV file
@@ -6,93 +7,97 @@ def load_csv(file_path):
     df = pd.read_csv(file_path)
     return df
 
-# Filter the DataFrame for False values (data outside of the training set)
-def filter_dataframe(df):
-    filtered_df = df[(df['dataframe_match'] != True)]
-    return filtered_df
-
-# Get unique values for db_name, difficulty, and complexity
-def get_relevant_dbs(filtered_df):
-    # Filter by dataset name
-    spider_df = filtered_df[filtered_df['dataset_name'] == 'spider_data']
-    kaggle_df = filtered_df[filtered_df['dataset_name'] == 'kaggleDBQA']
-
-    # Count occurrences of each db_name
-    spider_counts = spider_df['db_name'].value_counts()
-    kaggle_counts = kaggle_df['db_name'].value_counts()
-
-    # Select the top 80% based on count
-    spider_num = int(len(spider_counts) * 0.8)
-    kaggle_num = int(len(kaggle_counts) * 0.8)
-
-    spider_dbs = spider_counts.nlargest(spider_num).index.tolist()
-    kaggle_dbs = kaggle_counts.nlargest(kaggle_num).index.tolist()
-
-    # Combine the two lists
-    unique_db_names = list(set(spider_dbs) | set(kaggle_dbs))
-
-    return unique_db_names
 
 # Function to create a testing dataset
-def create_testing_dataset(df, unique_db_names, training_df_len):
-    # Calculate target size for the testing dataset (10% of training size)
-    test_size = int(training_df_len * 0.1)
+def create_testing_dataset(df):
+    # 1. Conjuntos de entrenamiento y tamaño de test
+    training_df = df[df["dataframe_match"] == True]
+    test_size = int(len(training_df) * 0.15)
+    print(f"Creating testing dataset with size: {test_size}")
 
-    # Filter the DataFrame for unmatched rows
-    filtered_test_df = df[(df['dataframe_match'] == False)]
+    # 2. Split de entrenamiento por dataset
+    spider_train = training_df[training_df["dataset_name"] == "spider_data"]
+    kaggle_train = training_df[training_df["dataset_name"] == "kaggleDBQA"]
 
-    # Calculate proportional distribution for `difficulty` and `complexity`
-    difficulty_proportions = filtered_test_df['difficulty'].value_counts(normalize=True).to_dict()
-    complexity_proportions = filtered_test_df['complexity'].value_counts(normalize=True).to_dict()
+    # 3. Asignar test_size a cada dataset
+    total_train = len(training_df)
+    spider_test_size = round(test_size * len(spider_train) / total_train)
+    kaggle_test_size = test_size - spider_test_size
+    print(f" - spider_data test size: {spider_test_size}")
+    print(f" - kaggleDBQA   test size: {kaggle_test_size}")
 
-    # Create the testing dataset by sampling
-    testing_dataset = []
+    # 4. Candidatos
+    testing_df = df[df["dataframe_match"] == False]
 
-    for difficulty, difficulty_proportion in difficulty_proportions.items():
-        # Calculate the target number of rows for this difficulty
-        rows_for_difficulty = int(test_size * difficulty_proportion)
+    def sample_db_and_difficulty(train_subset, test_subset, target_n, min_count=30):
+        # 4.1. Filtrar dbs con suficiente tamaño
+        db_counts = train_subset["db_name"].value_counts()
+        valid_dbs = db_counts[db_counts > min_count].index.tolist()
+        if not valid_dbs:
+            return pd.DataFrame([], columns=test_subset.columns)
 
-        # Filter rows matching the difficulty and valid conditions
-        difficulty_subset = filtered_test_df[
-            (filtered_test_df['difficulty'] == difficulty) &
-            (filtered_test_df['db_name'].isin(unique_db_names))
-        ]
+        # 4.2. Proporción raw por db
+        raw_db = {db: target_n * (db_counts[db] / db_counts.loc[valid_dbs].sum())
+                  for db in valid_dbs}
+        floor_db = {db: math.floor(cnt) for db, cnt in raw_db.items()}
 
-        for complexity, complexity_proportion in complexity_proportions.items():
-            # Calculate the target number of rows for this difficulty and complexity
-            rows_for_complexity = int(rows_for_difficulty * complexity_proportion)
+        # 4.3. Ajuste residuales db
+        rem_db = target_n - sum(floor_db.values())
+        resid_db = {db: raw_db[db] - floor_db[db] for db in valid_dbs}
+        for db, _ in sorted(resid_db.items(), key=lambda x: x[1], reverse=True)[:rem_db]:
+            floor_db[db] += 1
 
-            # Filter rows matching this complexity
-            complexity_subset = difficulty_subset[difficulty_subset['complexity'] == complexity]
+        # 4.4. Para cada db, repartir por difficulty
+        pieces = []
+        for db, n_db in floor_db.items():
+            if n_db <= 0:
+                continue
+            # subset de entrenamiento y test para esta db
+            train_db = train_subset[train_subset["db_name"] == db]
+            test_db  = test_subset[test_subset["db_name"] == db]
 
-            # Sample rows and append to the result
-            sampled_rows = complexity_subset.sample(
-                n=min(rows_for_complexity, len(complexity_subset)),
-                random_state=42
-            )
-            testing_dataset.append(sampled_rows)
+            # 4.4.1. proporciones de difficulty dentro de esta db
+            diff_counts = train_db["difficulty"].value_counts()
+            diffs = diff_counts.index.tolist()
+            raw_diff = {d: n_db * (diff_counts[d] / diff_counts.sum()) for d in diffs}
+            floor_diff = {d: math.floor(c) for d, c in raw_diff.items()}
 
-    # Combine all sampled rows into a single DataFrame
-    testing_dataset = pd.concat(testing_dataset, ignore_index=True)
+            # 4.4.2. ajustar residuales difficulty
+            rem_diff = n_db - sum(floor_diff.values())
+            resid_diff = {d: raw_diff[d] - floor_diff[d] for d in diffs}
+            for d, _ in sorted(resid_diff.items(), key=lambda x: x[1], reverse=True)[:rem_diff]:
+                floor_diff[d] += 1
 
-    # Adjust to ensure the testing dataset matches the desired test_size
-    if len(testing_dataset) < test_size:
-        # Calculate the deficit
-        deficit = test_size - len(testing_dataset)
+            # 4.4.3. muestreo por difficulty
+            for d, n_d in floor_diff.items():
+                if n_d <= 0:
+                    continue
+                candidate = test_db[test_db["difficulty"] == d]
+                take = min(n_d, len(candidate))
+                if take > 0:
+                    pieces.append(candidate.sample(n=take, random_state=42))
 
-        # Sample additional rows from unmatched data without constraints
-        additional_rows = filtered_test_df[
-            ~(filtered_test_df.index.isin(testing_dataset.index))
-        ].sample(n=min(deficit, len(filtered_test_df)), random_state=42)
+        return pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame([], columns=test_subset.columns)
 
-        # Add the additional rows
-        testing_dataset = pd.concat([testing_dataset, additional_rows], ignore_index=True)
+    # 5. Sample para cada dataset
+    spider_test = sample_db_and_difficulty(
+        spider_train,
+        testing_df[testing_df["dataset_name"] == "spider_data"],
+        spider_test_size,
+        min_count=30
+    )
+    kaggle_test = sample_db_and_difficulty(
+        kaggle_train,
+        testing_df[testing_df["dataset_name"] == "kaggleDBQA"],
+        kaggle_test_size,
+        min_count=30
+    )
 
-    # Final adjustment to ensure the exact size
-    if len(testing_dataset) > test_size:
-        testing_dataset = testing_dataset.sample(n=test_size, random_state=42)
+    # 6. Unión final
+    final_test = pd.concat([spider_test, kaggle_test], ignore_index=True)
+    print(f"Final testing dataset size: {len(final_test)}")
+    return final_test
 
-    return testing_dataset
 
 # Save the DataFrame to a CSV file
 def save_to_csv(df, output_path):
@@ -113,8 +118,5 @@ if __name__ == '__main__':
 
     df = load_csv(args.input_csv)
 
-    filtered_df = filter_dataframe(df)
-    dbs_list = get_relevant_dbs(filtered_df)
-
-    testing_dataset = create_testing_dataset(df, dbs_list, len(filtered_df))
+    testing_dataset = create_testing_dataset(df)
     save_to_csv(testing_dataset, args.output_csv)
