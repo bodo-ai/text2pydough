@@ -147,6 +147,8 @@ def compare_df(
     Compares two dataframes and returns True if they are the same, else False.
     query_gold and query_gen are the original queries that generated the respective dataframes.
     """
+    
+    print(f"Info: Comparing DataFrames for question: {question}")
     original_gold = df_gold.copy()
     original_gen = df_gen.copy()
     try:
@@ -201,9 +203,9 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
         float_gen = pd.to_numeric(s_gen, errors='coerce').reset_index(drop=True)
         for i in range(len(float_gold)):
             if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
-                #print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[i]}")
+                print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[i]}")
                 return False
-        #print("Info: Numeric series contents Match.")
+        print("Info: Numeric series contents Match.")
         return True
     # If they are not numeric, check if they are equal directly
     reset_gold = s_gold.reset_index(drop=True)
@@ -211,10 +213,10 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
     if reset_gold.dtype != reset_gen.dtype:
         return False
     if reset_gold.isin(reset_gen).all():
-        #print("Info: Series contents Match.")
+        print("Info: Series contents Match.")
         return True
     else:
-        #print("Info: Series contents do not Match.")
+        print("Info: Series contents do not Match.")
         return False
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
@@ -238,7 +240,7 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     # 1. Handle df_gold having zero columns
     if num_gold_cols == 0:
         if num_gold_rows == 0: # df_gold is 0x0
-            #print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
+            print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
             return True
         else: # df_gold is Rx0 (R > 0)
             # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
@@ -264,14 +266,14 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
         for j in range(num_gen_cols):
             if not b_cols_used[j]: # If df_gen's j-th column is not yet used
                 series_gen = df_gen.iloc[:, j]
-                #print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
+                print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
                 if series_match(series_gold, series_gen):
                     b_cols_used[j] = True
                     found_match_for_s_gold = True
                     break # Move to the next column in df_gold
         
         if not found_match_for_s_gold:
-            #print(f"Info: No match found for column {i} of df_gold in df_gen.")
+            print(f"Info: No match found for column {i} of df_gold in df_gen.")
             return False
     print("Info: Dataframes match second check.")    
     return True    
