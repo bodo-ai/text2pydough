@@ -63,12 +63,12 @@ class DeepSeekAIProvider(AIProvider):
 
 # === Gemini & Claude Provider ===
 class GeminiAIProvider(AIProvider):
-    def __init__(self, model_id):
+    def __init__(self, model_id, api_key=None, project=None, region=None):
         try:
-            self.api_key = os.environ["GOOGLE_API_KEY"]  
-            self.project = os.environ["GOOGLE_PROJECT_ID"]
-            self.location = os.environ["GOOGLE_REGION"]
             self.model_id = model_id
+            self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+            self.project = project or os.getenv("GOOGLE_PROJECT_ID")
+            self.location = region or os.getenv("GOOGLE_REGION")
             if "claude" in model_id:
                 self.location = "us-east5"
                 self.client = AnthropicVertex(project_id=self.project, region=self.location)
