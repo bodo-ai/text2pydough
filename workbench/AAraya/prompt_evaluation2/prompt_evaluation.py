@@ -16,7 +16,7 @@ from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
-from test_data.eval import compare_output, execute_code_and_extract_result
+from test_data.eval import execute_code_and_extract_result, compare_df, query_sqlite_db
 import aisuite as ai
 from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
@@ -83,7 +83,6 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     for db_name, dataset_name in zip(db_names, dataset_names):
         metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        print(json_file)
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
@@ -144,7 +143,9 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     return response1, duration, None
 
 def process_questions(data, prompt, questions_df, script, threads, models_to_evaluate, db_base_path, metadata_base_path, db_markdown_map=None, **kwargs):
+    print("[DEBUG] Entrando a process_questions con", len(questions_df), "preguntas")
     def thread_wrapper(row):
+        print(f"[DEBUG] Procesando pregunta: {row['question']}")
         # 1. Ejecutar modelos en paralelo
         responses = run_models_parallel(
             row,
@@ -155,6 +156,8 @@ def process_questions(data, prompt, questions_df, script, threads, models_to_eva
             db_markdown_map=db_markdown_map,
             **kwargs
         )
+        
+        print(f"[DEBUG] Respuestas recibidas para: {row['question']}")
 
         # 2. Evaluar resultados
         evaluation = evaluate_models(
@@ -163,6 +166,9 @@ def process_questions(data, prompt, questions_df, script, threads, models_to_eva
             db_base_path=db_base_path,
             metadata_base_path=metadata_base_path
         )
+        
+        print(f"[DEBUG] Evaluación completada para: {row['question']}, Ganador: {evaluation['winner']}")
+
 
         # 3. Consolidar información por fila
         return {
@@ -181,7 +187,6 @@ def process_questions(data, prompt, questions_df, script, threads, models_to_eva
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
     return results
-
 
 
 def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, db_markdown_map=None, **kwargs):
@@ -225,6 +230,7 @@ def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, 
     return results
 
 def evaluate_models(row, responses, db_base_path, metadata_base_path):
+    print(f"[DEBUG] Entrando a evaluate_models para: {question}")
     question = row["question"]
     db_name = row["db_name"]
     dataset_name = row["dataset_name"]
@@ -328,6 +334,7 @@ def parse_extra_args(extra_args):
 # === Entry Point ===
 
 def main(git_hash):
+    print("[DEBUG] Entrando al main()")
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
@@ -350,6 +357,7 @@ def main(git_hash):
     mlflow.gemini.autolog()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment(args.experiment_name)
+    print("[DEBUG] Iniciando run en MLFlow...")
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
         prompt = read_file(args.prompt_file)
@@ -360,7 +368,8 @@ def main(git_hash):
 
         df = pd.read_csv(args.questions)
         db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
-
+        
+        print("[DEBUG] Ejecutando process_questions()...")
         results = process_questions(
             data=data,
             prompt=prompt,
@@ -412,6 +421,10 @@ def main(git_hash):
         evaluated_output_file = f"{output_path}/evaluated_responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         final_df.to_csv(evaluated_output_file, index=False)
         mlflow.log_artifact(evaluated_output_file)
+        
+        print(f"[DEBUG] Guardado CSV: {raw_output_file}")
+        print(f"[DEBUG] Guardado CSV: {evaluated_output_file}")
+
 
         # === MÉTRICAS Y LOGGING ===
         total_rows = len(final_df)
@@ -441,6 +454,8 @@ def main(git_hash):
                 "metrics": metrics_path
             }
         )
+        
+        print("[DEBUG] Terminando run de MLFlow")
 
 if __name__ == "__main__":
     cwd = os.getcwd()
