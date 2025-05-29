@@ -201,11 +201,11 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
         # Check if the numeric values are equal within a small tolerance
         float_gold = pd.to_numeric(s_gold, errors='coerce').reset_index(drop=True)
         float_gen = pd.to_numeric(s_gen, errors='coerce').reset_index(drop=True)
-        '''
+        
         if float_gold.isin(float_gen).all():
             #print("Info: Numeric series contents Match.")
             return True
-        '''
+        
         # If they are not equal, check if they are within the numeric tolerance
         for i in range(len(float_gold)):
             if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
