@@ -28,13 +28,13 @@ from gemini_wrapper import GeminiWrapper
 
 models_to_evaluate = [
     {
-        "name": "gemini",
+        "name": "claude",
         "provider": "google",
-        "model_id": "gemini-2.5-pro-preview-05-06",
+        "model_id": "claude-3-7-sonnet@20250219",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
-            "region": "us-central1"
+            "region": "us-east5"
         }
     }
 ]
