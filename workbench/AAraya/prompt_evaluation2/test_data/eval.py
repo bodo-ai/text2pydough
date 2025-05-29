@@ -11,7 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pandas.api.types import is_numeric_dtype
 from threading import Lock
 metadata_lock = Lock()
-from pandas.testing import assert_frame_equal   # works in every supported pandas version
+from pandas.testing import assert_frame_equal
+import traceback
 
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -287,7 +288,8 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
         
         return result_df, None  # Return result and no exception
     except Exception as e:
-        return None, e  # Return None as result and exception message
+        error_msg = f"{e.__class__.__name__}: {str(e)}\n\n{traceback.format_exc()}"
+        return None, error_msg
 
 
 def query_sqlite_db(
