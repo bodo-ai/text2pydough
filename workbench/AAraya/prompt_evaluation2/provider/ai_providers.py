@@ -93,6 +93,7 @@ class GeminiAIProvider(AIProvider):
                 ],
                 model=self.model_id,
                 system=system_instruction,
+                max_tokens=max_tokens,
                 **kwargs
             )
             
