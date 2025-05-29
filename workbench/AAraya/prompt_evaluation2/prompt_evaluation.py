@@ -246,6 +246,7 @@ def evaluate_models(row, responses, db_base_path, metadata_base_path):
 
     for model_name, response in responses.items():
         code = response.get("code")
+        code = extract_python_code(code)
         local_env = {"pydough": pydough, "datetime": datetime}
 
         if code is None:
