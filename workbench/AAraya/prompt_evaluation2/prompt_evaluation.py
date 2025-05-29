@@ -24,22 +24,21 @@ from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
 
-
+# === Helper Functions ===
 
 models_to_evaluate = [
     {
-        "name": "claude",
+        "name": "gemini",
         "provider": "google",
-        "model_id": "claude-3-7-sonnet@20250219",
+        "model_id": "gemini-2.5-pro-preview-05-06",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
-            "region": "us-east5"
+            "region": "us-central1"
         }
     }
 ]
 
-# === Helper Functions ===
 
 def get_provider(provider, model_id, config=None):
     if provider == "azure":
