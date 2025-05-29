@@ -82,6 +82,7 @@ class GeminiAIProvider(AIProvider):
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
         if "claude" in self.model_id:
+            max_tokens = kwargs.pop("max_tokens", 20000)
             response = self.client.messages.create(
                 messages=[
            

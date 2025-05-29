@@ -24,7 +24,7 @@ from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
 
-# === Helper Functions ===
+
 
 models_to_evaluate = [
     {
@@ -39,6 +39,7 @@ models_to_evaluate = [
     }
 ]
 
+# === Helper Functions ===
 
 def get_provider(provider, model_id, config=None):
     if provider == "azure":
