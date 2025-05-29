@@ -96,8 +96,8 @@ def analyze_dataset(file_path, output_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Analyze dataset and generate metrics.")
-    parser.add_argument('--input_path')
-    parser.add_argument('--output_path')
+    parser.add_argument('input_path')
+    parser.add_argument('output_path')
     args = parser.parse_args()
 
     analyze_dataset(args.input_path, args.output_path)
