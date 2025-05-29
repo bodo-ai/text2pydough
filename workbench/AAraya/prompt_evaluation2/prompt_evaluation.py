@@ -62,9 +62,21 @@ def read_file(path):
         raise IOError(f"Failed to read file {path}: {e}")
 
 def extract_python_code(text):
-    if not isinstance(text, str): return ""
-    matches = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
-    return textwrap.dedent(matches[-1]).strip() if matches else ""
+    if not isinstance(text, str):
+        return ""
+
+    # Buscar bloques de código markdown (```python ... ```)
+    matches = re.findall(r"```(?:python)?\n(.*?)```", text, re.DOTALL)
+    if matches:
+        return textwrap.dedent(matches[-1]).strip()
+
+    # Fallback: intentar detectar un bloque al final del texto si no está bien cerrado
+    approx_code_start = text.rfind("```python")
+    if approx_code_start != -1:
+        return textwrap.dedent(text[approx_code_start + 9:]).strip()  # Skip '```python\n'
+
+    # Último fallback: devolver todo (no recomendado si hay explicaciones largas)
+    return textwrap.dedent(text).strip()
 
 def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     db_names = df["db_name"]
