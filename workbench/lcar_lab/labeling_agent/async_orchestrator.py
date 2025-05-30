@@ -443,8 +443,8 @@ async def main():
     metadata = {
         'timestamp': timestamp,
         'paths': {
-            'database': args.db_path,
-            'metadata_graph': args.metadata_path,
+            'database': args.db_base_path,
+            'metadata_graph': args.metadata_base_path,
             'cheatsheet': args.cheatsheet_path,
             'questions_csv': args.questions_csv_path,
             'results_csv': output_csv_path
