@@ -18,46 +18,38 @@ import json
 import re
 from io import StringIO
 from tqdm import tqdm
+import mlflow
 
 # Global variable to control logging backend
 
 USE_MLFLOW = False  # Set to False to use Phoenix instead
-USE_PHOENIX = False
-
 # Configure MLflow
 if USE_MLFLOW:
-    import mlflow
     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
+    # print(MLFLOW_TRACKING_URI)
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
+    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "agent-playground"))
     # Enable MLflow LangChain autologging
     mlflow.langchain.autolog(
         log_traces=True,
         log_models=True,
         log_input_examples=True,
         log_model_signatures=True,
-        #registered_model_name="pydough_agent"
+        registered_model_name="pydough_agent"
     )
-if USE_PHOENIX:
+else:
     # Register a Phoenix tracer
     from phoenix.otel import register
-    #from openinference.instrumentation.langchain import LangChainInstrumentor
-    
-    try:
-        # Initialize OpenInference instrumentor
-        #instrumentor = LangChainInstrumentor()
-        #instrumentor.instrument()
-        
-        # Register Phoenix tracer
-        tracer_provider = register(
-            #endpoint="http://localhost:6006",
-            project_name=os.getenv("EXPERIMENT_NAME", "labeling-agent-team-debug"),
-            auto_instrument=True
-        )
-        print("Phoenix tracer successfully initialized with OpenInference instrumentor")
-    except Exception as e:
-        print(f"Warning: Failed to initialize Phoenix tracer: {str(e)}")
-        tracer_provider = None
+    API_KEY = os.getenv("PHOENIX_API_KEY")
+    COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")  # Ej: "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com:6060/v1/traces"
+    tracer_provider = register(
+        endpoint=COLLECTOR_ENDPOINT,               # URL raíz sin /v1/traces
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        project_name=os.getenv("EXPERIMENT_NAME", "agent-react-testing"),
+        auto_instrument=True,
+        protocol="http/protobuf"                    # Forzar uso HTTP en lugar de gRPC
+    )
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
