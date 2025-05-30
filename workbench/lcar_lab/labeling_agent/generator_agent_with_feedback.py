@@ -27,9 +27,6 @@ import traceback
 from contextlib import redirect_stdout, redirect_stderr
 import io
 
-pydough.active_session.load_metadata_graph("/mnt/c/Users/david/bodo/TPCH/test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database="/mnt/c/Users/david/bodo/TPCH/test_data/tpch.db",  check_same_thread=False)
-
 load_dotenv()
 
 # Mapping of SQLite types to PyDough types
@@ -252,7 +249,7 @@ class PyDoughExecutionTool(BaseTool):
             metadata_path = self.metadata_path
         
         # Load metadata and connect to database
-        pydough.active_session.load_metadata_graph(metadata_path, "TPCH")
+        pydough.active_session.load_metadata_graph(metadata_path, "concert_singer")
         pydough.active_session.connect_database("sqlite", database=db_path, check_same_thread=False)
     
     def _extract_code(self, response: str) -> str:
@@ -370,17 +367,21 @@ class PydoughGeneratorAgent:
         self.cheatsheet_path = cheatsheet_path
         
         # Initialize LLM
+        print("\nGENERATOR: === Initializing LLM ===")
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash-lite",
             temperature=0.99
         )
+        print("GENERATOR: LLM initialized successfully.")
         
         # Create PyDough execution tool
+        print("\nGENERATOR: === Initializing PyDough Execution Tool ===")
         self.pydough_tool = PyDoughExecutionTool(
             db_path=self.db_path,
             metadata_path=self.metadata_path
         )
-        
+        print("GENERATOR: PyDough Execution Tool initialized successfully.")
+
         # Create tools list
         self.tools = [self.pydough_tool]
         

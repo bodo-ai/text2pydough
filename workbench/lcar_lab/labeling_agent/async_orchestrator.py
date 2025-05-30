@@ -75,8 +75,11 @@ MAX_CONCURRENT_QUESTIONS = 3
 async def process_single_question(
     question: str,
     sql_query: str,
-    generator_agent: PydoughGeneratorAgent,
-    evaluator_agent: SQLEvaluatorAgent,
+    db_path: str,
+    metadata_path: str,
+    cheatsheet_path: str,
+    dataset_name: str,
+    db_name: str,
     question_id: int,
     pbar: tqdm,
     max_feedback_loops: int = 3
@@ -109,6 +112,10 @@ async def process_single_question(
     attempt_history = []
     
     try:
+        # Initialize agents
+        generator_agent = PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path)
+        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}")
+
         # Execute the ground truth SQL query once
         sql_result = await run_in_thread(evaluator_agent._convert_sql_to_dataframe, sql_query)
         ground_truth_df = pd.read_json(StringIO(sql_result))
@@ -211,7 +218,9 @@ async def process_single_question(
             'evaluation_explanation': evaluation['explanation'],
             'feedback_loops': feedback_loop_count,
             'dataframe_match': dataframe_comparison_boolean,
-            'error': str(e)
+            'error': str(e),
+            'dataset_name': dataset_name,
+            'db_name': db_name
         }
         return result
     
@@ -226,7 +235,9 @@ async def process_single_question(
         'evaluation_explanation': evaluation['explanation'],
         'feedback_loops': feedback_loop_count,
         'dataframe_match': dataframe_comparison_boolean,
-        'error': None
+        'error': None,
+        'dataset_name': dataset_name,
+        'db_name': db_name
     }
     
     return result
@@ -234,8 +245,8 @@ async def process_single_question(
 async def process_questions(
     questions_csv_path: str,
     output_csv_path: str,
-    db_path: str,
-    metadata_path: str,
+    db_base_path: str,
+    metadata_base_path: str,
     cheatsheet_path: str,
     num_questions: int = None,
     start_row: int = 0,
@@ -254,9 +265,6 @@ async def process_questions(
         start_row: Row number to start processing from (0-based index)
         max_feedback_loops: Maximum number of feedback loops between generator and evaluator
     """
-    # Initialize agents
-    generator_agent = PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path)
-    evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}")
     
     # Read questions
     questions_df = pd.read_csv(questions_csv_path)
@@ -277,11 +285,21 @@ async def process_questions(
     
     async def safe_process(row, idx):
         async with sem:
+            db_name = row['db_name']
+            dataset_name = row['dataset_name']
+
+            db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
+            metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+            metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
+        
             return await process_single_question(
                 question=row['question'],
                 sql_query=row['sql'],
-                generator_agent=generator_agent,
-                evaluator_agent=evaluator_agent,
+                db_path=db_path,
+                metadata_path=metadata_path,
+                cheatsheet_path=cheatsheet_path,
+                dataset_name=dataset_name,
+                db_name=db_name,
                 question_id=idx + 1,
                 pbar=pbar,
                 max_feedback_loops=max_feedback_loops
@@ -323,9 +341,9 @@ async def main():
                       help=f'Number of questions to process concurrently (default: {MAX_CONCURRENT_QUESTIONS})')
     parser.add_argument('--max-feedback-loops', type=int, default=3,
                       help='Maximum number of feedback loops between generator and evaluator (default: 3)')
-    parser.add_argument('--db-path', type=str, required=True,
+    parser.add_argument('--db-base-path', type=str, required=True,
                       help='Path to the SQLite database file')
-    parser.add_argument('--metadata-path', type=str, required=True,
+    parser.add_argument('--metadata-base-path', type=str, required=True,
                       help='Path to the metadata graph JSON file')
     parser.add_argument('--cheatsheet-path', type=str, required=True,
                       help='Path to the cheatsheet markdown file')
@@ -356,11 +374,14 @@ async def main():
     # Set up output paths
     output_csv_path = os.path.join(run_output_dir, "results.csv")
     print(f"Results will be saved to: {output_csv_path}")
+
+    # Output for reprocessed csv´s
+    reprocessed_questions_output = os.path.join(base_output_dir, f"reprocessed_pydough_results_{timestamp}.csv")
     
     # Verify all required files exist
     required_files = {
-        'Database': args.db_path,
-        'Metadata': args.metadata_path,
+        'Database Directory': args.db_base_path,
+        'Metadata Base Directory': args.metadata_base_path,
         'Cheatsheet': args.cheatsheet_path,
         'Questions CSV': args.questions_csv_path
     }
@@ -371,17 +392,47 @@ async def main():
             print(f"Please ensure the {name.lower()} file exists at the specified path.")
             return
     
-    # Process questions
-    await process_questions(
-        questions_csv_path=args.questions_csv_path,
-        output_csv_path=output_csv_path,
-        db_path=args.db_path,
-        metadata_path=args.metadata_path,
-        cheatsheet_path=args.cheatsheet_path,
-        num_questions=args.num_questions,
-        start_row=args.start_row,
-        max_feedback_loops=args.max_feedback_loops
-    )
+    # Read questions CSV to check for dataframe_match column
+    df_questions = pd.read_csv(args.questions_csv_path)
+
+    if 'dataframe_match' in df_questions.columns:
+         # Filter rows where dataframe_match is False
+        filtered_df = df_questions[df_questions['dataframe_match'] == False]
+
+        # Reformat to original question structure
+        reformatted_questions = filtered_df[['question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
+            .rename(columns={'ground_truth_sql': 'sql'}) \
+            .to_dict(orient='records')
+        
+        new_csv = pd.DataFrame(reformatted_questions)
+
+        # Save to CSV
+        new_csv.to_csv(reprocessed_questions_output, index=False)
+
+        # Process reprocessed questions
+        await process_questions(
+            questions_csv_path=reprocessed_questions_output,
+            output_csv_path=output_csv_path,
+            db_base_path=args.db_base_path,
+            metadata_base_path=args.metadata_base_path,
+            cheatsheet_path=args.cheatsheet_path,
+            num_questions=args.num_questions,
+            start_row=args.start_row,
+            max_feedback_loops=args.max_feedback_loops
+        )
+
+    else:
+        # Process questions
+        await process_questions(
+            questions_csv_path=args.questions_csv_path,
+            output_csv_path=output_csv_path,
+            db_base_path=args.db_base_path,
+            metadata_base_path=args.metadata_base_path,
+            cheatsheet_path=args.cheatsheet_path,
+            num_questions=args.num_questions,
+            start_row=args.start_row,
+            max_feedback_loops=args.max_feedback_loops
+        )
     
     # Calculate accuracy and create metadata
     results_df = pd.read_csv(output_csv_path)
