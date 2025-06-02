@@ -3,6 +3,7 @@ from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
 from abc import ABC, abstractmethod
+import os
 import boto3
 import json
 import pandas as pd
@@ -43,7 +44,68 @@ class AzureAIProvider(AIProvider):
             print(f"Azure error: {e}")
             return None
 
-# === DeepSeek Provider ===
+# === Claude, Deepseek, Gemini, AI Suite Providers ===
+class ClaudeAIProvider(AIProvider):
+    def __init__(self, model_id, config=None):
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]  
+            self.project = os.environ["GOOGLE_PROJECT_ID"]
+            self.location = os.environ["GOOGLE_REGION"]
+            self.model_id = model_id
+            self.client = genai.Client(project=self.project, location=self.location)    
+        except KeyError:
+            raise RuntimeError("Missing required config or environment variable for ClaudeAIProvider")
+        
+    @mlflow.trace
+    def ask(self, question, prompt, **kwargs):
+        try:
+            response = self.client.messages.create(
+                model=self.model_id,
+                system=prompt,
+                messages=[{"role": "user", "content": question}],
+                **kwargs
+            )
+            return response.content[0].text, response.usage
+        except Exception as e:
+            print(f"[ERROR Claude GenAI] {e}")
+            return None, None
+
+class GeminiAIProvider(AIProvider):
+
+    def __init__(self, model_id, config=None):
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]  
+            self.project = os.environ["GOOGLE_PROJECT_ID"]
+            self.location = os.environ["GOOGLE_REGION"]
+            self.model_id = model_id
+            self.client = genai.Client(project=self.project, location=self.location)    
+        except KeyError:
+            raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
+
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                **kwargs
+            ),
+        )
+        return response.text, response.usage_metadata
+
+    def chat(self, question, prompt, chat=None, **kwargs):
+        if not chat:
+            chat = self.client.chats.create(model=self.model_id)
+        response = chat.send_message(
+            question,
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,
+                **kwargs
+            )
+        )
+        return response, chat
+    
 class DeepSeekAIProvider(AIProvider):
     def __init__(self, model_id):
         config = Config(read_timeout=500)
@@ -52,73 +114,34 @@ class DeepSeekAIProvider(AIProvider):
 
     def ask(self, question, prompt, **kwargs):
         system_messages = [{"text": prompt}]
-        messages = [{"role": "user", "content": [{"text": question}]}]
+        messages = [
+            {
+                "role": "user",  
+                "content": [{"text": question}]
+            }
+        ]
+
+        modelId = self.model_id
+
         response = self.brt.converse(
-            modelId=self.model_id,
-            inferenceConfig={"maxTokens": kwargs.get("max_tokens", 30000), **kwargs},
+            modelId=modelId,
+            inferenceConfig={
+                "maxTokens": kwargs.get("max_tokens", 30000),
+                **kwargs
+            },
             system=system_messages,
             messages=messages
         )
-        return response["output"]["message"]["content"][0]["text"]
+        response_text = response["output"]["message"]["content"][0]["text"]
+        return response_text
 
-# === Gemini & Claude Provider ===
-class GeminiAIProvider(AIProvider):
-    def __init__(self, model_id, api_key=None, project=None, region=None):
-        try:
-            self.model_id = model_id
-            self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-            self.project = project or os.getenv("GOOGLE_PROJECT_ID")
-            self.location = region or os.getenv("GOOGLE_REGION")
-            if "claude" in model_id:
-                self.location = "us-east5"
-                self.client = AnthropicVertex(project_id=self.project, region=self.location)
-                self.is_claude = True
-            else:
-                self.client = genai.Client(project=self.project, location=self.location)
-                self.is_claude = False
-        except KeyError:
-            raise RuntimeError("Missing Google Gemini credentials (GOOGLE_API_KEY, etc).")
 
-    @mlflow.trace
-    def ask(self, prompt, system_instruction, **kwargs):
-        if "claude" in self.model_id:
-            max_tokens = kwargs.pop("max_tokens", 20000)
-            response = self.client.messages.create(
-                messages=[
-           
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-                ],
-                model=self.model_id,
-                system=system_instruction,
-                max_tokens=max_tokens,
-                **kwargs
-            )
-            
-            text_message = response.content[0].text
-            usage = response.usage 
-            return text_message, usage
-        else:    
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    **kwargs
-                ),
-            
-            )
-            return response.text, response.usage_metadata
-
-# === AI Suite Provider ===
 class OtherAIProvider(AIProvider):
     def __init__(self, provider, model_id, config=None):
         self.client = ai.Client(config) if config else ai.Client()
         self.provider = provider
         self.model_id = model_id
-
+    
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
@@ -132,23 +155,21 @@ class OtherAIProvider(AIProvider):
             print(f"AI Suite error: {e}")
             return None
 
-# === Mistral Provider ===
 class MistralAIProvider(AIProvider):
     def __init__(self, model_id):
-        self.api_key = os.environ["MISTRAL_API_KEY"]
+        self.api_key = os.environ["MISTRAL_API_KEY"]  
         self.model_id = model_id
-        self.client = Mistral(api_key=self.api_key)
-
+        self.client= Mistral(api_key=self.api_key)
+    
     def ask(self, question, prompt, **kwargs):
         messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
         try:
             response = self.client.chat.complete(
-                model=self.model_id,
+                model=f"{self.model_id}",
                 messages=messages,
                 **kwargs
             )
             return response.choices[0].message.content
         except Exception as e:
-            print(f"Mistral error: {e}")
+            print(f"AI Suite error: {e}")
             return None
-
