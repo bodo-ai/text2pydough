@@ -160,7 +160,7 @@ class LLMClient:
         # default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         
         default_provider = "google"
-        default_model = "gemini-2.5-pro-exp-03-25"
+        default_model = "gemini-2.5-pro-preview-05-06"
         
         # default_provider = "aws-deepseek"
         # default_model = "us.deepseek.r1-v1:0"

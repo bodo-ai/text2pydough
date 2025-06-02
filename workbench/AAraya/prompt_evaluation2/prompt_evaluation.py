@@ -146,6 +146,8 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
 
 def process_questions(data, prompt, questions_df, script, threads, models_to_evaluate, db_base_path, metadata_base_path, db_markdown_map=None, **kwargs):
     print("[DEBUG] Entrando a process_questions con", len(questions_df), "preguntas")
+    
+    #Fix threadwrapper, Idea: Ejecutar run parallel y eval unas tres veces.
     def thread_wrapper(row):
         print(f"[DEBUG] Procesando pregunta: {row['question']}")
         # 1. Ejecutar modelos en paralelo
@@ -188,7 +190,7 @@ def process_questions(data, prompt, questions_df, script, threads, models_to_eva
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
-    return results
+    return results 
 
 
 def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, db_markdown_map=None, **kwargs):
@@ -229,7 +231,7 @@ def run_models_parallel(row, models_to_evaluate, prompt_template, data, script, 
         futures = [executor.submit(ask_model, model) for model in models_to_evaluate]
         results = dict(f.result() for f in futures)
 
-    return results
+    return results 
 
 def evaluate_models(row, responses, db_base_path, metadata_base_path):
     question = row["question"]
@@ -276,7 +278,7 @@ def evaluate_models(row, responses, db_base_path, metadata_base_path):
             }
             continue
 
-        match = compare_df(result_df, sql_df, query_category="a", question=question, query_gold=sql_gold, query_gen=code)
+        match = compare_df(sql_df, result_df, query_category="a", question=question, query_gold=sql_gold, query_gen=code)
         model_results[model_name] = {
             "result": "Match" if match else "No Match",
             "exception": None,
@@ -310,7 +312,7 @@ def evaluate_models(row, responses, db_base_path, metadata_base_path):
         "result": "Unknown",
         "code": None,
         "exception": "No valid response",
-        "all_results": model_results
+        "all_results": model_results 
     }
 
 
