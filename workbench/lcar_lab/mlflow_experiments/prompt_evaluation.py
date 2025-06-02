@@ -233,11 +233,46 @@ def main(git_hash):
 
         # === Conditional Custom Metrics ===
         if "difficulty" in tested_df.columns and "complexity" in tested_df.columns:
+            total_per_difficulty = tested_df["difficulty"].value_counts()
+            total_per_complexity = tested_df["complexity"].value_counts()
+            total_per_combo = tested_df.groupby(["difficulty", "complexity"]).size()
+
             match_df = tested_df[tested_df["comparison_result"] == "Match"]
-            
+            non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
+
             matches_per_difficulty = match_df["difficulty"].value_counts()
             matches_per_complexity = match_df["complexity"].value_counts()
             matches_per_combo = match_df.groupby(["difficulty", "complexity"]).size()
+
+            match_pct_difficulty = matches_per_difficulty / total_per_difficulty
+            match_pct_complexity = matches_per_complexity / total_per_complexity
+            match_pct_combo = matches_per_combo / total_per_combo
+
+            for diff, pct in match_pct_difficulty.items():
+                mlflow.log_metric(f"match_pct_difficulty_{diff}", pct)
+
+            for comp, pct in match_pct_complexity.items():
+                mlflow.log_metric(f"match_pct_complexity_{comp}", pct)
+
+            for (diff, comp), pct in match_pct_combo.items():
+                mlflow.log_metric(f"match_pct_{diff}_{comp}", pct)
+
+            non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
+            non_matches_per_complexity = non_match_df["complexity"].value_counts()
+            non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
+
+            no_match_pct_difficulty = non_matches_per_difficulty / total_per_difficulty
+            no_match_pct_complexity = non_matches_per_complexity / total_per_complexity
+            no_match_pct_combo = non_matches_per_combo / total_per_combo
+
+            for diff, pct in no_match_pct_difficulty.items():
+                mlflow.log_metric(f"no_match_pct_difficulty_{diff}", pct)
+
+            for comp, pct in no_match_pct_complexity.items():
+                mlflow.log_metric(f"no_match_pct_complexity_{comp}", pct)
+
+            for (diff, comp), pct in no_match_pct_combo.items():
+                mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct)
 
             total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
             total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
