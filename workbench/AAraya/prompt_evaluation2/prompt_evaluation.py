@@ -281,11 +281,6 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 **kwargs
             )
 
-    # If using parallel, we expect models_to_test to be defined globally or passed via kwargs
-    if use_parallel:
-        if "models_to_test" not in kwargs:
-            raise ValueError("models_to_test must be provided when use_parallel=True")
-
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
 
