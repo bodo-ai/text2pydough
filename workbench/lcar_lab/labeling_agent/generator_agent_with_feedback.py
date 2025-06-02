@@ -27,9 +27,6 @@ import traceback
 from contextlib import redirect_stdout, redirect_stderr
 import io
 
-pydough.active_session.load_metadata_graph("/mnt/c/Users/david/bodo/TPCH/test_data/tpch_demo_graph.json", "TPCH")
-pydough.active_session.connect_database("sqlite", database="/mnt/c/Users/david/bodo/TPCH/test_data/tpch.db",  check_same_thread=False)
-
 load_dotenv()
 
 # Mapping of SQLite types to PyDough types
@@ -149,15 +146,19 @@ def generate_pydough_graph(db_path: str) -> Dict[str, Any]:
                     "properties": properties
                 }
         
+        graph_name = os.path.basename(db_path).replace("_graph.json", "")
+
         # Create the complete graph structure
         pydough_graph = {
-            "TPCH": {
+            graph_name: {
                 "type": "graph",
                 "version": "1.0",
                 "tables": tables,
                 "relationships": {}
             }
         }
+
+        print(f"GENERATOR: Successfully generated Pydough graph for {graph_name}")
         
         return pydough_graph
     except Exception as e:
@@ -225,11 +226,11 @@ def process_benchmark(db_path: str, metadata_path: str, benchmark_path: str):
 
 class PyDoughExecutionTool(BaseTool):
     """Tool for executing PyDough code and returning results."""
-    
+
     name: str = "pydough_executor"
-    description: str = """Executes PyDough code and returns the results as a pandas DataFrame.
+    description: str = f"""Executes PyDough code and returns the results as a pandas DataFrame.
     Input should be a Python code block containing PyDough operations.
-    The code will be executed in a PyDough environment with access to the TPCH database."""
+    The code will be executed in a PyDough environment with access to the database."""
     
     db_path: str = Field(..., description="Path to the SQLite database file")
     metadata_path: str = Field(..., description="Path to the metadata graph JSON file")
@@ -251,8 +252,11 @@ class PyDoughExecutionTool(BaseTool):
             db_path = self.db_path
             metadata_path = self.metadata_path
         
+        # Dynamically extract the graph_name from metadata_path
+        graph_name = os.path.basename(metadata_path).replace("_graph.json", "")
+
         # Load metadata and connect to database
-        pydough.active_session.load_metadata_graph(metadata_path, "TPCH")
+        pydough.active_session.load_metadata_graph(metadata_path, graph_name)
         pydough.active_session.connect_database("sqlite", database=db_path, check_same_thread=False)
     
     def _extract_code(self, response: str) -> str:
@@ -371,7 +375,7 @@ class PydoughGeneratorAgent:
         
         # Initialize LLM
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-lite",
+            model="gemini-2.0-flash",
             temperature=0.99
         )
         
@@ -380,7 +384,7 @@ class PydoughGeneratorAgent:
             db_path=self.db_path,
             metadata_path=self.metadata_path
         )
-        
+
         # Create tools list
         self.tools = [self.pydough_tool]
         
@@ -410,19 +414,24 @@ class PydoughGeneratorAgent:
         
         try:
             # Read the database schema
-            schema_path = os.path.join(os.path.dirname(__file__), "pydough_data", "database", "tcph_graph.md")
-            with open(schema_path, 'r', encoding='utf-8') as f:
-                database_content = f.read()
+            if not self.metadata_path or not os.path.exists(self.metadata_path):
+                raise FileNotFoundError(f"Metadata file not found at: {self.metadata_path}")
             
-            # Read the PyDough cheatsheet
-            cheatsheet_path = os.path.join(os.path.dirname(__file__), "pydough_data", "pydough_files", "cheatsheet_partition_overhaul.md")
-            with open(cheatsheet_path, 'r', encoding='utf-8') as f:
+            with open(self.metadata_path, 'r', encoding='utf-8') as f:
+                database_content = f.read()
+                print(database_content)
+            
+            # Ensure cheatsheet path is valid
+            if not self.cheatsheet_path or not os.path.exists(self.cheatsheet_path):
+                raise FileNotFoundError(f"Cheatsheet file not found at: {self.cheatsheet_path}")
+            
+            with open(self.cheatsheet_path, 'r', encoding='utf-8') as f:
                 cheatsheet_content = f.read()
             
             # Read the prompt template
-            template_path = os.path.join(os.path.dirname(__file__), "pydough_data", "prompts", "prompt_overhaul_baseline.md")
-            with open(template_path, 'r', encoding='utf-8') as f:
-                template_content = f.read()
+            # template_path = os.path.join(os.path.dirname(__file__), "pydough_data", "prompts", "prompt_overhaul_baseline.md")
+            # with open(template_path, 'r', encoding='utf-8') as f:
+            #     template_content = f.read()
             
             # Format the prompt using the template
             formatted_prompt = f"""<task_description>
@@ -562,23 +571,23 @@ Please provide your answer in the following format:
                 "generator_response": ""
             }
 
-if __name__ == "__main__":
-    # TPCH database paths
-    db_path = "C:/Users/david/bodo/TPCH/test_data/tpch.db"
-    metadata_path = "C:/Users/david/bodo/TPCH/test_data/tpch_demo_graph.json"
-    #benchmark_path = "C:/Users/david/bodo/TPCH/test_data/benchmark.csv"
-    benchmark_path = "C:/Users/david/bodo/TPCH/test_data/questions.csv"
-    # Process all questions from benchmark
-    results = process_benchmark(db_path, metadata_path, benchmark_path)
+# if __name__ == "__main__":
+#     # TPCH database paths
+#     db_path = "C:/Users/david/bodo/TPCH/test_data/tpch.db"
+#     metadata_path = "C:/Users/david/bodo/TPCH/test_data/tpch_demo_graph.json"
+#     #benchmark_path = "C:/Users/david/bodo/TPCH/test_data/benchmark.csv"
+#     benchmark_path = "C:/Users/david/bodo/TPCH/test_data/questions.csv"
+#     # Process all questions from benchmark
+#     results = process_benchmark(db_path, metadata_path, benchmark_path)
     
-    # Print summary of results
-    if results:
-        # print("\nGENERATOR: === Benchmark Results Summary ===")
-        for result in results:
-            # print(f"\nGENERATOR: Question: {result['question']}")
-            if 'error' in result['result']:
-                # print(f"GENERATOR: Error: {result['result']['error']}")
-                pass
-            else:
-                # print(f"GENERATOR: Output: {result['result']['dataframe']}")
-                pass 
+#     # Print summary of results
+#     if results:
+#         # print("\nGENERATOR: === Benchmark Results Summary ===")
+#         for result in results:
+#             # print(f"\nGENERATOR: Question: {result['question']}")
+#             if 'error' in result['result']:
+#                 # print(f"GENERATOR: Error: {result['result']['error']}")
+#                 pass
+#             else:
+#                 # print(f"GENERATOR: Output: {result['result']['dataframe']}")
+#                 pass 
