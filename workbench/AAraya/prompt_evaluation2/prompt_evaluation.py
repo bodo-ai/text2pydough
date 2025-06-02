@@ -359,7 +359,6 @@ def main(git_hash):
         threads=args.num_threads,
         db_markdown_map=db_markdown_map,
         use_parallel=args.use_parallel,
-        models_to_test=models_to_test,
         **kwargs
         )
 
