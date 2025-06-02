@@ -22,7 +22,7 @@ import mlflow
 
 # Global variable to control logging backend
 
-USE_MLFLOW = False  # Set to False to use Phoenix instead
+USE_MLFLOW = True  # Set to False to use Phoenix instead
 # Configure MLflow
 if USE_MLFLOW:
     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -377,7 +377,7 @@ Question: {input}
             return_intermediate_steps=True,
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=3
+            max_iterations=10
         )
         
         return agent_executor
@@ -463,10 +463,19 @@ The generated response DataFrame (as JSON) is:
                 match = result_dict["match"]
                 explanation = result_dict["explanation"]
             except Exception as e:
-                print(f"Error parsing agent output: {str(e)}")
-                print(f"Raw output: {final_answer}")
-                match = False
-                explanation = f"Error parsing agent output: {str(e)}"
+                # Check for iteration or time limit error
+                if "Agent stopped due to iteration limit or time limit." in final_answer:
+                    print("Error: Agent exceeded iteration or time limit.")
+                    match = False
+                    explanation = (
+                        "The agent stopped because it exceeded the iteration or time limit. "
+                        "Consider simplifying the input question or increasing the limits if appropriate."
+                    )
+                else:
+                    print(f"Error parsing agent output: {str(e)}")
+                    print(f"Raw output: {final_answer}")
+                    match = False
+                    explanation = f"Error parsing agent output: {str(e)}"
             
             return {
                 "match": match,
@@ -478,16 +487,20 @@ The generated response DataFrame (as JSON) is:
                 "intermediate_steps": intermediate_steps
             }
         except Exception as e:
-            print(f"Error in agent execution: {str(e)}")
+            error_message = str(e)
+            explanation = f"Error in agent execution: {error_message}"
+            print(f"Error in agent execution: {explanation}")
+            
             return {
                 "match": False,
-                "explanation": f"Error in agent execution: {str(e)}",
+                "explanation": explanation,
                 "ground_truth_result": ground_truth_json,
                 "ground_truth_response": self.generate_response_from_sql(question, ground_truth_json),
                 "generated_response": generated_response,
                 "generated_df_json": generated_json,
                 "intermediate_steps": []
             }
+
     
     def generate_response_from_sql(self, question: str, sql_results: str) -> str:
         """Generate a natural language response based on the question and SQL results."""

@@ -419,7 +419,6 @@ class PydoughGeneratorAgent:
             
             with open(self.metadata_path, 'r', encoding='utf-8') as f:
                 database_content = f.read()
-                print(database_content)
             
             # Ensure cheatsheet path is valid
             if not self.cheatsheet_path or not os.path.exists(self.cheatsheet_path):
