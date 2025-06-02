@@ -532,7 +532,7 @@ def main():
         
         # print("\nInitializing LLM...")
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-preview-04-17",#"gemini-2.0-flash",
+            model="gemini-2.0-flash",#"gemini-2.5-flash-preview-04-17",
             temperature=0
         )
         # print("LLM initialization successful")
