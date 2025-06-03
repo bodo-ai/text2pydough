@@ -48,7 +48,7 @@ with open("/home/arami/bodo/labeling_agent/cheatsheet_partition_overhaul.md", "r
 
 # Configuration
 CONFIG = {
-    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'spider_kaggle_full_training_only_filtered.csv'),
+    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'cleaned_file.csv'),
     'output_file': 'sample_training_data.jsonl',
     'default_sample_size': 4000,
     'filter_field': 'dataframe_match',
@@ -177,7 +177,7 @@ async def process_sample_async(row, client, pbar):
         schema_json_str = row[CONFIG['schema_field']]
         schema_dict = json.loads(schema_json_str)
         # Add schema to the question
-        question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{row[CONFIG['schema_field']]}\n Pydough context:\n{cheatsheet}\n\n"
+        question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{row[CONFIG['schema_field']]}\n\n"
         
         # Generate Pydough context and documentation
         #context = await generate_pydough_context_async(client, row[CONFIG['question_field']], row[CONFIG['code_field']])
