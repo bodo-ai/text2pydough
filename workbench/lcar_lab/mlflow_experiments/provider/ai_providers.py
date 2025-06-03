@@ -47,52 +47,37 @@ class AzureAIProvider(AIProvider):
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
 class ClaudeAIProvider(AIProvider):
     def __init__(self, model_id):
-        config = Config(read_timeout=800)
-        self.brt = boto3.client(service_name='bedrock-runtime', config=config)
-        self.model_id = model_id
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]
+            self.project = os.environ["GOOGLE_PROJECT_ID"]
+            self.region = os.environ.get("GOOGLE_REGION", "us-east5")  # Claude solo en us-east5
+            self.model_id = model_id
 
-    def ask(self, question, prompt, **kwargs):
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": kwargs.get("max_tokens", 20000),
-            "thinking": {
-                "type": "enabled",
-                "budget_tokens": kwargs.get("budget_tokens", 5000)
-            },
-            "system": prompt,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": question
-                }
-            ],
-            "temperature": kwargs.get("temperature", 1),
-        })
+            # Claude on Vertex AI uses a different client
+            self.client = AnthropicVertex(project_id=self.project, region=self.region)
+        except KeyError as e:
+            raise RuntimeError(f"Missing environment variable: {e}")
 
-        modelId = self.model_id
-        accept = 'application/json'
-        contentType = 'application/json'
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        try:
+            response = self.client.messages.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                model=self.model_id,
+                system=system_instruction,
+                **kwargs
+            )
 
-        response = self.brt.invoke_model_with_response_stream(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
-        )
-        
-        text_delta = []
-        thinking_delta = []
-        stream = response.get('body')
-        if stream:
-            for event in stream:
-                chunk = event.get('chunk')
-                if chunk:
-                    bytes_data = json.loads(chunk.get('bytes').decode())
-                    if 'delta' in bytes_data:
-                        delta = bytes_data['delta']
-                        text_delta.append(delta.get('text', ''))
-                        thinking_delta.append(delta.get('thinking', ''))
-        return ''.join(text_delta)
+            text_message = response.content[0].text
+            usage = response.usage
+            return text_message, usage
+        except Exception as e:
+            raise RuntimeError(f"[ClaudeAIProvider] Request failed: {e}")
 
 class DeepSeekAIProvider(AIProvider):
     def __init__(self, model_id):
