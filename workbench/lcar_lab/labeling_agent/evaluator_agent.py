@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional, Tuple
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai.model_garden import ChatAnthropicVertex
 from langchain_community.utilities import SQLDatabase
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
@@ -377,9 +378,15 @@ class SQLEvaluatorAgent:
     def __init__(self, db_connection_string: str):
         """Initialize the SQL evaluator agent with a database connection."""
         self.db = SQLDatabase.from_uri(db_connection_string)
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            temperature=0
+        # self.llm = ChatGoogleGenerativeAI(
+        #     model="gemini-2.0-flash",
+        #     temperature=0
+        # )
+
+        self.llm = ChatAnthropicVertex(
+            model_name="claude-sonnet-4@20250514",
+            project="solid-drive-448717-p8",
+            location="us-east5"
         )
         
         # Create SQL toolkit for database operations

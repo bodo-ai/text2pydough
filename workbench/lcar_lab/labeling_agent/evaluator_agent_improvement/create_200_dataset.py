@@ -53,7 +53,7 @@ def select_proportional_samples(filtered_df, total_samples):
 
 if __name__ == "__main__":
     # Load the CSV files
-    training_csv_path = "/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/labeled_data/spider_kaggle_data/spider_kaggle_full.csv"
+    training_csv_path = "/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/labeled_data/spider_kaggle_data/spider_kaggle_full_removed_questions.csv"
     golden_csv_path = "/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/validation_dataset/golden_dataset_sql_checked.csv"
     testing_dataset_path = "/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/validation_dataset/testing_dataset.csv"
     validation_dataset_path = "/home/gerald8525/repositories/mount-folder/datasets/Finetuning/labeling/validation_dataset/validation_dataset_30.csv"
