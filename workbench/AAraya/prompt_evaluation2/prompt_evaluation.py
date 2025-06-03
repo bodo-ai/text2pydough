@@ -31,8 +31,8 @@ import random
 models_to_test = [ 
     {
         "name": "claude",
-        "provider": "google",
-        "model_id": "claude-sonnet-4@20250514",
+        "provider": "anthropic",
+        "model_id": "claude-3-7-sonnet@2025021s",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
@@ -55,7 +55,7 @@ models_to_test = [
 def get_provider(provider, model_id, config=None):
     if provider == "azure":
         return AzureAIProvider(model_id, config=config)
-    elif provider == "aws-thinking":
+    elif provider == "anthropic":
         return ClaudeAIProvider(model_id, config=config)
     elif provider == "aws-deepseek":
         return DeepSeekAIProvider(model_id, config=config)
