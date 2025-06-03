@@ -50,10 +50,9 @@ class ClaudeAIProvider(AIProvider):
         try:
             self.api_key = os.environ["GOOGLE_API_KEY"]
             self.project = os.environ["GOOGLE_PROJECT_ID"]
-            self.region = os.environ.get("GOOGLE_REGION", "us-east5")  # Claude solo en us-east5
+            self.region = os.environ.get("GOOGLE_REGION", "us-east5") 
             self.model_id = model_id
 
-            # Claude on Vertex AI uses a different client
             self.client = AnthropicVertex(project_id=self.project, region=self.region)
         except KeyError as e:
             raise RuntimeError(f"Missing environment variable: {e}")
