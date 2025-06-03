@@ -375,16 +375,16 @@ class PydoughGeneratorAgent:
         self.cheatsheet_path = cheatsheet_path
         
         # Initialize LLM
-        # self.llm = ChatGoogleGenerativeAI(
-        #     model="gemini-2.0-flash",
-        #     temperature=0.99
-        # )
-
-        self.llm = ChatAnthropicVertex(
-            model_name="claude-sonnet-4@20250514",
-            project="solid-drive-448717-p8",
-            location="us-east5"
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash-preview-05-20",
+            temperature=0.99
         )
+
+        # self.llm = ChatAnthropicVertex(
+        #     model_name="claude-sonnet-4@20250514",
+        #     project="solid-drive-448717-p8",
+        #     location="us-east5"
+        # )
         
         # Create PyDough execution tool
         self.pydough_tool = PyDoughExecutionTool(
