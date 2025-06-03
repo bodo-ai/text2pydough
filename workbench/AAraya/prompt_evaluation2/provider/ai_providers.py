@@ -46,7 +46,7 @@ class AzureAIProvider(AIProvider):
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
 class ClaudeAIProvider(AIProvider):
-    def __init__(self, model_id):
+    def __init__(self, model_id, config=None):
         try:
             self.api_key = os.environ["GOOGLE_API_KEY"]
             self.project = os.environ["GOOGLE_PROJECT_ID"]
