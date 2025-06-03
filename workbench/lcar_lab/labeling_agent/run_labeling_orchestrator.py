@@ -50,7 +50,7 @@ if USE_PHOENIX:
 # max number of rows used by evaluator to provide feedback. 
 MAX_ROWS = 10 
 # max number of feedback loops between generator and evaluator
-MAX_FEEDBACK_LOOPS = 2
+MAX_FEEDBACK_LOOPS = 3
 
 def process_questions(
     questions_csv_path: str,
@@ -271,16 +271,17 @@ def main():
     # Database path - handle both Windows and WSL paths
     if os.path.exists("/mnt/c"):
         # WSL environment
-        base_path = "/mnt/c/Users/david/bodo"
+        base_path = "/home/gerald8525/repositories/mount-folder"
     else:
         # Windows environment
         base_path = os.path.join("C:", "Users", "david", "bodo")
-    
+    print(f"ORCHESTRATOR: Base path: {base_path}")
+
     # Set up paths
-    db_path = os.path.join(base_path, "TPCH", "test_data", "tpch.db")
-    metadata_path = os.path.join(base_path, "TPCH", "test_data", "tpch_demo_graph.json")
+    db_path = os.path.join(base_path, "datasets", "TPCH", "test_data", "tpch.db")
+    metadata_path = os.path.join(base_path, "datasets", "TPCH", "test_data", "tpch_demo_graph.json")
     cheatsheet_path = os.path.join(base_path, "labeling_agent", "pydough_data", "pydough_files", "cheatsheet_partition_overhaul.md")
-    questions_csv_path = os.path.join(base_path, "TPCH", "test_data", "questions.csv")
+    questions_csv_path = os.path.join(base_path, "datasets", "TPCH", "test_data", "questions.csv")
     
     # Set up output directory
     if args.output_dir:

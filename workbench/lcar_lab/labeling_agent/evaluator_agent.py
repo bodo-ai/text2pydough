@@ -18,46 +18,38 @@ import json
 import re
 from io import StringIO
 from tqdm import tqdm
+import mlflow
 
 # Global variable to control logging backend
 
-USE_MLFLOW = False  # Set to False to use Phoenix instead
-USE_PHOENIX = False
-
+USE_MLFLOW = True  # Set to False to use Phoenix instead
 # Configure MLflow
 if USE_MLFLOW:
-    import mlflow
     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
+    # print(MLFLOW_TRACKING_URI)
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
+    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "agent-playground"))
     # Enable MLflow LangChain autologging
     mlflow.langchain.autolog(
         log_traces=True,
         log_models=True,
         log_input_examples=True,
         log_model_signatures=True,
-        #registered_model_name="pydough_agent"
+        registered_model_name="pydough_agent"
     )
-if USE_PHOENIX:
+else:
     # Register a Phoenix tracer
     from phoenix.otel import register
-    #from openinference.instrumentation.langchain import LangChainInstrumentor
-    
-    try:
-        # Initialize OpenInference instrumentor
-        #instrumentor = LangChainInstrumentor()
-        #instrumentor.instrument()
-        
-        # Register Phoenix tracer
-        tracer_provider = register(
-            #endpoint="http://localhost:6006",
-            project_name=os.getenv("EXPERIMENT_NAME", "labeling-agent-team-debug"),
-            auto_instrument=True
-        )
-        print("Phoenix tracer successfully initialized with OpenInference instrumentor")
-    except Exception as e:
-        print(f"Warning: Failed to initialize Phoenix tracer: {str(e)}")
-        tracer_provider = None
+    API_KEY = os.getenv("PHOENIX_API_KEY")
+    COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")  # Ej: "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com:6060/v1/traces"
+    tracer_provider = register(
+        endpoint=COLLECTOR_ENDPOINT,               # URL raíz sin /v1/traces
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        project_name=os.getenv("EXPERIMENT_NAME", "agent-react-testing"),
+        auto_instrument=True,
+        protocol="http/protobuf"                    # Forzar uso HTTP en lugar de gRPC
+    )
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -385,7 +377,7 @@ Question: {input}
             return_intermediate_steps=True,
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=3
+            max_iterations=10
         )
         
         return agent_executor
@@ -471,10 +463,19 @@ The generated response DataFrame (as JSON) is:
                 match = result_dict["match"]
                 explanation = result_dict["explanation"]
             except Exception as e:
-                print(f"Error parsing agent output: {str(e)}")
-                print(f"Raw output: {final_answer}")
-                match = False
-                explanation = f"Error parsing agent output: {str(e)}"
+                # Check for iteration or time limit error
+                if "Agent stopped due to iteration limit or time limit." in final_answer:
+                    print("Error: Agent exceeded iteration or time limit.")
+                    match = False
+                    explanation = (
+                        "The agent stopped because it exceeded the iteration or time limit. "
+                        "Consider simplifying the input question or increasing the limits if appropriate."
+                    )
+                else:
+                    print(f"Error parsing agent output: {str(e)}")
+                    print(f"Raw output: {final_answer}")
+                    match = False
+                    explanation = f"Error parsing agent output: {str(e)}"
             
             return {
                 "match": match,
@@ -486,16 +487,20 @@ The generated response DataFrame (as JSON) is:
                 "intermediate_steps": intermediate_steps
             }
         except Exception as e:
-            print(f"Error in agent execution: {str(e)}")
+            error_message = str(e)
+            explanation = f"Error in agent execution: {error_message}"
+            print(f"Error in agent execution: {explanation}")
+            
             return {
                 "match": False,
-                "explanation": f"Error in agent execution: {str(e)}",
+                "explanation": explanation,
                 "ground_truth_result": ground_truth_json,
                 "ground_truth_response": self.generate_response_from_sql(question, ground_truth_json),
                 "generated_response": generated_response,
                 "generated_df_json": generated_json,
                 "intermediate_steps": []
             }
+
     
     def generate_response_from_sql(self, question: str, sql_results: str) -> str:
         """Generate a natural language response based on the question and SQL results."""
@@ -540,7 +545,7 @@ def main():
         
         # print("\nInitializing LLM...")
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-preview-04-17",#"gemini-2.0-flash",
+            model="gemini-2.0-flash",#"gemini-2.5-flash-preview-04-17",
             temperature=0
         )
         # print("LLM initialization successful")
