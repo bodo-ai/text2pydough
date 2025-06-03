@@ -1,15 +1,19 @@
-# Testing list
-## General testing
-- Test with the availables models gemini 2.5 flash and claud 4.0 soonet.
-- Test with the testing dataset (it has 490 queries). # Lickage usar 200 dataset
-## First iteration
-- Exactly the same, to obtain the normal range of variation. 
-- 2 runs for every model. 
-- 5 feedback loops.
-## Second iteration
+# Labeling Agent Improvement
+
+## Models
+- Test with gemini 2.5 flash and claud 4.0 soonet models.
+  
+## Selected dataset 
+- Create a dataset with 200 questions that meet: 
+  - Questions outside training, testing, golden and validation datasets
+  - High level of difficulty
+  - Dataframe_match equal to false
+
+## Tests
+- Use the new eval function. 
+- Run and merge 3 (or more if this is continue working) results of claude 4.0 soonet and gemini 2.5 flash (using 7 feedback loops)
+- Add the metadata to the evaluator agent. 
 - Add the cheatsheet to the evaluator agent. 
-- 2 runs by model. 
-- 5 feedback loops. 
 
 ## Goal
-70%
+- Convert the 80% of False data to True data for training purposes. 
