@@ -461,9 +461,3 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     df.to_csv(output_file, index=False)
 
     return output_file, df
-
-# Example usage of the function
-if __name__ == "__main__":
-
-    # /home/arami/bodo/text2pydough/workbench/lcar_lab/training/training_data/labeled_data/kaggledbqa/training_ready/spider_kaggle_full_training_only_filtered.csv
-    compare_output("/home/arami/bodo/text2pydough/workbench/lcar_lab/training/training_data/labeled_data/kaggledbqa/training_ready", "/home/arami/bodo/labeling_agent/preprocess/spider_kaggle_full_training_only_filtered.csv", "/home/arami/mount-folder/datasets/", "/home/arami/mount-folder/datasets/")
