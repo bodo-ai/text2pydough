@@ -196,6 +196,17 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         except Exception as e:
             code, duration, usage, df = None, time.time() - start, None, None
             print(f"[ERROR] Model {model_info['name']} failed on attempt {attempt}: {e}")
+            
+            import traceback
+            traceback.print_exc()
+
+            # Si tiene un cuerpo de error detallado
+            if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                print("[ERROR DETAILS] Response text:", e.response.text)
+            elif hasattr(e, 'message'):
+                print("[ERROR DETAILS] Message:", e.message)
+            else:
+                print("[ERROR DETAILS]", repr(e))
 
         return {
             "model_name": model_info["name"],
