@@ -14,15 +14,16 @@ import mlflow
 
 # Global variable to control logging backend
 # Global variable to control logging backend
-USE_MLFLOW = False  # Set to False to use Phoenix instead
+USE_MLFLOW = True  # Set to False to use Phoenix instead
 
 # Configure MLflow
 if USE_MLFLOW:
     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
     # print(MLFLOW_TRACKING_URI)
+    os.environ["MLFLOW_TRACKING_TOKEN"] = MLFLOW_TRACKING_TOKEN
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "agent-playground"))
+    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
     # Enable MLflow LangChain autologging
     mlflow.langchain.autolog(
         log_traces=True,

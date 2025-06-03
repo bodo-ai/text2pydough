@@ -28,7 +28,10 @@ def process_query(row, db_base_path):
     """
     Processes a single query row and returns the result as a dictionary.
     """
-    sql_query = row['sql']
+    if 'ground_truth_sql' in row:
+        sql_query = row['ground_truth_sql']
+    else:
+        sql_query = row['sql']
     db_name = row['db_name']
     dataset_name = row['dataset_name']
     if dataset_name == "kaggleDBQA":
@@ -72,7 +75,8 @@ def process_sql_queries(csv_file_path: str, db_base_path: str):
     
     # Ensure the necessary columns exist
     if 'sql' not in df.columns or 'db_name' not in df.columns or 'dataset_name' not in df.columns:
-        raise ValueError("The CSV must contain 'sql', 'db_name', and 'dataset_name' columns.")
+        if 'ground_truth_sql' not in df.columns or 'db_name' not in df.columns or 'dataset_name' not in df.columns:
+            raise ValueError("The CSV must contain 'sql/ground_truth_sql', 'db_name', and 'dataset_name' columns.")
 
     # Use ThreadPoolExecutor for parallel processing
     with ThreadPoolExecutor() as executor:
