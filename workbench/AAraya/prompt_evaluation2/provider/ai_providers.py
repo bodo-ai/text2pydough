@@ -60,6 +60,7 @@ class ClaudeAIProvider(AIProvider):
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
         try:
+            kwargs.setdefault("max_tokens", 20000)
             response = self.client.messages.create(
                 messages=[
                     {
