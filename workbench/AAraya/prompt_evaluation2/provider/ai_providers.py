@@ -61,24 +61,28 @@ class ClaudeAIProvider(AIProvider):
     def ask(self, prompt, system_instruction, **kwargs):
         try:
             kwargs.setdefault("max_tokens", 20000)
+
             response = self.client.messages.create(
                 messages=[
                     {
+                        "role": "system",
+                        "content": system_instruction
+                    },
+                    {
                         "role": "user",
-                        "content": prompt,
+                        "content": prompt
                     }
                 ],
                 model=self.model_id,
-                system=system_instruction,
                 **kwargs
             )
 
             text_message = response.content[0].text
             usage = response.usage
             return text_message, usage
+
         except Exception as e:
             raise RuntimeError(f"[ClaudeAIProvider] Request failed: {e}")
-
 
 class GeminiAIProvider(AIProvider):
 
