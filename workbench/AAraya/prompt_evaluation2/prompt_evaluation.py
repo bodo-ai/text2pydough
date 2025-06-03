@@ -258,17 +258,17 @@ def ensemble_result(all_runs, question):
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
         print(f"[INFO] Ensemble selected: {best['model_name']} with {consensus[best_index]} matches.")
-        return best["code"], best["duration"], best["usage"]
+        return best["response"], best["duration"], best["usage"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
     if gemini_runs:
         fallback = random.choice(gemini_runs)
         print("[INFO] No consensus found. Falling back to Gemini run.")
-        return fallback["code"], fallback["duration"], fallback["usage"]
+        return fallback["response"], fallback["duration"], fallback["usage"]
     else:
         print("[WARNING] No Gemini runs available. Falling back to random valid run.")
         fallback = random.choice(valid_runs)
-        return fallback["code"], fallback["duration"], fallback["usage"]
+        return fallback["response"], fallback["duration"], fallback["usage"]
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
     def thread_wrapper(row):
