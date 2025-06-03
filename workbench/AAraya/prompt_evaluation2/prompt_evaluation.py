@@ -32,7 +32,7 @@ models_to_test = [
     {
         "name": "claude",
         "provider": "anthropic",
-        "model_id": "claude-3-7-sonnet@2025021",
+        "model_id": "claude-3-7-sonnet@20250219",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
