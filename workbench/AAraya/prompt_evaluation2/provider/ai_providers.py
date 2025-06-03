@@ -46,29 +46,39 @@ class AzureAIProvider(AIProvider):
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
 class ClaudeAIProvider(AIProvider):
-    def __init__(self, model_id, config=None):
+    def __init__(self, model_id):
         try:
-            self.api_key = os.environ["GOOGLE_API_KEY"]  
+            self.api_key = os.environ["GOOGLE_API_KEY"]
             self.project = os.environ["GOOGLE_PROJECT_ID"]
-            self.location = os.environ["GOOGLE_REGION"]
+            self.region = os.environ.get("GOOGLE_REGION", "us-east5")  # Claude solo en us-east5
             self.model_id = model_id
-            self.client = genai.Client(project=self.project, location=self.location)    
-        except KeyError:
-            raise RuntimeError("Missing required config or environment variable for ClaudeAIProvider")
-        
+
+            # Claude on Vertex AI uses a different client
+            self.client = AnthropicVertex(project_id=self.project, region=self.region)
+        except KeyError as e:
+            raise RuntimeError(f"Missing environment variable: {e}")
+
     @mlflow.trace
-    def ask(self, question, prompt, **kwargs):
+    def ask(self, prompt, system_instruction, **kwargs):
         try:
             response = self.client.messages.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
                 model=self.model_id,
-                system=prompt,
-                messages=[{"role": "user", "content": question}],
+                system=system_instruction,
                 **kwargs
             )
-            return response.content[0].text, response.usage
+
+            text_message = response.content[0].text
+            usage = response.usage
+            return text_message, usage
         except Exception as e:
-            print(f"[ERROR Claude GenAI] {e}")
-            return None, None
+            raise RuntimeError(f"[ClaudeAIProvider] Request failed: {e}")
+
 
 class GeminiAIProvider(AIProvider):
 
