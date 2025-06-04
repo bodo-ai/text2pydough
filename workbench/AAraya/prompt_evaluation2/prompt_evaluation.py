@@ -276,6 +276,7 @@ def ensemble_result(all_runs, question, question_idx="?"):
         return fallback["response"], fallback["duration"], fallback["usage"]
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
+    print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     def thread_wrapper(row_tuple):
         index, row = row_tuple
         row["question_index"] = index + 1
