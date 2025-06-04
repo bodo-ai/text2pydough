@@ -15,15 +15,18 @@ def process_csv(csv1_path, csv2_path, output_true, output_false, metadata_path):
     # Concatenate the DataFrames
     df_total = pd.concat([df1, df2], ignore_index=True)
     print(f"✅ Loaded {len(df1)} rows from {csv1_path} and {len(df2)} rows from {csv2_path}. Total rows: {len(df_total)}")
-    # Filter rows where 'dataframe_match' is True or False
+
+    # Filter rows where 'dataframe_match' is True
     df_true = df_total[df_total['dataframe_match'] == True]
     print(f"✅ Found {len(df_true)} rows with 'dataframe_match' == True")
-    df_true = df_true.drop_duplicates()
-    print(f"✅ Total unique rows after filtering: {len(df_true)}")
-    df_false = df_total[df_total['dataframe_match'] == False].drop_duplicates()
+    df_true = df_true.drop_duplicates(subset=['question'])
+    print(f"✅ Total unique rows after filtering by question: {len(df_true)}")
+
+    # Filter rows where 'dataframe_match' is False
+    df_false = df_total[df_total['dataframe_match'] == False]
     print(f"✅ Found {len(df_false)} rows with 'dataframe_match' == False")
-    df_false = df_false.drop_duplicates()
-    print(f"✅ Total unique rows after filtering: {len(df_false)}")
+    df_false = df_false.drop_duplicates(subset=['question'])
+    print(f"✅ Total unique rows after filtering by question: {len(df_false)}")
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_true), exist_ok=True)
@@ -50,8 +53,9 @@ def main():
     os.makedirs(merged_dir, exist_ok=True)
 
     # Input and output file paths (modify as needed)
-    csv1_path = '/home/gerald8525/repositories/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/gemini_2.5_flash/iteration_3/20250604_111708/results.csv'
-    csv2_path = '/home/gerald8525/repositories/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/claud_4.0_soonet/iteration_3/20250604_110710/results.csv'
+    csv1_path=   "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/gemini_2.5_flash/iteration_2/20250604_075548/results.csv"
+    csv2_path= "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/claud_4.0_soonet/iteration_2/20250603_155319/results.csv"
+  
     output_true = os.path.join(merged_dir, 'result_match_true.csv')
     output_false = os.path.join(merged_dir, 'result_match_false.csv')
     metadata_path = os.path.join(merged_dir, 'merge_metadata.json')
