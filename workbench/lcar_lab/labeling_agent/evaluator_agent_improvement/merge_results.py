@@ -53,8 +53,8 @@ def main():
     os.makedirs(merged_dir, exist_ok=True)
 
     # Input and output file paths (modify as needed)
-    csv1_path=   "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/gemini_2.5_flash/iteration_2/20250604_075548/results.csv"
-    csv2_path= "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/claud_4.0_soonet/iteration_2/20250603_155319/results.csv"
+    csv1_path = "/home/gerald8525/repositories/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/20250604_140236/results.csv"
+    csv2_path = "/home/gerald8525/repositories/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/20250604_140526/results.csv"
   
     output_true = os.path.join(merged_dir, 'result_match_true.csv')
     output_false = os.path.join(merged_dir, 'result_match_false.csv')
