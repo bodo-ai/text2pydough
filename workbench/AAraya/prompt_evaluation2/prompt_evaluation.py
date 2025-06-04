@@ -33,7 +33,7 @@ models_to_test = [
     {
         "name": "claude",
         "provider": "anthropic",
-        "model_id": "claude-3-7-sonnet@20250219",
+        "model_id": "claude-4",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
@@ -43,7 +43,7 @@ models_to_test = [
     {
         "name": "gemini",
         "provider": "google",
-        "model_id": "gemini-2.5-pro-preview-05-06",
+        "model_id": "gemini-2.5-flash",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
@@ -51,7 +51,6 @@ models_to_test = [
         }
     }
 ]
-
 
 def get_provider(provider, model_id, config=None):
     if provider == "azure":
@@ -246,7 +245,11 @@ def ensemble_result(all_runs, question, question_idx="?"):
     valid_runs = [r for r in all_runs if r["df"] is not None]
     if not valid_runs:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
-        return None, 0.0, None
+        for r in all_runs:
+            if r["response"]:
+                print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
+                return r["response"], r["duration"], r["usage"]
+        return None, 0.0, None  # If even response is missing
 
     consensus = defaultdict(int)
 
