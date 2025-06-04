@@ -334,6 +334,7 @@ def main(git_hash):
     print(f"[INFO] Starting prompt evaluation.")
     sys.stdout = open("debug_log.txt", "w")
     sys.stderr = sys.stdout
+    print("wut")
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
@@ -351,7 +352,6 @@ def main(git_hash):
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
     
-    print("wut")
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
     MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"]
     #mlflow.gemini.autolog()
