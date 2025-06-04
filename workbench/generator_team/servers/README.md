@@ -124,18 +124,3 @@ The server will start on port 2024 and provide a public URL for access.
    - Check model availability in the selected region
    - Ensure proper permissions are set
 
-3. **File Access Issues**
-   - Check file permissions
-   - Verify paths in environment variables
-   - Ensure WSL path conversion is working correctly
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-[Add appropriate license information] 
