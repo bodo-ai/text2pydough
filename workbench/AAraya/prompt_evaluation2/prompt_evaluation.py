@@ -330,6 +330,7 @@ def parse_extra_args(extra_args):
 # === Entry Point ===
 
 def main(git_hash):
+    print(f"[INFO] Starting prompt evaluation.")
     sys.stdout = open("debug_log.txt", "w")
     sys.stderr = sys.stdout
     parser = argparse.ArgumentParser()
