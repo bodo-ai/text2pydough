@@ -179,7 +179,7 @@ class MistralAIProvider(AIProvider):
                 messages=messages,
                 **kwargs
             )
-            return response.choices[0].message.content
+            return response.choices[0].message.content 
         except Exception as e:
             print(f"AI Suite error: {e}")
             return None

@@ -157,7 +157,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
         #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
         return response1[0], duration, response1[1]
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
-    return response1, duration, None
+    return response1, duration, None 
 
 def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, retries=3, **kwargs):
     question = row["question"]
@@ -209,12 +209,11 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         }
 
     all_runs = []
-    with ThreadPoolExecutor(max_workers=len(models_to_test) * retries) as executor:
-        futures = []
-        for model in models_to_test:
-            for attempt in range(retries):
-                futures.append(executor.submit(run_model, model, attempt))
-        all_runs = [f.result() for f in futures]
+    for attempt in range(retries):
+        with ThreadPoolExecutor(max_workers=len(models_to_test)) as executor:
+            futures = [executor.submit(run_model, model, attempt) for model in models_to_test]
+            all_runs.extend(f.result() for f in futures)
+
         
     print(f"[DEBUG] [Q{question_idx}] Completed all runs. Total: {len(all_runs)}")
     for run in all_runs:
@@ -280,7 +279,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
     def thread_wrapper(row_tuple):
         index, row = row_tuple
         row["question_index"] = index + 1
-        if use_parallel:
+        if use_parallel: 
             return run_models_parallel(
                 prompt=prompt,
                 data=data,
@@ -305,7 +304,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, questions_df.iterrows()))
 
-    return results
+    return results 
 
 def parse_extra_args(extra_args):
     kwargs = {}
