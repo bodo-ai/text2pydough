@@ -33,7 +33,7 @@ models_to_test = [
     {
         "name": "claude",
         "provider": "anthropic",
-        "model_id": "claude-4",
+        "model_id": "claude-sonnet-4@20250514",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
@@ -43,7 +43,7 @@ models_to_test = [
     {
         "name": "gemini",
         "provider": "google",
-        "model_id": "gemini-2.5-flash",
+        "model_id": "gemini-2.5-flash-preview-05-20",
         "config": {
             "api_key": os.getenv("GOOGLE_API_KEY"),
             "project": os.getenv("GOOGLE_PROJECT_ID"),
