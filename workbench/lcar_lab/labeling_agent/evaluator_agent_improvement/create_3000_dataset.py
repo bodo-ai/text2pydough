@@ -26,6 +26,17 @@ def filter_data(training_csv_path=str, golden_csv_path=str, testing_dataset_path
     # Step 3: Filter rows where 'difficulty' column has the value 'extra'
     print("Filtering rows with 'difficulty' value as 'extra/medium/hard'...")
     final_filtered_df = final_filtered_df[final_filtered_df['difficulty'].isin(['medium', 'hard', 'extra'])]
+
+    # Step 4: Rename 'sql' column to 'ground_truth_sql'
+    print("Renaming 'sql' column to 'ground_truth_sql'...")
+    if 'sql' in final_filtered_df.columns:
+        final_filtered_df = final_filtered_df.rename(columns={'sql': 'ground_truth_sql'})
+
+    # Step 5: Update 'dataset' column values from 'kaggleDBQA' to 'KaggleDBQA'
+    print("Updating 'dataset' column values from 'kaggleDBQA' to 'KaggleDBQA'...")
+    if 'dataset_name' in final_filtered_df.columns:
+        final_filtered_df['dataset_name'] = final_filtered_df['dataset_name'].replace('kaggleDBQA', 'KaggleDBQA')
+
     print(f"Filtered DataFrame shape: {final_filtered_df.shape}")
 
     # Return the final filtered DataFrame
