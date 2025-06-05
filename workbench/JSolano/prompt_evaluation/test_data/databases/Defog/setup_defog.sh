@@ -9,3 +9,15 @@ set -eo pipefail
 
 rm -fv defog.db
 sqlite3 defog.db < init_defog.sql
+
+rm -fv Broker.db
+sqlite3 Broker.db < broker_sqlite.sql
+
+rm -fv Dealership.db
+sqlite3 Dealership.db < dealership_sqlite.sql
+
+rm -fv Ewallet.db
+sqlite3 Ewallet.db < ewallet_sqlite.sql
+
+rm -fv DermTreatment.db
+sqlite3 DermTreatment.db < derm_treatment_sqlite.sql
