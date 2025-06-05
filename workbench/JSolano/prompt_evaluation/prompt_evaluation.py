@@ -59,13 +59,13 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
     for db_name, dataset_name in zip(db_names, dataset_names):
-        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
+        metadata_dir = os.path.join(metadata_base_path, dataset_name)
         json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(json_file)
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(db_base_path, "databases", dataset_name, f"{db_name}.db")}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, f"{db_name}.db")}"
             print(f"[INFO] Connecting to: {url}")
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
