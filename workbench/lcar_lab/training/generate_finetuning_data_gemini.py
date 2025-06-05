@@ -177,7 +177,7 @@ async def process_sample_async(row, client, pbar):
         schema_json_str = row[CONFIG['schema_field']]
         schema_dict = json.loads(schema_json_str)
         # Add schema to the question
-        question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{row[CONFIG['schema_field']]}\n\n"
+        question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{json_to_markdown(schema_dict)}\n\n"
         
         # Generate Pydough context and documentation
         #context = await generate_pydough_context_async(client, row[CONFIG['question_field']], row[CONFIG['code_field']])
