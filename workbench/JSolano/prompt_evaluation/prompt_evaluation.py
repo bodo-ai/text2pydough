@@ -234,8 +234,6 @@ def main(git_hash):
 
 if __name__ == "__main__":
     cwd = os.getcwd()
-    db_path = './test_data/TPCH.db'
-    download_database(db_path)
     if untracked_files(cwd) or modified_files(cwd):
         autocommit(cwd)
     main(get_git_commit(cwd))

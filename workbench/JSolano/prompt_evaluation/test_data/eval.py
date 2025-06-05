@@ -215,14 +215,9 @@ def compare_df(
     query_gold and query_gen are the original queries that generated the respective dataframes.
     """
     
-    print
-    print(df_gold, df_gen)
-    
     #print(f"Info: Comparing DataFrames for question: {question}")
     original_gold = df_gold.copy()
     original_gen = df_gen.copy()
-    
-    print(original_gold, original_gen)
     
     try:
         is_equal = df_gold.values == df_gen.values
@@ -321,8 +316,12 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     num_gen_cols = df_gen.shape[1]
     num_gold_rows = df_gold.shape[0]
     num_gen_rows = df_gen.shape[0]
+    
 
     # 1. Handle df_gold having zero columns
+    if df_gold.empty:
+        return True  # If df_gold is empty, it trivially matches any df_gen
+    
     if num_gold_cols == 0:
         if num_gold_rows == 0: # df_gold is 0x0
             print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
