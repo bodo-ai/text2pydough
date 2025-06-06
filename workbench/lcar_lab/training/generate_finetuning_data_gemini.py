@@ -29,7 +29,7 @@ load_dotenv()
 # Get the workspace root directory
 WORKSPACE_ROOT = Path("/home/arami/bodo")
 
-DATASET = 'kaggledbqa'
+DATASET = 'spider'
 
 # Global resources
 _pool = ThreadPoolExecutor()  # Thread pool for CPU-bound work
@@ -48,7 +48,7 @@ with open("/home/arami/bodo/labeling_agent/cheatsheet_partition_overhaul.md", "r
 
 # Configuration
 CONFIG = {
-    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'cleaned_file.csv'),
+    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_extra_hard_medium.csv'),
     'output_file': 'sample_training_data.jsonl',
     'default_sample_size': 4000,
     'filter_field': 'dataframe_match',
