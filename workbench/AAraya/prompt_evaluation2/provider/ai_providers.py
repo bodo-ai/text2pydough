@@ -79,13 +79,14 @@ class ClaudeAIProvider(AIProvider):
                     **kwargs
                 )
 
-                
                 full_output = ""
                 for chunk in response_stream:
-                    if chunk.content and chunk.content[0].text:
-                        full_output += chunk.content[0].text
+                    if hasattr(chunk, "content") and chunk.content:
+                        for part in chunk.content:
+                            if hasattr(part, "text") and part.text:
+                                full_output += part.text
 
-                return full_output, None  # usage not available in streaming mode
+                return full_output.strip(), None  # usage not available in streaming mode
 
             else:
                 # Regular mode

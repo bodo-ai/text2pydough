@@ -177,8 +177,11 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         print(f"[DEBUG] [Q{question_idx}] Running model {model_info['name']} (attempt {attempt})")
         client = get_provider(provider_name, model_id, config=config)
         start = time.time()
+        model_specific_kwargs = dict(kwargs)
+        if model_info["name"] == "gemini":
+            model_specific_kwargs.pop("use_stream", None)
         try:
-            response = client.ask(formatted_q, formatted_prompt, **kwargs)
+            response = client.ask(formatted_q, formatted_prompt, **model_specific_kwargs)
             duration = time.time() - start
             if isinstance(response, tuple):
                 raw_response, usage = response
