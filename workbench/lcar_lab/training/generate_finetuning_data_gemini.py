@@ -21,6 +21,7 @@ from datetime import datetime
 from collections import deque
 from typing import List
 import random
+from dynamic_prompt.mdgen import json_to_markdown
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,7 +29,7 @@ load_dotenv()
 # Get the workspace root directory
 WORKSPACE_ROOT = Path("/home/arami/bodo")
 
-DATASET = 'kaggledbqa'
+DATASET = 'spider'
 
 # Global resources
 _pool = ThreadPoolExecutor()  # Thread pool for CPU-bound work
@@ -37,9 +38,17 @@ rpm_limiter = AsyncLimiter(30, 60)  # Conservative rate limit of 30 requests per
 _request_times = deque(maxlen=30)  # Track last 30 request times
 _request_lock = asyncio.Lock()  # Lock for request tracking
 
+
+with open("/home/arami/bodo/labeling_agent/prompt.md", "r", encoding="utf-8") as f:
+    prompt=  f.read()
+
+
+with open("/home/arami/bodo/labeling_agent/cheatsheet_partition_overhaul.md", "r", encoding="utf-8") as f:
+    cheatsheet=  f.read()
+
 # Configuration
 CONFIG = {
-    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'spider_kaggle_full_training_only_filtered.csv'),
+    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_extra_hard_medium.csv'),
     'output_file': 'sample_training_data.jsonl',
     'default_sample_size': 4000,
     'filter_field': 'dataframe_match',
@@ -48,7 +57,7 @@ CONFIG = {
     'code_field': 'generated_pydough',
     'response_field': 'generated_response',
     'schema_field': 'database_schema',
-    'system_instruction': "You are an analytics expert and a proficient Pydough generator that creates Python code based on natural language descriptions.",
+    'system_instruction': 'You are an analytics expert and a proficient Pydough generator that creates Python code based on natural language descriptions.',
     'retry_attempts': 3,
     'retry_delay': 5,  # seconds
     'max_batch_size': 5,  # Process 5 tasks at a time
@@ -163,8 +172,12 @@ async def generate_pydough_context_async(client, question, code):
 async def process_sample_async(row, client, pbar):
     """Process a single sample asynchronously."""
     try:
+        import json
+
+        schema_json_str = row[CONFIG['schema_field']]
+        schema_dict = json.loads(schema_json_str)
         # Add schema to the question
-        question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{row[CONFIG['schema_field']]}"
+        question_with_schema = f"{row[CONFIG['question_field']]}\nDatabase Schema:\n{json_to_markdown(schema_dict)}\n\n"
         
         # Generate Pydough context and documentation
         #context = await generate_pydough_context_async(client, row[CONFIG['question_field']], row[CONFIG['code_field']])
@@ -269,7 +282,7 @@ def load_and_preprocess_data(csv_path, sample_size=None):
 def format_output(code, response, context):
     """Format the output with answer first, then code and context."""
     return f"""Answer:
-{code}"""
+```python\n{code}\n```"""
 
 def convert_to_json_format(examples):
     """Convert examples to JSON format with context."""

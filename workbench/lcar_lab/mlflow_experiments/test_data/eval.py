@@ -417,8 +417,8 @@ def process_row(row,db_base_path,metadata_base_path):
         db_name = row['db_name']
         dataset_name = row['dataset_name']
 
-        db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
-        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
+        db_path = os.path.join(db_base_path, dataset_name,  'databases', f"{db_name}/{db_name}.sqlite")
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         #print(question, db_name)
 
@@ -461,37 +461,3 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     df.to_csv(output_file, index=False)
 
     return output_file, df
-
-# Example usage of the function
-if __name__ == "__main__":
-    data_5_people = {
-        'Name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Edward'],
-        'Height_m': [1.65, 1.80, 1.75, 1.70, 1.90],  # Heights in meters
-        'number': [1, 2, 3, 4, 5]  # Adding a numeric column for testing
-    }
-    df_5_people = pd.DataFrame(data_5_people)
-
-    print("DataFrame 1 (5 people):")
-    print(df_5_people)
-    print("-" * 30) # Separator
-
-    data_7_people_v1 = {
-        'Name': ['Bob', 'Alice', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George'],
-        'Height_m': [1.80, 1.65, 1.75, 1.70, 1.90, 1.60, 1.85],  # Heights in meters
-        'number': [1.001, 2, 3, 4, 5, 100.1, 7]  # Adding a numeric column for testing
-    }
-    df_7_people_v1 = pd.DataFrame(data_7_people_v1)
-
-    print("DataFrame 2 (7 people):")
-    print(df_7_people_v1)
-    print("-" * 30) # Separator
-
-    print(compare_df(df_5_people, df_7_people_v1, query_category="a", question="Does this table contain the same people?"))
-
-    gold = pd.read_csv('testDF/sql_output.csv')  
-    gen = pd.read_csv('testDF/pydough_output.csv')
-    print(gold)
-    print(gen)
-
-    print(compare_df(gold, gen, query_category="a", question="Does this table contain the same customers?"))
-    
