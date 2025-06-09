@@ -45,14 +45,15 @@ class AzureAIProvider(AIProvider):
             return None
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
+from vertexai.generative_models import GenerativeModel, ChatSession
+
 class ClaudeAIProvider(AIProvider):
     def __init__(self, model_id, config=None):
         try:
             self.api_key = os.environ["GOOGLE_API_KEY"]
             self.project = os.environ["GOOGLE_PROJECT_ID"]
-            self.location="us-east5" 
+            self.location = "us-east5"
             self.model_id = model_id
-
             self.client = AnthropicVertex(project_id=self.project, region=self.location)
         except KeyError as e:
             raise RuntimeError(f"Missing environment variable: {e}")
@@ -61,23 +62,49 @@ class ClaudeAIProvider(AIProvider):
     def ask(self, prompt, system_instruction, **kwargs):
         try:
             kwargs.setdefault("max_tokens", 20000)
-            response = self.client.messages.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-                model=self.model_id,
-                system=system_instruction,
-                **kwargs
-            )
+            use_streaming = kwargs.pop("use_stream", True)
 
-            text_message = response.content[0].text
-            usage = response.usage
-            return text_message, usage
+            if use_streaming:
+                # Streaming mode
+                response_stream = self.client.messages.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    model=self.model_id,
+                    system=system_instruction,
+                    stream=True,
+                    **kwargs
+                )
+
+                
+                full_output = ""
+                for chunk in response_stream:
+                    if chunk.content and chunk.content[0].text:
+                        full_output += chunk.content[0].text
+
+                return full_output, None  # usage not available in streaming mode
+
+            else:
+                # Regular mode
+                response = self.client.messages.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    model=self.model_id,
+                    system=system_instruction,
+                    **kwargs
+                )
+                return response.content[0].text, response.usage
+
         except Exception as e:
             raise RuntimeError(f"[ClaudeAIProvider] Request failed: {e}")
+
 
 
 class GeminiAIProvider(AIProvider):
