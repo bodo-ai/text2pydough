@@ -83,7 +83,7 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
             print(f"Warning: No database found for question_id {question_id}")
             continue
             
-        db_name = db_info[db_name_col].iloc[0]
+        db_name = row.get(db_name_col)
         
         # Load the schema data
         schema_data = load_schema_data(schema_dir, db_name)
@@ -100,7 +100,7 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
     merged_df = pd.DataFrame(merged_data)
     
     # Save the merged data
-    output_file = output_dir / 'training_data_with_schema.csv'
+    output_file = output_dir / 'training_data_with_schema_20250609_072134.csv'
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
     
