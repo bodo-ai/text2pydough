@@ -88,8 +88,7 @@ class ClaudeAIProvider(AIProvider):
                         if delta.get("type") == "text_delta":
                             full_output += delta.get("text", "")
                             
-                print(f"[ClaudeAIProvider] Full output: {full_output}")
-                return full_output, None  # usage not disponible en streaming
+                return full_output, None  # usage not available in streaming mode
 
             else:
                 # Regular mode
