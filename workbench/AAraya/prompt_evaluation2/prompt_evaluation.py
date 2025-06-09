@@ -26,6 +26,7 @@ from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
 import random
+import json
 
 # === Helper Functions ===
 

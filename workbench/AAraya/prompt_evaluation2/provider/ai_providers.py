@@ -80,6 +80,11 @@ class ClaudeAIProvider(AIProvider):
                 )
 
                 full_output = ""
+                debug_path = f"./claude_stream_debug.jsonl"
+                with open(debug_path, "a", encoding="utf-8") as debug_file:
+                    for chunk in response_stream:
+                        debug_file.write(json.dumps(chunk.to_dict(), default=str) + "\n")
+                    
                 for chunk in response_stream:
                     if hasattr(chunk, "content") and chunk.content:
                         for part in chunk.content:
