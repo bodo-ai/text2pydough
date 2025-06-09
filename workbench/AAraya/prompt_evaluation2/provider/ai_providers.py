@@ -80,18 +80,16 @@ class ClaudeAIProvider(AIProvider):
                 )
 
                 full_output = ""
-                debug_path = f"./claude_stream_debug.jsonl"
-                with open(debug_path, "a", encoding="utf-8") as debug_file:
-                    for chunk in response_stream:
-                        debug_file.write(json.dumps(chunk.to_dict(), default=str) + "\n")
-                    
                 for chunk in response_stream:
-                    if hasattr(chunk, "content") and chunk.content:
-                        for part in chunk.content:
-                            if hasattr(part, "text") and part.text:
-                                full_output += part.text
+                    data = chunk.to_dict() if hasattr(chunk, "to_dict") else chunk
 
-                return full_output.strip(), None  # usage not available in streaming mode
+                    if data.get("type") == "content_block_delta":
+                        delta = data.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            full_output += delta.get("text", "")
+                            
+                print(f"[ClaudeAIProvider] Full output: {full_output}")
+                return full_output, None  # usage not disponible en streaming
 
             else:
                 # Regular mode
