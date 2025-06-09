@@ -118,9 +118,9 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
 def main():
     DATASET = "kaggledbqa"
     # Define paths
-    base_path = Path("/mnt/c/Users/david/bodo/text2pydough/training/training_data/labeled_data/" + DATASET)
+    base_path = Path("/home/arami/bodo/text2pydough//workbench/lcar_lab/training/training_data/labeled_data/" + DATASET)
     
-    processed_data_path = base_path / "processed" / ("combined_" + DATASET + "_data.csv")
+    processed_data_path = "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/merged_files/20250606_142454/result_match_true.csv"
     questions_path = base_path / "questions" / (DATASET + "_data_full.csv")
     schema_dir = base_path / "metadata"
     output_dir = base_path / "training_ready"
