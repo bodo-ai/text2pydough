@@ -46,65 +46,50 @@ class AzureAIProvider(AIProvider):
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
 
+
 class ClaudeAIProviderAWS(AIProvider):
     def __init__(self, model_id, config=None):
         region = config.get("region", "us-east-1")
-        profile = config.get("profile")
-
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-        boto_config = Config(read_timeout=800)
-        self.brt = session.client(service_name="bedrock-runtime", region_name=region, config=boto_config)
+        profile = config.get("profile", "default")
+        session = Session(profile_name=profile)
+        self.brt = session.client("bedrock-runtime", region_name=region)
         self.model_id = model_id
 
-    @mlflow.trace
-    def ask(self, prompt, system_instruction, **kwargs):
+    def ask(self, question, prompt, **kwargs):
         max_tokens = kwargs.get("max_tokens", 20000)
         temperature = kwargs.get("temperature", 0.0)
 
-        # Prepare the input for Converse API
+        
+        inference_config = {
+            "max_tokens": max_tokens,
+            "temperature": temperature
+        }
+
         body = {
-            "anthropic_version": "bedrock-2023-05-31",
-            "system": system_instruction,
+            "modelId": self.model_id,
+            "system": [{"type": "text", "text": prompt}],
             "messages": [
                 {
                     "role": "user",
-                    "content": prompt,
+                    "content": [{"type": "text", "text": question}]
                 }
             ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+            "inferenceConfig": inference_config
         }
 
-        debug_path = kwargs.get("debug_path")
+        
+        response = self.brt.converse_stream(**body)
+
+        
         full_output = ""
+        for event in response["stream"]:
+            chunk = event.get("chunk")
+            if chunk:
+                bytes_data = json.loads(chunk["bytes"].decode())
+                if "delta" in bytes_data and "text" in bytes_data["delta"]:
+                    full_output += bytes_data["delta"]["text"]
 
-        try:
-            response = self.brt.converse_stream(
-                modelId=self.model_id,
-                body=json.dumps(body),
-                contentType="application/json",
-                accept="application/json",
-            )
-
-            stream = response.get("body")
-            if stream:
-                if debug_path:
-                    with open(debug_path, "a", encoding="utf-8") as debug_file:
-                        for event in stream:
-                            debug_file.write(json.dumps(event) + "\n")  # log full event
-                            delta = event.get("delta", {})
-                            if delta.get("type") == "text_delta":
-                                full_output += delta.get("text", "")
-                else:
-                    for event in stream:
-                        delta = event.get("delta", {})
-                        if delta.get("type") == "text_delta":
-                            full_output += delta.get("text", "")
-
-            return full_output, None
-
-        except Exception as e:
-            raise RuntimeError(f"[ClaudeAIProviderAWS] Request failed: {e}")
+        return full_output, None
 
 
 class ClaudeAIProvider(AIProvider):
