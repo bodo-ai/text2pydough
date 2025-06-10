@@ -48,51 +48,60 @@ class AzureAIProvider(AIProvider):
 
 class ClaudeAIProviderAWS(AIProvider):
     def __init__(self, model_id, config=None):
-        region = config.get("region", "us-east-1") if config else "us-east-1"
-        boto_config = Config(region_name=region, read_timeout=800)
+        region = config.get("region", "us-east-1")
+        profile = config.get("profile")
 
-        if config and "profile" in config:
-            session = boto3.Session(profile_name=config["profile"])
-            self.brt = session.client(service_name="bedrock-runtime", config=boto_config)
-        else:
-            self.brt = boto3.client(service_name="bedrock-runtime", config=boto_config)
-
+        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        boto_config = Config(read_timeout=800)
+        self.brt = session.client(service_name="bedrock-runtime", region_name=region, config=boto_config)
         self.model_id = model_id
 
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
-        body = json.dumps({
+        max_tokens = kwargs.get("max_tokens", 20000)
+        temperature = kwargs.get("temperature", 0.0)
+
+        # Prepare the input for Converse API
+        body = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": kwargs.get("max_tokens", 20000),
             "system": system_instruction,
             "messages": [
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": prompt,
                 }
             ],
-            "temperature": kwargs.get("temperature", 0.0)
-        })
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        debug_path = kwargs.get("debug_path")
+        full_output = ""
 
         try:
-            response = self.brt.invoke_model_with_response_stream(
-                body=body,
+            response = self.brt.converse_stream(
                 modelId=self.model_id,
+                body=json.dumps(body),
+                contentType="application/json",
                 accept="application/json",
-                contentType="application/json"
             )
 
-            full_output = ""
             stream = response.get("body")
             if stream:
-                for event in stream:
-                    chunk = event.get("chunk")
-                    if chunk:
-                        parsed = json.loads(chunk.get("bytes").decode())
-                        if "delta" in parsed and "text" in parsed["delta"]:
-                            full_output += parsed["delta"]["text"]
+                if debug_path:
+                    with open(debug_path, "a", encoding="utf-8") as debug_file:
+                        for event in stream:
+                            debug_file.write(json.dumps(event) + "\n")  # log full event
+                            delta = event.get("delta", {})
+                            if delta.get("type") == "text_delta":
+                                full_output += delta.get("text", "")
+                else:
+                    for event in stream:
+                        delta = event.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            full_output += delta.get("text", "")
 
-            return full_output.strip(), None 
+            return full_output, None
 
         except Exception as e:
             raise RuntimeError(f"[ClaudeAIProviderAWS] Request failed: {e}")
