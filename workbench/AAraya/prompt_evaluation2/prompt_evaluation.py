@@ -34,8 +34,7 @@ models_to_test = [
     {
         "name": "claude",
         "provider": "anthropic",
-        "backend": "bedrock",
-        "model_id": "anthropic.claude-3-opus-20240229-v1:0",
+        "model_id": "anthropic.claude-opus-4-20250514-v1:0",
         "config": {
             "region": "us-east-1",
             "profile": "default"
@@ -57,10 +56,7 @@ def get_provider(provider, model_id, config=None):
     backend = config.get("backend", "vertex") if config else "vertex"
 
     if provider == "anthropic":
-        if backend == "bedrock":
-            return ClaudeAIProviderAWS(model_id, config=config)
-        else:
-            return ClaudeAIProvider(model_id, config=config)
+        return ClaudeAIProviderAWS(model_id, config=config)
     elif provider == "azure":
         return AzureAIProvider(model_id, config=config)
     elif provider == "aws-deepseek":
