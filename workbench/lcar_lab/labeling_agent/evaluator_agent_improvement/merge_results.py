@@ -16,17 +16,18 @@ def process_csv(csv1_path, csv2_path, output_true, output_false, metadata_path):
     df_total = pd.concat([df1, df2], ignore_index=True)
     print(f"✅ Loaded {len(df1)} rows from {csv1_path} and {len(df2)} rows from {csv2_path}. Total rows: {len(df_total)}")
 
-    # Filter rows where 'dataframe_match' is True
-    df_true = df_total[df_total['dataframe_match'] == True]
-    print(f"✅ Found {len(df_true)} rows with 'dataframe_match' == True")
-    df_true = df_true.drop_duplicates(subset=['question'])
-    print(f"✅ Total unique rows after filtering by question: {len(df_true)}")
+    # Sort so that True rows come first for each question
+    df_total = df_total.sort_values(by=['question', 'dataframe_match'], ascending=[True, False])
 
-    # Filter rows where 'dataframe_match' is False
-    df_false = df_total[df_total['dataframe_match'] == False]
-    print(f"✅ Found {len(df_false)} rows with 'dataframe_match' == False")
-    df_false = df_false.drop_duplicates(subset=['question'])
-    print(f"✅ Total unique rows after filtering by question: {len(df_false)}")
+    # Drop duplicates, keeping the first (which will be True if exists)
+    df_total_unique = df_total.drop_duplicates(subset=['question'], keep='first')
+
+    # Split into True and False after deduplication
+    df_true = df_total_unique[df_total_unique['dataframe_match'] == True]
+    print(f"✅ Found {len(df_true)} unique rows with 'dataframe_match' == True")
+
+    df_false = df_total_unique[df_total_unique['dataframe_match'] == False]
+    print(f"✅ Found {len(df_false)} unique rows with 'dataframe_match' == False")
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_true), exist_ok=True)
@@ -53,8 +54,8 @@ def main():
     os.makedirs(merged_dir, exist_ok=True)
 
     # Input and output file paths (modify as needed)
-    csv1_path = "/Users/bodo/Documents/repositories/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/20250608_105939/results.csv"
-    csv2_path = "/Users/bodo/Documents/repositories/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/20250609_135721/results.csv"
+    csv1_path = "/home/jupyter/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/20250608_105939/results.csv"
+    csv2_path = "/home/jupyter/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results/20250609_135721/results.csv"
   
     output_true = os.path.join(merged_dir, 'result_match_true.csv')
     output_false = os.path.join(merged_dir, 'result_match_false.csv')
