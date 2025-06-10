@@ -49,9 +49,14 @@ class AzureAIProvider(AIProvider):
 
 class ClaudeAIProviderAWS(AIProvider):
     def __init__(self, model_id, config=None):
-        region = config.get("region", "us-east-1")
-        profile = config.get("profile", "default")
-        session = session(profile_name=profile)
+        region = config.get("region", "us-east-1") if config else "us-east-1"
+        profile = config.get("profile") if config else None
+
+        session_args = {}
+        if profile:
+            session_args["profile_name"] = profile
+
+        session = boto3.Session(**session_args)
         self.brt = session.client("bedrock-runtime", region_name=region)
         self.model_id = model_id
 
