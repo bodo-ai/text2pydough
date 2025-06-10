@@ -51,7 +51,7 @@ class ClaudeAIProviderAWS(AIProvider):
     def __init__(self, model_id, config=None):
         region = config.get("region", "us-east-1")
         profile = config.get("profile", "default")
-        session = Session(profile_name=profile)
+        session = session(profile_name=profile)
         self.brt = session.client("bedrock-runtime", region_name=region)
         self.model_id = model_id
 
