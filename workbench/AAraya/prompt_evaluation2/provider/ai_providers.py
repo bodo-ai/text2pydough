@@ -49,52 +49,50 @@ class AzureAIProvider(AIProvider):
 
 class ClaudeAIProviderAWS(AIProvider):
     def __init__(self, model_id, config=None):
-        region = config.get("region", "us-east-1") if config else "us-east-1"
-        profile = config.get("profile") if config else None
-
-        session_args = {}
-        if profile:
-            session_args["profile_name"] = profile
-
-        session = boto3.Session(**session_args)
-        self.brt = session.client("bedrock-runtime", region_name=region)
         self.model_id = model_id
+        region = config.get("region", "us-east-1")
+        profile = config.get("profile", None)
 
-    def ask(self, question, prompt, **kwargs):
-        max_tokens = kwargs.get("max_tokens", 20000)
+        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        boto_config = Config(read_timeout=800)
+
+        self.client = session.client("bedrock-runtime", region_name=region, config=boto_config)
+
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        max_tokens = kwargs.get("max_tokens", 4096)
         temperature = kwargs.get("temperature", 0.0)
 
-        
-        inference_config = {
-            "max_tokens": max_tokens,
-            "temperature": temperature
-        }
-
-        body = {
+        # Prepare inputs for converse_stream
+        input_payload = {
             "modelId": self.model_id,
-            "system": [{"type": "text", "text": prompt}],
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": question}]
-                }
-            ],
-            "inferenceConfig": inference_config
+            "system": [{"text": system_instruction}],  # Must be a list of dicts with only 'text'
+            "messages": [{
+                "role": "user",
+                "content": [{"text": prompt}]
+            }],
+            "inferenceConfig": {
+                "maxTokens": max_tokens,
+                "temperature": temperature
+            }
         }
 
-        
-        response = self.brt.converse_stream(**body)
-
-        
         full_output = ""
-        for event in response["stream"]:
-            chunk = event.get("chunk")
-            if chunk:
-                bytes_data = json.loads(chunk["bytes"].decode())
-                if "delta" in bytes_data and "text" in bytes_data["delta"]:
-                    full_output += bytes_data["delta"]["text"]
+        try:
+            response = self.client.converse_stream(**input_payload)
+            stream = response.get("stream")
+            if stream:
+                for event in stream:
+                    chunk = event.get("chunk")
+                    if chunk:
+                        decoded = json.loads(chunk.get("bytes").decode())
+                        delta = decoded.get("delta", {})
+                        if "text" in delta:
+                            full_output += delta["text"]
 
-        return full_output, None
+            return full_output, None  # Bedrock does not return usage yet
+        except Exception as e:
+            raise RuntimeError(f"[ClaudeAIProviderAWS] Request failed: {e}")
 
 
 class ClaudeAIProvider(AIProvider):
