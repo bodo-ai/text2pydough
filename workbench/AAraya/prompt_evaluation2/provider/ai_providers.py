@@ -45,7 +45,58 @@ class AzureAIProvider(AIProvider):
             return None
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
-from vertexai.generative_models import GenerativeModel, ChatSession
+
+class ClaudeAIProviderAWS(AIProvider):
+    def __init__(self, model_id, config=None):
+        region = config.get("region", "us-east-1") if config else "us-east-1"
+        boto_config = Config(region_name=region, read_timeout=800)
+
+        if config and "profile" in config:
+            session = boto3.Session(profile_name=config["profile"])
+            self.brt = session.client(service_name="bedrock-runtime", config=boto_config)
+        else:
+            self.brt = boto3.client(service_name="bedrock-runtime", config=boto_config)
+
+        self.model_id = model_id
+
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": kwargs.get("max_tokens", 20000),
+            "system": system_instruction,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": kwargs.get("temperature", 0.0)
+        })
+
+        try:
+            response = self.brt.invoke_model_with_response_stream(
+                body=body,
+                modelId=self.model_id,
+                accept="application/json",
+                contentType="application/json"
+            )
+
+            full_output = ""
+            stream = response.get("body")
+            if stream:
+                for event in stream:
+                    chunk = event.get("chunk")
+                    if chunk:
+                        parsed = json.loads(chunk.get("bytes").decode())
+                        if "delta" in parsed and "text" in parsed["delta"]:
+                            full_output += parsed["delta"]["text"]
+
+            return full_output.strip(), None 
+
+        except Exception as e:
+            raise RuntimeError(f"[ClaudeAIProviderAWS] Request failed: {e}")
+
 
 class ClaudeAIProvider(AIProvider):
     def __init__(self, model_id, config=None):

@@ -34,11 +34,11 @@ models_to_test = [
     {
         "name": "claude",
         "provider": "anthropic",
-        "model_id": "claude-opus-4@20250514",
+        "backend": "bedrock",
+        "model_id": "anthropic.claude-3-opus-20240229-v1:0",
         "config": {
-            "api_key": os.getenv("GOOGLE_API_KEY"),
-            "project": os.getenv("GOOGLE_PROJECT_ID"),
-            "region": "us-east5"
+            "region": "us-east-1",
+            "profile": "default"
         }
     },
     {
@@ -54,10 +54,15 @@ models_to_test = [
 ]
 
 def get_provider(provider, model_id, config=None):
-    if provider == "azure":
+    backend = config.get("backend", "vertex") if config else "vertex"
+
+    if provider == "anthropic":
+        if backend == "bedrock":
+            return ClaudeAIProviderAWS(model_id, config=config)
+        else:
+            return ClaudeAIProvider(model_id, config=config)
+    elif provider == "azure":
         return AzureAIProvider(model_id, config=config)
-    elif provider == "anthropic":
-        return ClaudeAIProvider(model_id, config=config)
     elif provider == "aws-deepseek":
         return DeepSeekAIProvider(model_id, config=config)
     elif provider == "google":
