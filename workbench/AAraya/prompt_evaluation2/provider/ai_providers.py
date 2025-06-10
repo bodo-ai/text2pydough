@@ -48,7 +48,7 @@ class AzureAIProvider(AIProvider):
 
 
 class ClaudeAIProviderAWS(AIProvider):
-    def __init__(self, model_id):
+    def __init__(self, model_id, config=None):
         config = Config(read_timeout=800)
         self.brt = boto3.client(service_name='bedrock-runtime', config=config)
         self.model_id = model_id
