@@ -34,10 +34,11 @@ models_to_test = [
     {
         "name": "claude",
         "provider": "anthropic",
-        "model_id": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        "model_id": "claude-sonnet-4@20250514",
         "config": {
-            "region": "us-east-1",
-            "profile": "default"
+            "api_key": os.getenv("GOOGLE_API_KEY"),
+            "project": os.getenv("GOOGLE_PROJECT_ID"),
+            "region": "us-east1"
         }
     },
     {
@@ -56,7 +57,7 @@ def get_provider(provider, model_id, config=None):
     backend = config.get("backend", "vertex") if config else "vertex"
 
     if provider == "anthropic":
-        return ClaudeAIProviderAWS(model_id, config=config)
+        return ClaudeAIProvider(model_id, config=config)
     elif provider == "azure":
         return AzureAIProvider(model_id, config=config)
     elif provider == "aws-deepseek":
