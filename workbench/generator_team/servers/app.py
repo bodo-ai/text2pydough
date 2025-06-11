@@ -17,7 +17,8 @@ os.environ["LANGGRAPH_RUNTIME"] = "in_memory"
 os.environ["LANGGRAPH_API_VARIANT"] = "local_dev"
 os.environ["LANGGRAPH_STUDIO_URL"] = "http://127.0.0.1:2024"
 os.environ["LANGGRAPH_STUDIO_ENABLED"] = "true"
-os.environ["LANGSMITH_API_KEY"]="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"
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
+os.environ["LANGSMITH_API_KEY"]=LANGSMITH_API_KEY
 
 # Define the state
 class AgentState(TypedDict):

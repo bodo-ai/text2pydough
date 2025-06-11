@@ -404,8 +404,9 @@ def main(git_hash):
             mlflow.log_artifact(combo_path)
             mlflow.log_artifact(complexity_path)
             mlflow.log_artifact(difficulty_path)
-            mlflow.log_artifact(args.validation_path)
-            mlflow.log_artifact(args.training_path)
+            if args.training_path and args.validation_path:
+                mlflow.log_artifact(args.validation_path)
+                mlflow.log_artifact(args.training_path)
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
@@ -433,6 +434,5 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     db_path = './test_data/TPCH.db'
     download_database(db_path)
-    if untracked_files(cwd) or modified_files(cwd):
-        autocommit(cwd)
+
     main(get_git_commit(cwd))
