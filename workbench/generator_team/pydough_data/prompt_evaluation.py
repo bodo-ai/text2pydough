@@ -134,7 +134,7 @@ class GeminiAIProvider(AIProvider):
             #location="us-central1",
             #http_options=types.HttpOptions(api_version='v1')
         #)
-        self.client = genai.Client(api_key="AIzaSyCIJ8R71urQshcnFNFUXOAuD0bs14yGIe0")#"AIzaSyB9i0FbDZzqy2Q3y4aolDP0EBXZOoTR7LY")
+        self.client = genai.Client(os.getenv("GOOGLE_API_KEY"))#"AIzaSyB9i0FbDZzqy2Q3y4aolDP0EBXZOoTR7LY")
         self.provider = provider
         self.model_id = model_id
         self.temperature= temperature

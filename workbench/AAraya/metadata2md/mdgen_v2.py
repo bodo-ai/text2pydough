@@ -4,14 +4,7 @@ from pydough import parse_json_metadata_from_file
 
 def generate_markdown_from_metadata(graph):
     """
-    Converts a pydough graph metadata object into a formatted Markdown string.
-
-    Args:
-        graph: A pydough Graph object, typically obtained from
-               pydough.parse_json_metadata_from_file().
-
-    Returns:
-        str: A Markdown string representing the metadata overview.
+    Converts a pydough graph metadata object into a formatted Markdown string..
     """
     markdown_output = []
 
@@ -91,7 +84,6 @@ def generate_markdown_from_metadata(graph):
 
 # Command-line interface (CLI) usage
 if __name__ == "__main__":
-    # Check for correct number of arguments
     if len(sys.argv) != 2:
         print("Usage: python your_script_name.py <input_json_file_path>")
         sys.exit(1)
@@ -103,7 +95,6 @@ if __name__ == "__main__":
         with open(input_file_path, 'r', encoding='utf-8') as f:
             metadata_json = json.load(f)
 
-        # Extract graph name (assuming it's in the first object of the JSON array)
         graph_name = metadata_json[0].get('name', 'default_graph')
 
         # Parse the metadata file using pydough

@@ -1,0 +1,250 @@
+question,db_name,dataset_name,model,code,exception,usage
+"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.",Broker,Defog,claude,"<thinking>
+Let's break down this request:
+
+1. Find customers who have at least 5 total transactions
+2. Calculate their transaction success rate (which I'll need to determine based on the data)
+3. Return customer name and success rate
+4. Order results from lowest to highest success rate
+
+First, I need to understand what constitutes a ""successful"" transaction. Looking at the database structure, I see that transactions have a ""status"" field. I'll assume that a transaction is successful if its status is something like ""completed"" or ""success"". Since I don't have the exact values, I'll make an assumption that a transaction is successful if its status is ""completed"".
+
+Now, let's build the query:
+
+1. Start with the `Customers` collection
+2. Filter for customers with at least 5 transactions
+3. Calculate the success rate for each customer (successful transactions / total transactions)
+4. Order by success rate ascending
+5. Return customer name and success rate
+
+Here's how I'll implement this:
+</thinking>
+
+I'll create a PyDough query to find transaction success rates for customers with at least 5 transactions.
+
+```python
+result = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=(COUNT(transactions_made.WHERE(status == ""completed"")) / COUNT(transactions_made)) * 100
+).ORDER_BY(success_rate.ASC())
+```
+
+This query:
+1. Starts with the `Customers` collection
+2. Filters to only include customers who have at least 5 transactions using `COUNT(transactions_made) >= 5`
+3. Calculates two fields:
+   - `customer_name`: The customer's name
+   - `success_rate`: The percentage of successful transactions, calculated by dividing the count of completed transactions by the total count of transactions and multiplying by 100
+4. Orders the results from lowest to highest success rate using `ORDER_BY(success_rate.ASC())`
+
+Note: I'm assuming that a transaction is considered successful if its status is ""completed"". If the success criteria is different, the WHERE condition inside the success_rate calculation would need to be adjusted accordingly.",,"Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=18706, output_tokens=506, server_tool_use=None, service_tier=None)"
+"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",Broker,Defog,claude,"<thinking>
+Let's break down this problem:
+
+1. We need to count distinct customers who:
+   a. Have a .com email address
+   b. Bought stocks of FAANG companies (Amazon, Apple, Google, Meta, or Netflix)
+
+2. FAANG companies are identified by their ticker symbols:
+   - Amazon: AMZN
+   - Apple: AAPL
+   - Google: GOOGL
+   - Meta: META
+   - Netflix: NFLX
+
+3. From the database structure:
+   - `Customers` have an `email` field
+   - `Transactions` have a `customer` field (linking to Customers) and a `ticker` field (linking to Tickers)
+   - `Tickers` have a `symbol` field
+
+4. We need to:
+   - Filter customers with .com email addresses
+   - Filter transactions for FAANG stocks
+   - Count distinct customers who made these transactions
+
+Let's build the PyDough code:
+
+First, I need to identify customers with .com email addresses:
+```
+com_customers = Customers.WHERE(ENDSWITH(email, "".com""))
+```
+
+Next, I need to identify FAANG stock transactions:
+```
+faang_tickers = Tickers.WHERE(
+    (symbol == ""AMZN"") | 
+    (symbol == ""AAPL"") | 
+    (symbol == ""GOOGL"") | 
+    (symbol == ""META"") | 
+    (symbol == ""NFLX"")
+)
+```
+
+Now, I need to count distinct customers with .com emails who bought FAANG stocks:
+```
+result = Broker.CALCULATE(
+    distinct_customers_count = NDISTINCT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) & 
+            (HAS(transactions_made.WHERE(
+                (ticker.symbol == ""AMZN"") | 
+                (ticker.symbol == ""AAPL"") | 
+                (ticker.symbol == ""GOOGL"") | 
+                (ticker.symbol == ""META"") | 
+                (ticker.symbol == ""NFLX"")
+            )) == 1)
+        )._id
+    )
+)
+```
+
+Actually, I need to make sure I'm only counting customers who bought these stocks (transaction_type = ""BUY""), not sold them:
+
+```
+result = Broker.CALCULATE(
+    distinct_customers_count = NDISTINCT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) & 
+            (HAS(transactions_made.WHERE(
+                ((ticker.symbol == ""AMZN"") | 
+                (ticker.symbol == ""AAPL"") | 
+                (ticker.symbol == ""GOOGL"") | 
+                (ticker.symbol == ""META"") | 
+                (ticker.symbol == ""NFLX"")) &
+                (transaction_type == ""BUY"")
+            )) == 1)
+        )._id
+    )
+)
+```
+
+Wait, I need to check if the problem statement specifically mentions ""bought"" or if it's just about having transactions with these stocks. Let me re-read the question.
+
+The question says ""bought stocks of FAANG companies"", so we should indeed filter for ""BUY"" transactions.
+
+Let me refine the query to be more efficient:
+
+```
+result = Broker.CALCULATE(
+    distinct_customers_count = COUNT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) & 
+            (HAS(transactions_made.WHERE(
+                ((ticker.symbol == ""AMZN"") | 
+                (ticker.symbol == ""AAPL"") | 
+                (ticker.symbol == ""GOOGL"") | 
+                (ticker.symbol == ""META"") | 
+                (ticker.symbol == ""NFLX"")) &
+                (transaction_type == ""BUY"")
+            )) == 1)
+        )
+    )
+)
+```
+
+Actually, I think I can simplify this further. Since we're counting distinct customers and each customer record is already distinct, we can use COUNT instead of NDISTINCT:
+
+```
+result = Broker.CALCULATE(
+    distinct_customers_count = COUNT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) & 
+            (HAS(transactions_made.WHERE(
+                ((ticker.symbol == ""AMZN"") | 
+                (ticker.symbol == ""AAPL"") | 
+                (ticker.symbol == ""GOOGL"") | 
+                (ticker.symbol == ""META"") | 
+                (ticker.symbol == ""NFLX"")) &
+                (transaction_type == ""BUY"")
+            )) == 1)
+        )
+    )
+)
+```
+
+This looks good. Let me double-check:
+1. We're filtering customers with .com email addresses
+2. We're filtering for customers who have at least one transaction that:
+   - Is a BUY transaction
+   - Involves a FAANG stock
+3. We're counting these customers
+
+The query looks correct and efficient.
+</thinking>
+
+I'll create a PyDough query to count distinct customers with .com email addresses who bought FAANG stocks.
+
+```python
+result = Broker.CALCULATE(
+    distinct_customers_count = COUNT(
+        Customers.WHERE(
+            (ENDSWITH(email, "".com"")) & 
+            (HAS(transactions_made.WHERE(
+                ((ticker.symbol == ""AMZN"") | 
+                (ticker.symbol == ""AAPL"") | 
+                (ticker.symbol == ""GOOGL"") | 
+                (ticker.symbol == ""META"") | 
+                (ticker.symbol == ""NFLX"")) &
+                (transaction_type == ""BUY"")
+            )) == 1)
+        )
+    )
+)
+```
+
+This query works as follows:
+1. It starts with the high-level `Broker` collection
+2. It filters `Customers` to include only those who:
+   - Have an email address ending with "".com"" (using the ENDSWITH function)
+   - Have at least one transaction (using HAS function) that:
+     - Involves a FAANG stock (ticker symbol is one of AMZN, AAPL, GOOGL, META, or NFLX)
+     - Is specifically a ""BUY"" transaction type
+3. Finally, it counts these filtered customers to get the total number of distinct customers meeting all criteria",,"Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=18751, output_tokens=1540, server_tool_use=None, service_tier=None)"
+"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",Broker,Defog,claude,"<thinking>
+Let's break down this request:
+
+1. We need to find customers who joined on or after January 1, 2023
+2. Among these customers, we need to count only the active ones (status = ""active"")
+3. We need to group these customers by country and count them
+4. We need to return the country and the count
+
+From the database structure:
+- We have a `Customers` collection
+- Each customer has a `join_date` field
+- Each customer has a `status` field
+- Each customer has a `country` field
+
+Let's build the PyDough code:
+
+1. First, we'll filter the customers to include only those who joined on or after January 1, 2023 and are active
+2. Then, we'll partition these customers by country
+3. For each country, we'll count the number of customers
+4. We'll return the country and the count
+
+Here's the PyDough code:
+</thinking>
+
+# PyDough Code
+```python
+result = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (status == ""active"")
+).PARTITION(name=""countries"", by=country).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```
+
+This code does the following:
+1. Starts with the `Customers` collection
+2. Filters to include only customers who:
+   - Joined on or after January 1, 2023 (using the condition `join_date >= ""2023-01-01""`)
+   - Are active (using the condition `status == ""active""`)
+3. Partitions these filtered customers by country
+4. For each country, calculates:
+   - The country name
+   - The count of active customers who joined on or after January 1, 2023 (TAC)
+
+The result will show each country and its corresponding TAC count.",,"Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=18723, output_tokens=451, server_tool_use=None, service_tier=None)"

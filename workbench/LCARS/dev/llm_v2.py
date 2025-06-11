@@ -18,6 +18,8 @@ from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
 from rapidfuzz import fuzz, process
+
+
 pydough.active_session.load_metadata_graph(f"./test_data/tpch_demo_graph.json", "TPCH")
 pydough.active_session.connect_database("sqlite", database=f"../../AAraya/demo/test_data/tpch.db", check_same_thread=False)
 
@@ -160,7 +162,7 @@ class LLMClient:
         # default_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
         
         default_provider = "google"
-        default_model = "gemini-2.5-pro-exp-03-25"
+        default_model = "gemini-2.5-pro-preview-05-06"
         
         # default_provider = "aws-deepseek"
         # default_model = "us.deepseek.r1-v1:0"

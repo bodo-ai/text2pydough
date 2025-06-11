@@ -100,7 +100,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}",'\nDatabase schema:\n', json_to_markdown(db_content)]), prompt.format(
+    return "".join([f"{question}",'\nDatabase schema:\n\n', str(db_content)]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
@@ -167,15 +167,6 @@ def parse_extra_args(extra_args):
 
 # === Entry Point ===
 
-import argparse
-import os
-import json
-import mlflow
-import pandas as pd
-from datetime import datetime
-# import your helper functions here, such as:
-# read_file, parse_extra_args, process_questions, extract_python_code, etc.
-
 def main(git_hash):
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
@@ -190,6 +181,8 @@ def main(git_hash):
     parser.add_argument("--model_id", type=str)
     parser.add_argument("--num_threads", type=int)
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
+    parser.add_argument("--training_path", type=str)
+    parser.add_argument("--validation_path", type=str)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
 
@@ -402,6 +395,9 @@ def main(git_hash):
             mlflow.log_artifact(combo_path)
             mlflow.log_artifact(complexity_path)
             mlflow.log_artifact(difficulty_path)
+            if args.training_path and args.validation_path:
+                mlflow.log_artifact(args.validation_path)
+                mlflow.log_artifact(args.training_path)
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)

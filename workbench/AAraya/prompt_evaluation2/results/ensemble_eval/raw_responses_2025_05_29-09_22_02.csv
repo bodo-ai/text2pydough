@@ -1,0 +1,846 @@
+question,db_name,dataset_name,model,code,exception,usage
+"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate.",Broker,Defog,gemini,"To determine the transaction success rate for customers with at least 5 total transactions, we will perform the following steps:
+1.  Filter the `Customers` collection to include only those who have made at least 5 transactions. This is done by checking the count of their `transactions_made`.
+2.  For these filtered customers, calculate:
+    *   Their name (`customer_name`).
+    *   The number of their successful transactions. We'll assume a transaction is successful if its `status` field is ""Completed"" (`successful_txns_count`).
+    *   The total number of their transactions (`total_txns_count`).
+3.  Using the counts from the previous step, calculate the `success_rate` as `(successful_txns_count * 100.0) / total_txns_count`. The multiplication by `100.0` ensures the result is a percentage and that floating-point division is used.
+4.  Select only the `customer_name` and the calculated `success_rate`.
+5.  Order the final results by the `success_rate` in ascending order (lowest to highest).
+
+```python
+# Step 1: Filter customers with at least 5 transactions and calculate counts of successful and total transactions.
+# We assume a transaction is 'successful' if its status is 'Completed'.
+customer_transaction_counts = Customers.WHERE(COUNT(transactions_made) >= 5).CALCULATE(
+    customer_name=name,
+    successful_txns_count=COUNT(transactions_made.WHERE(status == ""Completed"")),
+    total_txns_count=COUNT(transactions_made)
+)
+
+# Step 2: Calculate the success rate using the counts from Step 1.
+# Then, select only the customer name and their success rate, and order the results.
+result = customer_transaction_counts.CALCULATE(
+    customer_name=customer_name,
+    success_rate=(successful_txns_count * 100.0) / total_txns_count
+).ORDER_BY(success_rate.ASC())
+```
+**Explanation:**
+
+1.  `Customers.WHERE(COUNT(transactions_made) >= 5)`: This line starts with the `Customers` collection and filters it to keep only customers who have a count of `transactions_made` greater than or equal to 5.
+2.  The first `.CALCULATE(...)` then processes these filtered customers:
+    *   `customer_name=name`: Selects the customer's name.
+    *   `successful_txns_count=COUNT(transactions_made.WHERE(status == ""Completed""))`: Counts the number of transactions made by the customer where the `status` is ""Completed"". This is our definition of a successful transaction.
+    *   `total_txns_count=COUNT(transactions_made)`: Counts the total number of transactions for each customer.
+3.  The second `.CALCULATE(...)` takes the output of the first `CALCULATE`:
+    *   `customer_name=customer_name`: Keeps the customer's name.
+    *   `success_rate=(successful_txns_count * 100.0) / total_txns_count`: Calculates the success rate as a percentage. The `total_txns_count` is guaranteed to be at least 5 due to the earlier `WHERE` clause, preventing division by zero.
+4.  `.ORDER_BY(success_rate.ASC())`: Finally, the results are ordered by the `success_rate` in ascending order, from the lowest success rate to the highest.
+
+This query provides the customer's name and their transaction success rate, considering only customers with a minimum of 5 transactions, and assumes ""Completed"" status signifies a successful transaction.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=834 candidates_tokens_details=None prompt_token_count=18384 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18384)] thoughts_token_count=2134 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21352 traffic_type=None"
+"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",Broker,Defog,gemini,"To determine the number of distinct customers with a "".com"" email address who bought stocks of FAANG companies, we need to perform the following steps:
+
+1.  **Define FAANG Ticker Symbols**: Create a list of the ticker symbols for FAANG companies ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX').
+2.  **Filter Customers**:
+    *   Access the `Customers` collection.
+    *   Apply a filter to select customers whose `email` ends with "".com"".
+    *   Further filter these customers to include only those who have made at least one transaction involving one of the FAANG ticker symbols. This involves:
+        *   Accessing the `transactions_made` sub-collection for each customer.
+        *   For each transaction, checking if its associated `ticker.symbol` is present in our list of FAANG symbols using `ISIN`.
+        *   Using the `HAS` function to ensure the customer has at least one such transaction.
+3.  **Count Distinct Customers**:
+    *   Use the `Broker` (top-level) collection to calculate the final count.
+    *   Count the number of customers resulting from the filtering process. Since the filtering is done on the `Customers` collection, the resulting set of customers is inherently distinct.
+
+```python
+# Define the list of FAANG ticker symbols
+faang_ticker_symbols = (""AMZN"", ""AAPL"", ""GOOGL"", ""META"", ""NFLX"")
+
+# Filter customers who have a .com email and have made transactions with FAANG stocks
+filtered_customers = Customers.WHERE(
+    (ENDSWITH(email, "".com"")) &
+    (HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_ticker_symbols))) == 1)
+)
+
+# Calculate the count of these distinct customers
+result = Broker.CALCULATE(
+    num_faang_customers_with_com_email = COUNT(filtered_customers)
+)
+```
+
+**Explanation:**
+
+1.  `faang_ticker_symbols = (""AMZN"", ""AAPL"", ""GOOGL"", ""META"", ""NFLX"")`: This line defines a Python tuple containing the ticker symbols for the FAANG companies. This list will be used to identify relevant stock transactions.
+2.  `filtered_customers = Customers.WHERE(...)`: This line starts by accessing the `Customers` collection and applies a `WHERE` clause to filter them based on two conditions combined with a logical AND (`&`):
+    *   `ENDSWITH(email, "".com"")`: This condition checks if the customer's `email` field ends with the string "".com"".
+    *   `HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_ticker_symbols))) == 1`: This condition checks if the customer has at least one transaction related to FAANG stocks.
+        *   `transactions_made`: Accesses the list of transactions for each customer.
+        *   `.WHERE(ISIN(ticker.symbol, faang_ticker_symbols))`: Filters these transactions, keeping only those where the `ticker.symbol` (the symbol of the stock traded in the transaction) is one of the symbols in the `faang_ticker_symbols` list.
+        *   `HAS(...) == 1`: Checks if there is at least one such transaction for the customer.
+3.  `result = Broker.CALCULATE(num_faang_customers_with_com_email = COUNT(filtered_customers))`:
+    *   This line calculates the final result at the `Broker` (top) level.
+    *   `COUNT(filtered_customers)`: Counts the number of customers in the `filtered_customers` collection. Since `filtered_customers` is a collection of unique customers who met the criteria, this gives the number of distinct customers.
+    *   The result is assigned to a new field `num_faang_customers_with_com_email`.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=861 candidates_tokens_details=None prompt_token_count=18415 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18415)] thoughts_token_count=1739 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21015 traffic_type=None"
+"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",Broker,Defog,gemini,"To determine the number of Total Active Customers (TAC) from each country for customers who joined on or after January 1, 2023, we need to perform the following steps:
+
+1.  Filter the `Customers` collection to include only those who:
+    *   Joined on or after January 1, 2023 (`join_date >= ""2023-01-01""`).
+    *   Are active (assuming `status == ""Active""`).
+2.  Group these filtered customers by their `country`.
+3.  For each country, count the number of such customers.
+4.  Return the `country` and the calculated count (TAC).
+
+Here's the PyDough code:
+
+```python
+# Filter customers who are active and joined on or after January 1, 2023
+filtered_customers = Customers.WHERE((join_date >= ""2023-01-01"") & (status == ""Active""))
+
+# Partition by country and count the number of customers (TAC) in each country
+tac_by_country = filtered_customers.PARTITION(name=""country_groups"", by=(country)).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```
+
+**Explanation:**
+
+1.  `filtered_customers = Customers.WHERE((join_date >= ""2023-01-01"") & (status == ""Active""))`:
+    *   This line starts with the `Customers` collection.
+    *   The `WHERE` clause filters these customers.
+    *   `join_date >= ""2023-01-01""` selects customers whose joining date is on or after January 1, 2023.
+    *   `status == ""Active""` selects customers whose status is 'Active'.
+    *   The `&` operator combines these two conditions, so only customers meeting both criteria are included.
+
+2.  `tac_by_country = filtered_customers.PARTITION(name=""country_groups"", by=(country)).CALCULATE(...)`:
+    *   This line takes the `filtered_customers` from the previous step.
+    *   `PARTITION(name=""country_groups"", by=(country))` groups these customers based on their `country`. Each group will contain customers from the same country.
+    *   `.CALCULATE(country=country, tac_count=COUNT(Customers))`: For each group (i.e., for each country):
+        *   `country=country` selects the country name for the output.
+        *   `tac_count=COUNT(Customers)` counts the number of customers within that specific country group. This count represents the Total Active Customers (TAC) for that country according to the given definition.
+
+The final result, `tac_by_country`, will be a collection where each record contains a `country` and the corresponding `tac_count`.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=643 candidates_tokens_details=None prompt_token_count=18403 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18403)] thoughts_token_count=1218 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20264 traffic_type=None"
+How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday.,Broker,Defog,gemini,"To determine the number of stock transactions in each of the last 8 weeks (excluding the current week) and how many of those occurred on weekends, we will perform the following steps:
+
+1.  **Define Time Boundaries**: We first establish the precise 8-week period. This involves getting the start of the current week and then calculating the start and end dates for the 8 weeks preceding it.
+2.  **Filter Transactions**: We select transactions from the `Transactions` collection that:
+    *   Are for stocks (i.e., `ticker.ticker_type == 'STOCK'`).
+    *   Fall within the calculated 8-week date range.
+3.  **Calculate Transaction Attributes**: For each filtered transaction, we determine:
+    *   The start date of the week it belongs to (e.g., if a transaction was on Wednesday, this would be the preceding Monday, assuming weeks start on Monday). This will be used for grouping.
+    *   A boolean flag indicating if the transaction occurred on a weekend (Saturday or Sunday), using `DAYNAME` and `ISIN` functions.
+4.  **Group and Aggregate**: We then partition these processed transactions by their calculated week start date. For each week in the 8-week period that has transactions:
+    *   We count the total number of stock transactions.
+    *   We sum the weekend flags to count how many of these transactions occurred on a weekend.
+5.  **Order Results**: Finally, the results are ordered chronologically by the week start date.
+
+This approach ensures that we only consider stock transactions and correctly aggregate counts per week for the specified historical period.
+
+```python
+# Step 1: Define the time boundaries for the analysis.
+# We need the start of the current week to define our 8-week period.
+# 'Broker' is the assumed name for the top-level graph collection.
+defined_time_boundaries = Broker.CALCULATE(
+    # Determine the start of the current calendar week (e.g., Monday at 00:00:00).
+    var_current_week_start_date = DATETIME('now', 'start of week')
+).CALCULATE(
+    # The 8-week period begins exactly 8 weeks before the start of the current week.
+    var_period_start_date = DATETIME(var_current_week_start_date, '-8 weeks'),
+    # The 8-week period ends immediately before the current week begins (making it exclusive of the current week).
+    var_period_end_date = var_current_week_start_date
+)
+
+# Step 2: Filter transactions to those that are for stocks and fall within the defined 8-week period.
+# For each relevant transaction, also determine its week's start date and if it occurred on a weekend.
+relevant_stock_transactions = defined_time_boundaries.Transactions.WHERE(
+    (Transactions.ticker.ticker_type == 'STOCK') &  # Ensure the transaction is for a stock.
+    (Transactions.date_time >= var_period_start_date) &      # Transaction date must be on or after the period start.
+    (Transactions.date_time < var_period_end_date)           # Transaction date must be before the period end (exclusive).
+).CALCULATE(
+    # Calculate the start date of the week for each transaction. This will serve as the grouping key.
+    attr_transaction_week_start = DATETIME(Transactions.date_time, 'start of week'),
+    # Create a boolean flag indicating if the transaction occurred on a weekend.
+    # DAYNAME returns the textual name of the day (e.g., ""Saturday"").
+    attr_is_weekend = ISIN(DAYNAME(Transactions.date_time), (""Saturday"", ""Sunday""))
+)
+
+# Step 3: Group these transactions by the calculated week start date.
+# For each week, count the total number of stock transactions and the number of those that occurred on a weekend.
+weekly_transaction_counts = relevant_stock_transactions.PARTITION(
+    name=""group_by_week_start"",               # A descriptive name for the partition.
+    by=(attr_transaction_week_start)         # The field to group by.
+).CALCULATE(
+    # Output field: The start date of the week, which is our primary grouping identifier.
+    output_week_start_date = attr_transaction_week_start,
+    # Output field: The total count of stock transactions within this specific week.
+    # COUNT(relevant_stock_transactions) counts all records from the 'relevant_stock_transactions' collection
+    # that fall into the current partition group.
+    output_total_stock_transactions = COUNT(relevant_stock_transactions),
+    # Output field: The count of stock transactions that occurred on a weekend within this specific week.
+    # SUM(relevant_stock_transactions.attr_is_weekend) sums the boolean 'attr_is_weekend' field.
+    # True is treated as 1 and False as 0 in SUM aggregations.
+    output_weekend_stock_transactions = SUM(relevant_stock_transactions.attr_is_weekend)
+).ORDER_BY(output_week_start_date.ASC()) # Sort the weekly results chronologically.
+
+# Step 4: Assign the final result.
+result = weekly_transaction_counts
+```",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=1180 candidates_tokens_details=None prompt_token_count=18386 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18386)] thoughts_token_count=6334 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=25900 traffic_type=None"
+How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount.,Broker,Defog,gemini,"To determine the number of transactions and total transaction amount made by customers from the USA last week (exclusive of the current week), we will follow these steps:
+
+1.  **Define ""Last Week""**: We need to establish the date range for ""last week"".
+    *   `start_of_current_week_val`: This will be the beginning of the current week (e.g., if the week starts on Sunday, this will be the most recent Sunday at 00:00:00). We use `DATETIME('now', 'start of week')`.
+    *   `start_of_last_week_val`: This will be the beginning of the week prior to the current week. We calculate this as 7 days before `start_of_current_week_val` using `DATETIME('now', 'start of week', '-7 days')`.
+    *   Transactions from ""last week"" will have a `date_time` such that `date_time >= start_of_last_week_val` AND `date_time < start_of_current_week_val`.
+
+2.  **Filter Transactions**: We will select transactions that meet two criteria:
+    *   The transaction was made by a customer whose `country` is ""USA"". This is accessed via `Transactions.customer.country`.
+    *   The transaction's `date_time` falls within the ""last week"" range defined above.
+
+3.  **Calculate Aggregates**:
+    *   Count the number of filtered transactions.
+    *   Sum the `amount` of these filtered transactions.
+
+4.  **Return Results**: The final output will be a single record containing the number of transactions and their total amount.
+
+We will use contextless expressions to define the date boundaries and the set of relevant transactions, and then use `Broker.CALCULATE` for the final aggregation.
+
+```python
+# Define the start of the current week
+start_of_current_week_val = DATETIME('now', 'start of week')
+
+# Define the start of last week (7 days prior to the start of the current week)
+start_of_last_week_val = DATETIME('now', 'start of week', '-7 days')
+
+# Filter transactions made by customers from the USA during last week
+relevant_transactions = Transactions.WHERE(
+    (customer.country == ""USA"") &
+    (date_time >= start_of_last_week_val) &
+    (date_time < start_of_current_week_val)
+)
+
+# Calculate the number of transactions and the total transaction amount
+result = Broker.CALCULATE(
+    number_of_transactions = COUNT(relevant_transactions),
+    total_transaction_amount = SUM(relevant_transactions.amount)
+)
+```
+
+**Explanation:**
+
+1.  `start_of_current_week_val = DATETIME('now', 'start of week')`: This expression calculates the timestamp for the beginning of the current week.
+2.  `start_of_last_week_val = DATETIME('now', 'start of week', '-7 days')`: This expression calculates the timestamp for the beginning of the week immediately preceding the current week.
+3.  `relevant_transactions = Transactions.WHERE(...)`: This filters the `Transactions` collection.
+    *   `customer.country == ""USA""`: Ensures that only transactions from customers located in the USA are considered.
+    *   `(date_time >= start_of_last_week_val) & (date_time < start_of_current_week_val)`: Filters transactions to include only those that occurred during ""last week"" – specifically, on or after the start of last week and before the start of the current week.
+4.  `result = Broker.CALCULATE(...)`: This performs the final aggregation on the `Broker` (high-level) collection.
+    *   `number_of_transactions = COUNT(relevant_transactions)`: Counts the number of transactions that met the criteria defined in `relevant_transactions`.
+    *   `total_transaction_amount = SUM(relevant_transactions.amount)`: Sums the `amount` field of these `relevant_transactions`.
+
+The query will return a single row with two columns: `number_of_transactions` and `total_transaction_amount`, representing the requested figures for USA customers last week.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=950 candidates_tokens_details=None prompt_token_count=18380 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18380)] thoughts_token_count=2161 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21491 traffic_type=None"
+"Return the customer name, number of transactions, total transaction amount, and CR for all customersCR = customer rank by total transaction amount, with rank 1 being the customer with the highest total transaction amount",Broker,Defog,gemini,"Okay, I can help you with that. Here's the PyDough code to get the customer name, number of transactions, total transaction amount, and rank customers by their total transaction amount:
+
+```python
+customer_transaction_summary = Customers.CALCULATE(
+    customer_name=name,
+    num_transactions=COUNT(transactions_made),
+    total_transaction_amount=SUM(transactions_made.amount)
+).CALCULATE(
+    customer_name=customer_name,
+    num_transactions=num_transactions,
+    total_transaction_amount=total_transaction_amount,
+    CR=RANKING(by=total_transaction_amount.DESC())
+)
+```
+
+**Explanation:**
+
+1.  **`Customers.CALCULATE(...)`**:
+    *   We start with the `Customers` collection.
+    *   `customer_name=name`: Selects the customer's name and renames it to `customer_name`.
+    *   `num_transactions=COUNT(transactions_made)`: Counts the number of transactions for each customer using the `transactions_made` sub-collection.
+    *   `total_transaction_amount=SUM(transactions_made.amount)`: Calculates the sum of the `amount` for all transactions made by each customer.
+
+2.  **`.CALCULATE(...)`** (second `CALCULATE`):
+    *   This second `CALCULATE` is used to compute the rank (`CR`) because window functions like `RANKING` operate on fields that are already available in the current context.
+    *   We re-select `customer_name`, `num_transactions`, and `total_transaction_amount` to include them in the final output.
+    *   `CR=RANKING(by=total_transaction_amount.DESC())`: This calculates the rank for each customer.
+        *   `by=total_transaction_amount.DESC()`: Specifies that the ranking should be based on the `total_transaction_amount` in descending order (highest amount gets rank 1).",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=449 candidates_tokens_details=None prompt_token_count=18391 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18391)] thoughts_token_count=211 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19051 traffic_type=None"
+What are the 2 most frequently bought stock ticker symbols in the past 10 days? Return the ticker symbol and number of buy transactions.,Broker,Defog,gemini,"To find the 2 most frequently bought stock ticker symbols in the past 10 days, we need to perform the following steps:
+1.  Filter the `Transactions` collection to include only those records where `transaction_type` is ""buy"".
+2.  Further filter these ""buy"" transactions to include only those that occurred within the last 10 days. We can achieve this using the `DATEDIFF` function to compare the `date_time` of the transaction with the current date and time obtained via `DATETIME('now')`.
+3.  For these filtered transactions, we need to extract the ticker symbol. The ticker symbol is available through the `ticker` relationship: `ticker.symbol`.
+4.  Group the transactions by their ticker symbol using the `PARTITION` method.
+5.  For each group (i.e., for each unique ticker symbol), count the number of transactions. This count represents the number of times that stock was bought in the specified period.
+6.  Finally, use the `TOP_K` method to select the 2 ticker symbols with the highest transaction counts in descending order.
+7.  The result should return the ticker symbol and its corresponding count of buy transactions.
+
+```python
+# Step 1 & 2: Filter transactions to include only 'buy' transactions within the last 10 days.
+# DATEDIFF(""days"", date_time, DATETIME('now')) <= 10 covers transactions from 10 days ago up to the current moment.
+recent_buy_transactions = Transactions.WHERE(
+    (transaction_type == ""buy"") &
+    (DATEDIFF(""days"", date_time, DATETIME('now')) <= 10)
+)
+
+# Step 3: Calculate the ticker symbol for these transactions to make it available for partitioning.
+transactions_with_symbol = recent_buy_transactions.CALCULATE(
+    # Storing ticker.symbol in a new field ticker_sbl for partitioning
+    ticker_sbl=ticker.symbol
+)
+
+# Step 4 & 5: Partition by the calculated ticker symbol and count the number of transactions in each group.
+ticker_transaction_counts = transactions_with_symbol.PARTITION(
+    name=""ticker_groups"", by=ticker_sbl  # Partition by the calculated ticker_sbl
+).CALCULATE(
+    ticker_symbol=ticker_sbl,  # Output the ticker symbol
+    num_of_buy_transactions=COUNT(Transactions)  # Count transactions within each partition group
+)
+
+# Step 6 & 7: Select the top 2 most frequent ticker symbols based on the number of buy transactions.
+top_2_bought_tickers = ticker_transaction_counts.TOP_K(
+    2, by=num_of_buy_transactions.DESC()
+)
+```
+This PyDough code performs the following actions:
+1.  `recent_buy_transactions`: Filters the `Transactions` collection to retain only ""buy"" transactions that occurred within the last 10 days (inclusive of transactions up to the current moment on the 10th day prior).
+2.  `transactions_with_symbol`: From these filtered transactions, it calculates and stores the `ticker.symbol` into a new field `ticker_sbl`. This is done to prepare the symbol for use as a partitioning key.
+3.  `ticker_transaction_counts`: This step partitions the `transactions_with_symbol` collection by the `ticker_sbl`. For each unique ticker symbol, it calculates:
+    *   `ticker_symbol`: The stock ticker symbol.
+    *   `num_of_buy_transactions`: The total count of buy transactions for that symbol within the filtered period.
+4.  `top_2_bought_tickers`: Finally, it selects the top 2 records from `ticker_transaction_counts` based on `num_of_buy_transactions` in descending order, effectively giving the 2 most frequently bought stock ticker symbols. The result will contain `ticker_symbol` and `num_of_buy_transactions`.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=881 candidates_tokens_details=None prompt_token_count=18380 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18380)] thoughts_token_count=3028 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22289 traffic_type=None"
+What are the PMCS and PMAT for customers who signed up in the last 6 months excluding the current month?PMCS = per month customer signups. PMAT = per month average transaction amount.,Broker,Defog,gemini,"To determine the Per Month Customer Signups (PMCS) and Per Month Average Transaction Amount (PMAT) for customers who signed up in the last 6 months (excluding the current month), we will perform the following steps:
+
+1.  **Define the Time Window**: We first establish the relevant period. This comprises the 6 full months prior to the current month. We calculate the start date (inclusive) as the beginning of the month 6 months ago, and the end date (exclusive) as the beginning of the current month.
+2.  **Filter Customers**: We select customers from the `Customers` collection whose `join_date` falls within this defined time window.
+3.  **Prepare for Grouping**: For each selected customer, we derive a `signup_period` string in ""YYYY-MM"" format (e.g., ""2023-01"") from their `join_date`. This will be used for grouping.
+4.  **Group by Signup Month**: We partition the filtered customers based on their `signup_period`.
+5.  **Calculate Metrics**: For each `signup_period` group:
+    *   **PMCS**: We count the number of customers in that group.
+    *   **PMAT**: We calculate the average transaction `amount` from all transactions made by the customers in that group.
+6.  **Order Results**: The final results are ordered by the `signup_period` in ascending order.
+
+```python
+# Step 1: Define the start and end dates for the 6-month period excluding the current month.
+# 'end_date_exclusive' is the start of the current month.
+# 'start_date_inclusive' is the start of the month that was 6 months prior to the current month.
+date_boundaries = Broker.CALCULATE(
+    end_date_exclusive = DATETIME('now', 'start of month'),
+    start_date_inclusive = DATETIME('now', 'start of month', '-6 months')
+)
+
+# Step 2 & 3: Filter customers who joined within the defined period and
+# calculate their signup year and month for grouping.
+# 'signup_period' is formatted as YYYY-MM.
+customers_in_selected_period = date_boundaries.Customers.WHERE(
+    (join_date >= start_date_inclusive) & (join_date < end_date_exclusive)
+).CALCULATE(
+    signup_period = JOIN_STRINGS(""-"", YEAR(join_date), LPAD(MONTH(join_date), 2, ""0""))
+)
+
+# Step 4 & 5: Partition the filtered customers by their signup_period.
+# For each period, calculate PMCS (Per Month Customer Signups) by counting customers
+# and PMAT (Per Month Average Transaction Amount) by averaging the 'amount'
+# of all transactions made by customers who signed up in that period.
+monthly_customer_metrics = customers_in_selected_period.PARTITION(
+    name=""signup_month_group"", by=(signup_period)
+).CALCULATE(
+    signup_period = signup_period,
+    PMCS = COUNT(Customers),
+    PMAT = AVG(Customers.transactions_made.amount)
+).ORDER_BY(signup_period.ASC()) # Step 6: Order the results by signup period.
+
+result = monthly_customer_metrics
+```
+This PyDough code will:
+1.  Dynamically determine the last 6 full months based on the current date.
+2.  Filter customers who signed up during this period.
+3.  Group these customers by the year and month they signed up.
+4.  For each month, it calculates:
+    *   `PMCS`: The total number of customers who signed up in that month.
+    *   `PMAT`: The average transaction amount across all transactions made by customers who signed up in that month. If no transactions exist for a group, PMAT might be null.
+5.  The results are presented with `signup_period`, `PMCS`, and `PMAT`, ordered chronologically by `signup_period`.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=896 candidates_tokens_details=None prompt_token_count=18393 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18393)] thoughts_token_count=3668 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22957 traffic_type=None"
+"What is the ACP for each ticker type in the past 7 days, inclusive of today? Return the ticker type and the average closing price.ACP = Average Closing Price of tickers in the last 7 days, inclusive of today",Broker,Defog,gemini,"To determine the Average Closing Price (ACP) for each ticker type over the past 7 days (inclusive of today), we will perform the following steps:
+
+1.  **Filter and Prepare Data**: We start with the `DailyPrices` collection. For each daily price record, we extract its date (`price_date`), its closing price (`closing_price`), and the `ticker_type` associated with its ticker (`ticker_type_from_ticker`). We then filter these records to include only those from the last 7 days, inclusive of today. The condition `DATEDIFF(""days"", price_date, DATETIME('now')) <= 6` achieves this, as `DATEDIFF` will be 0 for today's records, 1 for yesterday's, and so on, up to 6 for records from 6 days ago, covering a total of 7 days.
+2.  **Partition by Ticker Type**: The filtered data is then partitioned by `ticker_type_from_ticker`. This groups all price records belonging to the same ticker type together.
+3.  **Calculate Average Closing Price**: For each group (i.e., for each ticker type), we calculate the average of the `closing_price`. The `AVG(DailyPrices.closing_price)` function computes this average over the `closing_price` values of the `DailyPrices` records within the current partition group.
+4.  **Format Output**: The final result will contain the `ticker_type` and its calculated `acp` (Average Closing Price).
+
+```python
+# Step 1: Filter DailyPrices for the last 7 days (inclusive) and extract necessary information.
+# 'price_date' is the date of the daily price record.
+# 'ticker_type_from_ticker' is the type of the ticker, accessed via the 'ticker' relationship.
+# 'closing_price' is the closing price for that day.
+# The WHERE clause filters for records where the date is within the last 7 days (0 to 6 days ago from 'now').
+price_infos = DailyPrices.CALCULATE(
+    price_date = date,
+    ticker_type_from_ticker = ticker.ticker_type,
+    closing_price = close
+).WHERE(DATEDIFF(""days"", price_date, DATETIME('now')) <= 6)
+
+# Step 2: Partition the filtered price information by 'ticker_type_from_ticker'.
+# This creates groups of price records, where each group corresponds to a unique ticker type.
+partitioned_by_ticker_type = price_infos.PARTITION(
+    name=""ticker_type_group"",  # A name for the groups created by the partition
+    by=(ticker_type_from_ticker)
+)
+
+# Step 3: For each ticker type group, calculate the Average Closing Price (acp).
+# 'ticker_type_from_ticker' (renamed to 'ticker_type') is the partitioning key.
+# AVG(DailyPrices.closing_price) calculates the average of the 'closing_price' field
+# for all DailyPrices records within the current 'ticker_type_group'.
+acp_per_ticker_type = partitioned_by_ticker_type.CALCULATE(
+    ticker_type = ticker_type_from_ticker,
+    acp = AVG(DailyPrices.closing_price)  # ACP is Average Closing Price
+)
+
+# Assign the final result to the variable 'result'
+result = acp_per_ticker_type
+```",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=766 candidates_tokens_details=None prompt_token_count=18397 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18397)] thoughts_token_count=4210 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23373 traffic_type=None"
+What is the AR for each country for customers who joined in 2022? Return the country and AR.AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100.,Broker,Defog,gemini,"The user wants to calculate the Activity Ratio (AR) for each country for customers who joined in 2022.
+The definition provided for AR is:
+AR (Activity Ratio) = (Number of Active Customers with Transactions / Total Number of Customers with Transactions) * 100.
+
+Let's break down the terms based on this definition for customers who joined in 2022, grouped by country:
+1.  ""Number of Active Customers with Transactions"": This refers to the count of customers within a specific country (who joined in 2022) that have made at least one transaction. The term ""Active"" here is synonymous with ""having transactions"".
+2.  ""Total Number of Customers with Transactions"": This also refers to the count of customers within that same group (country, joined 2022) that have made at least one transaction.
+
+Given this literal interpretation, the numerator and the denominator of the AR formula are identical.
+Therefore, for any given country:
+-   If there are any customers who joined in 2022 and have transactions, then AR = (N / N) * 100 = 100.0.
+-   If there are no such customers, then AR = (0 / 0) * 100. This is typically treated as 0.0 for such ratios.
+
+The PyDough code will implement this logic:
+1.  Filter `Customers` for those who joined in the year 2022.
+2.  For each of these customers, determine if they have made any transactions using `HAS(transactions_made)`.
+3.  Group these customers by `country`.
+4.  For each country, count the number of customers who have transactions. Let this be `num_customers_with_transactions`.
+5.  Calculate AR: If `num_customers_with_transactions > 0`, AR is 100.0; otherwise, AR is 0.0.
+6.  Return the `country` and the calculated `AR`.
+
+```python
+# Step 1: Filter customers who joined in 2022.
+customers_joined_2022 = Customers.WHERE(YEAR(join_date) == 2022)
+
+# Step 2: For these customers, identify their country and whether they have made transactions.
+# 'has_transactions_flag' will be True (1) if transactions exist, False (0) otherwise.
+customer_transaction_info = customers_joined_2022.CALCULATE(
+    customer_country = country,
+    has_transactions_flag = HAS(transactions_made) == 1
+)
+
+# Step 3: Partition by country and count customers with transactions.
+# 'num_with_transactions' will be the count of customers in that country (joined 2022)
+# who have at least one transaction. This count serves as both the numerator and
+# denominator in the provided AR formula.
+country_transaction_counts = customer_transaction_info.PARTITION(name=""country_group"", by=(customer_country)).CALCULATE(
+    output_country = customer_country,
+    num_with_transactions = SUM(Customers.has_transactions_flag)
+)
+
+# Step 4: Calculate AR based on the literal interpretation of the definition.
+# If num_with_transactions > 0, AR = 100.0, else AR = 0.0.
+result = country_transaction_counts.CALCULATE(
+    country = output_country,
+    AR = IFF(num_with_transactions > 0, 100.0, 0.0)
+)
+```
+Explanation:
+1.  `customers_joined_2022`: This line filters the `Customers` collection to include only those customers whose `join_date` falls within the year 2022.
+2.  `customer_transaction_info`: This takes the filtered customers and calculates two new fields for each:
+    *   `customer_country`: The country of the customer.
+    *   `has_transactions_flag`: A boolean flag (True/1 if the customer has made transactions, False/0 otherwise), determined by checking if the `transactions_made` sub-collection is non-empty.
+3.  `country_transaction_counts`: This line partitions the `customer_transaction_info` data by `customer_country`. For each country group, it calculates:
+    *   `output_country`: The name of the country.
+    *   `num_with_transactions`: The sum of `has_transactions_flag` for all customers in that country group. This effectively counts the number of customers in that country (who joined in 2022) that have transactions. According to the provided AR definition, this value represents both the ""Number of Active Customers with Transactions"" and the ""Total Number of Customers with Transactions"".
+4.  `result`: This final step calculates the AR.
+    *   It selects the `country` (from `output_country`).
+    *   It calculates `AR` using the `IFF` function: If `num_with_transactions` is greater than 0 (meaning there are customers with transactions), AR is 100.0. Otherwise (no customers with transactions), AR is 0.0. This directly implements the AR formula where numerator and denominator are identical.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=1179 candidates_tokens_details=None prompt_token_count=18402 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18402)] thoughts_token_count=7049 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=26630 traffic_type=None"
+"What is the number of customers whose name starts with J or ends with 'ez', and who live in a state ending with the letter 'a'?all customer attributes should be matched case insensitively",Broker,Defog,gemini,"To find the number of customers whose name starts with 'J' or ends with 'ez' (case-insensitively) and who live in a state ending with the letter 'a' (case-insensitively), we will perform the following steps:
+
+1.  Access the `Customers` collection.
+2.  Convert the `name` field to lowercase using `LOWER(name)` to ensure case-insensitive matching.
+3.  Check if the lowercase name starts with 'j' using `STARTSWITH(LOWER(name), 'j')`.
+4.  Check if the lowercase name ends with 'ez' using `ENDSWITH(LOWER(name), 'ez')`.
+5.  Combine these two name conditions using an OR (`|`) operator: `(STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez'))`.
+6.  Convert the `state` field to lowercase using `LOWER(state)`.
+7.  Check if the lowercase state ends with 'a' using `ENDSWITH(LOWER(state), 'a')`.
+8.  Combine the name condition and the state condition using an AND (`&`) operator within a `WHERE` clause.
+9.  Count the number of customers that satisfy these combined conditions using `COUNT()`.
+10. Assign this count to a field in a `CALCULATE` expression on the top-level `Broker` collection.
+
+```python
+result = Broker.CALCULATE(
+    number_of_customers=COUNT(
+        Customers.WHERE(
+            (STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez')) &
+            ENDSWITH(LOWER(state), 'a')
+        )
+    )
+)
+```
+Explanation:
+The PyDough code first filters the `Customers` collection.
+- The `WHERE` clause applies two main conditions combined with an AND (`&`):
+    - The first condition checks the customer's name: `(STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez'))`. This means the name, after being converted to lowercase, must either start with 'j' OR end with 'ez'.
+    - The second condition checks the customer's state: `ENDSWITH(LOWER(state), 'a')`. This means the state, after being converted to lowercase, must end with 'a'.
+- After filtering, `COUNT()` is used to count the number of customers who meet all the specified criteria.
+- This count is then assigned to the field `number_of_customers` in a new collection derived from `Broker`, effectively giving a single aggregated result.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=597 candidates_tokens_details=None prompt_token_count=18391 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18391)] thoughts_token_count=1014 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=20002 traffic_type=None"
+"What is the SPM for each ticker symbol from sell transactions in the past month, inclusive of 1 month ago? Return the ticker symbol and SPM.SPM (Selling Profit Margin) = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100",Broker,Defog,gemini,"To calculate the Selling Profit Margin (SPM) for each ticker symbol from sell transactions in the past month, we will follow these steps:
+
+1.  **Filter Transactions**: We'll select transactions that are of type ""sell"" and occurred within the last month, inclusive of one month ago from the current date. The date range will be from `DATETIME('now', '-1 month')` to `DATETIME('now')`.
+2.  **Prepare Data for Partitioning**: For these filtered transactions, we'll extract the ticker symbol (`ticker.symbol`) and calculate the necessary components for SPM: the transaction amount (`amount`) and the sum of tax and commission (`tax + commission`).
+3.  **Group by Ticker Symbol**: We'll partition these prepared transactions by the ticker symbol.
+4.  **Calculate Aggregates per Ticker**: Within each ticker group (partition), we will sum up the `transaction_amount` to get `total_amount_from_sells` and sum up the `transaction_tax_commission` to get `total_tax_plus_commission`.
+5.  **Calculate SPM**: Using the aggregated values and the provided formula `SPM = (Total Amount from Sells - (Tax + Commission)) / Total Amount from Sells * 100`, we'll compute the SPM for each ticker. We'll handle cases where `Total Amount from Sells` is zero to avoid division by zero, returning 0.0 for SPM in such instances.
+6.  **Select Output**: The final result will include the `ticker_symbol` and the calculated `spm`.
+
+```python
+# Step 1: Filter transactions for ""sell"" type and within the last month,
+# and calculate necessary per-transaction values.
+filtered_transactions = Transactions.WHERE(
+    (transaction_type == ""sell"") &
+    (date_time >= DATETIME('now', '-1 month')) & # From one month ago
+    (date_time <= DATETIME('now'))               # Up to current date
+).CALCULATE(
+    ticker_symbol_val = ticker.symbol,
+    transaction_amount = amount,
+    transaction_tax_commission = tax + commission # Pre-calculate sum of tax and commission
+)
+
+# Step 2: Partition by ticker symbol and calculate aggregates.
+# Then, calculate SPM for each ticker.
+result = filtered_transactions.PARTITION(
+    name=""ticker_sales_group"", by=(ticker_symbol_val)
+).CALCULATE(
+    ticker_symbol = ticker_symbol_val, # This is the partition key
+    total_amount_from_sells = SUM(filtered_transactions.transaction_amount),
+    total_tax_plus_commission = SUM(filtered_transactions.transaction_tax_commission)
+).CALCULATE(
+    ticker_symbol = ticker_symbol,
+    spm = IFF(
+        total_amount_from_sells == 0, # Handle division by zero
+        0.0,
+        (total_amount_from_sells - total_tax_plus_commission) / total_amount_from_sells * 100.0
+    )
+)
+```
+
+**Explanation:**
+
+1.  `filtered_transactions`:
+    *   We start with the `Transactions` collection.
+    *   `WHERE` clause filters these transactions:
+        *   `transaction_type == ""sell""`: Only includes sales.
+        *   `date_time >= DATETIME('now', '-1 month')`: Ensures transactions are from the last month, starting exactly one month ago.
+        *   `date_time <= DATETIME('now')`: Ensures transactions are up to the current moment.
+    *   `CALCULATE` then prepares fields for each filtered transaction:
+        *   `ticker_symbol_val = ticker.symbol`: Extracts the symbol from the related `ticker` record.
+        *   `transaction_amount = amount`: Stores the transaction's amount.
+        *   `transaction_tax_commission = tax + commission`: Calculates the sum of tax and commission for the transaction.
+
+2.  `result`:
+    *   `filtered_transactions.PARTITION(name=""ticker_sales_group"", by=(ticker_symbol_val))`: Groups the `filtered_transactions` by their `ticker_symbol_val`. Each group is named `ticker_sales_group`.
+    *   The first `CALCULATE` after `PARTITION` computes aggregates for each group:
+        *   `ticker_symbol = ticker_symbol_val`: Retains the ticker symbol for the group.
+        *   `total_amount_from_sells = SUM(filtered_transactions.transaction_amount)`: Sums the `transaction_amount` for all transactions within the current ticker group.
+        *   `total_tax_plus_commission = SUM(filtered_transactions.transaction_tax_commission)`: Sums the `transaction_tax_commission` for all transactions within the current ticker group.
+    *   The second `CALCULATE` computes the final SPM and selects the desired output fields:
+        *   `ticker_symbol = ticker_symbol`: Keeps the ticker symbol.
+        *   `spm = IFF(...)`: Calculates the Selling Profit Margin.
+            *   `IFF(total_amount_from_sells == 0, 0.0, ...)`: Checks if `total_amount_from_sells` is zero. If so, SPM is `0.0` to prevent division by zero.
+            *   Otherwise, SPM is calculated as `(total_amount_from_sells - total_tax_plus_commission) / total_amount_from_sells * 100.0`. The `100.0` ensures the result is a floating-point percentage.
+
+This query will return a collection where each record contains a `ticker_symbol` and its corresponding `spm` calculated from sell transactions in the last month. Tickers with no sell transactions in this period will not be included.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=1316 candidates_tokens_details=None prompt_token_count=18412 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18412)] thoughts_token_count=2582 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22310 traffic_type=None"
+"What is the ticker symbol, month, average closing price, highest price, lowest price, and MoMC for each ticker by month?MoMC = month-over-month change in average closing price = (avg_close_given_month - avg_close_previous_month) / avg_close_previous_month for each ticker symbol each month. Recall that we want the symbol, and not just the ticker _id.",Broker,Defog,gemini,"The query requires calculating monthly statistics (average closing price, highest price, lowest price) for each ticker symbol, and then determining the month-over-month change (MoMC) in the average closing price.
+
+Here's a step-by-step breakdown of the PyDough code:
+
+1.  **Prepare Daily Price Data (`price_data_prepared`)**:
+    *   Start with the `DailyPrices` collection.
+    *   For each daily record, `CALCULATE` the following:
+        *   `ticker_symbol_val`: The ticker symbol, obtained from the related `ticker` record (`ticker.symbol`).
+        *   `year_num`: The numeric year from the `date`.
+        *   `month_num`: The numeric month from the `date`.
+        *   `month_key_str`: A formatted month string (e.g., ""YYYY-MM"") using `JOIN_STRINGS` and `LPAD` to ensure months are two digits (e.g., ""01"" for January). This string is used for grouping and final output.
+
+2.  **Calculate Monthly Aggregates (`monthly_stats`)**:
+    *   Take the `price_data_prepared` collection.
+    *   `PARTITION` it by `ticker_symbol_val`, `month_key_str`, `year_num`, and `month_num`. This creates groups for each unique ticker-month. The `name` of this partition is `monthly_aggregation_group`.
+    *   Within each group, `CALCULATE`:
+        *   `ticker_symbol_out`: Carry over the ticker symbol.
+        *   `month_out`: Carry over the formatted month string.
+        *   `year_for_sort`, `month_for_sort`: Carry over numeric year and month, which will be used for sorting when applying the `PREV` function.
+        *   `current_month_avg_close`: The average closing price for the group, calculated as `AVG(DailyPrices.close)`.
+        *   `current_month_high`: The maximum high price for the group, `MAX(DailyPrices.high)`.
+        *   `current_month_low`: The minimum low price for the group, `MIN(DailyPrices.low)`.
+    *   The aggregation functions (`AVG`, `MAX`, `MIN`) operate on the original `DailyPrices` fields within the context of each partition group.
+
+3.  **Calculate Month-over-Month Change (`result_with_momc`)**:
+    *   Take the `monthly_stats` collection (which contains one record per ticker-month with its aggregates).
+    *   `PARTITION` this collection by `ticker_symbol_out`. The `name` of this partition is `ticker_group`. This step groups all monthly records for each ticker together.
+    *   Access the sub-collection of monthly stats for each ticker (referred to as `monthly_stats` within the context of `ticker_group`).
+    *   On this sub-collection, `CALCULATE`:
+        *   `ticker_symbol`, `month`, `average_closing_price`, `highest_price`, `lowest_price`: Select and rename the fields from `monthly_stats` for the final output.
+        *   `prev_avg_close`: Use the `PREV()` window function to get the `current_month_avg_close` from the previous record.
+            *   `by=(year_for_sort.ASC(), month_for_sort.ASC())`: Orders the records chronologically by year and then month within each ticker's group before `PREV` is applied.
+            *   `per=""ticker_group""`: Ensures `PREV` operates independently for each ticker (i.e., it looks for the previous month of the *same* ticker).
+            *   `default=NULL`: If there's no previous record (e.g., for the first month of a ticker), `prev_avg_close` will be `NULL`.
+        *   `MoMC`: Calculate the month-over-month change using the formula `(current_month_avg_close - prev_avg_close) / prev_avg_close`.
+            *   Uses `IFF` to handle cases where `prev_avg_close` is `NULL` or `0`, setting `MoMC` to `NULL` in such scenarios to avoid errors or undefined results.
+
+4.  **Order Results**:
+    *   The final result set is ordered by `ticker_symbol` in ascending order and then by `month` (the ""YYYY-MM"" string) in ascending order.
+
+```python
+# Step 1: Prepare daily price data with necessary fields for grouping and calculations.
+price_data_prepared = DailyPrices.CALCULATE(
+    ticker_symbol_val=ticker.symbol,
+    year_num=YEAR(date),
+    month_num=MONTH(date),
+    month_key_str=JOIN_STRINGS(""-"", YEAR(date), LPAD(MONTH(date), 2, ""0""))
+)
+
+# Step 2: Calculate monthly aggregates (average close, max high, min low) for each ticker.
+monthly_stats = price_data_prepared.PARTITION(
+    name=""monthly_aggregation_group"", by=(ticker_symbol_val, month_key_str, year_num, month_num)
+).CALCULATE(
+    ticker_symbol_out=ticker_symbol_val,
+    month_out=month_key_str,
+    year_for_sort=year_num,
+    month_for_sort=month_num,
+    current_month_avg_close=AVG(DailyPrices.close),
+    current_month_high=MAX(DailyPrices.high),
+    current_month_low=MIN(DailyPrices.low)
+)
+
+# Step 3: Calculate Month-over-Month Change (MoMC).
+# Partition monthly_stats by ticker_symbol to apply PREV function per ticker.
+# The sub-collection accessed after PARTITION is named after the input collection.
+result_with_momc = monthly_stats.PARTITION(
+    name=""ticker_group"", by=(ticker_symbol_out)
+).monthly_stats.CALCULATE(
+    ticker_symbol=ticker_symbol_out,
+    month=month_out,
+    average_closing_price=current_month_avg_close,
+    highest_price=current_month_high,
+    lowest_price=current_month_low,
+    prev_avg_close=PREV(
+        current_month_avg_close,
+        by=(year_for_sort.ASC(), month_for_sort.ASC()),
+        per=""ticker_group"",
+        default=NULL
+    ),
+    MoMC=IFF(
+        (prev_avg_close != NULL) & (prev_avg_close != 0),
+        (current_month_avg_close - prev_avg_close) / prev_avg_close,
+        NULL
+    )
+).ORDER_BY(ticker_symbol.ASC(), month.ASC())
+```",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=1573 candidates_tokens_details=None prompt_token_count=18439 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18439)] thoughts_token_count=7807 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27819 traffic_type=None"
+"Which 3 distinct stocks had the highest price change between the low and high from April 1 2023 to April 4 2023? I want the different in the low and high throughout this timerange, not just the intraday price changes. Return the ticker symbol and price change.To analyze stock performance, join the daily price and ticker tables, filter for a specific date range, and calculate price change.",Broker,Defog,gemini,"To find the 3 distinct stocks with the highest price change between their lowest low and highest high from April 1, 2023, to April 4, 2023, we will perform the following steps:
+
+1.  Filter the `DailyPrices` collection to include only records within the date range from ""2023-04-01"" to ""2023-04-04"" (inclusive).
+2.  Group these filtered records by the stock's ticker symbol using `PARTITION`. The ticker symbol is accessed via `DailyPrices.ticker.symbol`.
+3.  For each stock (each partition group):
+    *   Calculate the minimum `low` price (`min_low_for_period`) observed for that stock during the specified period.
+    *   Calculate the maximum `high` price (`max_high_for_period`) observed for that stock during the specified period.
+4.  Calculate the `price_change_val` for each stock as the difference between its `max_high_for_period` and `min_low_for_period`.
+5.  Use `TOP_K` to select the top 3 stocks with the largest `price_change_val` in descending order.
+6.  Finally, select and rename the `ticker_symbol` and the calculated `price_change` for the output.
+
+```python
+# Filter daily prices for the specified date range
+filtered_daily_prices = DailyPrices.WHERE((date >= ""2023-04-01"") & (date <= ""2023-04-04""))
+
+# Partition by ticker symbol, calculate min low and max high for the period,
+# then calculate the price change, and finally select the top 3.
+top_stocks_by_price_change = filtered_daily_prices.PARTITION(name=""stock_daily_data"", by=ticker.symbol).CALCULATE(
+    # ticker.symbol is the partition key, assign it to a new variable
+    ticker_symbol_value = ticker.symbol,
+    # Find the minimum low price for this stock within the filtered period
+    min_low_for_period = MIN(DailyPrices.low),
+    # Find the maximum high price for this stock within the filtered period
+    max_high_for_period = MAX(DailyPrices.high)
+).CALCULATE(
+    # Pass through the ticker symbol
+    ticker_symbol_output = ticker_symbol_value,
+    # Calculate the price change: max high - min low over the period
+    price_change_value = max_high_for_period - min_low_for_period
+).TOP_K(3, by=price_change_value.DESC()).CALCULATE(
+    # Select the final fields with desired names
+    ticker_symbol = ticker_symbol_output,
+    price_change = price_change_value
+)
+```
+**Explanation:**
+
+1.  `filtered_daily_prices = DailyPrices.WHERE((date >= ""2023-04-01"") & (date <= ""2023-04-04""))`: This line filters the `DailyPrices` collection to retain only the records where the `date` falls between April 1, 2023, and April 4, 2023, inclusive.
+2.  `.PARTITION(name=""stock_daily_data"", by=ticker.symbol)`: The filtered data is then partitioned by `ticker.symbol`. This groups all daily price records belonging to the same stock symbol together.
+3.  `.CALCULATE(ticker_symbol_value = ticker.symbol, min_low_for_period = MIN(DailyPrices.low), max_high_for_period = MAX(DailyPrices.high))`: For each stock group (partition):
+    *   `ticker_symbol_value = ticker.symbol`: The ticker symbol (which is the partition key) is selected.
+    *   `min_low_for_period = MIN(DailyPrices.low)`: The minimum `low` price for that stock across all its records within the filtered date range is calculated.
+    *   `max_high_for_period = MAX(DailyPrices.high)`: The maximum `high` price for that stock across all its records within the filtered date range is calculated.
+4.  `.CALCULATE(ticker_symbol_output = ticker_symbol_value, price_change_value = max_high_for_period - min_low_for_period)`: This step takes the output from the previous `CALCULATE`:
+    *   `ticker_symbol_output = ticker_symbol_value`: The ticker symbol is passed through.
+    *   `price_change_value = max_high_for_period - min_low_for_period`: The actual price change is calculated by subtracting the period's minimum low from the period's maximum high.
+5.  `.TOP_K(3, by=price_change_value.DESC())`: This selects the top 3 records (stocks) based on the `price_change_value`, ordered in descending order (highest change first).
+6.  `.CALCULATE(ticker_symbol = ticker_symbol_output, price_change = price_change_value)`: Finally, this selects the `ticker_symbol` and `price_change` for the top 3 stocks, renaming them to the desired output field names.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=1199 candidates_tokens_details=None prompt_token_count=18440 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18440)] thoughts_token_count=3034 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22673 traffic_type=None"
+"Which customer made the highest number of transactions in the same month as they signed up? Return the customer's _id, name and number of transactions.",Broker,Defog,gemini,"To find the customer who made the highest number of transactions in the same month as they signed up, we need to perform the following steps:
+
+1.  Iterate through each customer in the `Customers` collection.
+2.  For each customer, determine their sign-up month and year from their `join_date`.
+3.  Access their `transactions_made` sub-collection.
+4.  Filter these transactions to include only those where the `date_time` of the transaction falls within the same calendar month and year as the customer's `join_date`.
+5.  Count these filtered transactions.
+6.  After calculating this count for all customers, use `TOP_K` to identify the customer with the maximum count.
+7.  Finally, select the `_id`, `name`, and the calculated number of transactions for this top customer.
+
+```python
+# Calculate for each customer their _id, name, and the number of transactions
+# made in the same month and year as their join_date.
+customer_signup_month_transactions = Customers.CALCULATE(
+    c_id=_id,
+    c_name=name,
+    num_transactions_in_signup_month=COUNT(transactions_made.WHERE(
+        (YEAR(date_time) == YEAR(join_date)) & (MONTH(date_time) == MONTH(join_date))
+    ))
+)
+
+# Find the customer with the highest number of such transactions.
+# If multiple customers have the same highest count, TOP_K(1) will select one.
+top_customer = customer_signup_month_transactions.TOP_K(
+    1, by=num_transactions_in_signup_month.DESC()
+).CALCULATE(
+    _id=c_id,
+    name=c_name,
+    number_of_transactions=num_transactions_in_signup_month
+)
+```
+
+**Explanation:**
+
+1.  `Customers.CALCULATE(...)`: We start with the `Customers` collection. For each customer, we calculate:
+    *   `c_id=_id`: Stores the customer's ID.
+    *   `c_name=name`: Stores the customer's name.
+    *   `num_transactions_in_signup_month=COUNT(...)`: This calculates the number of transactions made by the customer in their sign-up month.
+        *   `transactions_made.WHERE(...)`: We access the customer's transactions and filter them.
+        *   `(YEAR(date_time) == YEAR(join_date)) & (MONTH(date_time) == MONTH(join_date))`: This condition ensures that only transactions occurring in the same calendar year and month as the customer's `join_date` are considered.
+        *   `COUNT(...)`: Counts the number of transactions that satisfy the condition.
+
+2.  `.TOP_K(1, by=num_transactions_in_signup_month.DESC())`: From the results of the previous `CALCULATE` (which includes all customers and their respective counts), this selects the top 1 customer who has the highest `num_transactions_in_signup_month`. The `DESC()` ensures we get the highest count.
+
+3.  `.CALCULATE(_id=c_id, name=c_name, number_of_transactions=num_transactions_in_signup_month)`: This final step takes the single customer record returned by `TOP_K` and formats the output to include only the requested fields: `_id`, `name`, and the count, aliased as `number_of_transactions`.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=788 candidates_tokens_details=None prompt_token_count=18382 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18382)] thoughts_token_count=2356 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=21526 traffic_type=None"
+Who are the top 5 customers by total transaction amount? Return their name and total amount.,Broker,Defog,gemini,"Okay, I can help you with that. Here's the PyDough code to find the top 5 customers by their total transaction amount:
+
+```python
+top_customers_by_transaction_amount = Customers.CALCULATE(
+    customer_name=name,
+    total_amount=SUM(transactions_made.amount)
+).TOP_K(5, by=total_amount.DESC())
+```
+
+**Explanation:**
+
+1.  **`Customers.CALCULATE(...)`**: We start by accessing the `Customers` collection.
+    *   `customer_name=name`: We select the `name` of the customer and alias it as `customer_name`.
+    *   `total_amount=SUM(transactions_made.amount)`: For each customer, we calculate the sum of the `amount` from all their associated transactions (accessed via the `transactions_made` sub-collection). This sum is aliased as `total_amount`.
+
+2.  **`.TOP_K(5, by=total_amount.DESC())`**:
+    *   This function selects the top 5 records from the result of the previous `CALCULATE` operation.
+    *   `by=total_amount.DESC()`: The records are ordered in descending order based on the `total_amount` we calculated, so the customers with the highest total transaction amounts appear first.
+
+This query will return a collection containing the `customer_name` and `total_amount` for the top 5 customers.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=325 candidates_tokens_details=None prompt_token_count=18370 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18370)] thoughts_token_count=188 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=18883 traffic_type=None"
+"How many distinct customers made each type of transaction between Jan 1, 2023 and Mar 31, 2023 (inclusive of start and end dates)? Return the transaction type, number of distinct customers and average number of shares, for the top 3 transaction types by number of customers.",Broker,Defog,gemini,"To determine how many distinct customers made each type of transaction between Jan 1, 2023, and Mar 31, 2023, and to find the average number of shares for the top 3 transaction types by customer count, we will perform the following steps:
+
+1.  **Filter Transactions by Date**: We'll first select transactions that fall within the specified date range (January 1, 2023, to March 31, 2023, inclusive). We use `DATETIME` to define the date boundaries accurately, ensuring the entire period is covered.
+2.  **Group by Transaction Type**: The filtered transactions will then be partitioned by their `transaction_type`.
+3.  **Calculate Metrics**: For each `transaction_type` group, we will calculate:
+    *   The number of distinct customers involved, using `NDISTINCT(Transactions.customer_id)`.
+    *   The average number of shares transacted, using `AVG(Transactions.shares)`.
+4.  **Identify Top 3 Types**: We will then use `TOP_K` to select the top 3 transaction types based on the `number_of_distinct_customers` in descending order.
+5.  **Return Results**: The final output will include the `transaction_type`, the calculated `number_of_distinct_customers`, and the `average_number_of_shares` for these top 3 types.
+
+```python
+# Step 1: Filter transactions to the specified date range.
+# The range is inclusive, so for the end date '2023-03-31', we use '< DATETIME(""2023-04-01"")'
+# to include all timestamps on March 31st.
+transactions_in_range = Transactions.WHERE(
+    (date_time >= DATETIME(""2023-01-01"")) & (date_time < DATETIME(""2023-04-01""))
+)
+
+# Step 2: Partition the filtered transactions by transaction_type.
+# Step 3: For each transaction type, calculate the number of distinct customers and the average number of shares.
+# The partition key 'transaction_type' is directly available in the CALCULATE clause.
+# 'Transactions.customer_id' and 'Transactions.shares' refer to the respective fields
+# within each partition group.
+grouped_by_transaction_type = transactions_in_range.PARTITION(
+    name=""type_groups"", by=(transaction_type)
+).CALCULATE(
+    transaction_type = transaction_type,
+    number_of_distinct_customers = NDISTINCT(Transactions.customer_id),
+    average_number_of_shares = AVG(Transactions.shares)
+)
+
+# Step 4: Select the top 3 transaction types based on the number of distinct customers.
+# The results are ordered by 'number_of_distinct_customers' in descending order.
+top_3_types_by_customer_count = grouped_by_transaction_type.TOP_K(
+    3, by=number_of_distinct_customers.DESC()
+)
+
+# Step 5: The 'top_3_types_by_customer_count' variable now holds the desired result
+# with the fields: transaction_type, number_of_distinct_customers, and average_number_of_shares.
+result = top_3_types_by_customer_count
+```",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=760 candidates_tokens_details=None prompt_token_count=18416 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18416)] thoughts_token_count=3529 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=22705 traffic_type=None"
+Return the customer ID and name of customers who have not made any transactions.,Broker,Defog,gemini,"Okay, I can help you with that. Here's the PyDough code to retrieve the customer ID and name of customers who have not made any transactions:
+
+```python
+customers_no_transactions = Customers.WHERE(HASNOT(transactions_made) == 1).CALCULATE(
+    customer_id=_id,
+    customer_name=name
+)
+```
+
+**Explanation:**
+
+1.  **`Customers.WHERE(HASNOT(transactions_made) == 1)`**:
+    *   We start with the `Customers` collection.
+    *   The `WHERE` clause filters these customers.
+    *   `HASNOT(transactions_made) == 1` checks if the `transactions_made` sub-collection for each customer is empty (i.e., the customer has made no transactions). `== 1` is used because `HASNOT` returns a boolean-like value (1 for true, 0 for false in this context).
+
+2.  **`.CALCULATE(customer_id=_id, customer_name=name)`**:
+    *   After filtering, `CALCULATE` is used to select and rename the desired fields.
+    *   `customer_id=_id` selects the `_id` field and renames it to `customer_id`.
+    *   `customer_name=name` selects the `name` field and renames it to `customer_name`.
+
+This query will return a collection of customers, each with their `customer_id` and `customer_name`, who have not made any transactions.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=339 candidates_tokens_details=None prompt_token_count=18366 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18366)] thoughts_token_count=105 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=18810 traffic_type=None"
+Return the distinct list of customer IDs who have made a 'buy' transaction.,Broker,Defog,gemini,"Okay, let's break down this request.
+
+We need to:
+1.  Identify all transactions that are of type 'buy'.
+2.  From these 'buy' transactions, extract the `customer_id`.
+3.  Ensure the list of `customer_id`s is distinct.
+
+Based on the database schema:
+-   The `Transactions` collection contains `transaction_type` and `customer_id`.
+
+Here's how we can construct the PyDough query:
+
+1.  Start with the `Transactions` collection.
+2.  Filter these transactions using `WHERE` to keep only those where `transaction_type == 'buy'`.
+3.  To get a distinct list of `customer_id`s from these filtered transactions, we can use the `PARTITION` function, grouping by `customer_id`.
+4.  Then, use `CALCULATE` to select the `customer_id` from each partition.
+
+```python
+distinct_buying_customer_ids = Transactions.WHERE(transaction_type == 'buy').PARTITION(name=""distinct_buyers"", by=customer_id).CALCULATE(
+    customer_id=customer_id
+)
+```
+
+**Explanation:**
+
+1.  `Transactions.WHERE(transaction_type == 'buy')`: This filters the `Transactions` collection to include only records where the `transaction_type` is 'buy'.
+2.  `.PARTITION(name=""distinct_buyers"", by=customer_id)`: This takes the filtered transactions and groups them by `customer_id`. The result is a new collection (conceptually, one record per unique `customer_id` that made a 'buy' transaction).
+3.  `.CALCULATE(customer_id=customer_id)`: For each group (i.e., for each distinct `customer_id` that made a 'buy' transaction), this selects the `customer_id` itself. The field in the output will be named `customer_id`.
+
+This query will return a collection where each record contains a single field, `customer_id`, representing a unique customer ID that has made at least one 'buy' transaction.",,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16361)] cached_content_token_count=16361 candidates_token_count=465 candidates_tokens_details=None prompt_token_count=18367 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=18367)] thoughts_token_count=872 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=19704 traffic_type=None"

@@ -83,7 +83,7 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
             print(f"Warning: No database found for question_id {question_id}")
             continue
             
-        db_name = db_info[db_name_col].iloc[0]
+        db_name = row.get(db_name_col)
         
         # Load the schema data
         schema_data = load_schema_data(schema_dir, db_name)
@@ -100,7 +100,7 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
     merged_df = pd.DataFrame(merged_data)
     
     # Save the merged data
-    output_file = output_dir / 'training_data_with_schema.csv'
+    output_file = output_dir / 'training_data_with_schema_20250609_072134.csv'
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
     
@@ -118,9 +118,9 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
 def main():
     DATASET = "kaggledbqa"
     # Define paths
-    base_path = Path("/mnt/c/Users/david/bodo/text2pydough/training/training_data/labeled_data/" + DATASET)
+    base_path = Path("/home/arami/bodo/text2pydough//workbench/lcar_lab/training/training_data/labeled_data/" + DATASET)
     
-    processed_data_path = base_path / "processed" / ("combined_" + DATASET + "_data.csv")
+    processed_data_path = "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/merged_files/20250606_142454/result_match_true.csv"
     questions_path = base_path / "questions" / (DATASET + "_data_full.csv")
     schema_dir = base_path / "metadata"
     output_dir = base_path / "training_ready"
