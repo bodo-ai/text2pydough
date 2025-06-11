@@ -100,7 +100,7 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
     merged_df = pd.DataFrame(merged_data)
     
     # Save the merged data
-    output_file = output_dir / 'training_data_with_schema_20250609_072134.csv'
+    output_file = output_dir / 'training_data_with_schema_20250611_072134.csv'
     merged_df.to_csv(output_file, index=False)
     print(f"Merged data saved to {output_file}")
     
@@ -116,11 +116,11 @@ def merge_schema_with_data(processed_data, questions_data, schema_dir, output_di
     return merged_df
 
 def main():
-    DATASET = "kaggledbqa"
+    DATASET = "spider"  # Change this to your dataset name
     # Define paths
     base_path = Path("/home/arami/bodo/text2pydough//workbench/lcar_lab/training/training_data/labeled_data/" + DATASET)
     
-    processed_data_path = "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/merged_files/20250606_142454/result_match_true.csv"
+    processed_data_path = "/home/arami/bodo/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/merged_files/20250610_224421/result_match_true.csv"
     questions_path = base_path / "questions" / (DATASET + "_data_full.csv")
     schema_dir = base_path / "metadata"
     output_dir = base_path / "training_ready"
