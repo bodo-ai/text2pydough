@@ -14,36 +14,36 @@ import mlflow
 
 # Global variable to control logging backend
 # Global variable to control logging backend
-USE_MLFLOW = True  # Set to False to use Phoenix instead
+# USE_MLFLOW = True  # Set to False to use Phoenix instead
 
-# Configure MLflow
-if USE_MLFLOW:
-    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
-    # print(MLFLOW_TRACKING_URI)
-    os.environ["MLFLOW_TRACKING_TOKEN"] = MLFLOW_TRACKING_TOKEN
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
-    # Enable MLflow LangChain autologging
-    mlflow.langchain.autolog(
-        log_traces=True,
-        log_models=True,
-        log_input_examples=True,
-        log_model_signatures=True,
-        registered_model_name="pydough_agent"
-    )
-else:
-    # Register a Phoenix tracer
-    from phoenix.otel import register
-    API_KEY = os.getenv("PHOENIX_API_KEY")
-    COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")  # Ej: "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com:6060/v1/traces"
-    tracer_provider = register(
-        endpoint=COLLECTOR_ENDPOINT,               # URL raíz sin /v1/traces
-        headers={"Authorization": f"Bearer {API_KEY}"},
-        project_name=os.getenv("EXPERIMENT_NAME", "agent-react-testing"),
-        auto_instrument=True,
-        protocol="http/protobuf"                    # Forzar uso HTTP en lugar de gRPC
-    )
+# # Configure MLflow
+# if USE_MLFLOW:
+#     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+#     MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
+#     # print(MLFLOW_TRACKING_URI)
+#     os.environ["MLFLOW_TRACKING_TOKEN"] = MLFLOW_TRACKING_TOKEN
+#     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+#     mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "labeling-agent-debug"))
+#     # Enable MLflow LangChain autologging
+#     mlflow.langchain.autolog(
+#         log_traces=True,
+#         log_models=True,
+#         log_input_examples=True,
+#         log_model_signatures=True,
+#         registered_model_name="pydough_agent"
+#     )
+# else:
+#     # Register a Phoenix tracer
+#     from phoenix.otel import register
+#     API_KEY = os.getenv("PHOENIX_API_KEY")
+#     COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")  # Ej: "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com:6060/v1/traces"
+#     tracer_provider = register(
+#         endpoint=COLLECTOR_ENDPOINT,               # URL raíz sin /v1/traces
+#         headers={"Authorization": f"Bearer {API_KEY}"},
+#         project_name=os.getenv("EXPERIMENT_NAME", "agent-react-testing"),
+#         auto_instrument=True,
+#         protocol="http/protobuf"                    # Forzar uso HTTP en lugar de gRPC
+#     )
 
 # Set up executors at module level
 THREAD_EXECUTOR = ThreadPoolExecutor(max_workers=os.cpu_count() * 5)

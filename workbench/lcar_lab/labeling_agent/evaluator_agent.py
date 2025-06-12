@@ -25,34 +25,34 @@ from pandas.api.types import is_numeric_dtype
 
 # Global variable to control logging backend
 
-USE_MLFLOW = True  # Set to False to use Phoenix instead
-# Configure MLflow
-if USE_MLFLOW:
-    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
-    # print(MLFLOW_TRACKING_URI)
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "agent-playground"))
-    # Enable MLflow LangChain autologging
-    mlflow.langchain.autolog(
-        log_traces=True,
-        log_models=True,
-        log_input_examples=True,
-        log_model_signatures=True,
-        registered_model_name="pydough_agent"
-    )
-else:
-    # Register a Phoenix tracer
-    from phoenix.otel import register
-    API_KEY = os.getenv("PHOENIX_API_KEY")
-    COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")  # Ej: "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com:6060/v1/traces"
-    tracer_provider = register(
-        endpoint=COLLECTOR_ENDPOINT,               # URL raíz sin /v1/traces
-        headers={"Authorization": f"Bearer {API_KEY}"},
-        project_name=os.getenv("EXPERIMENT_NAME", "agent-react-testing"),
-        auto_instrument=True,
-        protocol="http/protobuf"                    # Forzar uso HTTP en lugar de gRPC
-    )
+# USE_MLFLOW = True  # Set to False to use Phoenix instead
+# # Configure MLflow
+# if USE_MLFLOW:
+#     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+#     MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN", "")
+#     # print(MLFLOW_TRACKING_URI)
+#     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+#     mlflow.set_experiment(os.getenv("EXPERIMENT_NAME", "agent-playground"))
+#     # Enable MLflow LangChain autologging
+#     mlflow.langchain.autolog(
+#         log_traces=True,
+#         log_models=True,
+#         log_input_examples=True,
+#         log_model_signatures=True,
+#         registered_model_name="pydough_agent"
+#     )
+# else:
+#     # Register a Phoenix tracer
+#     from phoenix.otel import register
+#     API_KEY = os.getenv("PHOENIX_API_KEY")
+#     COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")  # Ej: "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com:6060/v1/traces"
+#     tracer_provider = register(
+#         endpoint=COLLECTOR_ENDPOINT,               # URL raíz sin /v1/traces
+#         headers={"Authorization": f"Bearer {API_KEY}"},
+#         project_name=os.getenv("EXPERIMENT_NAME", "agent-react-testing"),
+#         auto_instrument=True,
+#         protocol="http/protobuf"                    # Forzar uso HTTP en lugar de gRPC
+#     )
 
 def _clean_mixed_column(series: pd.Series) -> pd.Series:
     """
@@ -378,6 +378,7 @@ class SQLEvaluatorAgent:
     def __init__(self, db_connection_string: str):
         """Initialize the SQL evaluator agent with a database connection."""
         self.db = SQLDatabase.from_uri(db_connection_string)
+        
         self.llm = ChatGoogleGenerativeAI(
            model="gemini-2.5-flash-preview-05-20",
            temperature=0
