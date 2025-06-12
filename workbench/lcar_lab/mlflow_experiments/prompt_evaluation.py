@@ -405,8 +405,7 @@ def main(git_hash):
             mlflow.log_artifact(complexity_path)
             mlflow.log_artifact(difficulty_path)
             if args.training_path and args.validation_path:
-                mlflow.log_artifact(args.validation_path)
-                mlflow.log_artifact(args.training_path)
+                mlflow.log_artifacts(args.training_path, 'train_data')
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
