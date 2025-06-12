@@ -2,6 +2,7 @@
 import os
 from typing import List
 import mlflow.pyfunc
+from mlflow.models import set_model
 from provider.ai_providers import *
 
 class GeminiWrapper(mlflow.pyfunc.PythonModel):
@@ -17,3 +18,5 @@ class GeminiWrapper(mlflow.pyfunc.PythonModel):
             contents=model_input
         )
         return [response.text]
+    
+set_model(GeminiWrapper())

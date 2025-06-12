@@ -22,7 +22,20 @@ from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
 from dynamic_prompt.mdgen_v2 import generate_markdown_from_metadata
 from sqlalchemy import create_engine, inspect, text
-from gemini_wrapper import GeminiWrapper
+
+class GeminiWrapper(mlflow.pyfunc.PythonModel):
+    def __init__(self, model_id):
+        self.model_id = model_id
+
+    def load_context(self, context):
+        self.client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+
+    def predict(self, context, model_input: List[str]) -> List[str]:
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=model_input
+        )
+        return [response.text]
 
 # === Helper Functions ===
 
@@ -417,8 +430,7 @@ def main(git_hash):
 
         mlflow.pyfunc.log_model(
             artifact_path=args.model_id,
-            python_model=GeminiWrapper(model_id=args.model_id),
-            code_paths=["./gemini_wrapper.py"],
+            python_model=GeminiWrapper(args.model_id),
             artifacts={
                 "prompt_file": args.prompt_file,
                 "pydough_file": args.pydough_file,
