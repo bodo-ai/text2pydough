@@ -409,7 +409,8 @@ def main(git_hash):
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
-        metrics_path = "./metrics.json"
+        output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+        metrics_path = f"{output_path}/test/metrics_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
 
         with open(metrics_path, "w") as metrics_file:
             metrics_file.write(metrics_json)
