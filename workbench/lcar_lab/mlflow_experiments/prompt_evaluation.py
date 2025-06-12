@@ -88,7 +88,11 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
         if db_name not in db_markdown_map:
             with open(json_file, "r") as f:
                 data = json.load(f)
-                db_markdown_map[db_name] = data
+
+                graph_name = data[0].get('name', 'default_graph')
+                my_graph = pydough.parse_json_metadata_from_file(json_file, graph_name)
+
+                db_markdown_map[db_name] = my_graph
 
     return db_markdown_map
 
@@ -414,6 +418,7 @@ def main(git_hash):
         mlflow.pyfunc.log_model(
             artifact_path=args.model_id,
             python_model=GeminiWrapper(model_id=args.model_id),
+            code_paths=["./gemini_wrapper.py"],
             artifacts={
                 "prompt_file": args.prompt_file,
                 "pydough_file": args.pydough_file,
