@@ -20,7 +20,7 @@ from test_data.eval import compare_output, execute_code_and_extract_result
 import aisuite as ai
 from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
-from dynamic_prompt.mdgen import json_to_markdown
+from dynamic_prompt.mdgen_v2 import generate_markdown_from_metadata
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
 
@@ -106,7 +106,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     question = data.get(question, {}).get("redefined_question", question)
     return "".join([f"{question}",'\nDatabase schema:\n\n', str(db_content)]), prompt.format(
         script_content=script,
-        database_content=json_to_markdown(db_content),
+        database_content=generate_markdown_from_metadata(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
