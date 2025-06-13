@@ -28,12 +28,6 @@ USE_CHEATSHEET=true
 
 # set the vertexai model name for the PyDough generator
 MODEL_NAME="gemini-2.5-pro-preview-03-25"
-#projects/316936339319/locations/us-central1/endpoints/4491730399348654080"
-
-#"projects/316936339319/locations/us-central1/endpoints/4491730399348654080"
-#"gemini-2.5-pro-preview-03-25"
-
-#"gemini-2.0-flash"
 
 # Create output directory if it doesn't exist
 #mkdir -p "${OUTPUT_DIR}"
