@@ -162,7 +162,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, retries=0, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -215,7 +215,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         }
 
     all_runs = []
-    for attempt in range(retries):
+    for attempt in range(tries):
         with ThreadPoolExecutor(max_workers=len(models_to_test)) as executor:
             futures = [executor.submit(run_model, model, attempt) for model in models_to_test]
             all_runs.extend(f.result() for f in futures)
@@ -231,7 +231,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         grouped.setdefault(run["model_name"], []).append(run)
 
     # Detect early match between Gemini and Claude
-    for i in range(retries):
+    for i in range(tries):
         gemini_run = grouped.get("gemini", [])[i]
         claude_run = grouped.get("claude", [])[i]
         if gemini_run["df"] is not None and claude_run["df"] is not None:
