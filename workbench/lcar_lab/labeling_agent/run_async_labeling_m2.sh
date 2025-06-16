@@ -6,11 +6,11 @@ echo $BASE_DIR
 DB_PATH="${BASE_DIR}/mount-folder/datasets"
 METADATA_PATH="${BASE_DIR}/mount-folder/datasets"
 CHEATSHEET_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
-QUESTIONS_CSV_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/merged_files/20250613_014220/result_match_false.csv"
-OUTPUT_DIR="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/evaluator_agent_improvement/results"
+QUESTIONS_CSV_PATH="${BASE_DIR}/mount-folder/labeling_data/gemini_2.0_flash"
+OUTPUT_DIR="${BASE_DIR}/mount-folder/labeling_data/gemini_2.5_flash"
 # Default values for optional parameters
 START_ROW=0
-NUM_QUESTIONS=3000
+NUM_QUESTIONS=60
 CONCURRENT_QUESTIONS=5
 MAX_FEEDBACK_LOOPS=5
 # Create output directory if it doesn't exist
