@@ -88,10 +88,10 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
             with open(json_file, "r") as f:
                 data = json.load(f)
 
-                graph_name = data[0].get('name', 'default_graph')
-                my_graph = pydough.parse_json_metadata_from_file(json_file, graph_name)
+                #graph_name = data[0].get('name', 'default_graph')
+                #my_graph = pydough.parse_json_metadata_from_file(json_file, graph_name)
 
-                db_markdown_map[db_name] = my_graph
+                db_markdown_map[db_name] = data
 
     return db_markdown_map
 
