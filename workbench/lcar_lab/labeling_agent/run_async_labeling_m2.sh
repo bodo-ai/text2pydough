@@ -6,8 +6,8 @@ echo $BASE_DIR
 DB_PATH="${BASE_DIR}/mount-folder/datasets"
 METADATA_PATH="${BASE_DIR}/mount-folder/datasets"
 CHEATSHEET_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
-QUESTIONS_CSV_PATH="${BASE_DIR}/mount-folder/datasets/Finetuning/labeling/validation_dataset/testing_dataset.csv"
-OUTPUT_DIR="${BASE_DIR}/mount-folder/labeling_data/gemini_2.0_flash"
+QUESTIONS_CSV_PATH="${BASE_DIR}/mount-folder/labeling_data/gemini_2.0_flash"
+OUTPUT_DIR="${BASE_DIR}/mount-folder/labeling_data/gemini_2.5_flash"
 # Default values for optional parameters
 START_ROW=0
 NUM_QUESTIONS=60

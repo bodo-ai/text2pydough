@@ -241,7 +241,7 @@ async def process_single_question(
     return result
 
 async def process_questions(
-    questions_csv_path: str,
+    questions_df: pd.DataFrame,
     output_csv_path: str,
     db_base_path: str,
     metadata_base_path: str,
@@ -263,9 +263,6 @@ async def process_questions(
         start_row: Row number to start processing from (0-based index)
         max_feedback_loops: Maximum number of feedback loops between generator and evaluator
     """
-    
-    # Read questions
-    questions_df = pd.read_csv(questions_csv_path)
     
     # Select starting row and limit number of questions if specified
     questions_df = questions_df.iloc[start_row:]
@@ -389,12 +386,14 @@ async def main():
             print(f"Error: {name} file not found at {path}")
             print(f"Please ensure the {name.lower()} file exists at the specified path.")
             return
-    
-    # Read questions CSV to check for dataframe_match column
-    df_questions = pd.read_csv(args.questions_csv_path)
 
-    if 'dataframe_match' in df_questions.columns:
-         # Filter rows where dataframe_match is False
+    start_row = args.start_row
+
+    while  start_row < args.num_questions:
+        # Read questions CSV to check for dataframe_match column
+        df_questions = pd.read_csv(args.questions_csv_path, skiprows=lambda x: x > 0 and x < args.start_row)
+
+        # Filter rows where dataframe_match is False
         filtered_df = df_questions[df_questions['dataframe_match'] == False]
 
         # Reformat to original question structure
@@ -404,12 +403,9 @@ async def main():
         
         new_csv = pd.DataFrame(reformatted_questions)
 
-        # Save to CSV
-        new_csv.to_csv(reprocessed_questions_output, index=False)
-
         # Process reprocessed questions
         await process_questions(
-            questions_csv_path=reprocessed_questions_output,
+            questions_df=new_csv,
             output_csv_path=output_csv_path,
             db_base_path=args.db_base_path,
             metadata_base_path=args.metadata_base_path,
@@ -419,18 +415,7 @@ async def main():
             max_feedback_loops=args.max_feedback_loops
         )
 
-    else:
-        # Process questions
-        await process_questions(
-            questions_csv_path=args.questions_csv_path,
-            output_csv_path=output_csv_path,
-            db_base_path=args.db_base_path,
-            metadata_base_path=args.metadata_base_path,
-            cheatsheet_path=args.cheatsheet_path,
-            num_questions=args.num_questions,
-            start_row=args.start_row,
-            max_feedback_loops=args.max_feedback_loops
-        )
+        start_row = len(new_csv)
     
     # Calculate accuracy and create metadata
     results_df = pd.read_csv(output_csv_path)

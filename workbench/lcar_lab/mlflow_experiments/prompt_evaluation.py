@@ -20,9 +20,8 @@ from test_data.eval import compare_output, execute_code_and_extract_result
 import aisuite as ai
 from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
-from dynamic_prompt.mdgen import json_to_markdown
+from dynamic_prompt.mdgen_v2 import generate_markdown_from_metadata
 from sqlalchemy import create_engine, inspect, text
-from gemini_wrapper import GeminiWrapper
 
 # === Helper Functions ===
 
@@ -88,7 +87,11 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
         if db_name not in db_markdown_map:
             with open(json_file, "r") as f:
                 data = json.load(f)
-                db_markdown_map[db_name] = data
+
+                graph_name = data[0].get('name', 'default_graph')
+                my_graph = pydough.parse_json_metadata_from_file(json_file, graph_name)
+
+                db_markdown_map[db_name] = my_graph
 
     return db_markdown_map
 
@@ -102,7 +105,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     question = data.get(question, {}).get("redefined_question", question)
     return "".join([f"{question}",'\nDatabase schema:\n\n', str(db_content)]), prompt.format(
         script_content=script,
-        database_content=json_to_markdown(db_content),
+        database_content=generate_markdown_from_metadata(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -406,14 +409,15 @@ def main(git_hash):
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
-        metrics_path = "./metrics.json"
+        output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+        metrics_path = f"{output_path}/metrics/metrics_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
 
         with open(metrics_path, "w") as metrics_file:
             metrics_file.write(metrics_json)
 
         mlflow.pyfunc.log_model(
             artifact_path=args.model_id,
-            python_model=GeminiWrapper(model_id=args.model_id),
+            python_model="gemini_wrapper.py",
             artifacts={
                 "prompt_file": args.prompt_file,
                 "pydough_file": args.pydough_file,

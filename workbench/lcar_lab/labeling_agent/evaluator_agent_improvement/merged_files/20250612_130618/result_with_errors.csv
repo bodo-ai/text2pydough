@@ -1,0 +1,397 @@
+question_id,question,ground_truth_sql,generated_response,generated_pydough,evaluation_match,evaluation_explanation,feedback_loops,dataframe_match,error,dataset_name,db_name
+306,List the distinct ranges of the mountains with the top 3 prominence.,SELECT DISTINCT Range FROM mountain ORDER BY Prominence DESC LIMIT 3,"## 1. Analysis of the question
+
+The question asks for:
+- The distinct ranges of mountains
+- That have the top 3 prominence values
+- Need to sort by prominence in descending order
+- Take the top 3 records
+- Extract the range field
+- Apply distinct/unique operation to remove duplicates
+
+## 2. Step-by-step explanation of the solution
+
+1. Start with the `mountains` collection
+2. Sort the mountains by prominence in descending order using `ORDER_BY`
+3. Take the top 3 mountains with highest prominence
+4. Extract only the range field using `CALCULATE`
+5. Apply distinct operation by using `PARTITION` to group by range and then extract unique ranges
+
+## 3. The PyDough code
+
+```python
+# Get the top 3 mountains by prominence and extract their distinct ranges
+top_prominence_mountains = mountains.ORDER_BY(prominence.DESC()).TOP_K(3, by=prominence.DESC())
+distinct_ranges = top_prominence_mountains.CALCULATE(range=range).PARTITION(name=""ranges"", by=range).CALCULATE(range=range)
+```
+
+## 4. Explanation of how the code works
+
+The code works in the following steps:
+
+1. **`mountains.ORDER_BY(prominence.DESC())`**: Orders all mountains by their prominence values in descending order (highest prominence first)
+
+2. **`.TOP_K(3, by=prominence.DESC())`**: Selects the top 3 mountains with the highest prominence values
+
+3. **`.CALCULATE(range=range)`**: Extracts only the range field from these top 3 mountains
+
+4. **`.PARTITION(name=""ranges"", by=range)`**: Groups the results by the range field to identify distinct ranges
+
+5. **`.CALCULATE(range=range)`**: Extracts the distinct range values from the partitioned groups
+
+This approach ensures we get the distinct mountain ranges from only the top 3 mountains by prominence, which should return the unique ranges: Kilimanjaro, Rwenzori, and Mount Kenya (assuming these are the ranges of the top 3 mountains by prominence).","# Get the top 3 mountains by prominence and extract their distinct ranges
+top_prominence_mountains = mountains.ORDER_BY(prominence.DESC()).TOP_K(3, by=prominence.DESC())
+distinct_ranges = top_prominence_mountains.CALCULATE(range=range).PARTITION(name=""ranges"", by=range).CALCULATE(range=range)",False,"The generated response produced an empty DataFrame ({}) while the ground truth should return 3 distinct mountain ranges: Kilimanjaro, Rwenzori, and Mount Kenya. This represents a complete failure to generate or execute the Pydough code. The correct logic should: 1) Access the mountain table/dataframe, 2) Sort the data by the 'Prominence' column in descending order, 3) Select the 'Range' column from the top 3 rows, 4) Apply distinct/unique operation to remove duplicates, and 5) Return the resulting ranges. The empty result suggests either no Pydough code was generated, there were syntax errors preventing execution, or the code failed to properly reference the mountain dataframe and its columns (Range, Prominence). The generator needs to ensure proper dataframe operations are implemented to filter, sort, and select the required data.",1,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,climbing
+476,What are the first name and last name of the players who were paid salary by team Washington Nationals in both 2005 and 2007?,"SELECT T2.name_first ,  T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2005 AND T3.name = 'Washington Nationals' INTERSECT SELECT T2.name_first , T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2007 AND T3.name = 'Washington Nationals'","## 1. Analysis of the question
+
+I need to find players who:
+- Were paid a salary by the Washington Nationals team
+- Received salary in both 2005 and 2007
+- Return their first name and last name
+
+Looking at the database schema, I can see:
+- `salaries` table contains salary information with `year`, `team_id`, and `player_id`
+- `players` table contains player information with `name_first` and `name_last`
+- There's a relationship between salaries and players through `player_id`
+
+From the previous feedback, I see there was an error related to foreign key initialization when trying to access the players table. I need to be careful about how I structure the query to avoid this issue.
+
+## 2. Step-by-step explanation of the solution
+
+1. First, I need to filter salaries for Washington Nationals (team_id = ""WAS"") in years 2005 and 2007
+2. Group players by player_id to check if they appear in both years
+3. Filter to keep only players who have salary records in both years
+4. Get the first and last names of these players by directly working with the salaries table and accessing the player relationship
+
+## 3. The PyDough code
+
+```python
+# Filter salaries for Washington Nationals in 2005 and 2007
+nationals_salaries = salaries.WHERE(
+    (team_id == ""WAS"") & 
+    ISIN(year, (2005, 2007))
+)
+
+# Group by player to check if they appear in both years
+player_years = nationals_salaries.PARTITION(name=""player_groups"", by=player_id).CALCULATE(
+    player_id=player_id,
+    years_count=NDISTINCT(salaries.year)
+)
+
+# Filter players who appear in both years (count = 2)
+players_both_years = player_years.WHERE(years_count == 2)
+
+# Get the first and last names of these players
+result = players_both_years.CALCULATE(
+    first_name=player.name_first,
+    last_name=player.name_last
+)
+```
+
+## 4. Explanation of how the code works
+
+1. **Filter salaries**: `nationals_salaries` filters the salaries table to include only records for team ""WAS"" (Washington Nationals) in years 2005 and 2007.
+
+2. **Partition by player**: The `PARTITION` groups salary records by `player_id`, creating groups for each unique player.
+
+3. **Count distinct years**: For each player group, `NDISTINCT(salaries.year)` counts how many distinct years that player has salary records for within our filtered data (2005 and 2007).
+
+4. **Filter for both years**: `players_both_years` keeps only players who have `years_count == 2`, meaning they appear in both 2005 and 2007.
+
+5. **Get player names**: Finally, I access the related `player` information directly from the `players_both_years` result and calculate the `first_name` and `last_name` fields from the players table using the relationship defined in the schema.
+
+The key difference from previous attempts is that I'm accessing the player relationship directly from the partitioned result rather than trying to filter a separate players table, which should avoid the foreign key initialization error.","# Filter salaries for Washington Nationals in 2005 and 2007
+nationals_salaries = salaries.WHERE(
+    (team_id == ""WAS"") & 
+    ISIN(year, (2005, 2007))
+)
+
+# Group by player to check if they appear in both years
+player_years = nationals_salaries.PARTITION(name=""player_groups"", by=player_id).CALCULATE(
+    player_id=player_id,
+    years_count=NDISTINCT(salaries.year)
+)
+
+# Filter players who appear in both years (count = 2)
+players_both_years = player_years.WHERE(years_count == 2)
+
+# Get the first and last names of these players
+result = players_both_years.CALCULATE(
+    first_name=player.name_first,
+    last_name=player.name_last
+)",False,Error in agent execution: Could not initialize target column for ForeignKey 'player.team_id' on table 'fielding_postseason': table 'player' has no column named 'team_id',3,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,baseball_1
+479,What are the first names and support rep ids for employees serving 10 or more customers?,"SELECT T1.FirstName ,  T1.SupportRepId FROM CUSTOMER AS T1 JOIN EMPLOYEE AS T2 ON T1.SupportRepId  =  T2.EmployeeId GROUP BY T1.SupportRepId HAVING COUNT(*)  >=  10","## 1. Analysis of the question
+
+The question asks for:
+- First names of employees
+- Support rep IDs of employees  
+- Only for employees who serve 10 or more customers
+
+From the database schema, I can see that:
+- `employees` collection has `firstname` and `employeeid` fields
+- `customers` collection has a `supportrepid` field that links to employees
+- There's a relationship where `customers.employee` points to the employee serving that customer
+- I need to count how many customers each employee serves and filter for those with 10+
+
+## 2. Step-by-step explanation of the solution
+
+1. Start with the `employees` collection
+2. Filter to only include employees who have customers (using HAS function)
+3. Use CALCULATE to get the employee's first name, employee ID, and count of customers they serve
+4. Filter the results to only include employees serving 10 or more customers
+5. Select only the requested fields: firstname and employeeid (as support rep id)
+
+## 3. The PyDough code
+
+```python
+employees_with_many_customers = employees.WHERE(
+    HAS(customers) == 1
+).CALCULATE(
+    firstname=firstname,
+    support_rep_id=employeeid,
+    customer_count=COUNT(customers)
+).WHERE(
+    customer_count >= 10
+).CALCULATE(
+    firstname=firstname,
+    support_rep_id=support_rep_id
+)
+```
+
+## 4. Explanation of how the code works
+
+1. **employees.WHERE(HAS(customers) == 1)**: Filters employees to only include those who have at least one customer assigned to them
+
+2. **CALCULATE(firstname=firstname, support_rep_id=employeeid, customer_count=COUNT(customers))**: Creates new fields:
+   - `firstname`: The employee's first name
+   - `support_rep_id`: The employee's ID (which serves as the support rep ID)
+   - `customer_count`: Counts how many customers this employee serves using the reverse relationship
+
+3. **WHERE(customer_count >= 10)**: Filters to only include employees who serve 10 or more customers
+
+4. **Final CALCULATE(firstname=firstname, support_rep_id=support_rep_id)**: Selects only the requested fields, removing the intermediate `customer_count` field from the final result
+
+The code leverages the relationship between employees and customers through the `customers` reverse relationship property, which allows us to count how many customers each employee serves.","employees_with_many_customers = employees.WHERE(
+    HAS(customers) == 1
+).CALCULATE(
+    firstname=firstname,
+    support_rep_id=employeeid,
+    customer_count=COUNT(customers)
+).WHERE(
+    customer_count >= 10
+).CALCULATE(
+    firstname=firstname,
+    support_rep_id=support_rep_id
+)",,,0,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,chinook_1
+704,What is the id of the trip that started from the station with the highest dock count?,SELECT T1.id FROM trip AS T1 JOIN station AS T2 ON T1.start_station_id  =  T2.id ORDER BY T2.dock_count DESC LIMIT 1,"## 1. Analysis of the question
+
+The question asks for the ID of the trip that started from the station with the highest dock count. This requires:
+- Finding the station with the highest dock count
+- Identifying a trip that started from that specific station
+- Returning the trip ID
+
+Based on the previous feedback, I need to:
+- Use correct collection names from the schema (`stations` and `trips`)
+- Properly handle the reference between collections
+- Return just one trip ID as requested
+
+## 2. Step-by-step explanation of the solution
+
+1. First, I need to find the station with the highest dock count using TOP_K
+2. Then, I need to find trips that started from that station by matching the start_station_id
+3. Since the question asks for ""the id"" (singular), I'll get just one trip using TOP_K(1)
+4. Return the trip ID
+
+The key is to properly join the collections and ensure the station ID is correctly used for filtering trips.
+
+## 3. The PyDough code
+
+```python
+# Find a trip that started from the station with the highest dock count
+result = trips.WHERE(
+    start_station_id == stations.TOP_K(1, by=dock_count.DESC()).SINGULAR().id
+).TOP_K(1, by=id.ASC())
+```
+
+## 4. Explanation of how the code works
+
+1. **`stations.TOP_K(1, by=dock_count.DESC())`**: This finds the single station with the highest dock count by sorting all stations in descending order by their dock_count and taking the top 1.
+
+2. **`.SINGULAR().id`**: Since TOP_K(1) returns a collection with one record, I use SINGULAR() to treat it as a single value so I can access its `id` property.
+
+3. **`trips.WHERE(start_station_id == ...)`**: This filters all trips to only include those where the start_station_id matches the ID of the station with the highest dock count.
+
+4. **`.TOP_K(1, by=id.ASC())`**: This gets just one trip from the filtered results, ordered by ID in ascending order to ensure consistent results.
+
+The result will be a collection containing one trip that started from the station with the highest dock count. The trip ID can be accessed from this result using the `id` field.","# Find a trip that started from the station with the highest dock count
+result = trips.WHERE(
+    start_station_id == stations.TOP_K(1, by=dock_count.DESC()).SINGULAR().id
+).TOP_K(1, by=id.ASC())",False,The agent stopped because it exceeded the iteration or time limit. Consider simplifying the input question or increasing the limits if appropriate.,4,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,bike_1
+705,"What is the id, name and IATA code of the airport that had most number of flights?","SELECT T1.id ,  T1.name ,  T1.IATA FROM airport AS T1 JOIN flight AS T2 ON T1.id  =  T2.airport_id GROUP BY T2.id ORDER BY count(*) DESC LIMIT 1","## 1. Analysis of the question
+
+The question asks for:
+- The airport's ID, name, and IATA code
+- The airport that had the most number of flights
+- This requires counting flights per airport and finding the one with the maximum count
+
+Based on the feedback from previous attempts, I need to:
+- Use the correct collection name from the database schema (`flights`, not `flight`)
+- Use proper PyDough syntax for accessing related fields through foreign keys
+- Use correct aggregation function syntax (`COUNT()` instead of `COUNT(flights)`)
+- Match field names exactly as they appear in the database schema (`iata`, not `IATA`)
+
+## 2. Step-by-step explanation of the solution
+
+1. Start with the `flights` collection since flights reference airports through `airport_id`
+2. Use `PARTITION` to group flights by airport (using airport_id)
+3. For each airport group, calculate the required fields and count the number of flights
+4. Use `TOP_K(1, by=...)` to get the airport with the highest flight count
+5. Order by flight count in descending order to get the maximum
+
+## 3. The PyDough code
+
+```python
+airport_with_most_flights = flights.PARTITION(
+    name=""airport_groups"", by=airport_id
+).CALCULATE(
+    airport_id=airport_id,
+    airport_name=airport.name,
+    iata_code=airport.iata,
+    flight_count=COUNT()
+).TOP_K(1, by=flight_count.DESC())
+```
+
+## 4. Explanation of how the code works
+
+The code works as follows:
+
+1. **`flights.PARTITION(name=""airport_groups"", by=airport_id)`**: Groups all flights by their airport_id, creating groups where each group contains all flights for a specific airport.
+
+2. **`CALCULATE(...)`**: For each airport group, creates calculated fields:
+   - `airport_id=airport_id`: The airport's ID (from the partition key)
+   - `airport_name=airport.name`: The airport's name (accessed through the relationship to the airports table)
+   - `iata_code=airport.iata`: The airport's IATA code (accessed through the relationship to the airports table)
+   - `flight_count=COUNT()`: Counts the number of flights in each airport group
+
+3. **`TOP_K(1, by=flight_count.DESC())`**: Selects the top 1 airport based on the flight count in descending order, which gives us the airport with the most flights.
+
+This approach correctly starts from the flights collection, groups by airport, and counts flights per airport to find the one with the maximum number of flights, addressing the issues identified in the previous feedback.","airport_with_most_flights = flights.PARTITION(
+    name=""airport_groups"", by=airport_id
+).CALCULATE(
+    airport_id=airport_id,
+    airport_name=airport.name,
+    iata_code=airport.iata,
+    flight_count=COUNT()
+).TOP_K(1, by=flight_count.DESC())",False,"The generated PyDough response produces an empty DataFrame while the ground truth produces a result with Akureyri Airport. The main issues with the PyDough code are: 1) The syntax 'flights.PARTITION()' may be incorrect - it should likely reference the actual collection name from the database (possibly 'flight' based on the table schema). 2) The relationship access syntax 'airport.name' and 'airport.iata' may not be valid PyDough syntax for accessing related table fields through foreign keys. 3) The COUNT(flights) syntax may be incorrect - it should likely be COUNT() or COUNT(*) to count records in each partition. 4) The field references should match the actual database schema - 'iata' should be 'IATA' (uppercase) as shown in the airport table schema. To fix this, ensure: the collection name matches the database table name, use proper PyDough syntax for accessing related fields through foreign keys, use correct aggregation function syntax, and match field names exactly as they appear in the database schema.",2,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,flight_company
+706,What is the installation date for each ending station on all the trips?,"SELECT T1.id ,  T2.installation_date FROM trip AS T1 JOIN station AS T2 ON T1.end_station_id  =  T2.id","## Analysis of the question
+
+The question asks for the installation date of each ending station for all trips. This requires:
+1. Looking at all trips in the database
+2. For each trip, identifying the ending station
+3. Getting the installation date for that ending station from the stations collection
+4. Since we want ""each ending station"", we need to show unique ending stations with their installation dates to avoid duplicates
+
+## Step-by-step explanation of the solution
+
+1. Start with the `trips` collection since we need information about all trips
+2. Extract the ending station information from each trip (end_station_id and end_station_name)
+3. Use PARTITION to group by unique ending stations to avoid duplicates when multiple trips end at the same station
+4. For each unique ending station, look up the installation date from the stations collection by matching the station ID
+
+## The PyDough code
+
+```python
+# Get unique ending stations with their installation dates from all trips
+ending_stations_with_dates = trips.CALCULATE(
+    end_station_id=end_station_id,
+    end_station_name=end_station_name
+).PARTITION(
+    name=""unique_ending_stations"", 
+    by=(end_station_id, end_station_name)
+).CALCULATE(
+    end_station_id=end_station_id,
+    end_station_name=end_station_name,
+    installation_date=stations.WHERE(id == end_station_id).installation_date
+)
+```
+
+## Explanation of how the code works
+
+1. **Start with trips collection**: We begin with `trips` since we need to analyze all trips and their ending stations.
+
+2. **Extract ending station information**: The first `CALCULATE` extracts `end_station_id` and `end_station_name` from each trip record.
+
+3. **Remove duplicates with PARTITION**: We use `PARTITION` with the name ""unique_ending_stations"" and group by both `end_station_id` and `end_station_name`. This ensures we get only unique ending stations, avoiding duplicates when multiple trips end at the same station.
+
+4. **Look up installation date**: In the final `CALCULATE`, we access the `stations` collection and filter it where the station `id` matches our `end_station_id`. Then we extract the `installation_date` field from the matching station record.
+
+5. **Result**: The final result contains each unique ending station (with both ID and name) along with its installation date, covering all ending stations that appear in the trips data.","# Get unique ending stations with their installation dates from all trips
+ending_stations_with_dates = trips.CALCULATE(
+    end_station_id=end_station_id,
+    end_station_name=end_station_name
+).PARTITION(
+    name=""unique_ending_stations"", 
+    by=(end_station_id, end_station_name)
+).CALCULATE(
+    end_station_id=end_station_id,
+    end_station_name=end_station_name,
+    installation_date=stations.WHERE(id == end_station_id).installation_date
+)",False,"Error in agent execution: Error code: 413 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Prompt is too long'}}",2,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,bike_1
+708,"What is the latitude, longitude, and city of the station from which the trip with smallest duration started?","SELECT T1.lat ,  T1.long ,  T1.city FROM station AS T1 JOIN trip AS T2 ON T1.id  =  T2.start_station_id ORDER BY T2.duration LIMIT 1","## 1. Analysis of the question
+
+I need to find the station information (latitude, longitude, and city) for the station from which the trip with the smallest duration started. This requires:
+- Finding the trip with the minimum duration from the `trips` collection
+- Identifying the start station ID of that trip
+- Retrieving the latitude, longitude, and city information for that station from the `stations` collection
+
+Based on the feedback from previous attempts, I need to be careful about:
+- Using the correct collection names from the schema
+- Not performing unnecessary field renaming
+- Using an efficient approach that directly finds the result
+
+## 2. Step-by-step explanation of the solution
+
+1. I'll find the trip with the smallest duration using `TOP_K(1, by=duration.ASC())`
+2. Extract the `start_station_id` from that trip using `SINGULAR()` to access the single record
+3. Use that station ID to filter the `stations` collection and find the matching station
+4. Extract the required fields: `lat`, `long`, and `city` without renaming them
+
+## 3. The PyDough code
+
+```python
+# Find the trip with the smallest duration
+min_duration_trip = trips.TOP_K(1, by=duration.ASC())
+
+# Get the start station ID from the minimum duration trip
+start_station_id_value = min_duration_trip.SINGULAR().start_station_id
+
+# Find the station with that ID and get its latitude, longitude, and city
+result = stations.WHERE(id == start_station_id_value).CALCULATE(
+    lat=lat,
+    long=long,
+    city=city
+)
+```
+
+## 4. Explanation of how the code works
+
+1. **Finding minimum duration trip**: `trips.TOP_K(1, by=duration.ASC())` sorts all trips by duration in ascending order and selects the first one (smallest duration).
+
+2. **Extracting start station ID**: `min_duration_trip.SINGULAR().start_station_id` uses the `SINGULAR()` function to access the single trip record and extract its `start_station_id` field.
+
+3. **Finding the corresponding station**: `stations.WHERE(id == start_station_id_value)` filters the stations collection to find the station whose `id` matches the `start_station_id` from the minimum duration trip.
+
+4. **Selecting required fields**: `CALCULATE(lat=lat, long=long, city=city)` creates the final result with the requested station information, keeping the original field names as they appear in the database schema.
+
+The code efficiently finds the shortest trip and retrieves the geographic and location information of its starting station using the correct collection names and field references.","# Find the trip with the smallest duration
+min_duration_trip = trips.TOP_K(1, by=duration.ASC())
+
+# Get the start station ID from the minimum duration trip
+start_station_id_value = min_duration_trip.SINGULAR().start_station_id
+
+# Find the station with that ID and get its latitude, longitude, and city
+result = stations.WHERE(id == start_station_id_value).CALCULATE(
+    lat=lat,
+    long=long,
+    city=city
+)",False,"Error in agent execution: Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",3,False,"Error code: 429 - {'error': {'code': 429, 'message': 'Quota exceeded for aiplatform.googleapis.com/online_prediction_input_tokens_per_minute_per_base_model with base model: anthropic-claude-sonnet-4. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.', 'status': 'RESOURCE_EXHAUSTED'}}",spider_data,bike_1
