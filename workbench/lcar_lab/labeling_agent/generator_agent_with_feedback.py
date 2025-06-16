@@ -374,7 +374,7 @@ class PydoughGeneratorAgent:
         self.metadata_path = metadata_path
         self.cheatsheet_path = cheatsheet_path
         
-        # Initialize LLM
+        #Initialize LLM
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash-preview-05-20",
             temperature=0.99

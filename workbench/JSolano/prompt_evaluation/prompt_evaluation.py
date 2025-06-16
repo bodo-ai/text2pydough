@@ -59,13 +59,13 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
     for db_name, dataset_name in zip(db_names, dataset_names):
-        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
+        metadata_dir = os.path.join(metadata_base_path, dataset_name)
         json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(json_file)
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(db_base_path, "databases", dataset_name, f"{db_name}.db")}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, f"{db_name}.db")}"
             print(f"[INFO] Connecting to: {url}")
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
@@ -174,7 +174,6 @@ def main(git_hash):
     kwargs = parse_extra_args(args.extra_args)
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
     MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"] 
-    mlflow.gemini.autolog()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment(args.experiment_name)
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
@@ -234,8 +233,6 @@ def main(git_hash):
 
 if __name__ == "__main__":
     cwd = os.getcwd()
-    db_path = './test_data/TPCH.db'
-    download_database(db_path)
     if untracked_files(cwd) or modified_files(cwd):
         autocommit(cwd)
     main(get_git_commit(cwd))
