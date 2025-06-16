@@ -54,7 +54,6 @@ models_to_test = [
 ]
 
 def get_provider(provider, model_id, config=None):
-    backend = config.get("backend", "vertex") if config else "vertex"
 
     if provider == "anthropic":
         return ClaudeAIProvider(model_id, config=config)
@@ -359,7 +358,7 @@ def main(git_hash):
     
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
     MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"]
-    #mlflow.gemini.autolog()
+    
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment(args.experiment_name)
 
