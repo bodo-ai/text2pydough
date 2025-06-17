@@ -1,0 +1,3847 @@
+RAG Response for Example 2
+==================================================
+
+Full RAG Results Dictionary:
+{'generated_answer': '# Explanation of Pydough Code for TPC-H Query #2\n\nI\'ll explain the provided Pydough code that answers the question about finding suppliers in the European region who can supply brass parts of size 15 at minimum cost, with specific sorting and filtering requirements.\n\n## 1. Pydough-Specific Functions and Patterns Used\n\n### BACK Function\nThe `BACK` function is used to reference entities from previous steps in the data flow. For example:\n- `BACK(1)` refers to the immediately preceding entity\n- `BACK(2)` refers to the entity two steps back\n- `BACK(3)` refers to the entity three steps back\n\nIn the code, we see this pattern used to access attributes from previous entities:\n```python\ns_acctbal=BACK(2).account_balance,\ns_name=BACK(2).name,\nn_name=BACK(3).name,\ns_address=BACK(2).address,\ns_phone=BACK(2).phone,\ns_comment=BACK(2).comment,\nsupplycost=BACK(1).supplycost,\n```\n\n### PARTITION Function\nThe `PARTITION` function [45c4498] is used to group collections under specific keys, similar to SQL\'s `GROUP BY`. In this code:\n```python\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\n```\nThis partitions the `selected_parts` by their `key` attribute, giving the partition the name "p", and calculates the minimum supply cost for each partition.\n\n### TOP_K Function\nThe `TOP_K` function [45c4498] is used to limit the result set to a specific number of rows, ordered by specified criteria:\n```python\n.TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n```\nThis returns the top 100 results ordered by account balance (descending), nation name (ascending), supplier name (ascending), and part key (ascending).\n\n### WHERE Function\nThe `WHERE` function is used for filtering data based on conditions:\n```python\n.WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n```\nThis filters for parts whose type ends with "BRASS" and have a size of 15.\n\n## 2. Data Flow and Transformations\n\nThe code follows these steps:\n\n1. **Initial Selection**: Start with nations in the European region\n   ```python\n   nations.WHERE(region.name == "EUROPE")\n   ```\n\n2. **Navigation and Attribute Collection**: Navigate through suppliers, supply records, and parts, collecting relevant attributes\n   ```python\n   .suppliers.supply_records.part(\n       s_acctbal=BACK(2).account_balance,\n       s_name=BACK(2).name,\n       n_name=BACK(3).name,\n       s_address=BACK(2).address,\n       s_phone=BACK(2).phone,\n       s_comment=BACK(2).comment,\n       supplycost=BACK(1).supplycost,\n   )\n   ```\n\n3. **Filtering Parts**: Filter for brass parts of size 15\n   ```python\n   .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n   ```\n\n4. **Partitioning and Finding Minimum Cost**: Group by part key and find the minimum supply cost for each part\n   ```python\n   part_groups = PARTITION(selected_parts, name="p", by=key)(\n       best_cost=MIN(p.supplycost)\n   )\n   ```\n\n5. **Final Selection and Formatting**: Select parts with the minimum cost, format the output, and sort appropriately\n   ```python\n   result = part_groups.p.WHERE(\n       (supplycost == BACK(1).best_cost)\n       & ENDSWITH(part_type, "BRASS")\n       & (size == 15)\n   )(\n       S_ACCTBAL=s_acctbal,\n       S_NAME=s_name,\n       N_NAME=n_name,\n       P_PARTKEY=key,\n       P_MFGR=manufacturer,\n       S_ADDRESS=s_address,\n       S_PHONE=s_phone,\n       S_COMMENT=s_comment,\n   ).TOP_K(\n       100,\n       by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n   )\n   ```\n\n## 3. Important Pydough Best Practices Demonstrated\n\n1. **Chaining Operations**: The code demonstrates chaining multiple operations together for a clean, readable flow [82a3091].\n\n2. **Using BACK References**: The code properly uses `BACK` references to access attributes from previous steps in the data flow.\n\n3. **Partitioning for Aggregation**: The code uses `PARTITION` to group data before applying the `MIN` aggregation function [45c4498].\n\n4. **Clear Variable Naming**: Variables like `selected_parts` and `part_groups` clearly indicate their purpose.\n\n## 4. How This Code Follows Pydough Conventions\n\n1. **Naming Convention**: The code uses snake_case for variable names (`selected_parts`, `part_groups`) and uppercase for output column names (`S_ACCTBAL`, `P_PARTKEY`).\n\n2. **Chaining Pattern**: The code follows the Pydough pattern of chaining operations with dot notation.\n\n3. **Sorting Specification**: The code correctly specifies sorting direction using `.ASC()` and `.DESC()` methods [45c4498].\n\n4. **Partitioning Pattern**: The code follows the convention of naming the partition and specifying the grouping key [45c4498].\n\n## 5. How the Code Addresses the Original Question\n\nThe code directly addresses the requirements of TPC-H query #2 [82a3091]:\n\n1. It filters for nations in the European region: `nations.WHERE(region.name == "EUROPE")`\n\n2. It selects brass parts of size 15: `.WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))`\n\n3. It finds the minimum supply cost for each part: `best_cost=MIN(p.supplycost)`\n\n4. It selects suppliers offering parts at the minimum cost: `(supplycost == BACK(1).best_cost)`\n\n5. It sorts by account balance (descending) and other criteria: `by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC())`\n\n6. It limits to the top 100 results: `.TOP_K(100, ...)`\n\n7. It includes all required attributes in the output: supplier\'s account balance, name, nation; part\'s number and manufacturer; supplier\'s address, phone, and comment.\n\nThe implementation in the code matches the description in [82a3091], which states that this query "finds, in a given region, for each part of a certain type and size, the supplier who can supply it at minimum cost."\n\n## 6. Key Examples from the Search\n\nThe implementation is similar to the example in [82a3091], which shows a similar approach for TPC-H query #2:\n\n```python\nselected_parts = (\n nations.CALCULATE(n_name=name)\n .WHERE(region.name == "EUROPE")\n .suppliers.CALCULATE(\n   s_acctbal=account_balance,\n   s_name=name,\n   s_address=address,\n   s_phone=phone,\n   s_comment=comment,\n )\n .supply_records.CALCULATE(\n   supplycost=supplycost,\n )\n .part.WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n )\n```\n\nThe main difference is that the example uses `CALCULATE` to create new attributes, while the provided code uses a more direct approach with the `part()` method and `BACK` references.\n\nIn conclusion, the provided Pydough code efficiently implements TPC-H query #2, following Pydough conventions and best practices to find suppliers in the European region who can supply brass parts of size 15 at minimum cost, with appropriate sorting and filtering.', 'search_results': AggregateSearchResult(chunk_search_results=[ChunkSearchResult(score=0.049, text="source": [
+
+"## Query 1\n",
+
+"\n",
+
+"This query seeks to determine **the amount of business that was billed, shipped, and returned**. More specifically, it provides a summary pricing report for all line items shipped as of a given date. The date is within 90 days of the greatest ship date contained in the database.\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"select\n",
+
+"\tl_returnflag,\n",
+
+"\tl_linestatus,\n",
+
+"\tsum(l_quantity) as sum_qty,\n",
+
+"\tsum(l_extendedprice) as sum_base_price,\n",
+
+"\tsum(l_extendedprice * (1 - l_discount)) as sum_disc_price,\n",
+
+"\tsum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,\n",
+
+"\tavg(l_quantity) as avg_qty,\n",
+
+"\tavg(l_extendedprice) as avg_price,\n",
+
+"\tavg(l_discount) as avg_disc,\n",
+
+"\tcount(*) as count_order\n",
+
+"from\n",
+
+"\tlineitem\n",
+
+"where\n",
+
+"\tl_shipdate <= date '1998-12-01' - interval '90' day\n",
+
+"group by\n",
+
+"\tl_returnflag,\n",
+
+"\tl_linestatus\n",
+
+"order by\n",
+
+"\tl_returnflag,\n",
+
+"\tl_linestatus\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "59d6e822-f77e-4dc2-b7d8-5cbb41ddf9b6",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"disc_price = l.extended_price * (1 - l.discount)\n",
+
+"charge = disc_price * (1 + l.tax)\n",
+
+"selected_lines = lines.WHERE((ship_date <= datetime.date(1998, 9, 2)))\n",
+
+"partitioned_lines = PARTITION(selected_lines, name=\"l\", by=(return_flag, status))\n",
+
+"output = partitioned_lines.CALCULATE(\n",
+
+" L_RETURNFLAG=return_flag,\n",
+
+" L_LINESTATUS=status,\n",
+
+" SUM_QTY=SUM(l.quantity),\n",
+
+" SUM_BASE_PRICE=SUM(l.extended_price),\n",
+
+" SUM_DISC_PRICE=SUM(disc_price),\n",
+
+" SUM_CHARGE=SUM(charge),\n",
+
+" AVG_QTY=AVG(l.quantity),\n",
+
+" AVG_PRICE=AVG(l.extended_price),\n",
+
+" AVG_DISC=AVG(l.discount),\n",
+
+" COUNT_ORDER=COUNT(l),\n",
+
+").ORDER_BY(return_flag.ASC(), status.ASC())\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "419981b5-0159-47b2-bc7f-da4e44707f7c",
+
+"metadata": {},
+
+"source": [
+
+"## Query 2\n",
+
+"\n",
+
+"This question seeks to determine **which supplier should be selected to place an order for a given part in a given region**. More verbosely, it finds, in a given region, for each part of a certain type and size, the supplier who can supply it at minimum cost. If several suppliers in that region offer the desired part type and size at the same (minimum) cost, the query lists the parts from suppliers with the 100 highest account balances. For each supplier, the query lists the supplier's account balance, name and nation; the part's number and manufacturer; the supplier's address, phone number and comment information. The chosen region, part type, and size are Europe, brass parts, and 15, respectively.\n",
+
+"\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"SELECT\n",
+
+" S_ACCTBAL,\n",
+
+" S_NAME,\n",
+
+" N_NAME,\n",
+
+" P_PARTKEY,\n",
+
+" P_MFGR,\n",
+
+" S_ADDRESS,\n",
+
+" S_PHONE,\n",
+
+" S_COMMENT\n",
+
+"FROM\n",
+
+" PART,\n",
+
+" SUPPLIER,\n",
+
+" PARTSUPP,\n",
+
+" NATION,\n",
+
+" REGION\n",
+
+"WHERE\n",
+
+" P_PARTKEY = PS_PARTKEY\n",
+
+" AND S_SUPPKEY = PS_SUPPKEY\n",
+
+" AND P_SIZE = 15\n",
+
+" AND P_TYPE LIKE '%BRASS'\n",
+
+" AND S_NATIONKEY = N_NATIONKEY\n",
+
+" AND N_REGIONKEY = R_REGIONKEY\n",
+
+" AND R_NAME = 'EUROPE'\n",
+
+" AND PS_SUPPLYCOST = (\n",
+
+" SELECT MIN(PS_SUPPLYCOST)\n",
+
+" FROM PARTSUPP, SUPPLIER, NATION, REGION\n",
+
+" WHERE P_PARTKEY = PS_PARTKEY\n",
+
+" AND S_SUPPKEY = PS_SUPPKEY\n",
+
+" AND S_NATIONKEY = N_NATIONKEY\n",
+
+" AND N_REGIONKEY = R_REGIONKEY\n",
+
+" AND R_NAME = 'EUROPE'\n",
+
+" )\n",
+
+"ORDER BY\n",
+
+" S_ACCTBAL DESC,\n",
+
+" N_NAME,\n",
+
+" S_NAME,\n",
+
+" P_PARTKEY\n",
+
+"LIMIT 100;\n",
+
+"```\n",
+
+"\n",
+
+"Notice the use of a correlated subqueries to determine the `PS_SUPPLYCOST` criteria. In PyDough this is handled naturally by simply first peforming the partition, applying the filter, and then navigating back to `selected_parts` in question, which avoids fully stepping out of the query. "), ChunkSearchResult(score=0.048, text="source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_lines = orders.WHERE(\n",
+
+" (order_date >= datetime.date(1993, 10, 1))\n",
+
+" & (order_date < datetime.date(1994, 1, 1))\n",
+
+").lines.WHERE(return_flag == \"R\").CALCULATE(amt=extended_price * (1 - discount))\n",
+
+"\n",
+
+"output = customers.CALCULATE(\n",
+
+" C_CUSTKEY=key,\n",
+
+" C_NAME=name,\n",
+
+" REVENUE=SUM(selected_lines.amt),\n",
+
+" C_ACCTBAL=acctbal,\n",
+
+" N_NAME=nation.name,\n",
+
+" C_ADDRESS=address,\n",
+
+" C_PHONE=phone,\n",
+
+" C_COMMENT=comment,\n",
+
+").TOP_K(20, by=(REVENUE.DESC(), C_CUSTKEY.ASC()))\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "7e5efd87-7038-4725-b5ee-c3895668616d",
+
+"metadata": {},
+
+"source": [
+
+"## Query 11\n",
+
+"\n",
+
+"The question seeks **to identify the most import subset of available part supplies from a particular nation**. It does so by finding, from scanning the available stock of suppliers in a given nation, all the parts that represent a significant percentage of the total value of all available parts. The query displays the part number and the value of those parts in descending order of value. A significant fraction is chosen to mean as at least 0.01%, and the chosen nation is Germany.\n",
+
+"\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"SELECT\n",
+
+" PS_PARTKEY,\n",
+
+" SUM(PS_SUPPLYCOST * PS_AVAILQTY) AS VALUE\n",
+
+"FROM\n",
+
+" PARTSUPP,\n",
+
+" SUPPLIER,\n",
+
+" NATION\n",
+
+"WHERE\n",
+
+" PS_SUPPKEY = S_SUPPKEY\n",
+
+" AND S_NATIONKEY = N_NATIONKEY\n",
+
+" AND N_NAME = 'GERMANY'\n",
+
+"GROUP BY\n",
+
+" PS_PARTKEY\n",
+
+"HAVING\n",
+
+" SUM(PS_SUPPLYCOST * PS_AVAILQTY) > (\n",
+
+" SELECT\n",
+
+" SUM(PS_SUPPLYCOST * PS_AVAILQTY) * 0.0001\n",
+
+" FROM\n",
+
+" PARTSUPP,\n",
+
+" SUPPLIER,\n",
+
+" NATION\n",
+
+" WHERE\n",
+
+" PS_SUPPKEY = S_SUPPKEY\n",
+
+" AND S_NATIONKEY = N_NATIONKEY\n",
+
+" AND N_NAME = 'GERMANY'\n",
+
+" )\n",
+
+"ORDER BY\n",
+
+" VALUE DESC;\n",
+
+"```\n",
+
+"\n",
+
+"Notice that the SQL query requires a correlated subquery that leverages having to compute the corresponding SUM. PyDough uses a single filter to simplify this logic and ensure that through use of `BACK` the original results can be filtered."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "ecbb5c84-4b48-4f5b-91f7-03a5e95ca0bd",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"is_german_supplier = supplier.nation.name == \"GERMANY\"\n",
+
+"selected_records = supply_records.WHERE(is_german_supplier).CALCULATE(metric=supplycost * availqty)\n",
+
+"output = TPCH.CALCULATE(min_market_share=SUM(selected_records.metric) * 0.0001).PARTITION(\n",
+
+" selected_records, name=\"ps\", by=part_key\n",
+
+").CALCULATE(\n",
+
+" PS_PARTKEY=part_key, VALUE=SUM(ps.metric)\n",
+
+").WHERE(VALUE > min_market_share).ORDER_BY(VALUE.DESC())\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "158f76df-3abe-4721-924f-8e9597121b0f",
+
+"metadata": {},), ChunkSearchResult(score=0.047, text="source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_lines = lines.WHERE(\n",
+
+" (ship_date >= datetime.date(1996, 1, 1))\n",
+
+" & (ship_date < datetime.date(1996, 4, 1))\n",
+
+")\n",
+
+"total = SUM(selected_lines.extended_price * (1 - selected_lines.discount))\n",
+
+"output = TPCH.CALCULATE(\n",
+
+" max_revenue=MAX(suppliers.CALCULATE(total_revenue=total).total_revenue)\n",
+
+").suppliers.CALCULATE(\n",
+
+" S_SUPPKEY=key,\n",
+
+" S_NAME=name,\n",
+
+" S_ADDRESS=address,\n",
+
+" S_PHONE=phone,\n",
+
+" TOTAL_REVENUE=total,\n",
+
+").WHERE(TOTAL_REVENUE == max_revenue).ORDER_BY(S_SUPPKEY.ASC())\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "f0ddf5ee-c3e5-4a96-89a5-94bfb25fd226",
+
+"metadata": {},
+
+"source": [
+
+"## Query 16\n",
+
+"\n",
+
+"This question seeks to determine **how many suppliers can meet the needs of a part with a particular set of attributes**. It does so by counting the number of suppliers who can supply parts that satisfy a particular customer's requirements. The customer is interested in parts of eight different sizes as long as they are not of a given type, not of a given brand, and not from a supplier who has had complaints registered at the Better Business Bureau. Results must be presented in descending count and ascending brand, type, and size. The chosen brand, part type, and sizes are `'Brand#45'`, `'MEDIUM POLISHED'`, and `[49, 14, 23, 45, 19, 3, 36, 9]`, respectively.\n",
+
+"\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"select\n",
+
+" p_brand,\n",
+
+" p_type,\n",
+
+" p_size,\n",
+
+" count(distinct ps_suppkey) as supplier_cnt\n",
+
+"from\n",
+
+" partsupp,\n",
+
+" part\n",
+
+"where\n",
+
+" p_partkey = ps_partkey\n",
+
+" and p_brand <> 'BRAND#45'\n",
+
+" and p_type not like 'MEDIUM POLISHED%'\n",
+
+" and p_size in (49, 14, 23, 45, 19, 3, 36, 9)\n",
+
+" and ps_suppkey not in (\n",
+
+" select\n",
+
+" s_suppkey\n",
+
+" from\n",
+
+" supplier\n",
+
+" where\n",
+
+" s_comment like '%Customer%Complaints%'\n",
+
+" )\n",
+
+"group by\n",
+
+" p_brand,\n",
+
+" p_type,\n",
+
+" p_size\n",
+
+"order by\n",
+
+" supplier_cnt desc,\n",
+
+" p_brand,\n",
+
+" p_type,\n",
+
+" p_size;\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "1e22a800-e9ea-4b75-9921-c01553922c2e",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_records = (\n",
+
+" parts.CALCULATE(\n",
+
+" p_brand=brand,\n",
+
+" p_type=part_type,\n",
+
+" p_size=size,\n",
+
+" ).WHERE(\n",
+
+" (brand != \"BRAND#45\")\n",
+
+" & ~STARTSWITH(part_type, \"MEDIUM POLISHED%\")\n",
+
+" & ISIN(size, [49, 14, 23, 45, 19, 3, 36, 9])\n",
+
+" )\n",
+
+" .supply_records\n",
+
+" .WHERE(~LIKE(supplier.comment, \"%Customer%Complaints%\"))\n",
+
+")\n",
+
+"output = PARTITION(selected_records, name=\"ps\", by=(p_brand, p_type, p_size)).CALCULATE(\n",
+
+" P_BRAND=p_brand,\n",
+
+" P_TYPE=p_type,\n",
+
+" P_SIZE=p_size,\n",
+
+" SUPPLIER_COUNT=NDISTINCT(ps.supplier_key),\n",
+
+").ORDER_BY(SUPPLIER_COUNT.DESC(), P_BRAND.ASC(), P_TYPE.ASC(), P_SIZE.ASC())\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "c5c44905-cb4b-44b6-a106-f643df1abd2a",
+
+"metadata": {},), ChunkSearchResult(score=0.046, text=]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "27365f94-32a0-48f1-9589-711d57cf145b",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_parts = (\n",
+
+" nations.CALCULATE(n_name=name)\n",
+
+" .WHERE(region.name == \"EUROPE\")\n",
+
+" .suppliers.CALCULATE(\n",
+
+" s_acctbal=account_balance,\n",
+
+" s_name=name,\n",
+
+" s_address=address,\n",
+
+" s_phone=phone,\n",
+
+" s_comment=comment,\n",
+
+" )\n",
+
+" .supply_records.CALCULATE(\n",
+
+" supplycost=supplycost,\n",
+
+" )\n",
+
+" .part.WHERE(ENDSWITH(part_type, \"BRASS\") & (size == 15))\n",
+
+" )\n",
+
+"part_groups = PARTITION(selected_parts, name=\"p\", by=key).CALCULATE(\n",
+
+" best_cost=MIN(p.supplycost)\n",
+
+")\n",
+
+"output = part_groups.p.WHERE(\n",
+
+" (supplycost == best_cost)\n",
+
+" & ENDSWITH(part_type, \"BRASS\")\n",
+
+" & (size == 15)\n",
+
+").CALCULATE(\n",
+
+" S_ACCTBAL=s_acctbal,\n",
+
+" S_NAME=s_name,\n",
+
+" N_NAME=n_name,\n",
+
+" P_PARTKEY=key,\n",
+
+" P_MFGR=manufacturer,\n",
+
+" S_ADDRESS=s_address,\n",
+
+" S_PHONE=s_phone,\n",
+
+" S_COMMENT=s_comment,\n",
+
+").TOP_K(\n",
+
+" 100,\n",
+
+" by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n",
+
+")\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "c4979e37-388e-48df-9165-ecd3c71571c1",
+
+"metadata": {},
+
+"source": [
+
+"## Query 3\n",
+
+"\n",
+
+"The question seeks to find **the 10 unshipped orders with the highest value**. More verbosely, it retrieves the shipping priority and potential revenue, defined as the sum of the extended price times one minus the discount, of the orders having the largest revenue among those that had not been shipped as of a given date. Orders are listed in decreasing order of revenue. If more than 10 unshipped orders exist, only the 10 orders with the largest revenue are listed.\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"SELECT\n",
+
+" L_ORDERKEY,\n",
+
+" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS REVENUE,\n",
+
+" O_ORDERDATE,\n",
+
+" O_SHIPPRIORITY\n",
+
+"FROM\n",
+
+" CUSTOMER,\n",
+
+" ORDERS,\n",
+
+" LINEITEM\n",
+
+"WHERE\n",
+
+" C_MKTSEGMENT = 'BUILDING'\n",
+
+" AND C_CUSTKEY = O_CUSTKEY\n",
+
+" AND L_ORDERKEY = O_ORDERKEY\n",
+
+" AND O_ORDERDATE < DATE '1995-03-15'\n",
+
+" AND L_SHIPDATE > DATE '1995-03-15'\n",
+
+"GROUP BY\n",
+
+" L_ORDERKEY,\n",
+
+" O_ORDERDATE,\n",
+
+" O_SHIPPRIORITY\n",
+
+"ORDER BY\n",
+
+" REVENUE DESC,\n",
+
+" O_ORDERDATE\n",
+
+"LIMIT 10;\n",
+
+"```\n",
+
+"\n",
+
+"PyDough allows us to first derive `selected_lines` as the data to be partitioned, before grouping it by certain partition keys to compute the aggregations."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "95975cba-e8e2-4ac9-bbc2-874c0ab43418",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"cutoff_date = datetime.date(1995, 3, 15)\n",
+
+"selected_orders = orders.CALCULATE(\n",
+
+" order_date, ship_priority\n",
+
+").WHERE(\n",
+
+" (customer.mktsegment == \"BUILDING\") & (order_date < cutoff_date)\n",
+
+")\n",
+
+"selected_lines = selected_orders.lines.WHERE(ship_date > cutoff_date)\n",
+
+"output = PARTITION(\n",
+
+" selected_lines, name=\"l\", by=(order_key, order_date, ship_priority)\n",
+
+").CALCULATE(\n",
+
+" L_ORDERKEY=order_key,\n",
+
+" REVENUE=SUM(l.extended_price * (1 - l.discount)),\n",
+
+" O_ORDERDATE=order_date,\n",
+
+" O_SHIPPRIORITY=ship_priority,\n",
+
+").TOP_K(10, by=(REVENUE.DESC(), O_ORDERDATE.ASC(), L_ORDERKEY.ASC()))\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "a72bd083-12c7-402e-8b44-22d640308a7f",
+
+"metadata": {},), ChunkSearchResult(score=0.045, text="source": [
+
+"## Query 20\n",
+
+"\n",
+
+"This question seeks to **determine supppliers in a particular nation that may be candidate for discounts over a year in question**. More specifically, it identifies suppliers who have an excess of a given part available; an excess is defined to be more than 50% of the parts like the given part that the supplier shipped in a given year for a given nation. Only parts whose names share a certain naming convention are considered. The chosen year and nation are 1994 and Canada, respectively. The chosen naming convention is parts whose names start with `'forest'`.\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"select\n",
+
+" s_name,\n",
+
+" s_address\n",
+
+"from\n",
+
+" supplier, nation\n",
+
+"where\n",
+
+" s_suppkey in (\n",
+
+" select\n",
+
+" ps_suppkey\n",
+
+" from\n",
+
+" partsupp\n",
+
+" where\n",
+
+" ps_partkey in (\n",
+
+" select\n",
+
+" p_partkey\n",
+
+" from\n",
+
+" part\n",
+
+" where\n",
+
+" p_name like 'forest%'\n",
+
+" )\n",
+
+" and ps_availqty > (\n",
+
+" select\n",
+
+" 0.5 * sum(l_quantity)\n",
+
+" from\n",
+
+" lineitem\n",
+
+" where\n",
+
+" l_partkey = ps_partkey\n",
+
+" and l_suppkey = ps_suppkey\n",
+
+" and l_shipdate >= date('1994-01-01')\n",
+
+" and l_shipdate < date('1994-01-01') + interval '1' year\n",
+
+" )\n",
+
+" )\n",
+
+" and s_nationkey = n_nationkey\n",
+
+" and n_name = 'CANADA'\n",
+
+"order by\n",
+
+" s_name\n",
+
+"```\n",
+
+"\n",
+
+"Notice that the SQL version requires repeated use of subqueries, but PyDough can combine the `part_qty` and `selected_part_supplied` sections into a single extended expression that cleanly represents the filter requirement."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "640f1835-b274-433a-8cbe-150440087856",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"part_qty = SUM(\n",
+
+" lines.WHERE(\n",
+
+" (ship_date >= datetime.date(1994, 1, 1))\n",
+
+" & (ship_date < datetime.date(1995, 1, 1))\n",
+
+" ).quantity\n",
+
+")\n",
+
+"selected_part_supplied = supply_records.CALCULATE(\n",
+
+" availqty\n",
+
+").part.WHERE(\n",
+
+" STARTSWITH(name, \"forest\") & (availqty > part_qty * 0.5)\n",
+
+")\n",
+
+"output = suppliers.CALCULATE(\n",
+
+" S_NAME=name,\n",
+
+" S_ADDRESS=address,\n",
+
+").WHERE((nation.name == \"CANADA\") & COUNT(selected_part_supplied) > 0).ORDER_BY(S_NAME.ASC())\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "82c059e6",
+
+"metadata": {},
+
+"source": [
+
+"## Query 21\n",
+
+"\n",
+
+"This query **identifies certain suppliers who were not able to ship required parts in a timely manner**. It does so by counting, for each Saudi Arabian supplier, how many times their product was part of a multi-supplier order (with current status of 'F') where they were the only supplier who failed to meet the committed delivery date.\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"select\n",
+
+" S_NAME,\n",
+
+" count(*) as NUMWAIT\n",
+
+"from\n",
+
+" supplier,\n",
+
+" lineitem l1,\n",
+
+" orders,\n",
+
+" nation\n",
+
+"where\n",
+
+" s_suppkey = l1.l_suppkey\n",
+
+" and o_orderkey = l1.l_orderkey\n",
+
+" and o_orderstatus = 'F'\n",
+
+" and l1.l_receiptdate > l1.l_commitdate\n",
+
+" and exists (\n",
+
+" select\n",
+
+" *\n",
+
+" from\n",
+
+" lineitem l2\n",
+
+" where\n",
+
+" l2.l_orderkey = l1.l_orderkey\n",
+
+" and l2.l_suppkey <> l1.l_suppkey\n",
+
+" )\n",
+
+" and not exists (\n",
+
+" select\n",
+
+" *\n",
+
+" from\n",
+
+" lineitem l3\n",
+
+" where\n",
+
+" l3.l_orderkey = l1.l_orderkey\n",
+
+" and l3.l_suppkey <> l1.l_suppkey\n",
+
+" and l3.l_receiptdate > l3.l_commitdate\n",
+
+" )\n",
+
+" and s_nationkey = n_nationkey\n",
+
+" and n_name = 'SAUDI ARABIA'\n",
+
+"group by\n",
+
+" s_name\n",
+
+"order by\n",
+
+" numwait desc,\n",
+
+" s_name\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "8e400982",
+
+"metadata": {},
+
+"outputs": [],), ChunkSearchResult(score=0.045, text="source": [
+
+"%%pydough\n",
+
+"\n",
+
+"customer_info = customers.CALCULATE(\n",
+
+" key,\n",
+
+" num_non_special_orders=COUNT(\n",
+
+" orders.WHERE(~(LIKE(comment, \"%special%requests%\")))\n",
+
+" ),\n",
+
+")\n",
+
+"output = PARTITION(customer_info, name=\"custs\", by=num_non_special_orders).CALCULATE(\n",
+
+" C_COUNT=num_non_special_orders, CUSTDIST=COUNT(custs)\n",
+
+").ORDER_BY(CUSTDIST.DESC(), C_COUNT.DESC())\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "1f793b72-d8ce-4f82-84b5-7e568ee0600a",
+
+"metadata": {},
+
+"source": [
+
+"## Query 14\n",
+
+"\n",
+
+"This question seeks seeks to determine **the impact of a promotion on revenue within a particular month**. More specifically, it determines what percentage of the revenue in a given year and month was derived from promotional parts. The query considers only parts actually shipped in that month and gives the percentage. Revenue is defined as extended price times one minus the discount. The chosen year and month are September of 1995.\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"SELECT\n",
+
+" 100.00 * SUM(CASE\n",
+
+" WHEN P_TYPE LIKE 'PROMO%'\n",
+
+" THEN L_EXTENDEDPRICE * (1 - L_DISCOUNT)\n",
+
+" ELSE 0\n",
+
+" END) / SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS PROMO_REVENUE\n",
+
+"FROM\n",
+
+" LINEITEM,\n",
+
+" PART\n",
+
+"WHERE\n",
+
+" L_PARTKEY = P_PARTKEY\n",
+
+" AND L_SHIPDATE >= DATE '1995-09-01'\n",
+
+" AND L_SHIPDATE < DATE '1995-10-01';\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "8a843681-0893-4636-a312-75095c730de3",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"value = extended_price * (1 - discount)\n",
+
+"selected_lines = lines.WHERE(\n",
+
+" (ship_date >= datetime.date(1995, 9, 1))\n",
+
+" & (ship_date < datetime.date(1995, 10, 1))\n",
+
+").CALCULATE(\n",
+
+" value=value,\n",
+
+" promo_value=IFF(STARTSWITH(part.part_type, \"PROMO\"), value, 0),\n",
+
+")\n",
+
+"output = TPCH.CALCULATE(PROMO_REVENUE=100.0 * SUM(selected_lines.promo_value) / SUM(selected_lines.value))\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "1734b0e1-a4bb-456b-a41e-fa6440c87e85",
+
+"metadata": {},
+
+"source": [
+
+"## Query 15\n",
+
+"\n",
+
+"This question seeks to determine **the top supplier within a particular quarter**. It does so by finding the supplier who contributed the most to the overall revenue for parts shipped during a given quarter of a given year. In case of a tie, the query lists all suppliers whose contribution was equal to the maximum, presented in supplier number order. The chosen quarter is the first 3 months of 1996.\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"with REVENUE (SUPPLIER_NO, TOTAL_REVENUE) AS\n",
+
+" SELECT\n",
+
+" L_SUPPKEY,\n",
+
+" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT))\n",
+
+" FROM\n",
+
+" LINEITEM\n",
+
+" WHERE\n",
+
+" L_SHIPDATE >= DATE '1996-01-01'\n",
+
+" AND L_SHIPDATE < DATE '1996-04-01'\n",
+
+" GROUP BY\n",
+
+" L_SUPPKEY;\n",
+
+"\n",
+
+"SELECT\n",
+
+" S_SUPPKEY,\n",
+
+" S_NAME,\n",
+
+" S_ADDRESS,\n",
+
+" S_PHONE,\n",
+
+" TOTAL_REVENUE\n",
+
+"FROM\n",
+
+" SUPPLIER,\n",
+
+" REVENUE\n",
+
+"WHERE\n",
+
+" S_SUPPKEY = SUPPLIER_NO AND\n",
+
+" TOTAL_REVENUE = (\n",
+
+" SELECT\n",
+
+" MAX(TOTAL_REVENUE)\n",
+
+" FROM\n",
+
+" REVENUE0\n",
+
+" )\n",
+
+"ORDER BY\n",
+
+" SUPPLIER_NO;\n",
+
+"```\n",
+
+"\n",
+
+"With PyDough, the total revenue per-supplier can be expressed via contextless expressions which are first placed into context for the global aggregation to find the maximum revenue overall, then used again to be associated per-supplier."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "a3f9b025-3ae7-4c7d-888c-a430cbe536b2",
+
+"metadata": {},
+
+"outputs": [],), ChunkSearchResult(score=0.044, text="source": [
+
+"## Query 17\n",
+
+"\n",
+
+"This question seeks to determine **how much average yearly revenue would be lost if orders were no longer filled for small quantities of certain parts**. It does so by considering parts of a given brand and with a given container type and determines the average lineitem quantity of such parts ordered for all orders (past and pending) in the 7-year database. What would be the average yearly gross (undiscounted) loss in revenue if orders for these parts with a quantity of less than 20% of this average were no longer taken? The chosen brand and container type are `'Brand#23'` and `MED BOX`, respectively.\n",
+
+"\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"select\n",
+
+" sum(l_extendedprice) / 7.0 as avg_yearly\n",
+
+"from\n",
+
+" lineitem,\n",
+
+" part\n",
+
+"where\n",
+
+" p_partkey = l_partkey\n",
+
+" and p_brand = 'Brand#23'\n",
+
+" and p_container = 'MED BOX'\n",
+
+" and l_quantity < (\n",
+
+" select\n",
+
+" 0.2 * avg(l_quantity)\n",
+
+" from\n",
+
+" lineitem\n",
+
+" where\n",
+
+" l_partkey = p_partkey\n",
+
+" )\n",
+
+"```\n",
+
+"\n",
+
+"PyDough bypasses the need for the correlated subquery by first aggregating lineitems by part, then stepping into the lineitems and backreferencing to compare against the per-part average value."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "4824db18-364b-4ba3-98a2-70ee8930c074",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_lines = parts.WHERE(\n",
+
+" (brand == \"Brand#23\") & (container == \"MED BOX\")\n",
+
+").CALCULATE(\n",
+
+" avg_quantity=AVG(lines.quantity)\n",
+
+").lines.WHERE(quantity < 0.2 * avg_quantity)\n",
+
+"output = TPCH.CALCULATE(AVG_YEARLY=SUM(selected_lines.extended_price) / 7.0)\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "ca71d07c-095b-4dd6-82a6-71cdd69be974",
+
+"metadata": {},
+
+"source": [
+
+"## Query 18\n",
+
+"\n",
+
+"This question seeks to **ranks customers based on their status as having placed a large quantity order**. It does so by calculating a list of the top 100 customers who have ever placed large quantity orders. It lists the customer name, customer key, the order key, date and total price and the quantity for the order.\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"select\n",
+
+" c_name,\n",
+
+" c_custkey,\n",
+
+" o_orderkey,\n",
+
+" o_orderdate,\n",
+
+" o_totalprice,\n",
+
+" sum(l_quantity)\n",
+
+"from\n",
+
+" customer,\n",
+
+" orders,\n",
+
+" lineitem\n",
+
+"where\n",
+
+" o_orderkey in (\n",
+
+" select\n",
+
+" l_orderkey\n",
+
+" from\n",
+
+" lineitem\n",
+
+" group by\n",
+
+" l_orderkey \n",
+
+" having\n",
+
+" sum(l_quantity) > 300\n",
+
+" )\n",
+
+" and c_custkey = o_custkey\n",
+
+" and o_orderkey = l_orderkey\n",
+
+"group by\n",
+
+" c_name,\n",
+
+" c_custkey,\n",
+
+" o_orderkey,\n",
+
+" o_orderdate,\n",
+
+" o_totalprice\n",
+
+"order by\n",
+
+" o_totalprice desc,\n",
+
+" o_orderdate;\n",
+
+"```\n",
+
+"\n",
+
+"Notice that PyDough can simplify this by phrasing this as an operation being done per-order, thus eliding the need to do any manual aggregation."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "87292649-b89a-4e0d-a438-74bd1aa9656d",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"output = orders.CALCULATE(\n",
+
+" C_NAME=customer.name,\n",
+
+" C_CUSTKEY=customer.key,\n",
+
+" O_ORDERKEY=key,\n",
+
+" O_ORDERDATE=order_date,\n",
+
+" O_TOTALPRICE=total_price,\n",
+
+" TOTAL_QUANTITY=SUM(lines.quantity),\n",
+
+").WHERE(\n",
+
+" TOTAL_QUANTITY > 300\n",
+
+").TOP_K(100, by=(O_TOTALPRICE.DESC(), O_ORDERDATE.ASC()))\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "b27461d3-9720-4dee-9d40-e519ca01c71b",
+
+"metadata": {},), ChunkSearchResult(score=0.043, text="source": [
+
+"## Query 9\n",
+
+"\n",
+
+"This question asks about **the profit made for a particular line of parts looking at the supplying nation and particular year in question**. More specifically, it finds, for each nation and each year, the profit for all parts ordered in that year that contain a specified substring in their names and that were filled by a supplier in that nation. The profit is defined as the sum of the extended price times one minus the discount, minus the product of the supply cost and quantity, for all lineitems describing parts in the specified line. The query lists the nations in ascending alphabetical order and, for each nation, the year and profit in descending order by year (most recent first). The substring in question is `'green'`.\n",
+
+"\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"SELECT\n",
+
+" NATION,\n",
+
+" O_YEAR,\n",
+
+" SUM(AMOUNT) AS SUM_PROFIT\n",
+
+"FROM (\n",
+
+" SELECT\n",
+
+" N_NAME AS NATION,\n",
+
+" EXTRACT(YEAR FROM O_ORDERDATE) AS O_YEAR,\n",
+
+" L_EXTENDEDPRICE * (1 - L_DISCOUNT) - PS_SUPPLYCOST * L_QUANTITY AS AMOUNT\n",
+
+" FROM\n",
+
+" PART,\n",
+
+" SUPPLIER,\n",
+
+" LINEITEM,\n",
+
+" PARTSUPP,\n",
+
+" ORDERS,\n",
+
+" NATION\n",
+
+" WHERE\n",
+
+" S_SUPPKEY = L_SUPPKEY\n",
+
+" AND PS_SUPPKEY = L_SUPPKEY\n",
+
+" AND PS_PARTKEY = L_PARTKEY\n",
+
+" AND P_PARTKEY = L_PARTKEY\n",
+
+" AND O_ORDERKEY = L_ORDERKEY\n",
+
+" AND S_NATIONKEY = N_NATIONKEY\n",
+
+" AND P_NAME LIKE '%green%'\n",
+
+") PROFIT\n",
+
+"GROUP BY\n",
+
+" NATION,\n",
+
+" O_YEAR\n",
+
+"ORDER BY\n",
+
+" NATION,\n",
+
+" O_YEAR;\n",
+
+"```"
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "3f2d470d-7bf4-4000-b049-9cac0c635ae2",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_lines = (\n",
+
+" nations.CALCULATE(nation_name=name)\n",
+
+" .suppliers.supply_records.CALCULATE(supplycost)\n",
+
+" .WHERE(CONTAINS(part.name, \"green\"))\n",
+
+" .lines.CALCULATE(\n",
+
+" o_year=YEAR(order.order_date),\n",
+
+" value=extended_price * (1 - discount) - supplycost * quantity,\n",
+
+" )\n",
+
+")\n",
+
+"output = (\n",
+
+" PARTITION(selected_lines, name=\"l\", by=(nation_name, o_year))\n",
+
+" .CALCULATE(NATION=nation_name, O_YEAR=o_year, AMOUNT=SUM(l.value))\n",
+
+" .TOP_K(10, by=(NATION.ASC(), O_YEAR.DESC()))\n",
+
+")\n",
+
+"pydough.to_df(output)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "efe1a2f4-3198-4cd5-9807-3f054d0901e8",
+
+"metadata": {},
+
+"source": [
+
+"## Query 10\n",
+
+"\n",
+
+"This question **determines the top 20 customers based on impact in revenue due to having returned parts within a particular quarter**. Revenue lost is defined as the sum of the extended price times one minus the discount for all qualifying lineitems. The chosen quarter is the last 3 months of 1993. The query lists the customer's name, address, nation, phone number, account balance, comment information and revenue lost.\n",
+
+"\n",
+
+"\n",
+
+"\n",
+
+"Here is the corresponding SQL:\n",
+
+"\n",
+
+"```SQL\n",
+
+"SELECT\n",
+
+" C_CUSTKEY,\n",
+
+" C_NAME,\n",
+
+" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS REVENUE,\n",
+
+" C_ACCTBAL,\n",
+
+" N_NAME,\n",
+
+" C_ADDRESS,\n",
+
+" C_PHONE,\n",
+
+" C_COMMENT\n",
+
+"FROM\n",
+
+" CUSTOMER,\n",
+
+" ORDERS,\n",
+
+" LINEITEM,\n",
+
+" NATION\n",
+
+"WHERE\n",
+
+" C_CUSTKEY = O_CUSTKEY\n",
+
+" AND L_ORDERKEY = O_ORDERKEY\n",
+
+" AND O_ORDERDATE >= DATE '1993-10-01'\n",
+
+" AND O_ORDERDATE < DATE '1994-01-01'\n",
+
+" AND L_RETURNFLAG = 'R'\n",
+
+" AND C_NATIONKEY = N_NATIONKEY\n",
+
+"GROUP BY\n",
+
+" C_CUSTKEY,\n",
+
+" C_NAME,\n",
+
+" C_ACCTBAL,\n",
+
+" C_PHONE,\n",
+
+" N_NAME,\n",
+
+" C_ADDRESS,\n",
+
+" C_COMMENT\n",
+
+"ORDER BY\n",
+
+" REVENUE DESC\n",
+
+"LIMIT 20;\n",
+
+"```\n",
+
+"\n",
+
+"In the original query, a wide variety of columns need to be aggregated in the `GROUP BY` clause. PyDough greatly simplifies this if we phrase this question in the form of \"for each customer...\" since aggregating per-customer can be done implicitly without any manual partitioning."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "7d65be30-98fb-42af-aaff-8db79d8c981b",
+
+"metadata": {},
+
+"outputs": [],), ChunkSearchResult(score=0.043, text=# within $4 of the smallest known account balance globally.
+
+# (This is a correlated SEMI-join)
+
+selected_suppliers = nations.suppliers.WHERE(
+
+⋮----
+
+def correl_6()
+
+⋮----
+
+# Correlated back reference example #6: simple 1-step correlated reference
+
+⋮----
+
+# letter as the region, but only keep regions with at least one such nation.
+
+# This is a true correlated join doing an aggregated access that does NOT
+
+# require that records without the RHS be kept.
+
+selected_nations = nations.WHERE(name[:1] == region_name[:1])
+
+⋮----
+
+def correl_7()
+
+⋮----
+
+# Correlated back reference example #6: deleted correlated reference
+
+⋮----
+
+# letter as the region, but only keep regions without at least one such
+
+# nation. The true correlated join is trumped by the correlated ANTI-join.
+
+⋮----
+
+def correl_8()
+
+⋮----
+
+# Correlated back reference example #8: non-agg correlated reference
+
+# For each nation, fetch the name of its region, but filter the region
+
+# so it only keeps it if it starts with the same letter as the nation
+
+# (otherwise, returns NULL). This is a true correlated join doing an
+
+# access without aggregation without requiring the RHS be
+
+⋮----
+
+aug_region = region.WHERE(name[:1] == nation_name[:1])
+
+⋮----
+
+def correl_9()
+
+⋮----
+
+# Correlated back reference example #9: non-agg correlated reference
+
+⋮----
+
+# (otherwise, omit the nation). This is a true correlated join doing an
+
+# access that also requires the RHS records be present.
+
+⋮----
+
+def correl_10()
+
+⋮----
+
+# Correlated back reference example #10: deleted correlated reference
+
+⋮----
+
+# (otherwise, returns NULL), and also filter the nations to only keep
+
+# records where the region is NULL. The true correlated join is trumped by
+
+# the correlated ANTI-join.
+
+⋮----
+
+def correl_11()
+
+⋮----
+
+# Correlated back reference example #11: backref out of partition child.
+
+# Which part brands have at least 1 part that more than 40% above the
+
+# average retail price for all parts from that brand.
+
+⋮----
+
+brands = PARTITION(Parts, name="p", by=brand).CALCULATE(
+
+outlier_parts = p.WHERE(retail_price > 1.4 * avg_price)
+
+selected_brands = brands.WHERE(HAS(outlier_parts))
+
+⋮----
+
+def correl_12()
+
+⋮----
+
+# Correlated back reference example #12: backref out of partition child.
+
+# Which part brands have at least 1 part that is above the average retail
+
+# price for parts of that brand, below the average retail price for all
+
+# parts, and has a size below 3.
+
+⋮----
+
+global_info = TPCH.CALCULATE(global_avg_price=AVG(Parts.retail_price))
+
+brands = global_info.PARTITION(Parts, name="p", by=brand).CALCULATE(
+
+selected_parts = p.WHERE(
+
+selected_brands = brands.WHERE(HAS(selected_parts))
+
+⋮----
+
+def correl_13()
+
+⋮----
+
+# Correlated back reference example #13: multiple correlation.
+
+# Count how many suppliers sell at least one part where the retail price
+
+# is less than a 50% markup over the supply cost. Only considers suppliers
+
+# from nations #1/#2/#3, and small parts.
+
+# (This is a correlated SEMI-joins)
+
+selected_part = part.WHERE(
+
+selected_supply_records = supply_records.CALCULATE(supplycost).WHERE(
+
+supplier_info = Suppliers.WHERE(nation_key <= 3).CALCULATE(
+
+selected_suppliers = supplier_info.WHERE(COUNT(selected_supply_records) > 0)
+
+⋮----
+
+def correl_14()
+
+⋮----
+
+# Correlated back reference example #14: multiple correlation.
+
+⋮----
+
+# is less than a 50% markup over the supply cost, and the retail price of
+
+# the part is below the average for all parts from the supplier. Only
+
+# considers suppliers from nations #19, and LG DRUM parts.
+
+# (This is multiple correlated SEMI-joins)
+
+⋮----
+
+supplier_info = Suppliers.WHERE(nation_key == 19).CALCULATE(
+
+selected_suppliers = supplier_info.WHERE(HAS(selected_supply_records))
+
+⋮----
+
+def correl_15()
+
+⋮----), ChunkSearchResult(score=0.030, text=is_german_supplier = supplier.nation.name == "GERMANY"
+
+selected_records = PartSupp.WHERE(is_german_supplier).CALCULATE(
+
+⋮----
+
+def impl_tpch_q12()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q12.
+
+"""
+
+⋮----
+
+def impl_tpch_q13()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q13, truncated to 10 rows.
+
+"""
+
+selected_orders = orders.WHERE(~(LIKE(comment, "%special%requests%")))
+
+customer_info = Customers.CALCULATE(num_non_special_orders=COUNT(selected_orders))
+
+⋮----
+
+def impl_tpch_q14()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q14.
+
+"""
+
+value = extended_price * (1 - discount)
+
+⋮----
+
+def impl_tpch_q15()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q15.
+
+"""
+
+selected_lines = lines.WHERE(
+
+total = SUM(selected_lines.extended_price * (1 - selected_lines.discount))
+
+⋮----
+
+def impl_tpch_q16()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q16.
+
+"""
+
+selected_records = (
+
+⋮----
+
+def impl_tpch_q17()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q17.
+
+"""
+
+part_info = Parts.WHERE((brand == "Brand#23") & (container == "MED BOX")).CALCULATE(
+
+selected_lines = part_info.lines.WHERE(quantity < 0.2 * part_avg_quantity)
+
+⋮----
+
+def impl_tpch_q18()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q18, truncated to 10 rows
+
+"""
+
+⋮----
+
+def impl_tpch_q19()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q19.
+
+"""
+
+⋮----
+
+def impl_tpch_q20()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q20, truncated to 10 rows.
+
+"""
+
+part_qty = SUM(
+
+selected_part_supplied = supply_records.CALCULATE(availqty).part.WHERE(
+
+⋮----
+
+def impl_tpch_q21()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q21, truncated to 10 rows.
+
+"""
+
+date_check = receipt_date > commit_date
+
+selected_orders = lines.CALCULATE(original_key=supplier_key).WHERE(date_check).order
+
+different_supplier = supplier_key != original_key
+
+waiting_entries = selected_orders.WHERE(
+
+⋮----
+
+def impl_tpch_q22()
+
+⋮----
+
+"""
+
+PyDough implementation of TPCH Q22.
+
+"""
+
+selected_customers = Customers.CALCULATE(cntry_code=phone[:2]).WHERE(
+
+````
+
+## File: .gitignore
+
+````
+
+# Byte-compiled / optimized / DLL files
+
+__pycache__/
+
+.py[cod]
+
+$py.class
+
+# C extensions
+
+.so
+
+# Distribution / packaging
+
+.Python
+
+build/
+
+develop-eggs/
+
+dist/
+
+downloads/
+
+eggs/
+
+.eggs/
+
+lib/
+
+lib64/
+
+parts/
+
+sdist/
+
+var/
+
+wheels/
+
+share/python-wheels/
+
+.egg-info/
+
+.installed.cfg
+
+.egg
+
+MANIFEST
+
+test-output.xml
+
+.db
+
+# PyInstaller
+
+# Usually these files are written by a python script from a template
+
+# before PyInstaller builds the exe, so as to inject date/other infos into it.
+
+.manifest
+
+.spec
+
+# Installer logs
+
+pip-log.txt
+
+pip-delete-this-directory.txt
+
+uv.lock
+
+# Unit test / coverage reports
+
+htmlcov/
+
+.tox/
+
+.nox/
+
+.coverage
+
+.coverage.*
+
+.cache
+
+nosetests.xml
+
+coverage.xml
+
+.cover
+
+.py,cover
+
+.hypothesis/
+
+.pytest_cache/
+
+cover/
+
+# Translations
+
+.mo
+
+.pot
+
+# Django stuff:
+
+.log
+
+local_settings.py
+
+db.sqlite3
+
+db.sqlite3-journal
+
+# Flask stuff:
+
+instance/
+
+.webassets-cache
+
+# Scrapy stuff:
+
+.scrapy
+
+# Sphinx documentation
+
+docs/_build/
+
+# PyBuilder
+
+.pybuilder/
+
+target/
+
+# Jupyter Notebook
+
+.ipynb_checkpoints
+
+# IPython
+
+profile_default/
+
+ipython_config.py
+
+# pyenv
+
+# For a library or package, you might want to ignore these files since the code is
+
+# intended to run in multiple environments; otherwise, check them in:
+
+# .python-version
+
+# pipenv
+
+# According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+
+# However, in case of collaboration, if having platform-specific dependencies or dependencies
+
+# having no cross-platform support, pipenv may install dependencies that don't work, or not
+
+# install all needed dependencies.
+
+#Pipfile.lock
+
+# poetry
+
+# Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+
+# This is especially recommended for binary packages to ensure reproducibility, and is more
+
+# commonly ignored for libraries.
+
+# https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+
+#poetry.lock
+
+# pdm
+
+# Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.), ChunkSearchResult(score=0.028, text=# names in a rolling window.
+
+⋮----
+
+def avg_order_diff_per_customer()
+
+⋮----
+
+# Finds the 5 customers with the highest average difference in days between
+
+# orders made.
+
+prev_order_date_by_cust = PREV(order_date, by=order_date.ASC(), levels=1)
+
+order_info = orders.CALCULATE(
+
+selected_customers = Customers.WHERE(HAS(order_info))
+
+⋮----
+
+def yoy_change_in_num_orders()
+
+⋮----
+
+# For every year, counts the number of orders made in that year and the
+
+# percentage change from the previous year.
+
+years = PARTITION(
+
+current_year_orders = COUNT(orders_in_year)
+
+prev_year_orders = PREV(COUNT(orders_in_year), by=year.ASC())
+
+⋮----
+
+def first_order_in_year()
+
+⋮----
+
+# Find all orders that do not have a previous order in the same year
+
+# (breaking ties by order key).
+
+previous_order_date = PREV(order_date, by=(order_date.ASC(), key.ASC()))
+
+⋮----
+
+def customer_largest_order_deltas()
+
+⋮----
+
+# For each customer, find the highest positive/negative difference in
+
+# revenue between one of their orders and and the most recent order before
+
+# it, ignoring their first ever order. Return the 5 customers with the
+
+# largest such difference. Only consider customers with orders.
+
+line_revenue = extended_price * (1 - discount)
+
+order_revenue = SUM(lines.CALCULATE(r=line_revenue).r)
+
+previous_order_revenue = PREV(order_revenue, by=order_date.ASC(), levels=1)
+
+orders_info = orders.WHERE(PRESENT(previous_order_revenue)).CALCULATE(
+
+⋮----
+
+def suppliers_bal_diffs()
+
+⋮----
+
+# Finds the 5 suppliers with the largest difference in account balance from
+
+# the supplier with the next smallest account balance in the same region.
+
+⋮----
+
+def month_year_sliding_windows()
+
+⋮----
+
+# Finds all months where the total amount spent by customers on orders in
+
+# that month was more than the preceding/following month, and the amount
+
+# spent in that year was more than the following year.
+
+ym_groups = PARTITION(
+
+y_groups = (
+
+⋮----
+
+def avg_gap_prev_urgent_same_clerk()
+
+⋮----
+
+# Finds the average gap in days between each urgent order and the previous
+
+# urgent order handled by the same clerk
+
+urgent_orders = Orders.WHERE(order_priority == "1-URGENT")
+
+clerks = PARTITION(urgent_orders, name="orders", by=clerk)
+
+order_info = clerks.orders.CALCULATE(
+
+⋮----
+
+def nation_window_aggs()
+
+⋮----
+
+# Calculating multiple global windowed aggregations for each nation, only
+
+# considering nations whose names do not start with a vowel.
+
+⋮----
+
+def region_nation_window_aggs()
+
+⋮----
+
+# per-region, considering nations whose names do not start with a vowel.
+
+⋮----
+
+def supplier_pct_national_qty()
+
+⋮----
+
+# Find the 5 African suppliers with the highest percentage of total
+
+# quantity of product shipped from them out of all suppliers in that nation
+
+# meeting certain criteria. Include for each such supplier their name,
+
+# nation name, the quantity, and the percentage. The criteria are that the
+
+# shipments were done in 1998, they were shipped by ship, the part shipped
+
+# had had "tomato" in the name and was a large container. Also, when
+
+# finding the sum for each naiton and the best suppliers, ignore all
+
+# suppliers with a negative account balance and whose comments do not
+
+# contain the word "careful".
+
+selected_lines = lines.WHERE(
+
+supp_qty = SUM(selected_lines.quantity)
+
+⋮----
+
+def highest_priority_per_year()
+
+⋮----
+
+# For each year, identify the priority with the highest percentage of
+
+# made in that year with that priority, listing the year, priority, and
+
+# percentage. Sort the results by year.
+
+order_info = Orders.CALCULATE(order_year=YEAR(order_date))
+
+year_priorities = PARTITION(
+
+years = PARTITION(year_priorities, name="priorities", by=order_year)
+
+⋮----
+
+def nation_best_order()
+
+⋮----
+
+# For each Asian nation, identify the most expensive order made by a
+
+# customer in that nation in 1998, listing the nation name, customer
+
+# name, order key, the order's price, and percentage of the price of
+
+# all orders made in 1998. Order the nations alphabetically.
+
+selected_nations = Nations.WHERE(region.name == "ASIA")
+
+best_order = (
+
+⋮----), ChunkSearchResult(score=0.027, text=AGGREGATE(keys={}, aggregations={'agg_0': MAX(total_revenue)})
+
+PROJECT(columns={'total_revenue': DEFAULT_TO(agg_0, 0:int64)})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['left'], columns={'agg_0': t1.agg_0})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey})
+
+AGGREGATE(keys={'supplier_key': supplier_key}, aggregations={'agg_0': SUM(expr_3)})
+
+PROJECT(columns={'expr_3': extended_price * 1:int64 - discount, 'supplier_key': supplier_key})
+
+FILTER(condition=ship_date < datetime.date(1996, 4, 1):date & ship_date >= datetime.date(1996, 1, 1):date, columns={'discount': discount, 'extended_price': extended_price, 'supplier_key': supplier_key})
+
+SCAN(table=tpch.LINEITEM, columns={'discount': l_discount, 'extended_price': l_extendedprice, 'ship_date': l_shipdate, 'supplier_key': l_suppkey})
+
+SCAN(table=tpch.SUPPLIER, columns={'address': s_address, 'key': s_suppkey, 'name': s_name, 'phone': s_phone})
+
+AGGREGATE(keys={'supplier_key': supplier_key}, aggregations={'agg_1': SUM(expr_4)})
+
+PROJECT(columns={'expr_4': extended_price * 1:int64 - discount, 'supplier_key': supplier_key})
+
+FILTER(condition=ship_date < datetime.date(1996, 4, 1):date & ship_date >= datetime.date(1996, 1, 1):date, columns={'discount': discount, 'extended_price': extended_price, 'supplier_key': supplier_key})
+
+SCAN(table=tpch.LINEITEM, columns={'discount': l_discount, 'extended_price': l_extendedprice, 'ship_date': l_shipdate, 'supplier_key': l_suppkey})
+
+````
+
+## File: tests/test_plan_refsols/tpch_q16.txt
+
+````
+
+ROOT(columns=[('P_BRAND', P_BRAND), ('P_TYPE', P_TYPE), ('P_SIZE', P_SIZE), ('SUPPLIER_COUNT', SUPPLIER_COUNT)], orderings=[(ordering_1):desc_last, (ordering_2):asc_first, (ordering_3):asc_first, (ordering_4):asc_first])
+
+LIMIT(limit=Literal(value=10, type=Int64Type()), columns={'P_BRAND': P_BRAND, 'P_SIZE': P_SIZE, 'P_TYPE': P_TYPE, 'SUPPLIER_COUNT': SUPPLIER_COUNT, 'ordering_1': ordering_1, 'ordering_2': ordering_2, 'ordering_3': ordering_3, 'ordering_4': ordering_4}, orderings=[(ordering_1):desc_last, (ordering_2):asc_first, (ordering_3):asc_first, (ordering_4):asc_first])
+
+PROJECT(columns={'P_BRAND': P_BRAND, 'P_SIZE': P_SIZE, 'P_TYPE': P_TYPE, 'SUPPLIER_COUNT': SUPPLIER_COUNT, 'ordering_1': SUPPLIER_COUNT, 'ordering_2': P_BRAND, 'ordering_3': P_TYPE, 'ordering_4': P_SIZE})
+
+PROJECT(columns={'P_BRAND': p_brand, 'P_SIZE': p_size, 'P_TYPE': p_type, 'SUPPLIER_COUNT': agg_0})
+
+AGGREGATE(keys={'p_brand': p_brand, 'p_size': p_size, 'p_type': p_type}, aggregations={'agg_0': NDISTINCT(supplier_key)})
+
+FILTER(condition=NOT(LIKE(comment_2, '%Customer%Complaints%':string)), columns={'p_brand': p_brand, 'p_size': p_size, 'p_type': p_type, 'supplier_key': supplier_key})
+
+JOIN(conditions=[t0.supplier_key == t1.key], types=['left'], columns={'comment_2': t1.comment, 'p_brand': t0.p_brand, 'p_size': t0.p_size, 'p_type': t0.p_type, 'supplier_key': t0.supplier_key})
+
+JOIN(conditions=[t0.key == t1.part_key], types=['inner'], columns={'p_brand': t0.p_brand, 'p_size': t0.p_size, 'p_type': t0.p_type, 'supplier_key': t1.supplier_key})
+
+PROJECT(columns={'key': key, 'p_brand': brand, 'p_size': size, 'p_type': part_type})
+
+FILTER(condition=brand != 'BRAND#45':string & ISIN(size, [49, 14, 23, 45, 19, 3, 36, 9]:array[unknown]) & NOT(STARTSWITH(part_type, 'MEDIUM POLISHED%':string)), columns={'brand': brand, 'key': key, 'part_type': part_type, 'size': size})
+
+SCAN(table=tpch.PART, columns={'brand': p_brand, 'key': p_partkey, 'part_type': p_type, 'size': p_size})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+SCAN(table=tpch.SUPPLIER, columns={'comment': s_comment, 'key': s_suppkey})
+
+````
+
+## File: tests/test_plan_refsols/tpch_q17.txt
+
+````
+
+ROOT(columns=[('AVG_YEARLY', AVG_YEARLY)], orderings=[])
+
+PROJECT(columns={'AVG_YEARLY': DEFAULT_TO(agg_0, 0:int64) / 7.0:float64})
+
+AGGREGATE(keys={}, aggregations={'agg_0': SUM(extended_price)})
+
+FILTER(condition=quantity < 0.2:float64 * part_avg_quantity, columns={'extended_price': extended_price})), ChunkSearchResult(score=0.027, text=JOIN(conditions=[t0.part_key == t1.key], types=['semi'], columns={'supplier_key': t0.supplier_key}, correl_name='corr2')
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey, 'supplycost': ps_supplycost})
+
+FILTER(condition=retail_price < corr2.supplycost * 1.5:float64 & STARTSWITH(container, 'SM':string), columns={'key': key})
+
+SCAN(table=tpch.PART, columns={'container': p_container, 'key': p_partkey, 'retail_price': p_retailprice})
+
+````
+
+## File: tests/test_plan_refsols/correl_14.txt
+
+````
+
+ROOT(columns=[('n', n)], orderings=[])
+
+PROJECT(columns={'n': agg_0})
+
+AGGREGATE(keys={}, aggregations={'agg_0': COUNT()})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['semi'], columns={'account_balance': t0.account_balance}, correl_name='corr3')
+
+PROJECT(columns={'account_balance': account_balance, 'avg_price': agg_0, 'key': key})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['left'], columns={'account_balance': t0.account_balance, 'agg_0': t1.agg_0, 'key': t0.key})
+
+FILTER(condition=nation_key == 19:int64, columns={'account_balance': account_balance, 'key': key})
+
+SCAN(table=tpch.SUPPLIER, columns={'account_balance': s_acctbal, 'key': s_suppkey, 'nation_key': s_nationkey})
+
+AGGREGATE(keys={'supplier_key': supplier_key}, aggregations={'agg_0': AVG(retail_price)})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['inner'], columns={'retail_price': t1.retail_price, 'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'retail_price': p_retailprice})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['semi'], columns={'supplier_key': t0.supplier_key}, correl_name='corr2')
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey, 'supplycost': ps_supplycost})
+
+FILTER(condition=retail_price < corr2.supplycost * 1.5:float64 & retail_price < corr3.avg_price & container == 'LG DRUM':string, columns={'key': key})
+
+SCAN(table=tpch.PART, columns={'container': p_container, 'key': p_partkey, 'retail_price': p_retailprice})
+
+````
+
+## File: tests/test_plan_refsols/correl_15.txt
+
+````
+
+ROOT(columns=[('n', n)], orderings=[])
+
+PROJECT(columns={'n': agg_1})
+
+AGGREGATE(keys={}, aggregations={'agg_1': COUNT()})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['semi'], columns={'account_balance': t0.account_balance}, correl_name='corr3')
+
+PROJECT(columns={'account_balance': account_balance, 'global_avg_price': global_avg_price, 'key': key, 'supplier_avg_price': agg_0})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['left'], columns={'account_balance': t0.account_balance, 'agg_0': t1.agg_0, 'global_avg_price': t0.global_avg_price, 'key': t0.key})
+
+JOIN(conditions=[True:bool], types=['inner'], columns={'account_balance': t1.account_balance, 'global_avg_price': t0.global_avg_price, 'key': t1.key})
+
+PROJECT(columns={'global_avg_price': agg_0})
+
+AGGREGATE(keys={}, aggregations={'agg_0': AVG(retail_price)})
+
+SCAN(table=tpch.PART, columns={'retail_price': p_retailprice})
+
+FILTER(condition=nation_key == 19:int64, columns={'account_balance': account_balance, 'key': key})
+
+SCAN(table=tpch.SUPPLIER, columns={'account_balance': s_acctbal, 'key': s_suppkey, 'nation_key': s_nationkey})
+
+AGGREGATE(keys={'supplier_key': supplier_key}, aggregations={'agg_0': AVG(retail_price)})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['inner'], columns={'retail_price': t1.retail_price, 'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'retail_price': p_retailprice})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['semi'], columns={'supplier_key': t0.supplier_key}, correl_name='corr2')), ChunkSearchResult(score=0.026, text=SCAN(table=tpch.PARTSUPP, columns={'availqty': ps_availqty, 'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+````
+
+## File: tests/test_plan_refsols/aggregate_on_function_call.txt
+
+````
+
+ROOT(columns=[('nation_name', nation_name), ('avg_consumer_value', avg_consumer_value)], orderings=[])
+
+PROJECT(columns={'avg_consumer_value': agg_0, 'nation_name': key})
+
+JOIN(conditions=[t0.key == t1.nation_key], types=['left'], columns={'agg_0': t1.agg_0, 'key': t0.key})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey})
+
+AGGREGATE(keys={'nation_key': nation_key}, aggregations={'agg_0': MAX(expr_1)})
+
+PROJECT(columns={'expr_1': IFF(acctbal < 0.0:float64, 0.0:float64, acctbal), 'nation_key': nation_key})
+
+SCAN(table=tpch.CUSTOMER, columns={'acctbal': c_acctbal, 'nation_key': c_nationkey})
+
+````
+
+## File: tests/test_plan_refsols/aggregate_semi.txt
+
+````
+
+ROOT(columns=[('name', name), ('num_10parts', num_10parts), ('avg_price_of_10parts', avg_price_of_10parts), ('sum_price_of_10parts', sum_price_of_10parts)], orderings=[])
+
+PROJECT(columns={'avg_price_of_10parts': agg_0, 'name': name, 'num_10parts': DEFAULT_TO(agg_1, 0:int64), 'sum_price_of_10parts': DEFAULT_TO(agg_2, 0:int64)})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['inner'], columns={'agg_0': t1.agg_0, 'agg_1': t1.agg_1, 'agg_2': t1.agg_2, 'name': t0.name})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'name': s_name})
+
+AGGREGATE(keys={'supplier_key': supplier_key}, aggregations={'agg_0': AVG(retail_price), 'agg_1': COUNT(), 'agg_2': SUM(retail_price)})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['inner'], columns={'retail_price': t1.retail_price, 'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+FILTER(condition=size == 10:int64, columns={'key': key, 'retail_price': retail_price})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'retail_price': p_retailprice, 'size': p_size})
+
+````
+
+## File: tests/test_plan_refsols/aggregate_then_backref.txt
+
+````
+
+ROOT(columns=[('part_key', part_key), ('supplier_key', supplier_key), ('order_key', order_key_5), ('order_quantity_ratio', order_quantity_ratio)], orderings=[])
+
+PROJECT(columns={'order_key_5': order_key_4, 'order_quantity_ratio': order_quantity_ratio, 'part_key': part_key, 'supplier_key': supplier_key})
+
+PROJECT(columns={'order_key_4': order_key_2, 'order_quantity_ratio': quantity / total_quantity, 'part_key': part_key, 'supplier_key': supplier_key})
+
+JOIN(conditions=[t0.key == t1.order_key], types=['inner'], columns={'order_key_2': t1.order_key, 'part_key': t1.part_key, 'quantity': t1.quantity, 'supplier_key': t1.supplier_key, 'total_quantity': t0.total_quantity})
+
+PROJECT(columns={'key': key, 'total_quantity': DEFAULT_TO(agg_0, 0:int64)})
+
+JOIN(conditions=[t0.key == t1.order_key], types=['left'], columns={'agg_0': t1.agg_0, 'key': t0.key})
+
+SCAN(table=tpch.ORDERS, columns={'key': o_orderkey})
+
+AGGREGATE(keys={'order_key': order_key}, aggregations={'agg_0': SUM(quantity)})
+
+SCAN(table=tpch.LINEITEM, columns={'order_key': l_orderkey, 'quantity': l_quantity})
+
+SCAN(table=tpch.LINEITEM, columns={'order_key': l_orderkey, 'part_key': l_partkey, 'quantity': l_quantity, 'supplier_key': l_suppkey})
+
+````
+
+## File: tests/test_plan_refsols/anti_aggregate_alternate.txt
+
+````
+
+ROOT(columns=[('name', name), ('num_10parts', num_10parts), ('avg_price_of_10parts', avg_price_of_10parts), ('sum_price_of_10parts', sum_price_of_10parts)], orderings=[])
+
+PROJECT(columns={'avg_price_of_10parts': DEFAULT_TO(NULL_2, 0:int64), 'name': name, 'num_10parts': DEFAULT_TO(NULL_2, 0:int64), 'sum_price_of_10parts': NULL_2})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['anti'], columns={'NULL_2': None:unknown, 'name': t0.name})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'name': s_name})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['inner'], columns={'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+FILTER(condition=size == 10:int64, columns={'key': key})), ChunkSearchResult(score=0.026, text=_t13.supplycost
+
+FROM tpch.nation AS nation
+
+JOIN _t4 AS _t6
+
+ON _t6.key = nation.n_regionkey
+
+JOIN tpch.supplier AS supplier
+
+ON nation.n_nationkey = supplier.s_nationkey
+
+JOIN _t5 AS _t13
+
+ON _t13.supplier_key = supplier.s_suppkey
+
+JOIN tpch.part AS part
+
+ON _t13.part_key = part.p_partkey AND part.p_size = 15 AND part.p_type LIKE '%BRASS'
+
+), _t0_2 AS (
+
+SELECT
+
+_t17.n_name,
+
+_t17.manufacturer AS p_mfgr,
+
+_t17.key_19 AS p_partkey,
+
+_t17.s_acctbal,
+
+_t17.s_address,
+
+_t17.s_comment,
+
+_t17.s_name,
+
+_t17.s_phone,
+
+_t17.s_acctbal AS ordering_1,
+
+_t17.n_name AS ordering_2,
+
+_t17.s_name AS ordering_3,
+
+_t17.key_19 AS ordering_4
+
+FROM _t16 AS _t16
+
+JOIN _t17 AS _t17
+
+ON _t16.best_cost = _t17.supplycost AND _t16.key_9 = _t17.key_19
+
+ORDER BY
+
+ordering_1 DESC,
+
+ordering_2,
+
+ordering_3,
+
+ordering_4
+
+LIMIT 10
+
+)
+
+SELECT
+
+s_acctbal AS S_ACCTBAL,
+
+s_name AS S_NAME,
+
+n_name AS N_NAME,
+
+p_partkey AS P_PARTKEY,
+
+p_mfgr AS P_MFGR,
+
+s_address AS S_ADDRESS,
+
+s_phone AS S_PHONE,
+
+s_comment AS S_COMMENT
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_1 DESC,
+
+ordering_2,
+
+ordering_3,
+
+ordering_4
+
+````
+
+## File: tests/test_sql_refsols/tpch_q2_sqlite.sql
+
+````sql
+
+WITH _t4 AS (
+
+SELECT
+
+r_name AS name,
+
+r_regionkey AS key
+
+FROM tpch.region
+
+WHERE
+
+r_name = 'EUROPE'
+
+), _t5 AS (
+
+SELECT
+
+ps_partkey AS part_key,
+
+ps_suppkey AS supplier_key,
+
+ps_supplycost AS supplycost
+
+FROM tpch.partsupp
+
+), _t16 AS (
+
+SELECT
+
+MIN(_t5.supplycost) AS best_cost,
+
+part.p_partkey AS key_9
+
+FROM tpch.nation AS nation
+
+JOIN _t4 AS _t4
+
+ON _t4.key = nation.n_regionkey
+
+JOIN tpch.supplier AS supplier
+
+ON nation.n_nationkey = supplier.s_nationkey
+
+JOIN _t5 AS _t5
+
+ON _t5.supplier_key = supplier.s_suppkey
+
+JOIN tpch.part AS part
+
+ON _t5.part_key = part.p_partkey AND part.p_size = 15 AND part.p_type LIKE '%BRASS'
+
+GROUP BY
+
+part.p_partkey
+
+), _t17 AS (
+
+SELECT
+
+part.p_partkey AS key_19,
+
+part.p_mfgr AS manufacturer,
+
+nation.n_name,
+
+supplier.s_acctbal,
+
+supplier.s_address,
+
+supplier.s_comment,
+
+supplier.s_name,
+
+supplier.s_phone,
+
+_t13.supplycost
+
+FROM tpch.nation AS nation
+
+JOIN _t4 AS _t6
+
+ON _t6.key = nation.n_regionkey
+
+JOIN tpch.supplier AS supplier
+
+ON nation.n_nationkey = supplier.s_nationkey
+
+JOIN _t5 AS _t13
+
+ON _t13.supplier_key = supplier.s_suppkey
+
+JOIN tpch.part AS part
+
+ON _t13.part_key = part.p_partkey AND part.p_size = 15 AND part.p_type LIKE '%BRASS'
+
+), _t0_2 AS (
+
+SELECT
+
+_t17.n_name,
+
+_t17.manufacturer AS p_mfgr,
+
+_t17.key_19 AS p_partkey,
+
+_t17.s_acctbal,
+
+_t17.s_address,
+
+_t17.s_comment,
+
+_t17.s_name,
+
+_t17.s_phone,
+
+_t17.s_acctbal AS ordering_1,
+
+_t17.n_name AS ordering_2,
+
+_t17.s_name AS ordering_3,
+
+_t17.key_19 AS ordering_4
+
+FROM _t16 AS _t16
+
+JOIN _t17 AS _t17
+
+ON _t16.best_cost = _t17.supplycost AND _t16.key_9 = _t17.key_19
+
+ORDER BY
+
+ordering_1 DESC,
+
+ordering_2,
+
+ordering_3,
+
+ordering_4
+
+LIMIT 10
+
+)
+
+SELECT
+
+s_acctbal AS S_ACCTBAL,
+
+s_name AS S_NAME,
+
+n_name AS N_NAME,
+
+p_partkey AS P_PARTKEY,
+
+p_mfgr AS P_MFGR,
+
+s_address AS S_ADDRESS,
+
+s_phone AS S_PHONE,
+
+s_comment AS S_COMMENT
+
+FROM _t0_2
+
+ORDER BY
+
+ordering_1 DESC,
+
+ordering_2,
+
+ordering_3,
+
+ordering_4
+
+````
+
+## File: tests/test_sql_refsols/tpch_q20_ansi.sql
+
+````sql
+
+WITH _t5_2 AS (
+
+SELECT
+
+SUM(l_quantity) AS agg_0,
+
+l_partkey AS part_key
+
+FROM tpch.lineitem
+
+WHERE
+
+l_shipdate < CAST('1995-01-01' AS DATE)
+
+AND l_shipdate >= CAST('1994-01-01' AS DATE)
+
+GROUP BY
+
+l_partkey
+
+), _t7_2 AS (
+
+SELECT
+
+COUNT() AS agg_0,
+
+partsupp.ps_suppkey AS supplier_key
+
+FROM tpch.partsupp AS partsupp
+
+JOIN tpch.part AS part
+
+ON part.p_name LIKE 'forest%' AND part.p_partkey = partsupp.ps_partkey
+
+LEFT JOIN _t5_2 AS _t5
+
+ON _t5.part_key = part.p_partkey
+
+WHERE
+
+partsupp.ps_availqty > (
+
+COALESCE(_t5.agg_0, 0) * 0.5
+
+)
+
+GROUP BY
+
+partsupp.ps_suppkey
+
+), _t0_2 AS (
+
+SELECT
+
+supplier.s_address,
+
+supplier.s_name,
+
+supplier.s_name AS ordering_1
+
+FROM tpch.supplier AS supplier
+
+LEFT JOIN tpch.nation AS nation
+
+ON nation.n_nationkey = supplier.s_nationkey
+
+LEFT JOIN _t7_2 AS _t7
+
+ON _t7.supplier_key = supplier.s_suppkey
+
+WHERE
+
+(
+
+COALESCE(_t7.agg_0, 0) AND nation.n_name = 'CANADA'
+
+) > 0
+
+ORDER BY
+
+ordering_1
+
+LIMIT 10
+
+)), ChunkSearchResult(score=0.015, text="source": [
+
+"## TOP_K\n",
+
+"\n",
+
+"The TOP K operation is used to reduce a collection to maximum number of values. The `by` arugument is used to order the output based on a sorting condition. As an example, consider this query to only calculate the first 5 nations by alphabetical name order."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "a02a00e9-7df8-431d-8fe8-ec3ae42fbf4a",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"pydough.to_df(nations.TOP_K(5, by=name.ASC()))"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "da15de47-1a56-4130-b801-56ad6eba9de7",
+
+"metadata": {},
+
+"source": [
+
+"The `by` argument requirements are:\n",
+
+"* Anything that can be an expression used in a `CALCULATE` or a `WHERE` can be used a component of a `by`.\n",
+
+"* The value in the `by` must end with either `.ASC()` or `.DESC()`\n",
+
+"\n",
+
+"You can also provide a tuple to by if you need to break ties. Consider this alternatives that instead selects the 20 parts with the largest size, starting with the smallest part id."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "27d13368-8265-4a33-99a3-b6724f8c54de",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"pydough.to_df(parts.TOP_K(20, by=(size.DESC(), key.ASC())))"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "9e4a1458-d52e-4970-955b-35ed1ec29cc7",
+
+"metadata": {},
+
+"source": [
+
+"## ORDER_BY\n",
+
+"\n",
+
+"If you just want to return your output in a sorted order, you can use `ORDER_BY`. The functionality is the same as in `TOP_K` except that there is no `K` argument so the rows are not reduced. Each argument must be an expression that can be used for sorting.\n",
+
+"\n",
+
+"Below can transform our nations collection to sort the output by the alphabetical ordering of the nation names."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "840ccde6-3e32-46db-9b97-a15507427f33",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"pydough.to_df(nations.ORDER_BY(name.ASC()))"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "ed9922ec-8021-4664-a0ed-f32520e0e4a5",
+
+"metadata": {},
+
+"source": [
+
+"## PARTITION\n",
+
+"\n",
+
+"The partition operation allows grouping collections under interesting keys similar to a SQL `GROUP BY`. Keys can be specified using the `by` argument and data columns to be aggregated can be referenced using the name argument. For example, we can use this to bucket nations by name length."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "274824ca-5d54-43df-b18a-dbdd50aaa472",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"updated_nations = nations.CALCULATE(key, name_length=LENGTH(name))\n",
+
+"grouped_nations = PARTITION(\n",
+
+" updated_nations, name=\"n\", by=(name_length)\n",
+
+").CALCULATE(\n",
+
+" name_length,\n",
+
+" nation_count=COUNT(n.key)\n",
+
+")\n",
+
+"pydough.to_df(grouped_nations)"
+
+]
+
+},
+
+{
+
+"cell_type": "markdown",
+
+"id": "f1043412-75c0-4535-a935-894cb83d30e2",
+
+"metadata": {},
+
+"source": [
+
+"A couple important usage details:\n",
+
+"* The `name` argument specifies the name of the subcollection access from the partitions to the original unpartitioned data.\n",
+
+"* `keys` can be either be a single expression or a tuple of them, but it can only be references to expressions that already exist in the context of the data (e.g. `name`, not `LOWER(name)` or `region.name`)\n",
+
+"* Terms defined from the context of the `PARTITION` can be down-streamed to its descendants. An example is shown below where we select brass parts of size 15, but only the ones whose supply is below the average of all such parts."
+
+]
+
+},
+
+{
+
+"cell_type": "code",
+
+"execution_count": null,
+
+"id": "c8514760-7c58-440b-82ee-773b0564b43f",
+
+"metadata": {},
+
+"outputs": [],
+
+"source": [
+
+"%%pydough\n",
+
+"\n",
+
+"selected_parts = parts.WHERE(ENDSWITH(part_type, \"BRASS\") & (size == 15))\n",
+
+"part_types = PARTITION(selected_parts, name=\"p\", by=part_type).CALCULATE(avg_price=AVG(p.retail_price))\n",
+
+"output = part_types.p.WHERE(retail_price < avg_price)\n",), ChunkSearchResult(score=0.014, text=JOIN(conditions=[t0.supplier_key == t1.key], types=['inner'], columns={'name': t0.name, 'nation_key_8': t1.nation_key, 'receipt_date': t0.receipt_date})
+
+FILTER(condition=nation_key == 4:int64 & RANKING(args=[], partition=[key], order=[(receipt_date):asc_last, (extended_price * 1:int64 - discount):desc_first]) == 1:int64, columns={'name': name, 'receipt_date': receipt_date, 'supplier_key': supplier_key})
+
+JOIN(conditions=[t0.key_2 == t1.order_key], types=['inner'], columns={'discount': t1.discount, 'extended_price': t1.extended_price, 'key': t0.key, 'name': t0.name, 'nation_key': t0.nation_key, 'receipt_date': t1.receipt_date, 'supplier_key': t1.supplier_key})
+
+JOIN(conditions=[t0.key == t1.customer_key], types=['inner'], columns={'key': t0.key, 'key_2': t1.key, 'name': t0.name, 'nation_key': t0.nation_key})
+
+SCAN(table=tpch.CUSTOMER, columns={'key': c_custkey, 'name': c_name, 'nation_key': c_nationkey})
+
+FILTER(condition=clerk == 'Clerk#000000017':string, columns={'customer_key': customer_key, 'key': key})
+
+SCAN(table=tpch.ORDERS, columns={'clerk': o_clerk, 'customer_key': o_custkey, 'key': o_orderkey})
+
+SCAN(table=tpch.LINEITEM, columns={'discount': l_discount, 'extended_price': l_extendedprice, 'order_key': l_orderkey, 'receipt_date': l_receiptdate, 'supplier_key': l_suppkey})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'nation_key': s_nationkey})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name})
+
+````
+
+## File: tests/test_plan_refsols/singular7.txt
+
+````
+
+ROOT(columns=[('supplier_name', supplier_name), ('part_name', part_name), ('n_orders', n_orders)], orderings=[(ordering_0):desc_last, (ordering_1):asc_first])
+
+LIMIT(limit=Literal(value=5, type=Int64Type()), columns={'n_orders': n_orders, 'ordering_0': ordering_0, 'ordering_1': ordering_1, 'part_name': part_name, 'supplier_name': supplier_name}, orderings=[(ordering_0):desc_last, (ordering_1):asc_first])
+
+PROJECT(columns={'n_orders': n_orders, 'ordering_0': n_orders, 'ordering_1': supplier_name, 'part_name': part_name, 'supplier_name': supplier_name})
+
+PROJECT(columns={'n_orders': n_orders, 'part_name': part_name, 'supplier_name': name})
+
+JOIN(conditions=[t0.key == t1.key], types=['left'], columns={'n_orders': t1.n_orders, 'name': t0.name, 'part_name': t1.part_name})
+
+FILTER(condition=nation_key == 20:int64, columns={'key': key, 'name': name})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'name': s_name, 'nation_key': s_nationkey})
+
+FILTER(condition=RANKING(args=[], partition=[key], order=[(n_orders):desc_first, (part_name):asc_last]) == 1:int64, columns={'key': key, 'n_orders': n_orders, 'part_name': part_name})
+
+PROJECT(columns={'key': key, 'n_orders': DEFAULT_TO(agg_0, 0:int64), 'part_name': name_6})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['left'], columns={'agg_0': t0.agg_0, 'key': t0.key, 'name_6': t1.name})
+
+JOIN(conditions=[t0.part_key == t1.part_key & t0.supplier_key == t1.supplier_key], types=['left'], columns={'agg_0': t1.agg_0, 'key': t0.key, 'part_key': t0.part_key})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['inner'], columns={'key': t0.key, 'part_key': t1.part_key, 'supplier_key': t1.supplier_key})
+
+FILTER(condition=nation_key == 20:int64, columns={'key': key})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'nation_key': s_nationkey})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+AGGREGATE(keys={'part_key': part_key, 'supplier_key': supplier_key}, aggregations={'agg_0': COUNT()})
+
+FILTER(condition=YEAR(ship_date) == 1994:int64, columns={'part_key': part_key, 'supplier_key': supplier_key})
+
+SCAN(table=tpch.LINEITEM, columns={'part_key': l_partkey, 'ship_date': l_shipdate, 'supplier_key': l_suppkey})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'name': p_name})
+
+````), ChunkSearchResult(score=0.014, text=### Common Testing Utilities
+
+The `test_utils.py` file contains various utilities used by PyDough test files, such as the `TestInfo` classes used to build QDAG nodes for unit tests. Some important utilities include:
+
+`graph_fetcher`: Type alias for a function that takes in a string and generates metadata for a graph based on it.
+
+`noun_fetcher`: Type alias for a function that takes in a string and generates the representation of all the nouns in a metadata graph based on it.
+
+`map_over_dict_values`: Applies a lambda function to the values of a dictionary, returning a new dictionary with the transformation applied.
+
+By using these utilities and fixtures, the testing module ensures comprehensive and efficient testing of PyDough's functionality.
+
+````
+
+## File: tests/setup_defog.sh
+
+````bash
+
+#!/bin/bash
+
+# Script should be run from within the `tests` directory to set up the defog.ai
+
+# database with the tables that are used by the various schemas. The e2e
+
+# defog tests cannot be run unless this commmand has already been used to set
+
+# up the sqlite database.
+
+set -eo pipefail
+
+rm -fv defog.db
+
+sqlite3 defog.db < init_defog.sql
+
+````
+
+## File: tests/simple_pydough_functions.py
+
+````python
+
+"""
+
+Various functions containing PyDough code snippets for testing purposes.
+
+"""
+
+# ruff: noqa
+
+# mypy: ignore-errors
+
+# ruff & mypy should not try to typecheck or verify any of this
+
+⋮----
+
+def simple_scan()
+
+⋮----
+
+def simple_filter()
+
+⋮----
+
+def simple_scan_top_five()
+
+⋮----
+
+def simple_filter_top_five()
+
+⋮----
+
+def order_info_per_priority()
+
+⋮----
+
+# Find information about the highest total price order for each priority
+
+# type in 1992. Specifically, for each order priority, the key & total
+
+# price of the order. Order the results by priority.
+
+priorities = PARTITION(
+
+⋮----
+
+def simple_collation()
+
+⋮----
+
+def year_month_nation_orders()
+
+⋮----
+
+# Finds the 5 largest instances of numbers of orders made in a month of a
+
+# year by customers in a nation, only looking at nations from Asia and
+
+# Africa.
+
+selected_regions = Regions.WHERE(ISIN(name, ("ASIA", "AFRICA")))
+
+urgent_orders = (
+
+groups = PARTITION(
+
+⋮----
+
+def parts_quantity_increase_95_96()
+
+⋮----
+
+# Find the 3 parts with the largest increase in quantity ordered by
+
+# rail from 1995 to 1996, breaking ties alphabetically by name.
+
+# Only consider parts with a small size and that have at least one
+
+# qualifying order from both years.
+
+orders_95 = lines.WHERE((YEAR(order.order_date) == 1995) & (ship_mode == "RAIL"))
+
+orders_96 = lines.WHERE((YEAR(order.order_date) == 1996) & (ship_mode == "RAIL"))
+
+⋮----
+
+def rank_a()
+
+⋮----
+
+def rank_b()
+
+⋮----
+
+def rank_c()
+
+⋮----
+
+def rank_nations_by_region()
+
+⋮----
+
+def rank_nations_per_region_by_customers()
+
+⋮----
+
+def rank_parts_per_supplier_region_by_size()
+
+⋮----
+
+def rank_with_filters_a()
+
+⋮----
+
+def rank_with_filters_b()
+
+⋮----
+
+def rank_with_filters_c()
+
+⋮----
+
+def first_order_per_customer()
+
+⋮----
+
+# For each customer, find the total price of the first order they made and
+
+# when it was made. Pick the 5 customers with the highest such values.
+
+# If a customer ordered multiple orders on the first such day, pick the one
+
+# with the lowest key. Only consider customers with at least $9k in their
+
+# account. Only look at customers with at least one order.
+
+first_order = orders.WHERE(
+
+⋮----
+
+def percentile_nations()
+
+⋮----
+
+# For every nation, give its name & its bucket from 1-5 ordered by name
+
+# alphabetically
+
+⋮----
+
+def percentile_customers_per_region()
+
+⋮----
+
+# For each region, give the name of all customers in that region that are
+
+# in the 95th percentile in terms of account balance (larger percentile
+
+# means more money) and whose phone number ends in two zeros, sorted by the
+
+# name of the customers
+
+⋮----
+
+def regional_suppliers_percentile()
+
+⋮----
+
+# For each region, find the suppliers in the top 0.1% by number of parts
+
+# they supply, breaking ties by name, only keeping the suppliers in the top
+
+pct = PERCENTILE(
+
+⋮----
+
+def prev_next_regions()
+
+⋮----
+
+# Sorts the regions alphabetically and finds the previous and next regions'), ChunkSearchResult(score=0.014, text=SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'region_key': n_regionkey})
+
+FILTER(condition=name == 'EUROPE':string, columns={'key': key})
+
+SCAN(table=tpch.REGION, columns={'key': r_regionkey, 'name': r_name})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'nation_key': s_nationkey})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey, 'supplycost': ps_supplycost})
+
+FILTER(condition=size == 15:int64 & ENDSWITH(part_type, 'BRASS':string), columns={'key': key})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'part_type': p_type, 'size': p_size})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['inner'], columns={'key_19': t1.key, 'manufacturer': t1.manufacturer, 'n_name': t0.n_name, 's_acctbal': t0.s_acctbal, 's_address': t0.s_address, 's_comment': t0.s_comment, 's_name': t0.s_name, 's_phone': t0.s_phone, 'supplycost': t0.supplycost})
+
+JOIN(conditions=[t0.key_15 == t1.supplier_key], types=['inner'], columns={'n_name': t0.n_name, 'part_key': t1.part_key, 's_acctbal': t0.s_acctbal, 's_address': t0.s_address, 's_comment': t0.s_comment, 's_name': t0.s_name, 's_phone': t0.s_phone, 'supplycost': t1.supplycost})
+
+PROJECT(columns={'key_15': key_15, 'n_name': n_name, 's_acctbal': account_balance, 's_address': address, 's_comment': comment_14, 's_name': name_16, 's_phone': phone})
+
+JOIN(conditions=[t0.key == t1.nation_key], types=['inner'], columns={'account_balance': t1.account_balance, 'address': t1.address, 'comment_14': t1.comment, 'key_15': t1.key, 'n_name': t0.n_name, 'name_16': t1.name, 'phone': t1.phone})
+
+JOIN(conditions=[t0.region_key == t1.key], types=['inner'], columns={'key': t0.key, 'n_name': t0.n_name})
+
+PROJECT(columns={'key': key, 'n_name': name, 'region_key': region_key})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name, 'region_key': n_regionkey})
+
+FILTER(condition=name == 'EUROPE':string, columns={'key': key})
+
+SCAN(table=tpch.REGION, columns={'key': r_regionkey, 'name': r_name})
+
+SCAN(table=tpch.SUPPLIER, columns={'account_balance': s_acctbal, 'address': s_address, 'comment': s_comment, 'key': s_suppkey, 'name': s_name, 'nation_key': s_nationkey, 'phone': s_phone})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey, 'supplycost': ps_supplycost})
+
+FILTER(condition=size == 15:int64 & ENDSWITH(part_type, 'BRASS':string), columns={'key': key, 'manufacturer': manufacturer})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'manufacturer': p_mfgr, 'part_type': p_type, 'size': p_size})
+
+````
+
+## File: tests/test_plan_refsols/tpch_q20.txt
+
+````
+
+ROOT(columns=[('S_NAME', S_NAME), ('S_ADDRESS', S_ADDRESS)], orderings=[(ordering_1):asc_first])
+
+LIMIT(limit=Literal(value=10, type=Int64Type()), columns={'S_ADDRESS': S_ADDRESS, 'S_NAME': S_NAME, 'ordering_1': ordering_1}, orderings=[(ordering_1):asc_first])
+
+PROJECT(columns={'S_ADDRESS': S_ADDRESS, 'S_NAME': S_NAME, 'ordering_1': S_NAME})
+
+FILTER(condition=name_3 == 'CANADA':string & DEFAULT_TO(agg_0, 0:int64) > 0:int64, columns={'S_ADDRESS': S_ADDRESS, 'S_NAME': S_NAME})
+
+JOIN(conditions=[t0.key == t1.supplier_key], types=['left'], columns={'S_ADDRESS': t0.S_ADDRESS, 'S_NAME': t0.S_NAME, 'agg_0': t1.agg_0, 'name_3': t0.name_3})
+
+JOIN(conditions=[t0.nation_key == t1.key], types=['left'], columns={'S_ADDRESS': t0.S_ADDRESS, 'S_NAME': t0.S_NAME, 'key': t0.key, 'name_3': t1.name})
+
+PROJECT(columns={'S_ADDRESS': address, 'S_NAME': name, 'key': key, 'nation_key': nation_key})
+
+SCAN(table=tpch.SUPPLIER, columns={'address': s_address, 'key': s_suppkey, 'name': s_name, 'nation_key': s_nationkey})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name})
+
+AGGREGATE(keys={'supplier_key': supplier_key}, aggregations={'agg_0': COUNT()})
+
+FILTER(condition=availqty > DEFAULT_TO(agg_0, 0:int64) * 0.5:float64, columns={'supplier_key': supplier_key})
+
+JOIN(conditions=[t0.key == t1.part_key], types=['left'], columns={'agg_0': t1.agg_0, 'availqty': t0.availqty, 'supplier_key': t0.supplier_key})), ChunkSearchResult(score=0.014, text=ROOT(columns=[('order_key', order_key), ('ship_date', ship_date), ('extended_price', extended_price)], orderings=[])
+
+JOIN(conditions=[t0.part_key == t1.part_key & t0.supplier_key == t1.supplier_key], types=['inner'], columns={'extended_price': t0.extended_price, 'order_key': t0.order_key, 'ship_date': t0.ship_date})
+
+JOIN(conditions=[t0.part_key == t1.part_key & t0.supplier_key == t1.supplier_key], types=['inner'], columns={'extended_price': t0.extended_price, 'order_key': t0.order_key, 'part_key': t0.part_key, 'ship_date': t0.ship_date, 'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.LINEITEM, columns={'extended_price': l_extendedprice, 'order_key': l_orderkey, 'part_key': l_partkey, 'ship_date': l_shipdate, 'supplier_key': l_suppkey})
+
+JOIN(conditions=[t0.nation_key == t1.key], types=['inner'], columns={'part_key': t0.part_key, 'supplier_key': t0.supplier_key})
+
+JOIN(conditions=[t0.supplier_key == t1.key], types=['inner'], columns={'nation_key': t1.nation_key, 'part_key': t0.part_key, 'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+SCAN(table=tpch.SUPPLIER, columns={'key': s_suppkey, 'nation_key': s_nationkey})
+
+FILTER(condition=name == 'GERMANY':string, columns={'key': key})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name})
+
+JOIN(conditions=[t0.part_key == t1.key], types=['inner'], columns={'part_key': t0.part_key, 'supplier_key': t0.supplier_key})
+
+SCAN(table=tpch.PARTSUPP, columns={'part_key': ps_partkey, 'supplier_key': ps_suppkey})
+
+FILTER(condition=STARTSWITH(part_type, 'ECONOMY':string), columns={'key': key})
+
+SCAN(table=tpch.PART, columns={'key': p_partkey, 'part_type': p_type})
+
+````
+
+## File: tests/test_plan_refsols/lines_shipping_vs_customer_region.txt
+
+````
+
+ROOT(columns=[('order_year', order_year), ('customer_region_name', customer_region_name), ('customer_nation_name', customer_nation_name), ('supplier_region_name', supplier_region_name), ('nation_name', nation_name)], orderings=[])
+
+PROJECT(columns={'customer_nation_name': name_3, 'customer_region_name': name, 'nation_name': nation_name, 'order_year': YEAR(order_date), 'supplier_region_name': name_16})
+
+JOIN(conditions=[t0.part_key == t1.part_key & t0.supplier_key == t1.supplier_key], types=['left'], columns={'name': t0.name, 'name_16': t1.name_16, 'name_3': t0.name_3, 'nation_name': t1.nation_name, 'order_date': t0.order_date})
+
+JOIN(conditions=[t0.key_8 == t1.order_key], types=['inner'], columns={'name': t0.name, 'name_3': t0.name_3, 'order_date': t0.order_date, 'part_key': t1.part_key, 'supplier_key': t1.supplier_key})
+
+JOIN(conditions=[t0.key_5 == t1.customer_key], types=['inner'], columns={'key_8': t1.key, 'name': t0.name, 'name_3': t0.name_3, 'order_date': t1.order_date})
+
+JOIN(conditions=[t0.key_2 == t1.nation_key], types=['inner'], columns={'key_5': t1.key, 'name': t0.name, 'name_3': t0.name_3})
+
+JOIN(conditions=[t0.key == t1.region_key], types=['inner'], columns={'key_2': t1.key, 'name': t0.name, 'name_3': t1.name})
+
+SCAN(table=tpch.REGION, columns={'key': r_regionkey, 'name': r_name})
+
+SCAN(table=tpch.NATION, columns={'key': n_nationkey, 'name': n_name, 'region_key': n_regionkey})
+
+SCAN(table=tpch.CUSTOMER, columns={'key': c_custkey, 'nation_key': c_nationkey})
+
+SCAN(table=tpch.ORDERS, columns={'customer_key': o_custkey, 'key': o_orderkey, 'order_date': o_orderdate})
+
+SCAN(table=tpch.LINEITEM, columns={'order_key': l_orderkey, 'part_key': l_partkey, 'supplier_key': l_suppkey})
+
+PROJECT(columns={'name_16': name_16, 'nation_name': name_13, 'part_key': part_key, 'supplier_key': supplier_key})
+
+JOIN(conditions=[t0.region_key == t1.key], types=['inner'], columns={'name_13': t0.name_13, 'name_16': t1.name, 'part_key': t0.part_key, 'supplier_key': t0.supplier_key})
+
+JOIN(conditions=[t0.nation_key == t1.key], types=['inner'], columns={'name_13': t1.name, 'part_key': t0.part_key, 'region_key': t1.region_key, 'supplier_key': t0.supplier_key}))], graph_search_results=[], web_search_results=None, document_search_results=None), 'citations': [Citation(id='45c4498', object='citation', is_new=True, span=None, source_type=None, payload={'id': '45c44989-0ff8-55c4-94e3-ac184e5b7e45', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.015151515151515152, 'text': '"source": [\n\n"## TOP_K\\n",\n\n"\\n",\n\n"The TOP K operation is used to reduce a collection to maximum number of values. The `by` arugument is used to order the output based on a sorting condition. As an example, consider this query to only calculate the first 5 nations by alphabetical name order."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "a02a00e9-7df8-431d-8fe8-ec3ae42fbf4a",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.TOP_K(5, by=name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "da15de47-1a56-4130-b801-56ad6eba9de7",\n\n"metadata": {},\n\n"source": [\n\n"The `by` argument requirements are:\\n",\n\n"* Anything that can be an expression used in a `CALCULATE` or a `WHERE` can be used a component of a `by`.\\n",\n\n"* The value in the `by` must end with either `.ASC()` or `.DESC()`\\n",\n\n"\\n",\n\n"You can also provide a tuple to by if you need to break ties. Consider this alternatives that instead selects the 20 parts with the largest size, starting with the smallest part id."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27d13368-8265-4a33-99a3-b6724f8c54de",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(parts.TOP_K(20, by=(size.DESC(), key.ASC())))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "9e4a1458-d52e-4970-955b-35ed1ec29cc7",\n\n"metadata": {},\n\n"source": [\n\n"## ORDER_BY\\n",\n\n"\\n",\n\n"If you just want to return your output in a sorted order, you can use `ORDER_BY`. The functionality is the same as in `TOP_K` except that there is no `K` argument so the rows are not reduced. Each argument must be an expression that can be used for sorting.\\n",\n\n"\\n",\n\n"Below can transform our nations collection to sort the output by the alphabetical ordering of the nation names."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "840ccde6-3e32-46db-9b97-a15507427f33",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.ORDER_BY(name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "ed9922ec-8021-4664-a0ed-f32520e0e4a5",\n\n"metadata": {},\n\n"source": [\n\n"## PARTITION\\n",\n\n"\\n",\n\n"The partition operation allows grouping collections under interesting keys similar to a SQL `GROUP BY`. Keys can be specified using the `by` argument and data columns to be aggregated can be referenced using the name argument. For example, we can use this to bucket nations by name length."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "274824ca-5d54-43df-b18a-dbdd50aaa472",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"updated_nations = nations.CALCULATE(key, name_length=LENGTH(name))\\n",\n\n"grouped_nations = PARTITION(\\n",\n\n" updated_nations, name=\\"n\\", by=(name_length)\\n",\n\n").CALCULATE(\\n",\n\n" name_length,\\n",\n\n" nation_count=COUNT(n.key)\\n",\n\n")\\n",\n\n"pydough.to_df(grouped_nations)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "f1043412-75c0-4535-a935-894cb83d30e2",\n\n"metadata": {},\n\n"source": [\n\n"A couple important usage details:\\n",\n\n"* The `name` argument specifies the name of the subcollection access from the partitions to the original unpartitioned data.\\n",\n\n"* `keys` can be either be a single expression or a tuple of them, but it can only be references to expressions that already exist in the context of the data (e.g. `name`, not `LOWER(name)` or `region.name`)\\n",\n\n"* Terms defined from the context of the `PARTITION` can be down-streamed to its descendants. An example is shown below where we select brass parts of size 15, but only the ones whose supply is below the average of all such parts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "c8514760-7c58-440b-82ee-773b0564b43f",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = parts.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n"part_types = PARTITION(selected_parts, name=\\"p\\", by=part_type).CALCULATE(avg_price=AVG(p.retail_price))\\n",\n\n"output = part_types.p.WHERE(retail_price < avg_price)\\n",', 'metadata': {'version': 'v0', 'chunk_order': 15, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 3, 'associated_query': '\n    Please provide documentation and explanation for the following Pydough code:\n    \n    Original User Question:\n    Find, within the European region, for each brass part of size 15, the supplier who can supply it at minimum cost. If several suppliers in that region offer the desired part type and size at the same (minimum) cost, list the parts from suppliers with the 100 highest account balances. List the supplier\'s account balance, name and nation; the part\'s number and manufacturer; the supplier\'s address, phone number and comment information. This is also known as TPC-H query #2.\n    \n    Pydough Generated Code Answering the User Question:\n    selected_parts = (\n    nations.WHERE(region.name == "EUROPE")\n    .suppliers.supply_records.part(\n        s_acctbal=BACK(2).account_balance,\n        s_name=BACK(2).name,\n        n_name=BACK(3).name,\n        s_address=BACK(2).address,\n        s_phone=BACK(2).phone,\n        s_comment=BACK(2).comment,\n        supplycost=BACK(1).supplycost,\n    )\n    .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n)\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\nresult = part_groups.p.WHERE(\n    (supplycost == BACK(1).best_cost)\n    & ENDSWITH(part_type, "BRASS")\n    & (size == 15)\n)(\n    S_ACCTBAL=s_acctbal,\n    S_NAME=s_name,\n    N_NAME=n_name,\n    P_PARTKEY=key,\n    P_MFGR=manufacturer,\n    S_ADDRESS=s_address,\n    S_PHONE=s_phone,\n    S_COMMENT=s_comment,\n).TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n    \n    Based on information on the provided document only, focus on explaining:\n    1. The Pydough-specific functions and patterns used\n    2. The data flow and transformations\n    3. Any important Pydough best practices demonstrated\n    4. How this code follows Pydough conventions\n    5. How the code addresses the original question\n    6. Include key examples from the search when available. \n    7. Include key code blocks, key descriptions and definitions in your response.\n    8. Don\'t make up any information or code.\n    \n    Key terms to consider: ), TOP_K, nations, DESC, s_phone=BACK(2), n_name=BACK(3), result = part_groups, MIN, by=(S_ACCTBAL, s_address=BACK(2), best_cost=MIN(p, ASC, s_name=BACK(2), WHERE, supplycost=BACK(1), (supplycost == BACK(1), SORTING, PARTITION, s_acctbal=BACK(2), s_comment=BACK(2)\n    '}}), Citation(id='45c4498', object='citation', is_new=True, span=None, source_type=None, payload={'id': '45c44989-0ff8-55c4-94e3-ac184e5b7e45', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.015151515151515152, 'text': '"source": [\n\n"## TOP_K\\n",\n\n"\\n",\n\n"The TOP K operation is used to reduce a collection to maximum number of values. The `by` arugument is used to order the output based on a sorting condition. As an example, consider this query to only calculate the first 5 nations by alphabetical name order."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "a02a00e9-7df8-431d-8fe8-ec3ae42fbf4a",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.TOP_K(5, by=name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "da15de47-1a56-4130-b801-56ad6eba9de7",\n\n"metadata": {},\n\n"source": [\n\n"The `by` argument requirements are:\\n",\n\n"* Anything that can be an expression used in a `CALCULATE` or a `WHERE` can be used a component of a `by`.\\n",\n\n"* The value in the `by` must end with either `.ASC()` or `.DESC()`\\n",\n\n"\\n",\n\n"You can also provide a tuple to by if you need to break ties. Consider this alternatives that instead selects the 20 parts with the largest size, starting with the smallest part id."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27d13368-8265-4a33-99a3-b6724f8c54de",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(parts.TOP_K(20, by=(size.DESC(), key.ASC())))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "9e4a1458-d52e-4970-955b-35ed1ec29cc7",\n\n"metadata": {},\n\n"source": [\n\n"## ORDER_BY\\n",\n\n"\\n",\n\n"If you just want to return your output in a sorted order, you can use `ORDER_BY`. The functionality is the same as in `TOP_K` except that there is no `K` argument so the rows are not reduced. Each argument must be an expression that can be used for sorting.\\n",\n\n"\\n",\n\n"Below can transform our nations collection to sort the output by the alphabetical ordering of the nation names."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "840ccde6-3e32-46db-9b97-a15507427f33",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.ORDER_BY(name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "ed9922ec-8021-4664-a0ed-f32520e0e4a5",\n\n"metadata": {},\n\n"source": [\n\n"## PARTITION\\n",\n\n"\\n",\n\n"The partition operation allows grouping collections under interesting keys similar to a SQL `GROUP BY`. Keys can be specified using the `by` argument and data columns to be aggregated can be referenced using the name argument. For example, we can use this to bucket nations by name length."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "274824ca-5d54-43df-b18a-dbdd50aaa472",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"updated_nations = nations.CALCULATE(key, name_length=LENGTH(name))\\n",\n\n"grouped_nations = PARTITION(\\n",\n\n" updated_nations, name=\\"n\\", by=(name_length)\\n",\n\n").CALCULATE(\\n",\n\n" name_length,\\n",\n\n" nation_count=COUNT(n.key)\\n",\n\n")\\n",\n\n"pydough.to_df(grouped_nations)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "f1043412-75c0-4535-a935-894cb83d30e2",\n\n"metadata": {},\n\n"source": [\n\n"A couple important usage details:\\n",\n\n"* The `name` argument specifies the name of the subcollection access from the partitions to the original unpartitioned data.\\n",\n\n"* `keys` can be either be a single expression or a tuple of them, but it can only be references to expressions that already exist in the context of the data (e.g. `name`, not `LOWER(name)` or `region.name`)\\n",\n\n"* Terms defined from the context of the `PARTITION` can be down-streamed to its descendants. An example is shown below where we select brass parts of size 15, but only the ones whose supply is below the average of all such parts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "c8514760-7c58-440b-82ee-773b0564b43f",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = parts.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n"part_types = PARTITION(selected_parts, name=\\"p\\", by=part_type).CALCULATE(avg_price=AVG(p.retail_price))\\n",\n\n"output = part_types.p.WHERE(retail_price < avg_price)\\n",', 'metadata': {'version': 'v0', 'chunk_order': 15, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 3, 'associated_query': '\n    Please provide documentation and explanation for the following Pydough code:\n    \n    Original User Question:\n    Find, within the European region, for each brass part of size 15, the supplier who can supply it at minimum cost. If several suppliers in that region offer the desired part type and size at the same (minimum) cost, list the parts from suppliers with the 100 highest account balances. List the supplier\'s account balance, name and nation; the part\'s number and manufacturer; the supplier\'s address, phone number and comment information. This is also known as TPC-H query #2.\n    \n    Pydough Generated Code Answering the User Question:\n    selected_parts = (\n    nations.WHERE(region.name == "EUROPE")\n    .suppliers.supply_records.part(\n        s_acctbal=BACK(2).account_balance,\n        s_name=BACK(2).name,\n        n_name=BACK(3).name,\n        s_address=BACK(2).address,\n        s_phone=BACK(2).phone,\n        s_comment=BACK(2).comment,\n        supplycost=BACK(1).supplycost,\n    )\n    .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n)\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\nresult = part_groups.p.WHERE(\n    (supplycost == BACK(1).best_cost)\n    & ENDSWITH(part_type, "BRASS")\n    & (size == 15)\n)(\n    S_ACCTBAL=s_acctbal,\n    S_NAME=s_name,\n    N_NAME=n_name,\n    P_PARTKEY=key,\n    P_MFGR=manufacturer,\n    S_ADDRESS=s_address,\n    S_PHONE=s_phone,\n    S_COMMENT=s_comment,\n).TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n    \n    Based on information on the provided document only, focus on explaining:\n    1. The Pydough-specific functions and patterns used\n    2. The data flow and transformations\n    3. Any important Pydough best practices demonstrated\n    4. How this code follows Pydough conventions\n    5. How the code addresses the original question\n    6. Include key examples from the search when available. \n    7. Include key code blocks, key descriptions and definitions in your response.\n    8. Don\'t make up any information or code.\n    \n    Key terms to consider: ), TOP_K, nations, DESC, s_phone=BACK(2), n_name=BACK(3), result = part_groups, MIN, by=(S_ACCTBAL, s_address=BACK(2), best_cost=MIN(p, ASC, s_name=BACK(2), WHERE, supplycost=BACK(1), (supplycost == BACK(1), SORTING, PARTITION, s_acctbal=BACK(2), s_comment=BACK(2)\n    '}}), Citation(id='82a3091', object='citation', is_new=True, span=None, source_type=None, payload={'id': '82a30918-a85a-569a-8426-4a8af21165ab', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.04642338900734423, 'text': ']\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27365f94-32a0-48f1-9589-711d57cf145b",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = (\\n",\n\n" nations.CALCULATE(n_name=name)\\n",\n\n" .WHERE(region.name == \\"EUROPE\\")\\n",\n\n" .suppliers.CALCULATE(\\n",\n\n" s_acctbal=account_balance,\\n",\n\n" s_name=name,\\n",\n\n" s_address=address,\\n",\n\n" s_phone=phone,\\n",\n\n" s_comment=comment,\\n",\n\n" )\\n",\n\n" .supply_records.CALCULATE(\\n",\n\n" supplycost=supplycost,\\n",\n\n" )\\n",\n\n" .part.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n" )\\n",\n\n"part_groups = PARTITION(selected_parts, name=\\"p\\", by=key).CALCULATE(\\n",\n\n" best_cost=MIN(p.supplycost)\\n",\n\n")\\n",\n\n"output = part_groups.p.WHERE(\\n",\n\n" (supplycost == best_cost)\\n",\n\n" & ENDSWITH(part_type, \\"BRASS\\")\\n",\n\n" & (size == 15)\\n",\n\n").CALCULATE(\\n",\n\n" S_ACCTBAL=s_acctbal,\\n",\n\n" S_NAME=s_name,\\n",\n\n" N_NAME=n_name,\\n",\n\n" P_PARTKEY=key,\\n",\n\n" P_MFGR=manufacturer,\\n",\n\n" S_ADDRESS=s_address,\\n",\n\n" S_PHONE=s_phone,\\n",\n\n" S_COMMENT=s_comment,\\n",\n\n").TOP_K(\\n",\n\n" 100,\\n",\n\n" by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\\n",\n\n")\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "c4979e37-388e-48df-9165-ecd3c71571c1",\n\n"metadata": {},\n\n"source": [\n\n"## Query 3\\n",\n\n"\\n",\n\n"The question seeks to find **the 10 unshipped orders with the highest value**. More verbosely, it retrieves the shipping priority and potential revenue, defined as the sum of the extended price times one minus the discount, of the orders having the largest revenue among those that had not been shipped as of a given date. Orders are listed in decreasing order of revenue. If more than 10 unshipped orders exist, only the 10 orders with the largest revenue are listed.\\n",\n\n"\\n",\n\n"Here is the corresponding SQL:\\n",\n\n"\\n",\n\n"```SQL\\n",\n\n"SELECT\\n",\n\n" L_ORDERKEY,\\n",\n\n" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS REVENUE,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"FROM\\n",\n\n" CUSTOMER,\\n",\n\n" ORDERS,\\n",\n\n" LINEITEM\\n",\n\n"WHERE\\n",\n\n" C_MKTSEGMENT = \'BUILDING\'\\n",\n\n" AND C_CUSTKEY = O_CUSTKEY\\n",\n\n" AND L_ORDERKEY = O_ORDERKEY\\n",\n\n" AND O_ORDERDATE < DATE \'1995-03-15\'\\n",\n\n" AND L_SHIPDATE > DATE \'1995-03-15\'\\n",\n\n"GROUP BY\\n",\n\n" L_ORDERKEY,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"ORDER BY\\n",\n\n" REVENUE DESC,\\n",\n\n" O_ORDERDATE\\n",\n\n"LIMIT 10;\\n",\n\n"```\\n",\n\n"\\n",\n\n"PyDough allows us to first derive `selected_lines` as the data to be partitioned, before grouping it by certain partition keys to compute the aggregations."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "95975cba-e8e2-4ac9-bbc2-874c0ab43418",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"cutoff_date = datetime.date(1995, 3, 15)\\n",\n\n"selected_orders = orders.CALCULATE(\\n",\n\n" order_date, ship_priority\\n",\n\n").WHERE(\\n",\n\n" (customer.mktsegment == \\"BUILDING\\") & (order_date < cutoff_date)\\n",\n\n")\\n",\n\n"selected_lines = selected_orders.lines.WHERE(ship_date > cutoff_date)\\n",\n\n"output = PARTITION(\\n",\n\n" selected_lines, name=\\"l\\", by=(order_key, order_date, ship_priority)\\n",\n\n").CALCULATE(\\n",\n\n" L_ORDERKEY=order_key,\\n",\n\n" REVENUE=SUM(l.extended_price * (1 - l.discount)),\\n",\n\n" O_ORDERDATE=order_date,\\n",\n\n" O_SHIPPRIORITY=ship_priority,\\n",\n\n").TOP_K(10, by=(REVENUE.DESC(), O_ORDERDATE.ASC(), L_ORDERKEY.ASC()))\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "a72bd083-12c7-402e-8b44-22d640308a7f",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 23, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 32, 'associated_query': '2. I would like a detailed breakdown of the Pydough code that identifies the supplier for brass parts sized 15 at the minimum price across Europe. If there are multiple suppliers at that price, please show how to list the information for the top 100 suppliers based on their account balances. Include any important documentation and'}}), Citation(id='45c4498', object='citation', is_new=True, span=None, source_type=None, payload={'id': '45c44989-0ff8-55c4-94e3-ac184e5b7e45', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.015151515151515152, 'text': '"source": [\n\n"## TOP_K\\n",\n\n"\\n",\n\n"The TOP K operation is used to reduce a collection to maximum number of values. The `by` arugument is used to order the output based on a sorting condition. As an example, consider this query to only calculate the first 5 nations by alphabetical name order."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "a02a00e9-7df8-431d-8fe8-ec3ae42fbf4a",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.TOP_K(5, by=name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "da15de47-1a56-4130-b801-56ad6eba9de7",\n\n"metadata": {},\n\n"source": [\n\n"The `by` argument requirements are:\\n",\n\n"* Anything that can be an expression used in a `CALCULATE` or a `WHERE` can be used a component of a `by`.\\n",\n\n"* The value in the `by` must end with either `.ASC()` or `.DESC()`\\n",\n\n"\\n",\n\n"You can also provide a tuple to by if you need to break ties. Consider this alternatives that instead selects the 20 parts with the largest size, starting with the smallest part id."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27d13368-8265-4a33-99a3-b6724f8c54de",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(parts.TOP_K(20, by=(size.DESC(), key.ASC())))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "9e4a1458-d52e-4970-955b-35ed1ec29cc7",\n\n"metadata": {},\n\n"source": [\n\n"## ORDER_BY\\n",\n\n"\\n",\n\n"If you just want to return your output in a sorted order, you can use `ORDER_BY`. The functionality is the same as in `TOP_K` except that there is no `K` argument so the rows are not reduced. Each argument must be an expression that can be used for sorting.\\n",\n\n"\\n",\n\n"Below can transform our nations collection to sort the output by the alphabetical ordering of the nation names."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "840ccde6-3e32-46db-9b97-a15507427f33",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.ORDER_BY(name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "ed9922ec-8021-4664-a0ed-f32520e0e4a5",\n\n"metadata": {},\n\n"source": [\n\n"## PARTITION\\n",\n\n"\\n",\n\n"The partition operation allows grouping collections under interesting keys similar to a SQL `GROUP BY`. Keys can be specified using the `by` argument and data columns to be aggregated can be referenced using the name argument. For example, we can use this to bucket nations by name length."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "274824ca-5d54-43df-b18a-dbdd50aaa472",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"updated_nations = nations.CALCULATE(key, name_length=LENGTH(name))\\n",\n\n"grouped_nations = PARTITION(\\n",\n\n" updated_nations, name=\\"n\\", by=(name_length)\\n",\n\n").CALCULATE(\\n",\n\n" name_length,\\n",\n\n" nation_count=COUNT(n.key)\\n",\n\n")\\n",\n\n"pydough.to_df(grouped_nations)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "f1043412-75c0-4535-a935-894cb83d30e2",\n\n"metadata": {},\n\n"source": [\n\n"A couple important usage details:\\n",\n\n"* The `name` argument specifies the name of the subcollection access from the partitions to the original unpartitioned data.\\n",\n\n"* `keys` can be either be a single expression or a tuple of them, but it can only be references to expressions that already exist in the context of the data (e.g. `name`, not `LOWER(name)` or `region.name`)\\n",\n\n"* Terms defined from the context of the `PARTITION` can be down-streamed to its descendants. An example is shown below where we select brass parts of size 15, but only the ones whose supply is below the average of all such parts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "c8514760-7c58-440b-82ee-773b0564b43f",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = parts.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n"part_types = PARTITION(selected_parts, name=\\"p\\", by=part_type).CALCULATE(avg_price=AVG(p.retail_price))\\n",\n\n"output = part_types.p.WHERE(retail_price < avg_price)\\n",', 'metadata': {'version': 'v0', 'chunk_order': 15, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 3, 'associated_query': '\n    Please provide documentation and explanation for the following Pydough code:\n    \n    Original User Question:\n    Find, within the European region, for each brass part of size 15, the supplier who can supply it at minimum cost. If several suppliers in that region offer the desired part type and size at the same (minimum) cost, list the parts from suppliers with the 100 highest account balances. List the supplier\'s account balance, name and nation; the part\'s number and manufacturer; the supplier\'s address, phone number and comment information. This is also known as TPC-H query #2.\n    \n    Pydough Generated Code Answering the User Question:\n    selected_parts = (\n    nations.WHERE(region.name == "EUROPE")\n    .suppliers.supply_records.part(\n        s_acctbal=BACK(2).account_balance,\n        s_name=BACK(2).name,\n        n_name=BACK(3).name,\n        s_address=BACK(2).address,\n        s_phone=BACK(2).phone,\n        s_comment=BACK(2).comment,\n        supplycost=BACK(1).supplycost,\n    )\n    .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n)\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\nresult = part_groups.p.WHERE(\n    (supplycost == BACK(1).best_cost)\n    & ENDSWITH(part_type, "BRASS")\n    & (size == 15)\n)(\n    S_ACCTBAL=s_acctbal,\n    S_NAME=s_name,\n    N_NAME=n_name,\n    P_PARTKEY=key,\n    P_MFGR=manufacturer,\n    S_ADDRESS=s_address,\n    S_PHONE=s_phone,\n    S_COMMENT=s_comment,\n).TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n    \n    Based on information on the provided document only, focus on explaining:\n    1. The Pydough-specific functions and patterns used\n    2. The data flow and transformations\n    3. Any important Pydough best practices demonstrated\n    4. How this code follows Pydough conventions\n    5. How the code addresses the original question\n    6. Include key examples from the search when available. \n    7. Include key code blocks, key descriptions and definitions in your response.\n    8. Don\'t make up any information or code.\n    \n    Key terms to consider: ), TOP_K, nations, DESC, s_phone=BACK(2), n_name=BACK(3), result = part_groups, MIN, by=(S_ACCTBAL, s_address=BACK(2), best_cost=MIN(p, ASC, s_name=BACK(2), WHERE, supplycost=BACK(1), (supplycost == BACK(1), SORTING, PARTITION, s_acctbal=BACK(2), s_comment=BACK(2)\n    '}}), Citation(id='45c4498', object='citation', is_new=True, span=None, source_type=None, payload={'id': '45c44989-0ff8-55c4-94e3-ac184e5b7e45', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.015151515151515152, 'text': '"source": [\n\n"## TOP_K\\n",\n\n"\\n",\n\n"The TOP K operation is used to reduce a collection to maximum number of values. The `by` arugument is used to order the output based on a sorting condition. As an example, consider this query to only calculate the first 5 nations by alphabetical name order."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "a02a00e9-7df8-431d-8fe8-ec3ae42fbf4a",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.TOP_K(5, by=name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "da15de47-1a56-4130-b801-56ad6eba9de7",\n\n"metadata": {},\n\n"source": [\n\n"The `by` argument requirements are:\\n",\n\n"* Anything that can be an expression used in a `CALCULATE` or a `WHERE` can be used a component of a `by`.\\n",\n\n"* The value in the `by` must end with either `.ASC()` or `.DESC()`\\n",\n\n"\\n",\n\n"You can also provide a tuple to by if you need to break ties. Consider this alternatives that instead selects the 20 parts with the largest size, starting with the smallest part id."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27d13368-8265-4a33-99a3-b6724f8c54de",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(parts.TOP_K(20, by=(size.DESC(), key.ASC())))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "9e4a1458-d52e-4970-955b-35ed1ec29cc7",\n\n"metadata": {},\n\n"source": [\n\n"## ORDER_BY\\n",\n\n"\\n",\n\n"If you just want to return your output in a sorted order, you can use `ORDER_BY`. The functionality is the same as in `TOP_K` except that there is no `K` argument so the rows are not reduced. Each argument must be an expression that can be used for sorting.\\n",\n\n"\\n",\n\n"Below can transform our nations collection to sort the output by the alphabetical ordering of the nation names."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "840ccde6-3e32-46db-9b97-a15507427f33",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.ORDER_BY(name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "ed9922ec-8021-4664-a0ed-f32520e0e4a5",\n\n"metadata": {},\n\n"source": [\n\n"## PARTITION\\n",\n\n"\\n",\n\n"The partition operation allows grouping collections under interesting keys similar to a SQL `GROUP BY`. Keys can be specified using the `by` argument and data columns to be aggregated can be referenced using the name argument. For example, we can use this to bucket nations by name length."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "274824ca-5d54-43df-b18a-dbdd50aaa472",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"updated_nations = nations.CALCULATE(key, name_length=LENGTH(name))\\n",\n\n"grouped_nations = PARTITION(\\n",\n\n" updated_nations, name=\\"n\\", by=(name_length)\\n",\n\n").CALCULATE(\\n",\n\n" name_length,\\n",\n\n" nation_count=COUNT(n.key)\\n",\n\n")\\n",\n\n"pydough.to_df(grouped_nations)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "f1043412-75c0-4535-a935-894cb83d30e2",\n\n"metadata": {},\n\n"source": [\n\n"A couple important usage details:\\n",\n\n"* The `name` argument specifies the name of the subcollection access from the partitions to the original unpartitioned data.\\n",\n\n"* `keys` can be either be a single expression or a tuple of them, but it can only be references to expressions that already exist in the context of the data (e.g. `name`, not `LOWER(name)` or `region.name`)\\n",\n\n"* Terms defined from the context of the `PARTITION` can be down-streamed to its descendants. An example is shown below where we select brass parts of size 15, but only the ones whose supply is below the average of all such parts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "c8514760-7c58-440b-82ee-773b0564b43f",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = parts.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n"part_types = PARTITION(selected_parts, name=\\"p\\", by=part_type).CALCULATE(avg_price=AVG(p.retail_price))\\n",\n\n"output = part_types.p.WHERE(retail_price < avg_price)\\n",', 'metadata': {'version': 'v0', 'chunk_order': 15, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 3, 'associated_query': '\n    Please provide documentation and explanation for the following Pydough code:\n    \n    Original User Question:\n    Find, within the European region, for each brass part of size 15, the supplier who can supply it at minimum cost. If several suppliers in that region offer the desired part type and size at the same (minimum) cost, list the parts from suppliers with the 100 highest account balances. List the supplier\'s account balance, name and nation; the part\'s number and manufacturer; the supplier\'s address, phone number and comment information. This is also known as TPC-H query #2.\n    \n    Pydough Generated Code Answering the User Question:\n    selected_parts = (\n    nations.WHERE(region.name == "EUROPE")\n    .suppliers.supply_records.part(\n        s_acctbal=BACK(2).account_balance,\n        s_name=BACK(2).name,\n        n_name=BACK(3).name,\n        s_address=BACK(2).address,\n        s_phone=BACK(2).phone,\n        s_comment=BACK(2).comment,\n        supplycost=BACK(1).supplycost,\n    )\n    .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n)\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\nresult = part_groups.p.WHERE(\n    (supplycost == BACK(1).best_cost)\n    & ENDSWITH(part_type, "BRASS")\n    & (size == 15)\n)(\n    S_ACCTBAL=s_acctbal,\n    S_NAME=s_name,\n    N_NAME=n_name,\n    P_PARTKEY=key,\n    P_MFGR=manufacturer,\n    S_ADDRESS=s_address,\n    S_PHONE=s_phone,\n    S_COMMENT=s_comment,\n).TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n    \n    Based on information on the provided document only, focus on explaining:\n    1. The Pydough-specific functions and patterns used\n    2. The data flow and transformations\n    3. Any important Pydough best practices demonstrated\n    4. How this code follows Pydough conventions\n    5. How the code addresses the original question\n    6. Include key examples from the search when available. \n    7. Include key code blocks, key descriptions and definitions in your response.\n    8. Don\'t make up any information or code.\n    \n    Key terms to consider: ), TOP_K, nations, DESC, s_phone=BACK(2), n_name=BACK(3), result = part_groups, MIN, by=(S_ACCTBAL, s_address=BACK(2), best_cost=MIN(p, ASC, s_name=BACK(2), WHERE, supplycost=BACK(1), (supplycost == BACK(1), SORTING, PARTITION, s_acctbal=BACK(2), s_comment=BACK(2)\n    '}}), Citation(id='45c4498', object='citation', is_new=True, span=None, source_type=None, payload={'id': '45c44989-0ff8-55c4-94e3-ac184e5b7e45', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.015151515151515152, 'text': '"source": [\n\n"## TOP_K\\n",\n\n"\\n",\n\n"The TOP K operation is used to reduce a collection to maximum number of values. The `by` arugument is used to order the output based on a sorting condition. As an example, consider this query to only calculate the first 5 nations by alphabetical name order."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "a02a00e9-7df8-431d-8fe8-ec3ae42fbf4a",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.TOP_K(5, by=name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "da15de47-1a56-4130-b801-56ad6eba9de7",\n\n"metadata": {},\n\n"source": [\n\n"The `by` argument requirements are:\\n",\n\n"* Anything that can be an expression used in a `CALCULATE` or a `WHERE` can be used a component of a `by`.\\n",\n\n"* The value in the `by` must end with either `.ASC()` or `.DESC()`\\n",\n\n"\\n",\n\n"You can also provide a tuple to by if you need to break ties. Consider this alternatives that instead selects the 20 parts with the largest size, starting with the smallest part id."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27d13368-8265-4a33-99a3-b6724f8c54de",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(parts.TOP_K(20, by=(size.DESC(), key.ASC())))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "9e4a1458-d52e-4970-955b-35ed1ec29cc7",\n\n"metadata": {},\n\n"source": [\n\n"## ORDER_BY\\n",\n\n"\\n",\n\n"If you just want to return your output in a sorted order, you can use `ORDER_BY`. The functionality is the same as in `TOP_K` except that there is no `K` argument so the rows are not reduced. Each argument must be an expression that can be used for sorting.\\n",\n\n"\\n",\n\n"Below can transform our nations collection to sort the output by the alphabetical ordering of the nation names."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "840ccde6-3e32-46db-9b97-a15507427f33",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"pydough.to_df(nations.ORDER_BY(name.ASC()))"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "ed9922ec-8021-4664-a0ed-f32520e0e4a5",\n\n"metadata": {},\n\n"source": [\n\n"## PARTITION\\n",\n\n"\\n",\n\n"The partition operation allows grouping collections under interesting keys similar to a SQL `GROUP BY`. Keys can be specified using the `by` argument and data columns to be aggregated can be referenced using the name argument. For example, we can use this to bucket nations by name length."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "274824ca-5d54-43df-b18a-dbdd50aaa472",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"updated_nations = nations.CALCULATE(key, name_length=LENGTH(name))\\n",\n\n"grouped_nations = PARTITION(\\n",\n\n" updated_nations, name=\\"n\\", by=(name_length)\\n",\n\n").CALCULATE(\\n",\n\n" name_length,\\n",\n\n" nation_count=COUNT(n.key)\\n",\n\n")\\n",\n\n"pydough.to_df(grouped_nations)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "f1043412-75c0-4535-a935-894cb83d30e2",\n\n"metadata": {},\n\n"source": [\n\n"A couple important usage details:\\n",\n\n"* The `name` argument specifies the name of the subcollection access from the partitions to the original unpartitioned data.\\n",\n\n"* `keys` can be either be a single expression or a tuple of them, but it can only be references to expressions that already exist in the context of the data (e.g. `name`, not `LOWER(name)` or `region.name`)\\n",\n\n"* Terms defined from the context of the `PARTITION` can be down-streamed to its descendants. An example is shown below where we select brass parts of size 15, but only the ones whose supply is below the average of all such parts."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "c8514760-7c58-440b-82ee-773b0564b43f",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = parts.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n"part_types = PARTITION(selected_parts, name=\\"p\\", by=part_type).CALCULATE(avg_price=AVG(p.retail_price))\\n",\n\n"output = part_types.p.WHERE(retail_price < avg_price)\\n",', 'metadata': {'version': 'v0', 'chunk_order': 15, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 3, 'associated_query': '\n    Please provide documentation and explanation for the following Pydough code:\n    \n    Original User Question:\n    Find, within the European region, for each brass part of size 15, the supplier who can supply it at minimum cost. If several suppliers in that region offer the desired part type and size at the same (minimum) cost, list the parts from suppliers with the 100 highest account balances. List the supplier\'s account balance, name and nation; the part\'s number and manufacturer; the supplier\'s address, phone number and comment information. This is also known as TPC-H query #2.\n    \n    Pydough Generated Code Answering the User Question:\n    selected_parts = (\n    nations.WHERE(region.name == "EUROPE")\n    .suppliers.supply_records.part(\n        s_acctbal=BACK(2).account_balance,\n        s_name=BACK(2).name,\n        n_name=BACK(3).name,\n        s_address=BACK(2).address,\n        s_phone=BACK(2).phone,\n        s_comment=BACK(2).comment,\n        supplycost=BACK(1).supplycost,\n    )\n    .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n)\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\nresult = part_groups.p.WHERE(\n    (supplycost == BACK(1).best_cost)\n    & ENDSWITH(part_type, "BRASS")\n    & (size == 15)\n)(\n    S_ACCTBAL=s_acctbal,\n    S_NAME=s_name,\n    N_NAME=n_name,\n    P_PARTKEY=key,\n    P_MFGR=manufacturer,\n    S_ADDRESS=s_address,\n    S_PHONE=s_phone,\n    S_COMMENT=s_comment,\n).TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n    \n    Based on information on the provided document only, focus on explaining:\n    1. The Pydough-specific functions and patterns used\n    2. The data flow and transformations\n    3. Any important Pydough best practices demonstrated\n    4. How this code follows Pydough conventions\n    5. How the code addresses the original question\n    6. Include key examples from the search when available. \n    7. Include key code blocks, key descriptions and definitions in your response.\n    8. Don\'t make up any information or code.\n    \n    Key terms to consider: ), TOP_K, nations, DESC, s_phone=BACK(2), n_name=BACK(3), result = part_groups, MIN, by=(S_ACCTBAL, s_address=BACK(2), best_cost=MIN(p, ASC, s_name=BACK(2), WHERE, supplycost=BACK(1), (supplycost == BACK(1), SORTING, PARTITION, s_acctbal=BACK(2), s_comment=BACK(2)\n    '}}), Citation(id='82a3091', object='citation', is_new=True, span=None, source_type=None, payload={'id': '82a30918-a85a-569a-8426-4a8af21165ab', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.04642338900734423, 'text': ']\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27365f94-32a0-48f1-9589-711d57cf145b",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = (\\n",\n\n" nations.CALCULATE(n_name=name)\\n",\n\n" .WHERE(region.name == \\"EUROPE\\")\\n",\n\n" .suppliers.CALCULATE(\\n",\n\n" s_acctbal=account_balance,\\n",\n\n" s_name=name,\\n",\n\n" s_address=address,\\n",\n\n" s_phone=phone,\\n",\n\n" s_comment=comment,\\n",\n\n" )\\n",\n\n" .supply_records.CALCULATE(\\n",\n\n" supplycost=supplycost,\\n",\n\n" )\\n",\n\n" .part.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n" )\\n",\n\n"part_groups = PARTITION(selected_parts, name=\\"p\\", by=key).CALCULATE(\\n",\n\n" best_cost=MIN(p.supplycost)\\n",\n\n")\\n",\n\n"output = part_groups.p.WHERE(\\n",\n\n" (supplycost == best_cost)\\n",\n\n" & ENDSWITH(part_type, \\"BRASS\\")\\n",\n\n" & (size == 15)\\n",\n\n").CALCULATE(\\n",\n\n" S_ACCTBAL=s_acctbal,\\n",\n\n" S_NAME=s_name,\\n",\n\n" N_NAME=n_name,\\n",\n\n" P_PARTKEY=key,\\n",\n\n" P_MFGR=manufacturer,\\n",\n\n" S_ADDRESS=s_address,\\n",\n\n" S_PHONE=s_phone,\\n",\n\n" S_COMMENT=s_comment,\\n",\n\n").TOP_K(\\n",\n\n" 100,\\n",\n\n" by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\\n",\n\n")\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "c4979e37-388e-48df-9165-ecd3c71571c1",\n\n"metadata": {},\n\n"source": [\n\n"## Query 3\\n",\n\n"\\n",\n\n"The question seeks to find **the 10 unshipped orders with the highest value**. More verbosely, it retrieves the shipping priority and potential revenue, defined as the sum of the extended price times one minus the discount, of the orders having the largest revenue among those that had not been shipped as of a given date. Orders are listed in decreasing order of revenue. If more than 10 unshipped orders exist, only the 10 orders with the largest revenue are listed.\\n",\n\n"\\n",\n\n"Here is the corresponding SQL:\\n",\n\n"\\n",\n\n"```SQL\\n",\n\n"SELECT\\n",\n\n" L_ORDERKEY,\\n",\n\n" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS REVENUE,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"FROM\\n",\n\n" CUSTOMER,\\n",\n\n" ORDERS,\\n",\n\n" LINEITEM\\n",\n\n"WHERE\\n",\n\n" C_MKTSEGMENT = \'BUILDING\'\\n",\n\n" AND C_CUSTKEY = O_CUSTKEY\\n",\n\n" AND L_ORDERKEY = O_ORDERKEY\\n",\n\n" AND O_ORDERDATE < DATE \'1995-03-15\'\\n",\n\n" AND L_SHIPDATE > DATE \'1995-03-15\'\\n",\n\n"GROUP BY\\n",\n\n" L_ORDERKEY,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"ORDER BY\\n",\n\n" REVENUE DESC,\\n",\n\n" O_ORDERDATE\\n",\n\n"LIMIT 10;\\n",\n\n"```\\n",\n\n"\\n",\n\n"PyDough allows us to first derive `selected_lines` as the data to be partitioned, before grouping it by certain partition keys to compute the aggregations."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "95975cba-e8e2-4ac9-bbc2-874c0ab43418",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"cutoff_date = datetime.date(1995, 3, 15)\\n",\n\n"selected_orders = orders.CALCULATE(\\n",\n\n" order_date, ship_priority\\n",\n\n").WHERE(\\n",\n\n" (customer.mktsegment == \\"BUILDING\\") & (order_date < cutoff_date)\\n",\n\n")\\n",\n\n"selected_lines = selected_orders.lines.WHERE(ship_date > cutoff_date)\\n",\n\n"output = PARTITION(\\n",\n\n" selected_lines, name=\\"l\\", by=(order_key, order_date, ship_priority)\\n",\n\n").CALCULATE(\\n",\n\n" L_ORDERKEY=order_key,\\n",\n\n" REVENUE=SUM(l.extended_price * (1 - l.discount)),\\n",\n\n" O_ORDERDATE=order_date,\\n",\n\n" O_SHIPPRIORITY=ship_priority,\\n",\n\n").TOP_K(10, by=(REVENUE.DESC(), O_ORDERDATE.ASC(), L_ORDERKEY.ASC()))\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "a72bd083-12c7-402e-8b44-22d640308a7f",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 23, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 32, 'associated_query': '2. I would like a detailed breakdown of the Pydough code that identifies the supplier for brass parts sized 15 at the minimum price across Europe. If there are multiple suppliers at that price, please show how to list the information for the top 100 suppliers based on their account balances. Include any important documentation and'}}), Citation(id='82a3091', object='citation', is_new=True, span=None, source_type=None, payload={'id': '82a30918-a85a-569a-8426-4a8af21165ab', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.04642338900734423, 'text': ']\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27365f94-32a0-48f1-9589-711d57cf145b",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = (\\n",\n\n" nations.CALCULATE(n_name=name)\\n",\n\n" .WHERE(region.name == \\"EUROPE\\")\\n",\n\n" .suppliers.CALCULATE(\\n",\n\n" s_acctbal=account_balance,\\n",\n\n" s_name=name,\\n",\n\n" s_address=address,\\n",\n\n" s_phone=phone,\\n",\n\n" s_comment=comment,\\n",\n\n" )\\n",\n\n" .supply_records.CALCULATE(\\n",\n\n" supplycost=supplycost,\\n",\n\n" )\\n",\n\n" .part.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n" )\\n",\n\n"part_groups = PARTITION(selected_parts, name=\\"p\\", by=key).CALCULATE(\\n",\n\n" best_cost=MIN(p.supplycost)\\n",\n\n")\\n",\n\n"output = part_groups.p.WHERE(\\n",\n\n" (supplycost == best_cost)\\n",\n\n" & ENDSWITH(part_type, \\"BRASS\\")\\n",\n\n" & (size == 15)\\n",\n\n").CALCULATE(\\n",\n\n" S_ACCTBAL=s_acctbal,\\n",\n\n" S_NAME=s_name,\\n",\n\n" N_NAME=n_name,\\n",\n\n" P_PARTKEY=key,\\n",\n\n" P_MFGR=manufacturer,\\n",\n\n" S_ADDRESS=s_address,\\n",\n\n" S_PHONE=s_phone,\\n",\n\n" S_COMMENT=s_comment,\\n",\n\n").TOP_K(\\n",\n\n" 100,\\n",\n\n" by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\\n",\n\n")\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "c4979e37-388e-48df-9165-ecd3c71571c1",\n\n"metadata": {},\n\n"source": [\n\n"## Query 3\\n",\n\n"\\n",\n\n"The question seeks to find **the 10 unshipped orders with the highest value**. More verbosely, it retrieves the shipping priority and potential revenue, defined as the sum of the extended price times one minus the discount, of the orders having the largest revenue among those that had not been shipped as of a given date. Orders are listed in decreasing order of revenue. If more than 10 unshipped orders exist, only the 10 orders with the largest revenue are listed.\\n",\n\n"\\n",\n\n"Here is the corresponding SQL:\\n",\n\n"\\n",\n\n"```SQL\\n",\n\n"SELECT\\n",\n\n" L_ORDERKEY,\\n",\n\n" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS REVENUE,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"FROM\\n",\n\n" CUSTOMER,\\n",\n\n" ORDERS,\\n",\n\n" LINEITEM\\n",\n\n"WHERE\\n",\n\n" C_MKTSEGMENT = \'BUILDING\'\\n",\n\n" AND C_CUSTKEY = O_CUSTKEY\\n",\n\n" AND L_ORDERKEY = O_ORDERKEY\\n",\n\n" AND O_ORDERDATE < DATE \'1995-03-15\'\\n",\n\n" AND L_SHIPDATE > DATE \'1995-03-15\'\\n",\n\n"GROUP BY\\n",\n\n" L_ORDERKEY,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"ORDER BY\\n",\n\n" REVENUE DESC,\\n",\n\n" O_ORDERDATE\\n",\n\n"LIMIT 10;\\n",\n\n"```\\n",\n\n"\\n",\n\n"PyDough allows us to first derive `selected_lines` as the data to be partitioned, before grouping it by certain partition keys to compute the aggregations."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "95975cba-e8e2-4ac9-bbc2-874c0ab43418",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"cutoff_date = datetime.date(1995, 3, 15)\\n",\n\n"selected_orders = orders.CALCULATE(\\n",\n\n" order_date, ship_priority\\n",\n\n").WHERE(\\n",\n\n" (customer.mktsegment == \\"BUILDING\\") & (order_date < cutoff_date)\\n",\n\n")\\n",\n\n"selected_lines = selected_orders.lines.WHERE(ship_date > cutoff_date)\\n",\n\n"output = PARTITION(\\n",\n\n" selected_lines, name=\\"l\\", by=(order_key, order_date, ship_priority)\\n",\n\n").CALCULATE(\\n",\n\n" L_ORDERKEY=order_key,\\n",\n\n" REVENUE=SUM(l.extended_price * (1 - l.discount)),\\n",\n\n" O_ORDERDATE=order_date,\\n",\n\n" O_SHIPPRIORITY=ship_priority,\\n",\n\n").TOP_K(10, by=(REVENUE.DESC(), O_ORDERDATE.ASC(), L_ORDERKEY.ASC()))\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "a72bd083-12c7-402e-8b44-22d640308a7f",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 23, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 32, 'associated_query': '2. I would like a detailed breakdown of the Pydough code that identifies the supplier for brass parts sized 15 at the minimum price across Europe. If there are multiple suppliers at that price, please show how to list the information for the top 100 suppliers based on their account balances. Include any important documentation and'}}), Citation(id='82a3091', object='citation', is_new=True, span=None, source_type=None, payload={'id': '82a30918-a85a-569a-8426-4a8af21165ab', 'document_id': '87c20b3c-907d-59ae-8d82-c50d5db9e73f', 'owner_id': 'e91aeb9c-e28a-5d58-aabb-d8a9c076a798', 'collection_ids': ['81ae9232-fdb2-576d-b7e2-f3ada019def2'], 'score': 0.04642338900734423, 'text': ']\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "27365f94-32a0-48f1-9589-711d57cf145b",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"selected_parts = (\\n",\n\n" nations.CALCULATE(n_name=name)\\n",\n\n" .WHERE(region.name == \\"EUROPE\\")\\n",\n\n" .suppliers.CALCULATE(\\n",\n\n" s_acctbal=account_balance,\\n",\n\n" s_name=name,\\n",\n\n" s_address=address,\\n",\n\n" s_phone=phone,\\n",\n\n" s_comment=comment,\\n",\n\n" )\\n",\n\n" .supply_records.CALCULATE(\\n",\n\n" supplycost=supplycost,\\n",\n\n" )\\n",\n\n" .part.WHERE(ENDSWITH(part_type, \\"BRASS\\") & (size == 15))\\n",\n\n" )\\n",\n\n"part_groups = PARTITION(selected_parts, name=\\"p\\", by=key).CALCULATE(\\n",\n\n" best_cost=MIN(p.supplycost)\\n",\n\n")\\n",\n\n"output = part_groups.p.WHERE(\\n",\n\n" (supplycost == best_cost)\\n",\n\n" & ENDSWITH(part_type, \\"BRASS\\")\\n",\n\n" & (size == 15)\\n",\n\n").CALCULATE(\\n",\n\n" S_ACCTBAL=s_acctbal,\\n",\n\n" S_NAME=s_name,\\n",\n\n" N_NAME=n_name,\\n",\n\n" P_PARTKEY=key,\\n",\n\n" P_MFGR=manufacturer,\\n",\n\n" S_ADDRESS=s_address,\\n",\n\n" S_PHONE=s_phone,\\n",\n\n" S_COMMENT=s_comment,\\n",\n\n").TOP_K(\\n",\n\n" 100,\\n",\n\n" by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\\n",\n\n")\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "c4979e37-388e-48df-9165-ecd3c71571c1",\n\n"metadata": {},\n\n"source": [\n\n"## Query 3\\n",\n\n"\\n",\n\n"The question seeks to find **the 10 unshipped orders with the highest value**. More verbosely, it retrieves the shipping priority and potential revenue, defined as the sum of the extended price times one minus the discount, of the orders having the largest revenue among those that had not been shipped as of a given date. Orders are listed in decreasing order of revenue. If more than 10 unshipped orders exist, only the 10 orders with the largest revenue are listed.\\n",\n\n"\\n",\n\n"Here is the corresponding SQL:\\n",\n\n"\\n",\n\n"```SQL\\n",\n\n"SELECT\\n",\n\n" L_ORDERKEY,\\n",\n\n" SUM(L_EXTENDEDPRICE * (1 - L_DISCOUNT)) AS REVENUE,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"FROM\\n",\n\n" CUSTOMER,\\n",\n\n" ORDERS,\\n",\n\n" LINEITEM\\n",\n\n"WHERE\\n",\n\n" C_MKTSEGMENT = \'BUILDING\'\\n",\n\n" AND C_CUSTKEY = O_CUSTKEY\\n",\n\n" AND L_ORDERKEY = O_ORDERKEY\\n",\n\n" AND O_ORDERDATE < DATE \'1995-03-15\'\\n",\n\n" AND L_SHIPDATE > DATE \'1995-03-15\'\\n",\n\n"GROUP BY\\n",\n\n" L_ORDERKEY,\\n",\n\n" O_ORDERDATE,\\n",\n\n" O_SHIPPRIORITY\\n",\n\n"ORDER BY\\n",\n\n" REVENUE DESC,\\n",\n\n" O_ORDERDATE\\n",\n\n"LIMIT 10;\\n",\n\n"```\\n",\n\n"\\n",\n\n"PyDough allows us to first derive `selected_lines` as the data to be partitioned, before grouping it by certain partition keys to compute the aggregations."\n\n]\n\n},\n\n{\n\n"cell_type": "code",\n\n"execution_count": null,\n\n"id": "95975cba-e8e2-4ac9-bbc2-874c0ab43418",\n\n"metadata": {},\n\n"outputs": [],\n\n"source": [\n\n"%%pydough\\n",\n\n"\\n",\n\n"cutoff_date = datetime.date(1995, 3, 15)\\n",\n\n"selected_orders = orders.CALCULATE(\\n",\n\n" order_date, ship_priority\\n",\n\n").WHERE(\\n",\n\n" (customer.mktsegment == \\"BUILDING\\") & (order_date < cutoff_date)\\n",\n\n")\\n",\n\n"selected_lines = selected_orders.lines.WHERE(ship_date > cutoff_date)\\n",\n\n"output = PARTITION(\\n",\n\n" selected_lines, name=\\"l\\", by=(order_key, order_date, ship_priority)\\n",\n\n").CALCULATE(\\n",\n\n" L_ORDERKEY=order_key,\\n",\n\n" REVENUE=SUM(l.extended_price * (1 - l.discount)),\\n",\n\n" O_ORDERDATE=order_date,\\n",\n\n" O_SHIPPRIORITY=ship_priority,\\n",\n\n").TOP_K(10, by=(REVENUE.DESC(), O_ORDERDATE.ASC(), L_ORDERKEY.ASC()))\\n",\n\n"pydough.to_df(output)"\n\n]\n\n},\n\n{\n\n"cell_type": "markdown",\n\n"id": "a72bd083-12c7-402e-8b44-22d640308a7f",\n\n"metadata": {},', 'metadata': {'version': 'v0', 'chunk_order': 23, 'document_type': 'md', 'unstructured_filetype': 'text/plain', 'unstructured_languages': ['eng'], 'partitioned_by_unstructured': True, 'semantic_rank': 8, 'full_text_rank': 32, 'associated_query': '2. I would like a detailed breakdown of the Pydough code that identifies the supplier for brass parts sized 15 at the minimum price across Europe. If there are multiple suppliers at that price, please show how to list the information for the top 100 suppliers based on their account balances. Include any important documentation and'}})], 'metadata': {'id': 'msg_01WyLLVsyEG4konuQLRZYqDt', 'choices': [{'finish_reason': 'stop', 'index': 0, 'message': {'refusal': None, 'role': 'assistant', 'function_call': None, 'tool_calls': None, 'structured_content': None}}], 'created': 1745981608, 'model': 'claude-3-7-sonnet-20250219', 'object': 'chat.completion', 'service_tier': None, 'system_fingerprint': None, 'usage': {'prompt_tokens': 30692, 'completion_tokens': 2003, 'total_tokens': 32695}}, 'completion': '# Explanation of Pydough Code for TPC-H Query #2\n\nI\'ll explain the provided Pydough code that answers the question about finding suppliers in the European region who can supply brass parts of size 15 at minimum cost, with specific sorting and filtering requirements.\n\n## 1. Pydough-Specific Functions and Patterns Used\n\n### BACK Function\nThe `BACK` function is used to reference entities from previous steps in the data flow. For example:\n- `BACK(1)` refers to the immediately preceding entity\n- `BACK(2)` refers to the entity two steps back\n- `BACK(3)` refers to the entity three steps back\n\nIn the code, we see this pattern used to access attributes from previous entities:\n```python\ns_acctbal=BACK(2).account_balance,\ns_name=BACK(2).name,\nn_name=BACK(3).name,\ns_address=BACK(2).address,\ns_phone=BACK(2).phone,\ns_comment=BACK(2).comment,\nsupplycost=BACK(1).supplycost,\n```\n\n### PARTITION Function\nThe `PARTITION` function [45c4498] is used to group collections under specific keys, similar to SQL\'s `GROUP BY`. In this code:\n```python\npart_groups = PARTITION(selected_parts, name="p", by=key)(\n    best_cost=MIN(p.supplycost)\n)\n```\nThis partitions the `selected_parts` by their `key` attribute, giving the partition the name "p", and calculates the minimum supply cost for each partition.\n\n### TOP_K Function\nThe `TOP_K` function [45c4498] is used to limit the result set to a specific number of rows, ordered by specified criteria:\n```python\n.TOP_K(\n    100,\n    by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n)\n```\nThis returns the top 100 results ordered by account balance (descending), nation name (ascending), supplier name (ascending), and part key (ascending).\n\n### WHERE Function\nThe `WHERE` function is used for filtering data based on conditions:\n```python\n.WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n```\nThis filters for parts whose type ends with "BRASS" and have a size of 15.\n\n## 2. Data Flow and Transformations\n\nThe code follows these steps:\n\n1. **Initial Selection**: Start with nations in the European region\n   ```python\n   nations.WHERE(region.name == "EUROPE")\n   ```\n\n2. **Navigation and Attribute Collection**: Navigate through suppliers, supply records, and parts, collecting relevant attributes\n   ```python\n   .suppliers.supply_records.part(\n       s_acctbal=BACK(2).account_balance,\n       s_name=BACK(2).name,\n       n_name=BACK(3).name,\n       s_address=BACK(2).address,\n       s_phone=BACK(2).phone,\n       s_comment=BACK(2).comment,\n       supplycost=BACK(1).supplycost,\n   )\n   ```\n\n3. **Filtering Parts**: Filter for brass parts of size 15\n   ```python\n   .WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n   ```\n\n4. **Partitioning and Finding Minimum Cost**: Group by part key and find the minimum supply cost for each part\n   ```python\n   part_groups = PARTITION(selected_parts, name="p", by=key)(\n       best_cost=MIN(p.supplycost)\n   )\n   ```\n\n5. **Final Selection and Formatting**: Select parts with the minimum cost, format the output, and sort appropriately\n   ```python\n   result = part_groups.p.WHERE(\n       (supplycost == BACK(1).best_cost)\n       & ENDSWITH(part_type, "BRASS")\n       & (size == 15)\n   )(\n       S_ACCTBAL=s_acctbal,\n       S_NAME=s_name,\n       N_NAME=n_name,\n       P_PARTKEY=key,\n       P_MFGR=manufacturer,\n       S_ADDRESS=s_address,\n       S_PHONE=s_phone,\n       S_COMMENT=s_comment,\n   ).TOP_K(\n       100,\n       by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC()),\n   )\n   ```\n\n## 3. Important Pydough Best Practices Demonstrated\n\n1. **Chaining Operations**: The code demonstrates chaining multiple operations together for a clean, readable flow [82a3091].\n\n2. **Using BACK References**: The code properly uses `BACK` references to access attributes from previous steps in the data flow.\n\n3. **Partitioning for Aggregation**: The code uses `PARTITION` to group data before applying the `MIN` aggregation function [45c4498].\n\n4. **Clear Variable Naming**: Variables like `selected_parts` and `part_groups` clearly indicate their purpose.\n\n## 4. How This Code Follows Pydough Conventions\n\n1. **Naming Convention**: The code uses snake_case for variable names (`selected_parts`, `part_groups`) and uppercase for output column names (`S_ACCTBAL`, `P_PARTKEY`).\n\n2. **Chaining Pattern**: The code follows the Pydough pattern of chaining operations with dot notation.\n\n3. **Sorting Specification**: The code correctly specifies sorting direction using `.ASC()` and `.DESC()` methods [45c4498].\n\n4. **Partitioning Pattern**: The code follows the convention of naming the partition and specifying the grouping key [45c4498].\n\n## 5. How the Code Addresses the Original Question\n\nThe code directly addresses the requirements of TPC-H query #2 [82a3091]:\n\n1. It filters for nations in the European region: `nations.WHERE(region.name == "EUROPE")`\n\n2. It selects brass parts of size 15: `.WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))`\n\n3. It finds the minimum supply cost for each part: `best_cost=MIN(p.supplycost)`\n\n4. It selects suppliers offering parts at the minimum cost: `(supplycost == BACK(1).best_cost)`\n\n5. It sorts by account balance (descending) and other criteria: `by=(S_ACCTBAL.DESC(), N_NAME.ASC(), S_NAME.ASC(), P_PARTKEY.ASC())`\n\n6. It limits to the top 100 results: `.TOP_K(100, ...)`\n\n7. It includes all required attributes in the output: supplier\'s account balance, name, nation; part\'s number and manufacturer; supplier\'s address, phone, and comment.\n\nThe implementation in the code matches the description in [82a3091], which states that this query "finds, in a given region, for each part of a certain type and size, the supplier who can supply it at minimum cost."\n\n## 6. Key Examples from the Search\n\nThe implementation is similar to the example in [82a3091], which shows a similar approach for TPC-H query #2:\n\n```python\nselected_parts = (\n nations.CALCULATE(n_name=name)\n .WHERE(region.name == "EUROPE")\n .suppliers.CALCULATE(\n   s_acctbal=account_balance,\n   s_name=name,\n   s_address=address,\n   s_phone=phone,\n   s_comment=comment,\n )\n .supply_records.CALCULATE(\n   supplycost=supplycost,\n )\n .part.WHERE(ENDSWITH(part_type, "BRASS") & (size == 15))\n )\n```\n\nThe main difference is that the example uses `CALCULATE` to create new attributes, while the provided code uses a more direct approach with the `part()` method and `BACK` references.\n\nIn conclusion, the provided Pydough code efficiently implements TPC-H query #2, following Pydough conventions and best practices to find suppliers in the European region who can supply brass parts of size 15 at minimum cost, with appropriate sorting and filtering.'}
