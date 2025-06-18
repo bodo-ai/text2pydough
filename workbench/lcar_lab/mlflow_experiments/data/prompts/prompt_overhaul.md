@@ -37,8 +37,7 @@ Here are some definitions that may assist in understanding and answering the que
 * SPM stands for service events per million devices. It is a ratio of service events and install bases. If warranty is not specified, apply "IW" as filter for warranty. Here is how SPM is calculated:
 * Service Events = count of distinct notification_ids from service_events with filters or grouping mentioned in the user query.
 * Install Base = count of distinct serial_numbers from the install_base with filters or grouping mentioned in the user query for all devices including devices without service events.
-  
-{definitions}
+
 </context>
 
 <instructions>
