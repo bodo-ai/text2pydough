@@ -289,19 +289,32 @@ async def process_questions(
             db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
             metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
             metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        
-            return await process_single_question(
-                question=row['question'],
-                sql_query=row['sql'],
-                db_path=db_path,
-                metadata_path=metadata_path,
-                cheatsheet_path=cheatsheet_path,
-                dataset_name=dataset_name,
-                db_name=db_name,
-                question_id=idx + 1,
-                pbar=pbar,
-                max_feedback_loops=max_feedback_loops
-            )
+            if row.get('question_id') is None:
+                return await process_single_question(
+                    question=row['question'],
+                    sql_query=row['sql'],
+                    db_path=db_path,
+                    metadata_path=metadata_path,
+                    cheatsheet_path=cheatsheet_path,
+                    dataset_name=dataset_name,
+                    db_name=db_name,
+                    question_id=idx + 1,
+                    pbar=pbar,
+                    max_feedback_loops=max_feedback_loops
+                )
+            else:
+                return await process_single_question(
+                    question=row['question'],
+                    sql_query=row['sql'],
+                    db_path=db_path,
+                    metadata_path=metadata_path,
+                    cheatsheet_path=cheatsheet_path,
+                    dataset_name=dataset_name,
+                    db_name=db_name,
+                    question_id=row['question_id'],
+                    pbar=pbar,
+                    max_feedback_loops=max_feedback_loops
+                )
     
     # Create all tasks
     tasks = [
@@ -396,11 +409,15 @@ async def main():
     if 'dataframe_match' in df_questions.columns:
          # Filter rows where dataframe_match is False
         filtered_df = df_questions[df_questions['dataframe_match'] == False]
-
-        # Reformat to original question structure
-        reformatted_questions = filtered_df[['question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
-            .rename(columns={'ground_truth_sql': 'sql'}) \
-            .to_dict(orient='records')
+        
+        if 'ground_truth_sql' in filtered_df.columns:
+            # Reformat to original question structure
+            reformatted_questions = filtered_df[['question_id', 'question', 'sql', 'dataset_name', 'db_name']] \
+                .rename(columns={'ground_truth_sql': 'sql'}) \
+                .to_dict(orient='records')
+        else:
+            reformatted_questions = filtered_df[['question_id', 'question', 'sql', 'dataset_name', 'db_name']] \
+                .to_dict(orient='records')
         
         new_csv = pd.DataFrame(reformatted_questions)
 
