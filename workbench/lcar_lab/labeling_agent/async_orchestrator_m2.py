@@ -287,18 +287,32 @@ async def process_questions(
             metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
             metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         
-            return await process_single_question(
-                question=row['question'],
-                sql_query=row['sql'],
-                db_path=db_path,
-                metadata_path=metadata_path,
-                cheatsheet_path=cheatsheet_path,
-                dataset_name=dataset_name,
-                db_name=db_name,
-                question_id=idx + 1,
-                pbar=pbar,
-                max_feedback_loops=max_feedback_loops
-            )
+            if row.get('question_id') is None:
+                return await process_single_question(
+                    question=row['question'],
+                    sql_query=row['sql'],
+                    db_path=db_path,
+                    metadata_path=metadata_path,
+                    cheatsheet_path=cheatsheet_path,
+                    dataset_name=dataset_name,
+                    db_name=db_name,
+                    question_id=idx + 1,
+                    pbar=pbar,
+                    max_feedback_loops=max_feedback_loops
+                )
+            else:
+                return await process_single_question(
+                    question=row['question'],
+                    sql_query=row['sql'],
+                    db_path=db_path,
+                    metadata_path=metadata_path,
+                    cheatsheet_path=cheatsheet_path,
+                    dataset_name=dataset_name,
+                    db_name=db_name,
+                    question_id=row['question_id'],
+                    pbar=pbar,
+                    max_feedback_loops=max_feedback_loops
+                )
     
     # Create all tasks
     tasks = [
@@ -315,7 +329,8 @@ async def process_questions(
         pbar.update(1)
         
         # Save progress after each result
-        pd.DataFrame(output_data).to_csv(output_csv_path, index=False)
+        file_exists = os.path.isfile(output_csv_path)
+        pd.DataFrame([result]).to_csv(output_csv_path, mode='a', header=not file_exists, index=False)
     
     # Close progress bar
     pbar.close()
@@ -391,21 +406,23 @@ async def main():
 
     while  start_row < args.num_questions:
         # Read questions CSV to check for dataframe_match column
-        df_questions = pd.read_csv(args.questions_csv_path, skiprows=lambda x: x > 0 and x < args.start_row)
+        df_questions = pd.read_csv(args.questions_csv_path, skiprows=lambda x: x > 0 and x <= start_row)
+        print("df size:")
+        print(len(df_questions))
 
         # Filter rows where dataframe_match is False
         filtered_df = df_questions[df_questions['dataframe_match'] == False]
 
         # Reformat to original question structure
-        reformatted_questions = filtered_df[['question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
+        reformatted_questions = filtered_df[['question_id', 'question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
             .rename(columns={'ground_truth_sql': 'sql'}) \
             .to_dict(orient='records')
         
-        new_csv = pd.DataFrame(reformatted_questions)
+        new_df = pd.DataFrame(reformatted_questions)
 
         # Process reprocessed questions
         await process_questions(
-            questions_df=new_csv,
+            questions_df=new_df,
             output_csv_path=output_csv_path,
             db_base_path=args.db_base_path,
             metadata_base_path=args.metadata_base_path,
@@ -415,7 +432,9 @@ async def main():
             max_feedback_loops=args.max_feedback_loops
         )
 
-        start_row = len(new_csv)
+        start_row = start_row + len(df_questions)
+        print("start_row:")
+        print(start_row)
     
     # Calculate accuracy and create metadata
     results_df = pd.read_csv(output_csv_path)
