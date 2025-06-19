@@ -392,7 +392,6 @@ def main(git_hash):
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
         df["model_name"] = [r[3] if len(r) > 3 else None for r in results]
-        df["df"] = [r[4].to_json(orient="records") if len(r) > 4 else None for r in results]
 
         output_path = f"./results/{args.provider}/{args.model_id}"
         os.makedirs(output_path, exist_ok=True)
