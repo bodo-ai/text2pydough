@@ -199,7 +199,8 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             if code:
                 env = {"pydough": pydough, "datetime": datetime}
                 df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path)
-                df_json = df.to_json(orient="records", date_format="iso")
+                if df is not None:
+                    df_json = df.to_json(orient="records", date_format="iso")
                 print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if df is not None else 'None'}")
             
         except Exception as e:
