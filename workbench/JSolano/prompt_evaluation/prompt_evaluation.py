@@ -198,6 +198,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             df = None
 
             if code:
+                print(f"[DEBUG] [Q{question_idx}] Executing code for {model_info['name']}")
                 env = {"pydough": pydough, "datetime": datetime}
                 df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path)
                 if df is not None:
