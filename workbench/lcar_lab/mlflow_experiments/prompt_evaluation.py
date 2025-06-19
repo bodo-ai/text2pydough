@@ -354,6 +354,7 @@ def main(git_hash):
     parser.add_argument("--num_threads", type=int)
     parser.add_argument("--use-parallel", action="store_true")
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
+    parser.add_argument("--training_path", type=str)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
     
@@ -537,6 +538,8 @@ def main(git_hash):
             mlflow.log_artifact(combo_path)
             mlflow.log_artifact(complexity_path)
             mlflow.log_artifact(difficulty_path)
+            if args.training_path:
+                mlflow.log_artifacts(args.training_path, 'train_data')
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
