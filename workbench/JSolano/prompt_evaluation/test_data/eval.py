@@ -256,7 +256,7 @@ def compare_df(
     #print("Info: Proceeding with secondary check.")
     return secondary_check(original_gold, original_gen)
     
-def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) -> bool:
+def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, round_decimal = 5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
@@ -269,8 +269,8 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
         if len(s_gold) > len(s_gen):
             return False
         # Check if the numeric values are equal within a small tolerance
-        float_gold = pd.to_numeric(s_gold, errors='coerce').round(5).reset_index(drop=True)
-        float_gen = pd.to_numeric(s_gen, errors='coerce').round(5).reset_index(drop=True)
+        float_gold = pd.to_numeric(s_gold, errors='coerce').round(round_decimal).reset_index(drop=True)
+        float_gen = pd.to_numeric(s_gen, errors='coerce').round(round_decimal).reset_index(drop=True)
         
         if float_gold.isin(float_gen).all():
             print("Info: Numeric series contents Match. LENIENT")
@@ -428,8 +428,8 @@ def process_row(row,db_base_path,metadata_base_path):
         db_name = row['db_name']
         dataset_name = row['dataset_name']
 
-        db_path = os.path.join(db_base_path, dataset_name,  f"{db_name}.db")
-        metadata_dir = os.path.join(metadata_base_path, dataset_name)
+        db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
+        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
 
