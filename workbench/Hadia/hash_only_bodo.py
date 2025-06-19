@@ -13,7 +13,7 @@ from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, execute_code_and_extract_result_hash_bodo
+from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, execute_code_and_extract_result_hash_bodo, execute_code_and_extract_result_hash_bodo_df_csv
 from utils import download_database
 from claude import ClaudeModel, DeepseekModel
 from collections import defaultdict
@@ -303,21 +303,23 @@ def run(question, provider, model_id, formatted_prompt, temperature, database_co
         # 1. Get response
         # columns: response #and call_time
         #print("process_question_wrapper")
-        df_response.iloc[i, 1] = process_question_wrapper(
-                provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
+        #df_response.iloc[i, 1] = process_question_wrapper(
+        #        provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
         # 2. Extract Python code, execute it, and get the dataframe result hash
         # column: extracted_code
-        df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
+        #df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
         # column: hash
-        df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo(df_response.extracted_code.iloc[i])
+        df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo_df_csv()
     # 3. Find most common hash result
+    t0 = time.time()
     most_common_ans = df_response["hash"].value_counts().idxmax()
     # 4. Get the corresponding response
-    response = df_response[df_response["hash"] == most_common_ans]["response"].iloc[0]
+    ans = df_response[df_response["hash"] == most_common_ans]["hash"].iloc[0]
     t1 = time.time()
+    print("Bodo ensemble time:", t1-t0)
     # Save best response
     #df_response.to_csv(output_file, index=False)
-    return df_response
+    return ans, t1-t0
 
 
 def main():

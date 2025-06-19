@@ -1,20 +1,21 @@
 import argparse
-from numba.types import Tuple
 import ast
-import bodo
 import json
+import multiprocessing
+from multiprocessing import get_context
 import os
 import re
 import pandas as pd
 import aisuite as ai
 import time
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import UserMessage, SystemMessage
 from azure.core.credentials import AzureKeyCredential
-from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, execute_code_and_extract_result_hash_bodo
-from utils import download_database
+from test_data.eval import compare_df, compare_output, execute_code_and_extract_result, hash_result
+from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
 from claude import ClaudeModel, DeepseekModel
 from collections import defaultdict
 import pydough
@@ -58,7 +59,7 @@ class AzureAIProvider(AIProvider):
             response = [chunk.choices[0]["delta"]["content"] for chunk in completion if chunk.choices]
             return "".join(response)
         except Exception as e:
-            #print(f"Azure AI error: {e}")
+            print(f"Azure AI error: {e}")
             return None
 
 class DeepSeekAIProvider(AIProvider):
@@ -116,14 +117,13 @@ class OtherAIProvider(AIProvider):
             )
             return response.choices[0].message.content
         except Exception as e:
-            #print(f"AI Suite error: {e}")
+            print(f"ask AI Suite error: {e}")
             return None, None 
 
 def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
-@bodo.jit(cache=True)
 def extract_python_code(text):
     """Extracts Python code from triple backticks in text."""
     if not isinstance(text, str):  # Ensure text is a string
@@ -178,35 +178,25 @@ def get_azure_response(client, prompt, data, question, database_content, script_
         corrected_response= correct(client,question,response, formatted_prompt)
         return corrected_response, None
     except Exception as e:
-        #print(f"Azure AI error: {e}")
+        print(f"Azure AI error: {e}")
         return None
 
-def get_response(client, updated_question, formatted_prompt):
-    """Generates a response using aisuite."""
-    try:
-        response = client.ask(updated_question, formatted_prompt)
-        return response
-    except Exception as e:
-        #print(f"AI Suite error: {e}")
+def process_question(i, client, updated_question, formatted_prompt):
+    response = client.ask(updated_question, formatted_prompt)
+    extracted_code = extract_python_code(response)
+    local_env = {"pydough": pydough, "datetime": datetime}
+    result, exception = execute_code_and_extract_result(extracted_code, local_env)
+
+    if result is not None:
+        return (result, response)
+    else:
         return None
 
-def get_other_provider_response(client, prompt, data, question, database_content,script_content):
-    """Generates a response using aisuite."""
-    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
-   
-    try:
-        #print("Get response")
-        start_time = time.time()
-        response = get_response(client, updated_question,formatted_prompt)
-        end_time = time.time()
-        response_time = end_time - start_time
-        return response, response_time
-    except Exception as e:
-        #print(f"AI Suite error: {e}")
-        #return None
-        return "N/A", -1
+def process_csv(index):
+    df = pd.read_csv('q1_result_df.csv')
+    return df
 
-def ensembling_process(client, updated_question, formatted_prompt, iterations):
+def ensembling_process(client, updated_question, formatted_prompt, iterations, num_threads):
     """
     Performs an ensembling process to generate multiple responses from an AI client.
     Uses a direct comparison approach to identify matching results.
@@ -215,59 +205,68 @@ def ensembling_process(client, updated_question, formatted_prompt, iterations):
     counts = defaultdict(list)
 
     try:
-        for i in range(iterations):
-            response = client.ask(updated_question, formatted_prompt)
-            extracted_code = extract_python_code(response)
-            local_env = {"pydough": pydough, "datetime": datetime}
-            result, exception = execute_code_and_extract_result(extracted_code, local_env)
 
-            if result is not None:
-                dfs_and_responses.append((result, response))
-            #else:
-            #    print(f"The PyDough code has the exception: {exception}")
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            results = list(executor.map(process_csv, range(iterations)))
+
+        dfs_and_responses = [res for res in results if res is not None]
         
         if dfs_and_responses == []:
-            return response
+            ans = None
         else: 
+            t_h0 = time.time()
             for i in range(len(dfs_and_responses)):
                 for j in range(i + 1, len(dfs_and_responses)):
-                    df_gold = dfs_and_responses[i][0]
-                    df_gen = dfs_and_responses[j][0]
-
-                    if compare_df(
-                        df_gold=df_gold,
-                        df_gen=df_gen,
-                        query_category="",
-                        question=""
-                    ):
+                    df_gold = hash_result(dfs_and_responses[i])
+                    df_gen = hash_result(dfs_and_responses[j])
+                    if df_gold == df_gen:
                         counts[i].append(j)
 
             most_common_index = max(counts, key=lambda k: len(counts[k]), default=None)
 
             if most_common_index is not None:
-                return dfs_and_responses[most_common_index][1]
+                ans = dfs_and_responses[most_common_index]
             else:
-            #    print("No common result found, returning the first response as fallback.")
-                return dfs_and_responses[0][1] if dfs_and_responses else None
+                print("No common result found, returning the first response as fallback.")
+                ans = dfs_and_responses[0] if dfs_and_responses else None
+            ensemble_time_total = time.time() - t_h0
+        print("Multiprocessing ensemble time:", ensemble_time_total)
+        return ans, ensemble_time_total
+
 
     except Exception as e:
-        #print(f"AI Suite error: {e}")
+        print(f"ensembling_process AI Suite error: {e}")
         return None
+    t1 = time.time()
+    print("ensemble process time (call, execute, vote): ", t1-t0)
 
-def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations):
+def get_other_provider_response(client, prompt, data, question, database_content,script_content, num_iterations, num_threads):
+    """Generates a response using aisuite."""
+    updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
+   
+    try:
+        start_time = time.time()
+        response, common_time = ensembling_process(client, updated_question,formatted_prompt, num_iterations, num_threads)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        return response, execution_time, common_time
+    except Exception as e:
+        print(f"get_other_provider_response AI Suite error: {e}")
+        return "N/A", -1
+
+def get_claude_response(client, prompt, data, question, database_content, script_content, num_iterations, num_threads):
     """Generates a response using aisuite."""
     updated_question, formatted_prompt = format_prompt(prompt,data,question,database_content,script_content)
     start_time = time.time()
-    response=ensembling_process(client, updated_question,formatted_prompt, num_iterations)
+    response=ensembling_process(client, updated_question,formatted_prompt, num_iteration, num_threads)
     end_time = time.time()
     execution_time = end_time - start_time
     return response, execution_time
 
-output_type = bodo.typeof(("hello", 1.2))
-
-@bodo.wrap_python(output_type)
-def process_question_wrapper(provider, model_id, formatted_prompt, q, temperature, database_content, script_content, num_iterations):
-    """ Wrapper function to handle API calls. """
+def process_question_wrapper(args):
+    """ Wrapper function to handle multiprocessing calls. """
+    provider, model_id, formatted_prompt, data, q, temperature, database_content, script_content, num_iterations, num_threads = args
+    # Adding here for consistency with timing with Bodo.
     with open("data/queries_context.json", "r") as json_data:
         data = json.load(json_data)
 
@@ -276,49 +275,24 @@ def process_question_wrapper(provider, model_id, formatted_prompt, q, temperatur
         return get_azure_response(client, formatted_prompt, data, q, database_content, script_content)[0]
     elif provider == "aws-thinking":
         client = ClaudeAIProvider(provider, model_id)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations)[0]
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations, num_threads)[0]
     elif provider == "aws-deepseek":
         client = DeepSeekAIProvider(provider, model_id, temperature)
-        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations)[0]
+        return get_claude_response(client, formatted_prompt, data, q, database_content, script_content,num_iterations, num_threads)[0]
     else:
         client = OtherAIProvider(provider, model_id, temperature)
-        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content)
+        return get_other_provider_response(client, formatted_prompt, data, q, database_content, script_content, num_iterations, num_threads)[0]
 
- 
-@bodo.jit(cache=True)
-def run(question, provider, model_id, formatted_prompt, temperature, database_content, script_content, num_iterations, output_file):
-    """ Main function to process questions and get responses.
-    Overall process:
-    1. Run the question n times in parallel.
-    2. Get response from the AI provider.
-    3. Extract Python code from the response.
-    4. Execute the code and get the dataframe result hash.
-    4. Find the most common hash result.
-    6. Get the corresponding response.
-    """
+def process_questions(data, provider, model_id, formatted_prompt, questions_df, temperature, database_content, script_content, num_threads,num_iterations):
+    """ Processes questions in parallel using multiprocessing. """
+    def thread_wrapper(question):
+        client = OtherAIProvider(provider, model_id, temperature)
+        return get_other_provider_response(client, formatted_prompt, data, question, database_content, script_content, num_iterations, num_threads)
 
-    df_response = pd.DataFrame(columns=["hash", "response", 'extracted_code', "call_time", "exec_time"], index=range(num_iterations))
-    t0 = time.time()
-    for i in bodo.prange(num_iterations):
-        # 1. Get response
-        # columns: response #and call_time
-        #print("process_question_wrapper")
-        df_response.iloc[i, 1] = process_question_wrapper(
-                provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
-        # 2. Extract Python code, execute it, and get the dataframe result hash
-        # column: extracted_code
-        df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
-        # column: hash
-        df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo(df_response.extracted_code.iloc[i])
-    # 3. Find most common hash result
-    most_common_ans = df_response["hash"].value_counts().idxmax()
-    # 4. Get the corresponding response
-    response = df_response[df_response["hash"] == most_common_ans]["response"].iloc[0]
-    t1 = time.time()
-    # Save best response
-    #df_response.to_csv(output_file, index=False)
-    return df_response
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        results = list(executor.map(thread_wrapper, questions_df['question'].tolist()))
 
+    return results
 
 def main():
     # Argument Parser
@@ -336,7 +310,7 @@ def main():
     args = parser.parse_args()
 
     # Create result directory if not exists
-    folder_path = f"./results/bodo_eval/{args.provider}/{args.model_id}"
+    folder_path = f"./results/original_eval/{args.provider}/{args.model_id}"
     os.makedirs(folder_path, exist_ok=True)
     output_file = f"{folder_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
 
@@ -350,25 +324,43 @@ def main():
     with open(args.database_structure, "r", encoding="utf-8") as f:
         database_content = f.read()
 
-    # FIXME: data type is not accepted by Bodo
     with open("data/queries_context.json", "r") as json_data:
         data = json.load(json_data)
 
     # Read Questions
     print("File: ", args.questions, "num_threads: ", args.num_threads, "num_iterations: ", args.num_iterations)
-    with open(args.questions, "r", encoding="utf-8") as f:
-        question = f.read()
-
     t0 = time.time()
-    questions_df = run(question, args.provider.lower(), args.model_id, prompt, args.temperature, database_content, script_content, args.num_iterations, output_file)
-    t1 = time.time()
+    questions_df = pd.read_csv(args.questions, encoding="utf-8")
+
+    responses = process_questions(
+        data,
+        args.provider.lower(),
+        args.model_id,
+        prompt,
+        questions_df,
+        args.temperature,
+        database_content,
+        script_content,
+        args.num_threads,
+        args.num_iterations
+    )
+
+    response_column = [response[0] for response in responses]
+    #execution_time_column = [response[1] for response in responses]
+    hash_time_column = [response[1] for response in responses]
+
+    # Save responses and execution times into the DataFrame
+    questions_df["response"] = response_column
+    #questions_df["execution_time"] = execution_time_column
+
+    questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
+
+
+    t1=time.time()
     total_time = t1-t0
-    print(f"[RESULT] mode=bodo threads={args.num_threads} iterations={args.num_iterations} time={total_time:.3f} output_file={output_file}")
+    questions_df.to_csv(output_file, index=False, encoding="utf-8")
+    print(f"[RESULT] mode=multiprocessing threads={args.num_threads} iterations={args.num_iterations} time={hash_time_column[0]:.3f} output_file={output_file}")
 
-
-
-    # FIXME: Why Bodo complained here? It's out of JIT function
-    #questions_df.to_csv(output_file, index=False)#, encoding="utf-8")
 
 if __name__ == "__main__":
     # import pdb; pdb.set_trace()

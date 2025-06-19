@@ -174,9 +174,26 @@ def execute_code_and_extract_result_hash_bodo(extracted_code):
         exec(transformed_source, {}, local_env)
         last_variable = list(local_env.values())[-1]
         result_df = convert_to_df(last_variable)
+        print("result_df: ", result_df)
+        result_df.to_csv("/home/bodo/text2pydough/workbench/Hadia/q1_result_df.csv", index=False)
+        print("DONE writing....")
         hash_val = hash_result(result_df)
+        print("hash_val: ", hash_val)
         return hash_val # Return result and no exception
     except Exception as e:
+        print("Exception: ", str(e))
+        return str(e)  # Return None as result and exception message
+@bodo.wrap_python(bodo.string_type)
+def execute_code_and_extract_result_hash_bodo_df_csv():
+    """Read csv answer and returns the hash or raises an exception."""
+    try:
+        result_df = pd.read_csv("q1_result_df.csv")
+        print(result_df)
+        hash_val = hash_result(result_df)
+        print("hash_val: ", hash_val)
+        return hash_val # Return result and no exception
+    except Exception as e:
+        print("Exception: ", str(e))
         return str(e)  # Return None as result and exception message
 def execute_code_and_extract_result(extracted_code, local_env):
     """Executes the Python code and returns the result or raises an exception."""

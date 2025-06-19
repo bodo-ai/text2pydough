@@ -352,7 +352,7 @@ def main():
 
     t1=time.time()
     total_time = t1-t0
-    #questions_df.to_csv(output_file, index=False, encoding="utf-8")
+    questions_df.to_csv(output_file, index=False, encoding="utf-8")
     print(f"[RESULT] mode=multiprocessing threads={args.num_threads} iterations={args.num_iterations} time={total_time:.3f} output_file={output_file}")
 
 

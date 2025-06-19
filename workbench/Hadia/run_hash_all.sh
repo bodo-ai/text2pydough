@@ -12,24 +12,29 @@ for threads in "${THREAD_COUNTS[@]}"; do
   for iterations in "${ITERATION_COUNTS[@]}"; do
     echo "Running with $threads threads and $iterations iterations"
 
-    # No Bodo
-    log_no_bodo="${LOG_DIR}/no_bodo_t${threads}_i${iterations}.log"
-    ./run_no_bodo.sh "$threads" "$iterations" > "$log_no_bodo" 2>&1
-    result_line=$(grep "\[RESULT\]" "$log_no_bodo")
+    # Bodo
+    log_hash_bodo="${LOG_DIR}/no_bodo_t${threads}_i${iterations}.log"
+    ./run_hash_bodo.sh "$threads" "$iterations" > "$log_hash_bodo" 2>&1
+    result_line=$(grep "\[RESULT\]" "$log_hash_bodo")
+    time_line=$(grep "Bodo ensemble time" "$log_hash_bodo")
+    echo $time_line
     if [ -n "$result_line" ]; then
       mode=$(echo "$result_line" | sed -n 's/.*mode=\([^ ]*\).*/\1/p')
-      time=$(echo "$result_line" | sed -n 's/.*time=\([^ ]*\).*/\1/p')
+      time=$(echo "$time_line" | sed -n 's/.*time: \([^ ]*\).*/\1/p')
       out_file=$(echo "$result_line" | sed -n 's/.*output_file=\(.*\)/\1/p')
       echo "$mode,$threads,$iterations,$time,$out_file" >> "$SUMMARY_CSV"
     fi
 
-    # Bodo
-    log_bodo="${LOG_DIR}/bodo_t${threads}_i${iterations}.log"
-    ./run_bodo.sh "$threads" "$iterations" > "$log_bodo" 2>&1
-    result_line=$(grep "\[RESULT\]" "$log_bodo")
+    # Multiprocessing
+    log_hash_mp="${LOG_DIR}/bodo_t${threads}_i${iterations}.log"
+    ./run_hash_mp.sh "$threads" "$iterations" > "$log_hash_mp" 2>&1
+    result_line=$(grep "\[RESULT\]" "$log_hash_mp")
+    time_line=$(grep "Multiprocessing ensemble time" "$log_hash_mp")
     if [ -n "$result_line" ]; then
       mode=$(echo "$result_line" | sed -n 's/.*mode=\([^ ]*\).*/\1/p')
-      time=$(echo "$result_line" | sed -n 's/.*time=\([^ ]*\).*/\1/p')
+      echo "MODE: $mode"
+      time=$(echo "$time_line" | sed -n 's/.*time: \([^ ]*\).*/\1/p')
+      echo "Time: $time"
       out_file=$(echo "$result_line" | sed -n 's/.*output_file=\(.*\)/\1/p')
       echo "$mode,$threads,$iterations,$time,$out_file" >> "$SUMMARY_CSV"
     fi
