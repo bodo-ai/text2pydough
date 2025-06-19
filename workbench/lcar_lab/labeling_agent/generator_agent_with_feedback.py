@@ -376,9 +376,14 @@ class PydoughGeneratorAgent:
         
         #Initialize LLM
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-preview-05-20",
+            model="gemini-2.0-flash",
             temperature=0.99
         )
+        
+        # self.llm = ChatGoogleGenerativeAI(
+        #     model="gemini-2.5-flash-preview-05-20",
+        #     temperature=0.99
+        # )
 
         # self.llm = ChatAnthropicVertex(
         #     model_name="claude-sonnet-4@20250514",

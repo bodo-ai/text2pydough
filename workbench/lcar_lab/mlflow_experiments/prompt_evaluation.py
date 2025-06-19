@@ -1,8 +1,9 @@
-# main.py
+# prompt_evaluation.py
 
 import argparse
 import json
 import os
+import sys
 import re
 import textwrap
 import time
@@ -16,26 +17,55 @@ from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
-from test_data.eval import compare_output, execute_code_and_extract_result
+from test_data.eval import compare_output, execute_code_and_extract_result, compare_df
 import aisuite as ai
 from provider.ai_providers import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
-from dynamic_prompt.mdgen_v2 import generate_markdown_from_metadata
+from dynamic_prompt.mdgen import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
+from gemini_wrapper import GeminiWrapper
+from collections import defaultdict
+import random
+import json
 
 # === Helper Functions ===
 
+models_to_test = [ 
+    {
+        "name": "claude",
+        "provider": "anthropic",
+        "model_id": "claude-opus-4@20250514",
+        "config": {
+            "api_key": os.getenv("GOOGLE_API_KEY"),
+            "project": os.getenv("GOOGLE_PROJECT_ID"),
+            "region": "us-east1"
+        }
+    },
+    {
+        "name": "gemini",
+        "provider": "google",
+        "model_id": "gemini-2.5-pro-preview-06-05",
+        "config": {
+            "api_key": os.getenv("GOOGLE_API_KEY"),
+            "project": os.getenv("GOOGLE_PROJECT_ID"),
+            "region": "us-central1"
+        }
+    }
+]
+
 def get_provider(provider, model_id, config=None):
-    if provider == "azure":
-        return AzureAIProvider(model_id)
-    elif provider == "aws-thinking":
-        return ClaudeAIProvider(model_id)
+    backend = config.get("backend", "vertex") if config else "vertex"
+
+    if provider == "anthropic":
+        return ClaudeAIProvider(model_id, config=config)
+    elif provider == "azure":
+        return AzureAIProvider(model_id, config=config)
     elif provider == "aws-deepseek":
-        return DeepSeekAIProvider(model_id)
+        return DeepSeekAIProvider(model_id, config=config)
     elif provider == "google":
-        return GeminiAIProvider(model_id)
+        return GeminiAIProvider(model_id, config=config)
     elif provider == "mistral":
-        return MistralAIProvider(model_id)
+        return MistralAIProvider(model_id, config=config)
     else:
         return OtherAIProvider(provider, model_id, config)
     
@@ -72,13 +102,12 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
     for db_name, dataset_name in zip(db_names, dataset_names):
-        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
-        json_file = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        print(json_file)
+        json_file = os.path.join(metadata_base_path, "metadata", dataset_name, f"{db_name}_graph.json")
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")}"
+            url = f"sqlite:///{os.path.join(db_base_path, 'databases', dataset_name, db_name)}"
+            print("DB URL:", url)
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
             with open(json_file, "w") as f:
@@ -87,10 +116,6 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
         if db_name not in db_markdown_map:
             with open(json_file, "r") as f:
                 data = json.load(f)
-
-                #graph_name = data[0].get('name', 'default_graph')
-                #my_graph = pydough.parse_json_metadata_from_file(json_file, graph_name)
-
                 db_markdown_map[db_name] = data
 
     return db_markdown_map
@@ -103,9 +128,9 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}",'\nDatabase schema:\n\n', str(db_content)]), prompt.format(
+    return "".join([f"{question}\nDatabase Schema:\n",str(db_content)]), prompt.format(
         script_content=script,
-        database_content=generate_markdown_from_metadata(db_content),
+        database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -135,17 +160,157 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
         #response= correct(client, formatted_q, response1[0], formatted_prompt, db_name=db_name)
         return response1[0], duration, response1[1]
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
-    return response1, duration, None
+    return response1, duration, None 
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, **kwargs):
-    def thread_wrapper(row):
-        client = get_provider(provider, model_id)
-        return get_response(client, prompt, data, row, script, db_markdown_map=db_markdown_map, **kwargs)
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
+    question = row["question"]
+    question_idx = row.get("question_index", "?")
+    db_name = row.get("db_name", None)
+    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
+
+    db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
+    metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
+    
+    print(f"[DEBUG] [Q{question_idx}] Running models for: {question}")
+
+    def run_model(model_info, attempt):
+        provider_name = model_info["provider"]
+        model_id = model_info["model_id"]
+        config = model_info["config"]
+        print(f"[DEBUG] [Q{question_idx}] Running model {model_info['name']} (attempt {attempt})")
+        client = get_provider(provider_name, model_id, config=config)
+        start = time.time()
+        model_specific_kwargs = dict(kwargs)
+        if model_info["name"] == "gemini":
+            model_specific_kwargs.pop("use_stream", None)
+        try:
+            response = client.ask(formatted_q, formatted_prompt, **model_specific_kwargs)
+            duration = time.time() - start
+            if isinstance(response, tuple):
+                raw_response, usage = response
+            else:
+                raw_response, usage = response, None
+            
+            code = extract_python_code(raw_response,)
+            print(f"[DEBUG] [Q{question_idx}] Code generated by {model_info['name']}:\n{code}")
+
+            df = None
+            if code:
+                env = {"pydough": pydough, "datetime": datetime}
+                df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path)
+                print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if df is not None else 'None'}")
+            
+        except Exception as e:
+            raw_response, code, duration, usage, df = None, None, time.time() - start, None, None
+            print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
+
+        return {
+            "model_name": model_info["name"],
+            "attempt": attempt,
+            "response": raw_response,
+            "code": code,
+            "duration": duration,
+            "usage": usage,
+            "df": df,
+        }
+
+    all_runs = []
+    for attempt in range(tries):
+        with ThreadPoolExecutor(max_workers=len(models_to_test)) as executor:
+            futures = [executor.submit(run_model, model, attempt) for model in models_to_test]
+            all_runs.extend(f.result() for f in futures)
+
+        
+    print(f"[DEBUG] [Q{question_idx}] Completed all runs. Total: {len(all_runs)}")
+    for run in all_runs:
+        print(f"[DEBUG] [Q{question_idx}] {run['model_name']} | Attempt: {run['attempt']} | DF: {'✅' if run['df'] is not None else '❌'}")
+
+    # Group runs by model name
+    grouped = {}
+    for run in all_runs:
+        grouped.setdefault(run["model_name"], []).append(run)
+
+    # Detect early match between Gemini and Claude
+    for i in range(tries):
+        gemini_run = grouped.get("gemini", [])[i]
+        claude_run = grouped.get("claude", [])[i]
+        if gemini_run["df"] is not None and claude_run["df"] is not None:
+            if compare_df(gemini_run["df"], claude_run["df"], query_category="a", question=question):
+                print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
+                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"]
+
+    # Fallback: use ensemble result
+    print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
+    return ensemble_result(all_runs, question, question_idx)
+
+def ensemble_result(all_runs, question, question_idx="?"):
+    """
+    Uses dataframe comparison to select the most consistent output.
+    """
+    valid_runs = [r for r in all_runs if r["df"] is not None]
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
+        for r in all_runs:
+            if r["response"]:
+                print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
+                return r["response"], r["duration"], r["usage"]
+        return None, 0.0, None
+
+    consensus = defaultdict(int)
+
+    for i in range(len(valid_runs)):
+        for j in range(i + 1, len(valid_runs)):
+            if compare_df(valid_runs[i]["df"], valid_runs[j]["df"], query_category="a", question=question):
+                consensus[i] += 1
+                consensus[j] += 1
+
+    if consensus:
+        best_index = max(consensus, key=lambda i: consensus[i])
+        best = valid_runs[best_index]
+        print(f"[INFO] [Q{question_idx}] Ensemble selected: {best['model_name']} with {consensus[best_index]} matches.")
+        return best["response"], best["duration"], best["usage"]
+
+    gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
+    if gemini_runs:
+        fallback = random.choice(gemini_runs)
+        print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
+        return fallback["response"], fallback["duration"], fallback["usage"]
+    else:
+        print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
+        fallback = random.choice(valid_runs)
+        return fallback["response"], fallback["duration"], fallback["usage"]
+
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
+    print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
+    def thread_wrapper(row_tuple):
+        index, row = row_tuple
+        row["question_index"] = index + 1
+        if use_parallel: 
+            return run_models_parallel(
+                prompt=prompt,
+                data=data,
+                row=row,
+                script=script,
+                models_to_test=models_to_test,
+                db_markdown_map=db_markdown_map,
+                **kwargs
+            )
+        else:
+            client = get_provider(provider, model_id)
+            return get_response(
+                client=client,
+                prompt=prompt,
+                data=data,
+                row=row,
+                script=script,
+                db_markdown_map=db_markdown_map,
+                **kwargs
+            )
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        results = list(executor.map(thread_wrapper, [row for _, row in questions_df.iterrows()]))
+        results = list(executor.map(thread_wrapper, questions_df.iterrows()))
 
-    return results
+    return results 
 
 def parse_extra_args(extra_args):
     kwargs = {}
@@ -171,6 +336,10 @@ def parse_extra_args(extra_args):
 # === Entry Point ===
 
 def main(git_hash):
+    print(f"[INFO] Starting prompt evaluation.")
+    sys.stdout = open("debug_log.txt", "w")
+    sys.stderr = sys.stdout
+    print("wut")
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
@@ -183,15 +352,14 @@ def main(git_hash):
     parser.add_argument("--provider", type=str)
     parser.add_argument("--model_id", type=str)
     parser.add_argument("--num_threads", type=int)
+    parser.add_argument("--use-parallel", action="store_true")
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
-    parser.add_argument("--training_path", type=str)
-    parser.add_argument("--validation_path", type=str)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
-
+    
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
     MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"]
-    mlflow.gemini.autolog()
+    #mlflow.gemini.autolog()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment(args.experiment_name)
 
@@ -206,7 +374,18 @@ def main(git_hash):
         df = pd.read_csv(args.questions)
         db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
-        results = process_questions(data, args.provider.lower(), args.model_id, prompt, df, script, args.num_threads, db_markdown_map=db_markdown_map, **kwargs)
+        results = process_questions(
+        data,
+        provider=args.provider.lower(),
+        model_id=args.model_id,
+        prompt=prompt,
+        questions_df=df,
+        script=script,
+        threads=args.num_threads,
+        db_markdown_map=db_markdown_map,
+        use_parallel=args.use_parallel,
+        **kwargs
+        )
 
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results]
@@ -269,76 +448,36 @@ def main(git_hash):
 
             for (diff, comp), pct in no_match_pct_combo.items():
                 mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct)
-
             total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
             total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
             total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
-            #non_matches_per_combo_per_database = non_match_df.groupby(["difficulty","complexity", "db_name"]).size()
+            non_matches_per_combo_per_database = non_match_df.groupby(["difficulty","complexity", "db_name"]).size()
             matches_per_combo_db  = match_df.groupby(["difficulty", "complexity","db_name"]).size()
-            #non_matches_difficulty_per_database = non_match_df.groupby(["difficulty", "db_name"]).size()
+            non_matches_difficulty_per_database = non_match_df.groupby(["difficulty", "db_name"]).size()
             matches_per_difficulty_db  = match_df.groupby(["difficulty", "db_name"]).size()
-            #non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
+            non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
             matches_per_complexity_db  = match_df.groupby(["complexity", "db_name"]).size()
 
-            # Combo: difficulty + complexity + db_name
-            match_stats_combo_db_df = (
-                pd.DataFrame({
-                    "total_count": total_per_combo_db,
-                    "match_count": matches_per_combo_db
-                })
-                .fillna(0)
-                .astype(int)
-            )
+            # Combo (difficulty + complexity + db)
+            match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
+            match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
+            match_pct_combo_csv = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
+            match_pct_combo_df.to_csv(match_pct_combo_csv, index=False)
+            mlflow.log_artifact(match_pct_combo_csv)
 
-            match_stats_combo_db_df["match_percentage"] = (
-                match_stats_combo_db_df["match_count"] / match_stats_combo_db_df["total_count"]
-            )
+            # Difficulty + db
+            match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
+            match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
+            match_pct_difficulty_csv = f"{output_path}/match_percentage_per_difficulty_db.csv"
+            match_pct_difficulty_df.to_csv(match_pct_difficulty_csv, index=False)
+            mlflow.log_artifact(match_pct_difficulty_csv)
 
-            match_stats_combo_db_df = match_stats_combo_db_df.reset_index()
-            match_stats_combo_db_csv = f"{output_path}/match_stats_per_difficulty_complexity_db.csv"
-            match_stats_combo_db_df.to_csv(match_stats_combo_db_csv, index=False)
-            mlflow.log_artifact(match_stats_combo_db_csv)
-
-            # Difficulty + db_name
-            match_stats_difficulty_db_df = (
-                pd.DataFrame({
-                    "total_count": total_per_difficulty_db,
-                    "match_count": matches_per_difficulty_db
-                })
-                .fillna(0)
-                .astype(int)
-            )
-
-            match_stats_difficulty_db_df["match_percentage"] = (
-                match_stats_difficulty_db_df["match_count"] / match_stats_difficulty_db_df["total_count"]
-            )
-
-            match_stats_difficulty_db_df = match_stats_difficulty_db_df.reset_index()
-            match_stats_difficulty_csv = f"{output_path}/match_stats_per_difficulty_db.csv"
-            match_stats_difficulty_db_df.to_csv(match_stats_difficulty_csv, index=False)
-            mlflow.log_artifact(match_stats_difficulty_csv)
-
-
-            # Complexity + db_name
-            match_stats_complexity_db_df = (
-                pd.DataFrame({
-                    "total_count": total_per_complexity_db,
-                    "match_count": matches_per_complexity_db
-                })
-                .fillna(0)
-                .astype(int)
-            )
-
-            match_stats_complexity_db_df["match_percentage"] = (
-                match_stats_complexity_db_df["match_count"] / match_stats_complexity_db_df["total_count"]
-            )
-
-            match_stats_complexity_db_df = match_stats_complexity_db_df.reset_index()
-            match_stats_complexity_csv = f"{output_path}/match_stats_per_complexity_db.csv"
-            match_stats_complexity_db_df.to_csv(match_stats_complexity_csv, index=False)
-            mlflow.log_artifact(match_stats_complexity_csv)
-
-
+            # Complexity + db
+            match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
+            match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
+            match_pct_complexity_csv = f"{output_path}/match_percentage_per_complexity_db.csv"
+            match_pct_complexity_df.to_csv(match_pct_complexity_csv, index=False)
+            mlflow.log_artifact(match_pct_complexity_csv)
             # Save raw counts as CSV artifacts if needed
             matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
             matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
@@ -398,8 +537,6 @@ def main(git_hash):
             mlflow.log_artifact(combo_path)
             mlflow.log_artifact(complexity_path)
             mlflow.log_artifact(difficulty_path)
-            if args.training_path and args.validation_path:
-                mlflow.log_artifacts(args.training_path, 'train_data')
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
@@ -408,8 +545,7 @@ def main(git_hash):
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
-        output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        metrics_path = f"{output_path}/metrics/metrics_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
+        metrics_path = "./metrics.json"
 
         with open(metrics_path, "w") as metrics_file:
             metrics_file.write(metrics_json)
