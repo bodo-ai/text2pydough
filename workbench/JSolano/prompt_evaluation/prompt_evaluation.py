@@ -202,7 +202,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
                 print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if df is not None else 'None'}")
             
         except Exception as e:
-            raw_response, code, duration, usage, df = None, None, time.time() - start, None, None, None
+            raw_response, code, duration, usage, df = None, None, time.time() - start, None, None
             print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
 
         return {
