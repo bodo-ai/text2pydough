@@ -237,7 +237,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         if gemini_run["df"] is not None and claude_run["df"] is not None:
             if compare_df(gemini_run["df"], claude_run["df"], query_category="a", question=question):
                 print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
-                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"]
+                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["df"]
 
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
