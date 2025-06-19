@@ -253,7 +253,7 @@ def ensemble_result(all_runs, question, question_idx="?"):
         for r in all_runs:
             if r["response"]:
                 print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
-                return r["response"], r["duration"], r["usage"]
+                return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
     consensus = defaultdict(int)
@@ -268,17 +268,17 @@ def ensemble_result(all_runs, question, question_idx="?"):
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Ensemble selected: {best['model_name']} with {consensus[best_index]} matches.")
-        return best["response"], best["duration"], best["usage"]
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["df"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
     if gemini_runs:
         fallback = random.choice(gemini_runs)
         print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
-        return fallback["response"], fallback["duration"], fallback["usage"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df"]
     else:
         print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
         fallback = random.choice(valid_runs)
-        return fallback["response"], fallback["duration"], fallback["usage"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df"]
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
