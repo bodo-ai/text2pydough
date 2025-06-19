@@ -198,10 +198,11 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             if code:
                 env = {"pydough": pydough, "datetime": datetime}
                 df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path)
+                df_json = df.to_json(orient="records", date_format="iso")
                 print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if df is not None else 'None'}")
             
         except Exception as e:
-            raw_response, code, duration, usage, df = None, None, time.time() - start, None, None
+            raw_response, code, duration, usage, df = None, None, time.time() - start, None, None, None
             print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
 
         return {
@@ -212,6 +213,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             "duration": duration,
             "usage": usage,
             "df": df,
+            "df_json": df_json,
         }
 
     all_runs = []
@@ -237,7 +239,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         if gemini_run["df"] is not None and claude_run["df"] is not None:
             if compare_df(gemini_run["df"], claude_run["df"], query_category="a", question=question):
                 print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
-                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["df"]
+                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["df_json"]
 
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
@@ -268,17 +270,17 @@ def ensemble_result(all_runs, question, question_idx="?"):
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Ensemble selected: {best['model_name']} with {consensus[best_index]} matches.")
-        return best["response"], best["duration"], best["usage"], best["model_name"], best["df"]
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["df_json"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
     if gemini_runs:
         fallback = random.choice(gemini_runs)
         print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df_json"]
     else:
         print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
         fallback = random.choice(valid_runs)
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df_json"]
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
@@ -388,7 +390,7 @@ def main(git_hash):
         )
 
         df["response"] = [r[0] for r in results]
-        df["execution_time"] = [r[1] for r in results]
+        df["execution_time"] = [r[1] for r in results if r[1] is not None]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
         df["model_name"] = [r[3] if len(r) > 3 else None for r in results]
