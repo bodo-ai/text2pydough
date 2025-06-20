@@ -162,7 +162,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=6, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
