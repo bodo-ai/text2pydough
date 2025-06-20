@@ -247,7 +247,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     """
     # Fallback: use ensemble result
     #print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    return size_based_selection(all_runs, question, question_idx)
+    return size_based_selection(all_runs, question_idx)
 
 def ensemble_result(all_runs, question, question_idx="?"):
     """
