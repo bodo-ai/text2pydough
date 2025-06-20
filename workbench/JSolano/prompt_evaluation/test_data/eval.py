@@ -268,6 +268,9 @@ def symetric_compare_df(
     Compares two dataframes symmetrically, meaning it checks if both dataframes can be matched to each other.
     This is useful for cases where the order of the dataframes does not matter.
     """
+    if df_a.empty and df_b.empty:
+        # If both dataframes are empty, they match
+        return True
     if df_a.empty or df_b.empty:
         # If either dataframe is empty, they cannot match
         return False
