@@ -162,7 +162,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=6, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -262,6 +262,9 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
+    return size_based_selection(valid_runs, question_idx=question_idx)
+
+def ensemble_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
 
     for i in range(len(valid_runs)):
@@ -285,6 +288,20 @@ def ensemble_result(all_runs, question, question_idx="?"):
         print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
         fallback = random.choice(valid_runs)
         return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df_json"]
+    
+def size_based_selection(valid_runs, question_idx="?"):
+    """
+    Selects the run with the largest dataframe size.
+    """
+    size_dict = defaultdict(int)
+    for i in range(len(valid_runs)):
+        size_dict[i] = valid_runs[i]["df"].size
+    
+    if size_dict:
+        best_index = max(size_dict, key=lambda i: size_dict[i])
+        best = valid_runs[best_index]
+        print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["df_json"]
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
