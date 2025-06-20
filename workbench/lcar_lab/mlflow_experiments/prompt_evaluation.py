@@ -449,36 +449,76 @@ def main(git_hash):
 
             for (diff, comp), pct in no_match_pct_combo.items():
                 mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct)
+
             total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
             total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
             total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
-            non_matches_per_combo_per_database = non_match_df.groupby(["difficulty","complexity", "db_name"]).size()
+            #non_matches_per_combo_per_database = non_match_df.groupby(["difficulty","complexity", "db_name"]).size()
             matches_per_combo_db  = match_df.groupby(["difficulty", "complexity","db_name"]).size()
-            non_matches_difficulty_per_database = non_match_df.groupby(["difficulty", "db_name"]).size()
+            #non_matches_difficulty_per_database = non_match_df.groupby(["difficulty", "db_name"]).size()
             matches_per_difficulty_db  = match_df.groupby(["difficulty", "db_name"]).size()
-            non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
+            #non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
             matches_per_complexity_db  = match_df.groupby(["complexity", "db_name"]).size()
 
-            # Combo (difficulty + complexity + db)
-            match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
-            match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
-            match_pct_combo_csv = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
-            match_pct_combo_df.to_csv(match_pct_combo_csv, index=False)
-            mlflow.log_artifact(match_pct_combo_csv)
+            # Combo: difficulty + complexity + db_name
+            match_stats_combo_db_df = (
+                pd.DataFrame({
+                    "total_count": total_per_combo_db,
+                    "match_count": matches_per_combo_db
+                })
+                .fillna(0)
+                .astype(int)
+            )
 
-            # Difficulty + db
-            match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
-            match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
-            match_pct_difficulty_csv = f"{output_path}/match_percentage_per_difficulty_db.csv"
-            match_pct_difficulty_df.to_csv(match_pct_difficulty_csv, index=False)
-            mlflow.log_artifact(match_pct_difficulty_csv)
+            match_stats_combo_db_df["match_percentage"] = (
+                match_stats_combo_db_df["match_count"] / match_stats_combo_db_df["total_count"]
+            )
 
-            # Complexity + db
-            match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
-            match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
-            match_pct_complexity_csv = f"{output_path}/match_percentage_per_complexity_db.csv"
-            match_pct_complexity_df.to_csv(match_pct_complexity_csv, index=False)
-            mlflow.log_artifact(match_pct_complexity_csv)
+            match_stats_combo_db_df = match_stats_combo_db_df.reset_index()
+            match_stats_combo_db_csv = f"{output_path}/match_stats_per_difficulty_complexity_db.csv"
+            match_stats_combo_db_df.to_csv(match_stats_combo_db_csv, index=False)
+            mlflow.log_artifact(match_stats_combo_db_csv)
+
+            # Difficulty + db_name
+            match_stats_difficulty_db_df = (
+                pd.DataFrame({
+                    "total_count": total_per_difficulty_db,
+                    "match_count": matches_per_difficulty_db
+                })
+                .fillna(0)
+                .astype(int)
+            )
+
+            match_stats_difficulty_db_df["match_percentage"] = (
+                match_stats_difficulty_db_df["match_count"] / match_stats_difficulty_db_df["total_count"]
+            )
+
+            match_stats_difficulty_db_df = match_stats_difficulty_db_df.reset_index()
+            match_stats_difficulty_csv = f"{output_path}/match_stats_per_difficulty_db.csv"
+            match_stats_difficulty_db_df.to_csv(match_stats_difficulty_csv, index=False)
+            mlflow.log_artifact(match_stats_difficulty_csv)
+
+
+            # Complexity + db_name
+            match_stats_complexity_db_df = (
+                pd.DataFrame({
+                    "total_count": total_per_complexity_db,
+                    "match_count": matches_per_complexity_db
+                })
+                .fillna(0)
+                .astype(int)
+            )
+
+            match_stats_complexity_db_df["match_percentage"] = (
+                match_stats_complexity_db_df["match_count"] / match_stats_complexity_db_df["total_count"]
+            )
+
+            match_stats_complexity_db_df = match_stats_complexity_db_df.reset_index()
+            match_stats_complexity_csv = f"{output_path}/match_stats_per_complexity_db.csv"
+            match_stats_complexity_db_df.to_csv(match_stats_complexity_csv, index=False)
+            mlflow.log_artifact(match_stats_complexity_csv)
+
+
             # Save raw counts as CSV artifacts if needed
             matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
             matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
