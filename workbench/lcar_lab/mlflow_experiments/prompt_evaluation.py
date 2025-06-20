@@ -102,7 +102,7 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
     for db_name, dataset_name in zip(db_names, dataset_names):
-        json_file = os.path.join(metadata_base_path, "metadata", dataset_name, f"{db_name}_graph.json")
+        json_file = os.path.join(metadata_base_path, dataset_name, "metadata", f"{db_name}_graph.json")
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
@@ -128,7 +128,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}"]), prompt.format(
+    return "".join([f"{question}\nDatabase schema:\n\n{str(db_content)}"]), prompt.format(
         script_content=script,
         database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
