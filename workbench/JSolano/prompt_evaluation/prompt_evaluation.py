@@ -235,7 +235,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     grouped = {}
     for run in all_runs:
         grouped.setdefault(run["model_name"], []).append(run)
-    """
+    
     # Detect early match between Gemini and Claude
     for i in range(tries):
         gemini_run = grouped.get("gemini", [])[i]
@@ -244,10 +244,10 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             if symetric_compare_df(gemini_run["df"], claude_run["df"], query_category="a", question=question):
                 print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
                 return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["df_json"]
-    """
+
     # Fallback: use ensemble result
-    #print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    return size_based_selection(all_runs, question_idx)
+    print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
+    return ensemble_result(all_runs, question, question_idx)
 
 def ensemble_result(all_runs, question, question_idx="?"):
     """
@@ -262,7 +262,7 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    return size_based_selection(valid_runs, question_idx=question_idx)
+    return ensemble_selection(valid_runs, question_idx=question_idx)
 
 def ensemble_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
