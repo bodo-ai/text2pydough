@@ -300,25 +300,15 @@ def run(question, provider, model_id, formatted_prompt, temperature, database_co
     df_response = pd.DataFrame(columns=["hash", "response", 'extracted_code', "call_time", "exec_time"], index=range(num_iterations))
     t0 = time.time()
     for i in bodo.prange(num_iterations):
-        # 1. Get response
-        # columns: response #and call_time
-        #print("process_question_wrapper")
-        #df_response.iloc[i, 1] = process_question_wrapper(
-        #        provider, model_id, formatted_prompt, question, temperature, database_content, script_content, num_iterations)[0]
-        # 2. Extract Python code, execute it, and get the dataframe result hash
-        # column: extracted_code
-        #df_response.iloc[i, 2] = extract_python_code(df_response['response'].iloc[i])
-        # column: hash
+        # Hash result
         df_response.iloc[i, 0] = execute_code_and_extract_result_hash_bodo_df_csv()
-    # 3. Find most common hash result
+    # 1. Find most common hash result
     t0 = time.time()
     most_common_ans = df_response["hash"].value_counts().idxmax()
-    # 4. Get the corresponding response
+    # 2. Get the corresponding response
     ans = df_response[df_response["hash"] == most_common_ans]["hash"].iloc[0]
     t1 = time.time()
     print("Bodo ensemble time:", t1-t0)
-    # Save best response
-    #df_response.to_csv(output_file, index=False)
     return ans, t1-t0
 
 

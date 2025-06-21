@@ -350,10 +350,10 @@ def main():
     hash_time_column = [response[1] for response in responses]
 
     # Save responses and execution times into the DataFrame
-    questions_df["response"] = response_column
+    #questions_df["response"] = response_column
     #questions_df["execution_time"] = execution_time_column
 
-    questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
+    #questions_df["extracted_python_code"] = questions_df["response"].apply(extract_python_code)
 
 
     t1=time.time()
