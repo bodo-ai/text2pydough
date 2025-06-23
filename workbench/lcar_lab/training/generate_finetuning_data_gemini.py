@@ -48,7 +48,7 @@ with open("/home/arami/bodo/labeling_agent/cheatsheet_partition_overhaul.md", "r
 
 # Configuration
 CONFIG = {
-    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_with_schema_20250609_072134.csv'),
+    'default_data_path': str(WORKSPACE_ROOT / 'text2pydough' / 'workbench' / 'lcar_lab' / 'training' / 'training_data' / 'labeled_data' / DATASET / 'training_ready' / 'training_data_with_schema_20250611_072134.csv'),
     'output_file': 'sample_training_data.jsonl',
     'default_sample_size': 4000,
     'filter_field': 'dataframe_match',
