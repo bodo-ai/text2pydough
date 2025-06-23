@@ -45,55 +45,155 @@ class AzureAIProvider(AIProvider):
             return None
 
 # === Claude, Deepseek, Gemini, AI Suite Providers ===
-class ClaudeAIProvider(AIProvider):
-    def __init__(self, model_id):
-        config = Config(read_timeout=800)
-        self.brt = boto3.client(service_name='bedrock-runtime', config=config)
+
+
+class ClaudeAIProviderAWS(AIProvider):
+    def __init__(self, model_id, config=None):
         self.model_id = model_id
+        region = config.get("region", "us-east-1")
+        profile = config.get("profile", None)
 
-    def ask(self, question, prompt, **kwargs):
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": kwargs.get("max_tokens", 20000),
-            "thinking": {
-                "type": "enabled",
-                "budget_tokens": kwargs.get("budget_tokens", 5000)
-            },
-            "system": prompt,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": question
-                }
-            ],
-            "temperature": kwargs.get("temperature", 1),
-        })
+        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        boto_config = Config(read_timeout=800)
 
-        modelId = self.model_id
-        accept = 'application/json'
-        contentType = 'application/json'
+        self.client = session.client("bedrock-runtime", region_name=region, config=boto_config)
 
-        response = self.brt.invoke_model_with_response_stream(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        max_tokens = kwargs.get("max_tokens", 4096)
+        temperature = kwargs.get("temperature", 0.0)
+
+        # Prepare inputs for converse_stream
+        input_payload = {
+            "modelId": self.model_id,
+            "system": [{"text": system_instruction}],  # Must be a list of dicts with only 'text'
+            "messages": [{
+                "role": "user",
+                "content": [{"text": prompt}]
+            }],
+            "inferenceConfig": {
+                "maxTokens": max_tokens,
+                "temperature": temperature
+            }
+        }
+
+        full_output = ""
+        try:
+            response = self.client.converse_stream(**input_payload)
+            stream = response.get("stream")
+            if stream:
+                for event in stream:
+                    chunk = event.get("chunk")
+                    if chunk:
+                        decoded = json.loads(chunk.get("bytes").decode())
+                        delta = decoded.get("delta", {})
+                        if "text" in delta:
+                            full_output += delta["text"]
+
+            return full_output, None  # Bedrock does not return usage yet
+        except Exception as e:
+            raise RuntimeError(f"[ClaudeAIProviderAWS] Request failed: {e}")
+
+
+class ClaudeAIProvider(AIProvider):
+    def __init__(self, model_id, config=None):
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]
+            self.project = os.environ["GOOGLE_PROJECT_ID"]
+            self.location = "us-east5"
+            self.model_id = model_id
+            self.client = AnthropicVertex(project_id=self.project, region=self.location)
+        except KeyError as e:
+            raise RuntimeError(f"Missing environment variable: {e}")
+
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        try:
+            kwargs.setdefault("max_tokens", 20000)
+            use_streaming = kwargs.pop("use_stream", True)
+
+            if use_streaming:
+                # Streaming mode
+                response_stream = self.client.messages.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    model=self.model_id,
+                    system=system_instruction,
+                    stream=True,
+                    **kwargs
+                )
+
+                full_output = ""
+                for chunk in response_stream:
+                    data = chunk.to_dict() if hasattr(chunk, "to_dict") else chunk
+
+                    if data.get("type") == "content_block_delta":
+                        delta = data.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            full_output += delta.get("text", "")
+                            
+                return full_output, None  # usage not available in streaming mode
+
+            else:
+                # Regular mode
+                response = self.client.messages.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    model=self.model_id,
+                    system=system_instruction,
+                    **kwargs
+                )
+                return response.content[0].text, response.usage
+
+        except Exception as e:
+            raise RuntimeError(f"[ClaudeAIProvider] Request failed: {e}")
+
+
+
+class GeminiAIProvider(AIProvider):
+
+    def __init__(self, model_id, config=None):
+        try:
+            self.api_key = os.environ["GOOGLE_API_KEY"]  
+            self.project = os.environ["GOOGLE_PROJECT_ID"]
+            self.location = os.environ["GOOGLE_REGION"]
+            self.model_id = model_id
+            self.client = genai.Client(project=self.project, location=self.location)    
+        except KeyError:
+            raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
+
+    @mlflow.trace
+    def ask(self, prompt, system_instruction, **kwargs):
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                **kwargs
+            ),
         )
-        
-        text_delta = []
-        thinking_delta = []
-        stream = response.get('body')
-        if stream:
-            for event in stream:
-                chunk = event.get('chunk')
-                if chunk:
-                    bytes_data = json.loads(chunk.get('bytes').decode())
-                    if 'delta' in bytes_data:
-                        delta = bytes_data['delta']
-                        text_delta.append(delta.get('text', ''))
-                        thinking_delta.append(delta.get('thinking', ''))
-        return ''.join(text_delta)
+        return response.text, response.usage_metadata
 
+    def chat(self, question, prompt, chat=None, **kwargs):
+        if not chat:
+            chat = self.client.chats.create(model=self.model_id)
+        response = chat.send_message(
+            question,
+            config=types.GenerateContentConfig(
+                system_instruction=prompt,
+                **kwargs
+            )
+        )
+        return response, chat
+    
 class DeepSeekAIProvider(AIProvider):
     def __init__(self, model_id):
         config = Config(read_timeout=500)
@@ -123,65 +223,6 @@ class DeepSeekAIProvider(AIProvider):
         response_text = response["output"]["message"]["content"][0]["text"]
         return response_text
 
-class GeminiAIProvider(AIProvider):
-
-    def __init__(self, model_id):
-        try:
-            self.api_key = os.environ["GOOGLE_API_KEY"]  
-            self.project = os.environ["GOOGLE_PROJECT_ID"]
-            self.location = os.environ["GOOGLE_REGION"]
-            self.model_id = model_id
-            if "claude" in model_id:
-                self.location="us-east5"
-                self.client = AnthropicVertex(project_id=self.project, region=self.location)
-            else:   
-                self.client = genai.Client(project=self.project, location=self.location)    
-        except KeyError:
-            raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
-        
-    
-    @mlflow.trace
-    def ask(self, prompt, system_instruction, **kwargs):
-        if "claude" in self.model_id:
-            response = self.client.messages.create(
-                messages=[
-           
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-                ],
-                model=self.model_id,
-                system=system_instruction,
-                **kwargs
-            )
-            
-            text_message = response.content[0].text
-            usage = response.usage 
-            return text_message, usage
-        else:    
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    **kwargs
-                ),
-            
-            )
-            return response.text, response.usage_metadata
-    
-    def chat(self, question, prompt, chat=None, **kwargs):
-        if not chat:
-            chat = self.client.chats.create(model=self.model_id)
-        response = chat.send_message(
-            question,        
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                **kwargs
-            )
-        )
-        return response, chat
 
 class OtherAIProvider(AIProvider):
     def __init__(self, provider, model_id, config=None):
@@ -216,7 +257,7 @@ class MistralAIProvider(AIProvider):
                 messages=messages,
                 **kwargs
             )
-            return response.choices[0].message.content
+            return response.choices[0].message.content 
         except Exception as e:
             print(f"AI Suite error: {e}")
             return None

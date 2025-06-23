@@ -218,6 +218,7 @@ def compare_df(
     #print(f"Info: Comparing DataFrames for question: {question}")
     original_gold = df_gold.copy()
     original_gen = df_gen.copy()
+    
     try:
         is_equal = df_gold.values == df_gen.values
         if is_equal.all():
@@ -253,7 +254,7 @@ def compare_df(
     #print("Info: Proceeding with secondary check.")
     return secondary_check(original_gold, original_gen)
     
-def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) -> bool:
+def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, round_decimal = 5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
@@ -266,19 +267,23 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
         if len(s_gold) > len(s_gen):
             return False
         # Check if the numeric values are equal within a small tolerance
-        float_gold = pd.to_numeric(s_gold, errors='coerce').reset_index(drop=True)
-        float_gen = pd.to_numeric(s_gen, errors='coerce').reset_index(drop=True)
-        '''
+        float_gold = pd.to_numeric(s_gold, errors='coerce').round(round_decimal).reset_index(drop=True)
+        float_gen = pd.to_numeric(s_gen, errors='coerce').round(round_decimal).reset_index(drop=True)
+        
         if float_gold.isin(float_gen).all():
             print("Info: Numeric series contents Match. LENIENT")
             return True
-        '''
+        
         # If they are not equal, check if they are within the numeric tolerance
         for i in range(len(float_gold)):
-            if not (abs(float_gold[i] - float_gen[i]) < numeric_tolerance):
-                #print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[i]}")
-                return False
-        #print("Info: Numeric series contents Match.")
+            for j in range(len(float_gen)):
+                if abs(float_gold[i] - float_gen[j]) < numeric_tolerance:
+                    break
+            else:
+                # If we didn't break, it means no match was found for this index
+                print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[j]}")
+                return False            
+        print("Info: Numeric series contents Match.")
         return True
     # If they are not numeric, check if they are equal directly
     reset_gold = s_gold.reset_index(drop=True)
@@ -286,10 +291,10 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5) 
     if reset_gold.dtype != reset_gen.dtype:
         return False
     if reset_gold.isin(reset_gen).all():
-        #print("Info: Series contents Match.")
+        print("Info: Series contents Match.")
         return True
     else:
-        #print("Info: Series contents do not Match.")
+        print("Info: Series contents do not Match.")
         return False
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
@@ -309,11 +314,15 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     num_gen_cols = df_gen.shape[1]
     num_gold_rows = df_gold.shape[0]
     num_gen_rows = df_gen.shape[0]
+    
 
     # 1. Handle df_gold having zero columns
+    if df_gold.empty:
+        return True  # If df_gold is empty, it trivially matches any df_gen
+    
     if num_gold_cols == 0:
         if num_gold_rows == 0: # df_gold is 0x0
-            #print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
+            print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
             return True
         else: # df_gold is Rx0 (R > 0)
             # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
@@ -322,31 +331,31 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
 
     # 2. Not enough columns in df_gen to match all of df_gold's columns
     if num_gold_cols > num_gen_cols:
-        #print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
+        print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
         return False
     
     if num_gold_rows > num_gen_rows:
-        #print(f"Info: Not enough rows in df_gen to match all of df_gold's rows: {num_gold_rows} vs {num_gen_rows}.")
+        print(f"Info: Not enough rows in df_gen to match all of df_gold's rows: {num_gold_rows} vs {num_gen_rows}.")
         return False
     
     # --- Greedy Matching ---
     b_cols_used = [False] * num_gen_cols # Tracks which columns in df_gen have been matched
 
-    #print(f"Info: Starting greedy matching")
+    print(f"Info: Starting greedy matching")
     for i in range(num_gold_cols):
         series_gold = df_gold.iloc[:, i]
         found_match_for_s_gold = False
         for j in range(num_gen_cols):
             if not b_cols_used[j]: # If df_gen's j-th column is not yet used
                 series_gen = df_gen.iloc[:, j]
-                #print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
+                print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
                 if series_match(series_gold, series_gen):
                     b_cols_used[j] = True
                     found_match_for_s_gold = True
                     break # Move to the next column in df_gold
         
         if not found_match_for_s_gold:
-            #print(f"Info: No match found for column {i} of df_gold in df_gen.")
+            print(f"Info: No match found for column {i} of df_gold in df_gen.")
             return False
     print("Info: Dataframes match second check.")    
     return True    
@@ -386,26 +395,26 @@ def query_sqlite_db(
     """
     import sqlite3
 
-    conn = None
-    cur = None
+    connection = None
+    cursor = None
     try:
       
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.execute(query)
-        results = cur.fetchall()
-        colnames = [desc[0] for desc in cur.description]
-        cur.close()
-        conn.close()
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        cursor.execute(query)
+        results = cursor.fetchall()
+        colnames = [desc[0] for desc in cursor.description]
+        cursor.close()
+        connection.close()
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
         # round floats to decimal_points
         return df, None
     except Exception as e:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
         return None, str(e)
     
 def process_row(row,db_base_path,metadata_base_path):
@@ -417,10 +426,10 @@ def process_row(row,db_base_path,metadata_base_path):
         db_name = row['db_name']
         dataset_name = row['dataset_name']
 
-        db_path = os.path.join(db_base_path, dataset_name,  'databases', f"{db_name}/{db_name}.sqlite")
-        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
+        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        #print(question, db_name)
+        print(question, db_name)
 
         result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         

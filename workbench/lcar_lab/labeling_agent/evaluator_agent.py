@@ -379,16 +379,21 @@ class SQLEvaluatorAgent:
         """Initialize the SQL evaluator agent with a database connection."""
         self.db = SQLDatabase.from_uri(db_connection_string)
         
-        self.llm = ChatGoogleGenerativeAI(
-           model="gemini-2.5-flash-preview-05-20",
-           temperature=0
-        )
-
-        # self.llm = ChatAnthropicVertex(
-        #      model_name="claude-sonnet-4@20250514",
-        #      project="solid-drive-448717-p8",
-        #      location="us-east5"
+        # self.llm = ChatGoogleGenerativeAI(
+        #     model="gemini-2.0-flash",
+        #     temperature=0.99
         # )
+        
+        # self.llm = ChatGoogleGenerativeAI(
+        #     model="gemini-2.5-flash-preview-05-20",
+        #     temperature=0.99
+        # )
+
+        self.llm = ChatAnthropicVertex(
+             model_name="claude-3-7-sonnet@20250219",
+             project="solid-drive-448717-p8",
+             location="us-east5"
+        )
         
         # Create SQL toolkit for database operations
         self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
@@ -557,7 +562,7 @@ Question: {input}
             return_intermediate_steps=True,
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=10
+            max_iterations=30
         )
         
         return agent_executor
