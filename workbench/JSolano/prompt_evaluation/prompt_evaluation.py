@@ -262,7 +262,7 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    return frequency_based_selection(valid_runs, question, question_idx=question_idx)
+    return size_based_selection(valid_runs, question_idx=question_idx)
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
