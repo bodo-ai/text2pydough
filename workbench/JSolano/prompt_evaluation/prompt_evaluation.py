@@ -297,13 +297,19 @@ def size_based_selection(valid_runs, question_idx="?"):
     """
     size_dict = defaultdict(int)
     for i in range(len(valid_runs)):
-        size_dict[i] = valid_runs[i]["df"].size
-    
-    if size_dict:
+        if "df" in valid_runs[i] and valid_runs[i]["df"] is not None:
+            size_dict[i] = valid_runs[i]["df"].size
+        else:
+            size_dict[i] = -1  # Mark as invalid
+
+    if size_dict and max(size_dict.values()) > -1:
         best_index = max(size_dict, key=lambda i: size_dict[i])
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
         return best["response"], best["duration"], best["usage"], best["model_name"], best["df_json"]
+    else:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
+        return None, 0.0, None, None, None
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
