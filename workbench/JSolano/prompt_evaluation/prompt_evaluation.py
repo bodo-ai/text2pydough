@@ -181,7 +181,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         client = get_provider(provider_name, model_id, config=config)
         start = time.time()
         model_specific_kwargs = dict(kwargs)
-        df_json = None
+        gen_df_json = None
         if model_info["name"] == "gemini":
             model_specific_kwargs.pop("use_stream", None)
         try:
@@ -244,7 +244,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         if gemini_run["df"] is not None and claude_run["df"] is not None:
             if symetric_compare_df(gemini_run["df"], claude_run["df"], query_category="a", question=question):
                 print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
-                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["df_json"]
+                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
     '''
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
@@ -279,17 +279,17 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Ensemble selected: {best['model_name']} with {consensus[best_index]} matches.")
-        return best["response"], best["duration"], best["usage"], best["model_name"], best["df_json"]
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
     if gemini_runs:
         fallback = random.choice(gemini_runs)
         print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df_json"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
     else:
         print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
         fallback = random.choice(valid_runs)
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["df_json"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
     
 def size_based_selection(valid_runs, question_idx="?"):
     """
@@ -306,7 +306,7 @@ def size_based_selection(valid_runs, question_idx="?"):
         best_index = max(size_dict, key=lambda i: size_dict[i])
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
-        return best["response"], best["duration"], best["usage"], best["model_name"], best["df_json"]
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"]
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None
@@ -488,7 +488,7 @@ def main(git_hash):
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
         df["usage"] = [r[2] if len(r) > 2 else None for r in results]
         df["model_name"] = [r[3] if len(r) > 3 else None for r in results]
-        df["df_json"] = [r[4] if len(r) > 4 else None for r in results]
+        df["gen_df_json"] = [r[4] if len(r) > 4 else None for r in results]
 
         output_path = f"./results/{args.provider}/{args.model_id}"
         os.makedirs(output_path, exist_ok=True)
