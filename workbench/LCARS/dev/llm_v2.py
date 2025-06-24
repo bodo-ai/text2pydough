@@ -288,9 +288,9 @@ class LLMClient:
             result.knowledge_graph = self.database
             print(extracted_code)
             pydough_sql = self.get_pydough_sql(extracted_code)
+            result.sql = pydough_sql
             pydough_df = self.get_pydough_code(extracted_code)
             result.df = pydough_df
-            result.sql = pydough_sql
             return result
         except Exception as e:
             result.exception = traceback.format_exc()
