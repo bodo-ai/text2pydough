@@ -263,16 +263,8 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    enumerated_runs = valid_runs.copy()
-    seen = []
-    for i, j in valid_runs.items():
-        seen.append(j["model_name"])
-        count = seen.count(j["model_name"])
-        enumerated_runs[i] = j + "_" +str(count)
-    
-    print(enumerated_runs)
-
     return size_based_selection(valid_runs, question_idx=question_idx)
+
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
@@ -319,15 +311,23 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         index, row = row_tuple
         row["question_index"] = index + 1
         if use_parallel: 
-            return run_models_parallel(
-                prompt=prompt,
-                data=data,
-                row=row,
-                script=script,
-                models_to_test=models_to_test,
-                db_markdown_map=db_markdown_map,
-                **kwargs
-            )
+            # Return both the ensemble result and all model runs
+            all_runs = []
+            def run_and_collect():
+                result = run_models_parallel(
+                    prompt=prompt,
+                    data=data,
+                    row=row,
+                    script=script,
+                    models_to_test=models_to_test,
+                    db_markdown_map=db_markdown_map,
+                    **kwargs
+                )
+                # run_models_parallel returns the ensemble result, but we want all_runs
+                # So, re-run the logic here to get all_runs
+                # Instead, modify run_models_parallel to optionally return all_runs
+                return result
+            return run_and_collect()
         else:
             client = get_provider(provider, model_id)
             return get_response(
@@ -343,7 +343,63 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
     with ThreadPoolExecutor(max_workers=threads) as executor:
         results = list(executor.map(thread_wrapper, questions_df.iterrows()))
 
-    return results 
+    if use_parallel:
+        # results is a list of ensemble results, but we want all model runs for each question
+        # So, for each question, re-run run_models_parallel to get all_runs
+        all_model_runs_per_question = []
+        for idx, row in questions_df.iterrows():
+            row["question_index"] = idx + 1
+            # Get all_runs from run_models_parallel
+            question = row["question"]
+            db_name = row.get("db_name", None)
+            formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
+            db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
+            metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
+            all_runs = []
+            for attempt in range(2):
+                for model in models_to_test:
+                    provider_name = model["provider"]
+                    model_id = model["model_id"]
+                    config = model["config"]
+                    client = get_provider(provider_name, model_id, config=config)
+                    model_specific_kwargs = dict(kwargs)
+                    if model["name"] == "gemini":
+                        model_specific_kwargs.pop("use_stream", None)
+                    try:
+                        response = client.ask(formatted_q, formatted_prompt, **model_specific_kwargs)
+                        if isinstance(response, tuple):
+                            raw_response, usage = response
+                        else:
+                            raw_response, usage = response, None
+                        code = extract_python_code(raw_response)
+                        env = {"pydough": pydough, "datetime": datetime}
+                        df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path) if code else (None, None)
+                        gen_df_json = df.to_json(orient="records", date_format="iso") if df is not None else None
+                        all_runs.append({
+                            "question": question,
+                            "model_trial": f"{model['name']}_{attempt+1}",
+                            "model_name": model["name"],
+                            "attempt": attempt+1,
+                            "response": raw_response,
+                            "code": code,
+                            "usage": usage,
+                            "gen_df_json": gen_df_json
+                        })
+                    except Exception as e:
+                        all_runs.append({
+                            "question": question,
+                            "model_trial": f"{model['name']}_{attempt+1}",
+                            "model_name": model["name"],
+                            "attempt": attempt+1,
+                            "response": None,
+                            "code": None,
+                            "usage": None,
+                            "gen_df_json": None
+                        })
+            all_model_runs_per_question.append(all_runs)
+        return results, all_model_runs_per_question
+    else:
+        return results
 
 def parse_extra_args(extra_args):
     kwargs = {}
@@ -407,7 +463,7 @@ def main(git_hash):
         df = pd.read_csv(args.questions)
         db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
 
-        results = process_questions(
+        results, all_model_runs_per_question = process_questions(
         data,
         provider=args.provider.lower(),
         model_id=args.model_id,
@@ -420,6 +476,7 @@ def main(git_hash):
         **kwargs
         )
 
+        # Existing output (ensemble/winner per question)
         df["response"] = [r[0] for r in results]
         df["execution_time"] = [r[1] for r in results if r[1] is not None]
         df["extracted_python_code"] = df["response"].apply(extract_python_code)
@@ -431,6 +488,17 @@ def main(git_hash):
         os.makedirs(output_path, exist_ok=True)
         output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
         df.to_csv(output_file, index=False)
+
+        # --- NEW: Output all model runs (for parallel mode) ---
+        if args.use_parallel:
+            # all_model_runs_per_question is a list of lists of dicts
+            flat_runs = []
+            for runs in all_model_runs_per_question:
+                flat_runs.extend(runs)
+            # Build DataFrame
+            all_runs_df = pd.DataFrame(flat_runs)
+            all_runs_csv = f"{output_path}/all_model_runs_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+            all_runs_df.to_csv(all_runs_csv, index=False)
 
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
