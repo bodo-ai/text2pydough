@@ -46,7 +46,7 @@ def process_csv(input_csv_path, output_csv_path, db_base_path):
 
 # Paths and configuration
 input_csv_path = "corrected_questions_1.csv"  # Input CSV file path
-output_csv_path = "questions_with_gtj.csv"  # Output CSV file path
+output_csv_path = "questions_gtj.csv"  # Output CSV file path
 db_base_path = "./test_data/databases/Defog/"  # Base folder where the databases are located
 
 # Process the CSV
