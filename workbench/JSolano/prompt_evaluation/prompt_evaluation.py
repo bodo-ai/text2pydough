@@ -286,6 +286,10 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
     response, gradio_df = run_question(question)
+    if gradio_df is None:
+        print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
+        fallback = random.choice(all_runs)
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
     gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
     # Use the other fields from the Claude run if available, else None
     duration = claude_run["duration"] if claude_run else None
