@@ -540,6 +540,7 @@ def main(git_hash):
             all_runs_df = pd.DataFrame(flat_runs)
             all_runs_csv = f"{output_path}/all_model_runs_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
             all_runs_df.to_csv(all_runs_csv, index=False)
+            mlflow.log_artifact(all_runs_csv)
 
         test_path = f"{output_path}/test"
         os.makedirs(test_path, exist_ok=True)
