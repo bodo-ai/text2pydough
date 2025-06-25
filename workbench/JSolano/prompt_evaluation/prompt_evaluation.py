@@ -220,6 +220,8 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             "usage": usage,
             "df": df,
             "gen_df_json": gen_df_json,
+            "sql": row.get("sql", ""),
+            "db_name": db_name,
         }
 
     all_runs = []
@@ -408,6 +410,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                         gen_df_json = df.to_json(orient="records", date_format="iso") if df is not None else None
                         all_runs.append({
                             "question": question,
+                            "sql": row.get("sql", ""),
+                            "db_name": db_name,
                             "model_trial": f"{model['name']}_{attempt+1}",
                             "model_name": model["name"],
                             "attempt": attempt+1,
@@ -419,6 +423,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                     except Exception as e:
                         all_runs.append({
                             "question": question,
+                            "sql": row.get("sql", ""),
+                            "db_name": db_name,
                             "model_trial": f"{model['name']}_{attempt+1}",
                             "model_name": model["name"],
                             "attempt": attempt+1,
