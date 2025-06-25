@@ -468,7 +468,19 @@ def process_row(row,db_base_path,metadata_base_path):
             return 'Match' if comparison_result else 'No Match', None
         else:
             return 'Query Error', exception
-    return 'Unknown', None  
+    
+    extracted_ground_truth_json = row.get('ground_truth_json')
+    extracted_df_json = row.get('gen_df_json')
+    
+    if extracted_ground_truth_json is None or extracted_df_json is None:
+        return 'Unknown', None
+    
+    ground_truth_df = pd.read_json(extracted_ground_truth_json)
+    gen_df = pd.read_json(extracted_df_json)
+    
+    comparison_result = compare_df(ground_truth_df, gen_df, query_category="a", question=question)
+    
+    return 'Match' if comparison_result else 'No Match', None
 
 def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path):
     """
