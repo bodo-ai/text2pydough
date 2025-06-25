@@ -163,7 +163,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=2, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -264,7 +264,32 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    return size_based_selection(valid_runs, question_idx=question_idx)
+    return favourite_based_selection(valid_runs, question, question_idx=question_idx)
+
+def favourite_based_selection(all_runs, question, question_idx="?"):
+    """
+    Selects the Gemini result if available (response not empty and df not None), otherwise Claude (same), otherwise Gradio agent.
+    Returns: response, duration, usage, model_name, gen_df_json
+    """
+    # Find gemini and claude runs (assume only one try per model)
+    gemini_run = next((r for r in all_runs if r["model_name"] == "gemini"), None)
+    claude_run = next((r for r in all_runs if r["model_name"] == "claude"), None)
+
+    # Prefer Gemini if response is not empty and df is not None
+    if gemini_run and gemini_run["response"] and gemini_run["df"] is not None:
+        return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
+    # Otherwise, prefer Claude if response is not empty and df is not None
+    if claude_run and claude_run["response"] and claude_run["df"] is not None:
+        return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
+    # Otherwise, call Gradio agent
+    print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
+    response, gradio_df = run_question(question)
+    gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+    # Use the other fields from the Claude run if available, else None
+    duration = claude_run["duration"] if claude_run else None
+    usage = claude_run["usage"] if claude_run else None
+    # TODO: Add response, duration and usage from Gradio agent
+    return response, duration, usage, "Gradio agent", gen_df_json
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
@@ -291,7 +316,7 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
         fallback = random.choice(valid_runs)
         return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
     
-def size_based_selection(valid_runs, question_idx="?"):
+def size_based_selection(valid_runs, question, question_idx="?"):
     """
     Selects the run with the largest dataframe size.
     """
@@ -668,31 +693,6 @@ def main(git_hash):
                 "metrics.json": metrics_path
             }
         )
-
-def favourite_based_selection(all_runs, question, question_idx="?"):
-    """
-    Selects the Gemini result if available (response not empty and df not None), otherwise Claude (same), otherwise Gradio agent.
-    Returns: response, duration, usage, model_name, gen_df_json
-    """
-    # Find gemini and claude runs (assume only one try per model)
-    gemini_run = next((r for r in all_runs if r["model_name"] == "gemini"), None)
-    claude_run = next((r for r in all_runs if r["model_name"] == "claude"), None)
-
-    # Prefer Gemini if response is not empty and df is not None
-    if gemini_run and gemini_run["response"] and gemini_run["df"] is not None:
-        return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
-    # Otherwise, prefer Claude if response is not empty and df is not None
-    if claude_run and claude_run["response"] and claude_run["df"] is not None:
-        return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
-    # Otherwise, call Gradio agent
-    print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
-    response, gradio_df = run_question(question)
-    gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
-    # Use the other fields from the Claude run if available, else None
-    duration = claude_run["duration"] if claude_run else None
-    usage = claude_run["usage"] if claude_run else None
-    # TODO: Add response, duration and usage from Gradio agent
-    return response, duration, usage, "Gradio agent", gen_df_json
 
 if __name__ == "__main__":
     cwd = os.getcwd()
