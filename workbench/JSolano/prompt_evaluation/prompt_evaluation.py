@@ -401,7 +401,7 @@ def parse_extra_args(extra_args):
 def main(git_hash):
     print(f"[INFO] Starting prompt evaluation.")
     debug_log = "debug_log.txt"
-    sys.stdout = open(debug_log, "w")
+    sys.stdout = open("debug_log.txt", "w")
     sys.stderr = sys.stdout
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
@@ -620,6 +620,7 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
+        debug_log = f"debug_log.txt"
         mlflow.log_artifact(debug_log)
 
         percentages_dict = percentages.to_dict()
