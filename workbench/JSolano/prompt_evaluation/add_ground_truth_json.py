@@ -44,10 +44,14 @@ def process_csv(input_csv_path, output_csv_path, db_base_path):
     # Save the updated DataFrame to a CSV file
     data.to_csv(output_csv_path, index=False)
 
-# Paths and configuration
-input_csv_path = "corrected_questions_1.csv"  # Input CSV file path
-output_csv_path = "questions_gtj.csv"  # Output CSV file path
-db_base_path = "./test_data/databases/Defog/"  # Base folder where the databases are located
+def main():
+    input_csv_path = "corrected_questions_with_id.csv"  # Input CSV file path
+    output_csv_path = "corrected_questions_with_id_with_gtj.csv"  # Output CSV file path
+    db_base_path = "./test_data/databases/Defog/"  # Base folder where the databases are located
 
-# Process the CSV
-process_csv(input_csv_path, output_csv_path, db_base_path)
+    # Process the CSV
+    process_csv(input_csv_path, output_csv_path, db_base_path)
+
+if __name__ == "__main__":
+    main()
+
