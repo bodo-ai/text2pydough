@@ -240,7 +240,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(all_runs, question, question_idx)
+    ensemble = favourite_based_selection(all_runs, question, question_idx)
     return ensemble, all_runs
 
 def ensemble_result(all_runs, question, question_idx="?"):
@@ -269,9 +269,11 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
 
     # Prefer Gemini if response is not empty and df is not None
     if gemini_run and gemini_run["response"] and gemini_run["df"] is not None:
+        print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
         return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
     # Otherwise, prefer Claude if response is not empty and df is not None
     if claude_run and claude_run["response"] and claude_run["df"] is not None:
+        print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Claude result.")
         return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
@@ -285,6 +287,7 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
     duration = claude_run["duration"] if claude_run else None
     usage = claude_run["usage"] if claude_run else None
     # TODO: Add response, duration and usage from Gradio agent
+    print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
     return response, duration, usage, "Gradio agent", gen_df_json
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
@@ -617,9 +620,7 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
-        with open(debug_log, "r") as debug_file:
-            debug_content = debug_file.read()
-        mlflow.log_text(debug_content)
+        mlflow.log_artifact(debug_log)
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
