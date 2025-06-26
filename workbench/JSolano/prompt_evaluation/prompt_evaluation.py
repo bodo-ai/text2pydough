@@ -622,7 +622,7 @@ def main(git_hash):
         mlflow.log_artifact(tested_file)
         with open(debug_log, "r") as debug_file:
             debug_content = debug_file.read()
-        mlflow.log_text(debug_content)
+        mlflow.log_artifact(debug_content)
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
