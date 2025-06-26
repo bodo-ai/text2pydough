@@ -620,8 +620,12 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
-        debug_log = f"debug_log.txt"
-        mlflow.log_artifact(debug_log)
+        try:
+            with open(debug_log, "w") as file:
+                debug_log_content = file.read()
+            mlflow.log_artifact(debug_log_content)
+        except Exception as e:
+            print(f"[ERROR] Failed to log debug log: {e}")
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
