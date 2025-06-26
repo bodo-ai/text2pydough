@@ -251,7 +251,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     '''
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    return favourite_based_selection(all_runs, question, question_idx)
+    return ensemble_result(all_runs, question, question_idx)
 
 def ensemble_result(all_runs, question, question_idx="?"):
     """
@@ -266,7 +266,7 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    return favourite_based_selection(valid_runs, question, question_idx=question_idx)
+    return size_based_selection(valid_runs, question, question_idx=question_idx)
 
 def favourite_based_selection(all_runs, question, question_idx="?"):
     """
@@ -395,6 +395,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
             all_runs = []
             for attempt in range(2):
                 for model in models_to_test:
+                    question_id = row["question_id"]
                     provider_name = model["provider"]
                     model_id = model["model_id"]
                     config = model["config"]
@@ -416,6 +417,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                             "question": question,
                             "sql": row.get("sql", ""),
                             "db_name": db_name,
+                            "question_id": question_id,
                             "model_trial": f"{model['name']}_{attempt+1}",
                             "model_name": model["name"],
                             "attempt": attempt+1,
@@ -592,7 +594,7 @@ def main(git_hash):
                 mlflow.log_metric(f"no_match_pct_complexity_{comp}", pct)
 
             for (diff, comp), pct in no_match_pct_combo.items():
-                mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct)
+                mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct) 
             total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
             total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
             total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
