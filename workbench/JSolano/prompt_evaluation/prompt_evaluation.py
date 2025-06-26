@@ -240,7 +240,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = favourite_based_selection(all_runs, question, question_idx)
+    ensemble = ensemble_result(all_runs, question, question_idx)
     return ensemble, all_runs
 
 def ensemble_result(all_runs, question, question_idx="?"):
@@ -620,7 +620,9 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
-        mlflow.log_artifact(debug_log)
+        with open(debug_log, "r") as debug_file:
+            debug_content = debug_file.read()
+        mlflow.log_text(debug_content)
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
