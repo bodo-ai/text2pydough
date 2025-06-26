@@ -291,10 +291,10 @@ def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, 
     if reset_gold.dtype != reset_gen.dtype:
         return False
     if reset_gold.isin(reset_gen).all():
-        print("Info: Series contents Match.")
+        #print("Info: Series contents Match.")
         return True
     else:
-        print("Info: Series contents do not Match.")
+        #print("Info: Series contents do not Match.")
         return False
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
@@ -322,7 +322,7 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     
     if num_gold_cols == 0:
         if num_gold_rows == 0: # df_gold is 0x0
-            print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
+            #print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
             return True
         else: # df_gold is Rx0 (R > 0)
             # For "exact values" across 0 columns but R rows, df_gen must also have R rows.
@@ -331,31 +331,31 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
 
     # 2. Not enough columns in df_gen to match all of df_gold's columns
     if num_gold_cols > num_gen_cols:
-        print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
+        #print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
         return False
     
     if num_gold_rows > num_gen_rows:
-        print(f"Info: Not enough rows in df_gen to match all of df_gold's rows: {num_gold_rows} vs {num_gen_rows}.")
+        #print(f"Info: Not enough rows in df_gen to match all of df_gold's rows: {num_gold_rows} vs {num_gen_rows}.")
         return False
     
     # --- Greedy Matching ---
     b_cols_used = [False] * num_gen_cols # Tracks which columns in df_gen have been matched
 
-    print(f"Info: Starting greedy matching")
+    #print(f"Info: Starting greedy matching")
     for i in range(num_gold_cols):
         series_gold = df_gold.iloc[:, i]
         found_match_for_s_gold = False
         for j in range(num_gen_cols):
             if not b_cols_used[j]: # If df_gen's j-th column is not yet used
                 series_gen = df_gen.iloc[:, j]
-                print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
+                #print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
                 if series_match(series_gold, series_gen):
                     b_cols_used[j] = True
                     found_match_for_s_gold = True
                     break # Move to the next column in df_gold
         
         if not found_match_for_s_gold:
-            print(f"Info: No match found for column {i} of df_gold in df_gen.")
+            #print(f"Info: No match found for column {i} of df_gold in df_gen.")
             return False
     print("Info: Dataframes match second check.")    
     return True    
@@ -429,7 +429,7 @@ def process_row(row,db_base_path,metadata_base_path):
         db_path = os.path.join(db_base_path, dataset_name,"databases",  f"{db_name}/{db_name}.sqlite")
         metadata_dir = os.path.join(metadata_base_path,dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        print(question, db_name)
+        #print(question, db_name)
 
         result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         

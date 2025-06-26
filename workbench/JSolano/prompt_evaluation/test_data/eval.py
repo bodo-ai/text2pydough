@@ -255,7 +255,30 @@ def compare_df(
             pass
     #print("Info: Proceeding with secondary check.")
     return secondary_check(original_gold, original_gen)
-    
+
+def symetric_compare_df(
+    df_a: pd.DataFrame,
+    df_b: pd.DataFrame,
+    query_category: str,
+    question: str,
+    query_gold: str = None,
+    query_gen: str = None,
+    ) -> bool:
+    """
+    Compares two dataframes symmetrically, meaning it checks if both dataframes can be matched to each other.
+    This is useful for cases where the order of the dataframes does not matter.
+    """
+    if df_a.empty and df_b.empty:
+        # If both dataframes are empty, they match
+        return True
+    if df_a.empty or df_b.empty:
+        # If either dataframe is empty, they cannot match
+        return False
+    return (
+        compare_df(df_a, df_b, query_category, question, query_gold, query_gen) or #might need to be an AND
+        compare_df(df_b, df_a, query_category, question, query_gen, query_gold)
+    )
+
 def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, round_decimal = 5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
