@@ -230,7 +230,6 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             futures = [executor.submit(run_model, model, attempt) for model in models_to_test]
             all_runs.extend(f.result() for f in futures)
 
-        
     print(f"[DEBUG] [Q{question_idx}] Completed all runs. Total: {len(all_runs)}")
     for run in all_runs:
         print(f"[DEBUG] [Q{question_idx}] {run['model_name']} | Attempt: {run['attempt']} | DF: {'✅' if run['df'] is not None else '❌'}")
@@ -239,19 +238,10 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     grouped = {}
     for run in all_runs:
         grouped.setdefault(run["model_name"], []).append(run)
-    '''
-    # Detect early match between Gemini and Claude
-    for i in range(tries):
-        gemini_run = grouped.get("gemini", [])[i]
-        claude_run = grouped.get("claude", [])[i]
-        if gemini_run["df"] is not None and claude_run["df"] is not None:
-            if symetric_compare_df(gemini_run["df"], claude_run["df"], query_category="a", question=question):
-                print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
-                return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
-    '''
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    return ensemble_result(all_runs, question, question_idx)
+    ensemble = ensemble_result(all_runs, question, question_idx)
+    return ensemble, all_runs
 
 def ensemble_result(all_runs, question, question_idx="?"):
     """
@@ -349,22 +339,16 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         row["question_index"] = index + 1
         if use_parallel: 
             # Return both the ensemble result and all model runs
-            all_runs = []
-            def run_and_collect():
-                result = run_models_parallel(
-                    prompt=prompt,
-                    data=data,
-                    row=row,
-                    script=script,
-                    models_to_test=models_to_test,
-                    db_markdown_map=db_markdown_map,
-                    **kwargs
-                )
-                # run_models_parallel returns the ensemble result, but we want all_runs
-                # So, re-run the logic here to get all_runs
-                # Instead, modify run_models_parallel to optionally return all_runs
-                return result
-            return run_and_collect()
+            ensemble, all_runs = run_models_parallel(
+                prompt=prompt,
+                data=data,
+                row=row,
+                script=script,
+                models_to_test=models_to_test,
+                db_markdown_map=db_markdown_map,
+                **kwargs
+            )
+            return (ensemble, all_runs)
         else:
             client = get_provider(provider, model_id)
             return get_response(
@@ -381,66 +365,10 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         results = list(executor.map(thread_wrapper, questions_df.iterrows()))
 
     if use_parallel:
-        # results is a list of ensemble results, but we want all model runs for each question
-        # So, for each question, re-run run_models_parallel to get all_runs
-        all_model_runs_per_question = []
-        for idx, row in questions_df.iterrows():
-            row["question_index"] = idx + 1
-            # Get all_runs from run_models_parallel
-            question = row["question"]
-            db_name = row.get("db_name", None)
-            formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
-            db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
-            metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
-            all_runs = []
-            for attempt in range(2):
-                for model in models_to_test:
-                    question_id = row["question_id"]
-                    provider_name = model["provider"]
-                    model_id = model["model_id"]
-                    config = model["config"]
-                    client = get_provider(provider_name, model_id, config=config)
-                    model_specific_kwargs = dict(kwargs)
-                    if model["name"] == "gemini":
-                        model_specific_kwargs.pop("use_stream", None)
-                    try:
-                        response = client.ask(formatted_q, formatted_prompt, **model_specific_kwargs)
-                        if isinstance(response, tuple):
-                            raw_response, usage = response
-                        else:
-                            raw_response, usage = response, None
-                        code = extract_python_code(raw_response)
-                        env = {"pydough": pydough, "datetime": datetime}
-                        df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path) if code else (None, None)
-                        gen_df_json = df.to_json(orient="records", date_format="iso") if df is not None else None
-                        all_runs.append({
-                            "question": question,
-                            "sql": row.get("sql", ""),
-                            "db_name": db_name,
-                            "question_id": question_id,
-                            "model_trial": f"{model['name']}_{attempt+1}",
-                            "model_name": model["name"],
-                            "attempt": attempt+1,
-                            "response": raw_response,
-                            "code": code,
-                            "usage": usage,
-                            "gen_df_json": gen_df_json
-                        })
-                    except Exception as e:
-                        all_runs.append({
-                            "question": question,
-                            "sql": row.get("sql", ""),
-                            "db_name": db_name,
-                            "model_trial": f"{model['name']}_{attempt+1}",
-                            "model_name": model["name"],
-                            "attempt": attempt+1,
-                            "response": None,
-                            "code": None,
-                            "usage": None,
-                            "gen_df_json": None
-                        })
-            all_model_runs_per_question.append(all_runs)
-        return results, all_model_runs_per_question
+        # results is a list of (ensemble, all_runs) tuples
+        ensembles = [r[0] for r in results]
+        all_model_runs_per_question = [r[1] for r in results]
+        return ensembles, all_model_runs_per_question
     else:
         return results
 
@@ -469,9 +397,9 @@ def parse_extra_args(extra_args):
 
 def main(git_hash):
     print(f"[INFO] Starting prompt evaluation.")
-    sys.stdout = open("debug_log.txt", "w")
+    debug_log = "debug_log.txt"
+    sys.stdout = open(debug_log, "w")
     sys.stderr = sys.stdout
-    print("wut")
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
@@ -689,6 +617,9 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
+        with open(debug_log, "r") as debug_file:
+            debug_content = debug_file.read()
+        mlflow.log_text(debug_content)
 
         percentages_dict = percentages.to_dict()
         metrics_json = json.dumps(percentages_dict, indent=4)
