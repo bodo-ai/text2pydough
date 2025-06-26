@@ -269,11 +269,11 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
 
     # Prefer Gemini if response is not empty and df is not None
     if gemini_run and gemini_run["response"] and gemini_run["df"] is not None:
-        print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Gemini result.")
+        print(f"[INFO] [Q{question_idx}] Early match found. Returning Gemini result.")
         return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
     # Otherwise, prefer Claude if response is not empty and df is not None
     if claude_run and claude_run["response"] and claude_run["df"] is not None:
-        print(f"[INFO] [Q{question_idx}] Early match found on attempt {i}. Returning Claude result.")
+        print(f"[INFO] [Q{question_idx}] Early match found. Returning Claude result.")
         return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
