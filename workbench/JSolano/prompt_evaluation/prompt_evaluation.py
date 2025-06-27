@@ -292,7 +292,7 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
-    response_matches = defaultdict(defaultdict(int))
+    response_matches = defaultdict(lambda: defaultdict(int))
     model_matches = defaultdict(int)  # Track matches by model name
 
     for i in range(len(valid_runs)):
