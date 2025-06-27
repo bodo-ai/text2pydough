@@ -312,6 +312,7 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
     if len(consensus) > 0:
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
+        best_matches = model_matches[best_index]
         best_model = best['model_name']
         
         # Build the detailed consensus message
@@ -320,9 +321,8 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
             match_breakdown.append(f"{match_count} {model_name} matches")
         
         response_breakdown = []
-        for model_name, match_count in response_matches.items():
+        for model_name, match_count in best_matches.items():
             response_breakdown.append(f"{match_count} {model_name} matches")
-        
         
         consensus_details = " and ".join(match_breakdown)
         response_details = " and ".join(response_breakdown)
