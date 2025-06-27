@@ -312,7 +312,7 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
     if len(consensus) > 0:
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
-        best_matches = model_matches[best_index]
+        best_matches = response_matches[best_index]
         best_model = best['model_name']
         
         # Build the detailed consensus message
