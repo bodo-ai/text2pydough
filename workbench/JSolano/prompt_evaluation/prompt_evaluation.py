@@ -292,6 +292,7 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
+    response_matches = defaultdict(defaultdict(int))
     model_matches = defaultdict(int)  # Track matches by model name
 
     for i in range(len(valid_runs)):
@@ -300,10 +301,13 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
                 consensus[i] += 1
                 consensus[j] += 1
                 # Track which models matched with each other
+                
                 model_i = valid_runs[i]["model_name"]
                 model_j = valid_runs[j]["model_name"]
                 model_matches[model_i] += 1
                 model_matches[model_j] += 1
+                response_matches[i][model_j] += 1
+                response_matches[j][model_i] += 1
 
     if len(consensus) > 0:
         best_index = max(consensus, key=lambda i: consensus[i])
@@ -315,8 +319,14 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
         for model_name, match_count in model_matches.items():
             match_breakdown.append(f"{match_count} {model_name} matches")
         
+        response_breakdown = []
+        for model_name, match_count in response_matches.items():
+            response_breakdown.append(f"{match_count} {model_name} matches")
+        
+        
         consensus_details = " and ".join(match_breakdown)
-        print(f"[INFO] [Q{question_idx}] Ensemble selected: {best_model} with {consensus[best_index]} matches. {consensus_details}")
+        response_details = " and ".join(response_breakdown)
+        print(f"[INFO] [Q{question_idx}] Ensemble selected: {best_model} with {consensus[best_index]} matches. {response_details} for the chosen response. {consensus_details} globally. ")
         return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]

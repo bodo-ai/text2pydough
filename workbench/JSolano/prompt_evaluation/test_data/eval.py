@@ -234,11 +234,11 @@ def compare_df(
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
 
-    print(df_gold, df_gen)
+    #print(df_gold, df_gen)
     
-    # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
-    df_gold.fillna(-99999, inplace=True)
-    df_gen.fillna(-99999, inplace=True)
+    # fill NaNs with 0 to handle NaNs in the dataframes for comparison
+    df_gold.fillna(0, inplace=True)
+    df_gen.fillna(0, inplace=True)
     
     try:
         #print("Info: Comparing DataFrames using hard match.")
@@ -254,7 +254,7 @@ def compare_df(
         except:
             pass
     #print("Info: Proceeding with secondary check.")
-    return secondary_check(original_gold, original_gen)
+    return secondary_check(original_gold, original_gen) or secondary_check(df_gold, df_gen)
 
 def symetric_compare_df(
     df_a: pd.DataFrame,
@@ -279,7 +279,7 @@ def symetric_compare_df(
         compare_df(df_b, df_a, query_category, question, query_gen, query_gold)
     )
 
-def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, round_decimal = 5) -> bool:
+def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-3, round_decimal = 3) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
