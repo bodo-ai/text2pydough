@@ -133,7 +133,7 @@ def format_prompt(prompt, data, question, script, db_name=None, dataset_name=Non
     json_data = None
     if result:
         json_data = result.get("json_data", None)
-    return "".join([f"{question}\nDatabase schema:\n\n{str(db_content)}\nHere are some relevant collections and columns that might help answer the question\n {json_data}"]), prompt.format(
+    return "".join([f"{question}\nDatabase schema:\n\n{str(db_content)}\nHere are some relevant collections and columns that might help answer the question\n{str(json_data)}"]), prompt.format(
         script_content=script,
         #database_content=json_to_markdown(db_content),
         #similar_queries=similar_code,
