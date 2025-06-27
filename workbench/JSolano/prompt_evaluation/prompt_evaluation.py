@@ -292,17 +292,41 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
+    response_matches = defaultdict(lambda: defaultdict(int))
+    model_matches = defaultdict(int)  # Track matches by model name
 
     for i in range(len(valid_runs)):
         for j in range(i + 1, len(valid_runs)):
             if symetric_compare_df(valid_runs[i]["df"], valid_runs[j]["df"], query_category="a", question=question):
                 consensus[i] += 1
                 consensus[j] += 1
+                # Track which models matched with each other
+                
+                model_i = valid_runs[i]["model_name"]
+                model_j = valid_runs[j]["model_name"]
+                model_matches[model_i] += 1
+                model_matches[model_j] += 1
+                response_matches[i][model_j] += 1
+                response_matches[j][model_i] += 1
 
     if len(consensus) > 0:
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
-        print(f"[INFO] [Q{question_idx}] Ensemble selected: {best['model_name']} with {consensus[best_index]} matches.")
+        best_matches = model_matches[best_index]
+        best_model = best['model_name']
+        
+        # Build the detailed consensus message
+        match_breakdown = []
+        for model_name, match_count in model_matches.items():
+            match_breakdown.append(f"{match_count} {model_name} matches")
+        
+        response_breakdown = []
+        for model_name, match_count in best_matches.items():
+            response_breakdown.append(f"{match_count} {model_name} matches")
+        
+        consensus_details = " and ".join(match_breakdown)
+        response_details = " and ".join(response_breakdown)
+        print(f"[INFO] [Q{question_idx}] Ensemble selected: {best_model} with {consensus[best_index]} matches. {response_details} for the chosen response. {consensus_details} globally. ")
         return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
@@ -401,7 +425,7 @@ def parse_extra_args(extra_args):
 def main(git_hash):
     print(f"[INFO] Starting prompt evaluation.")
     debug_log = "debug_log.txt"
-    sys.stdout = open(debug_log, "w")
+    sys.stdout = open("debug_log.txt", "w")
     sys.stderr = sys.stdout
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
@@ -620,6 +644,7 @@ def main(git_hash):
         mlflow.log_metrics(percentages)
         mlflow.log_metric("total_queries", total_rows)
         mlflow.log_artifact(tested_file)
+        debug_log = f"debug_log.txt"
         mlflow.log_artifact(debug_log)
 
         percentages_dict = percentages.to_dict()
