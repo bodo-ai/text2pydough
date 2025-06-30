@@ -240,7 +240,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(all_runs, question, question_idx)
+    ensemble = favourite_based_selection(all_runs, question, question_idx)
     return ensemble, all_runs
 
 def ensemble_result(all_runs, question, question_idx="?"):
