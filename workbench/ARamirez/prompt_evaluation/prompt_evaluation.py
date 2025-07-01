@@ -122,7 +122,7 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
 
     return db_markdown_map
 
-def format_prompt(prompt, data, question, script, db_name=None, dataset_name=None, db_markdown_map=None):
+def format_prompt(prompt, data, question, script, db_name=None, dataset_name=None, db_markdown_map=None, mapping_metadata=None):
     db_content = ""
     if db_name and db_markdown_map and db_name in db_markdown_map:
         db_content = db_markdown_map[db_name]
@@ -130,11 +130,6 @@ def format_prompt(prompt, data, question, script, db_name=None, dataset_name=Non
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    result= process_question(question, dataset_name,db_name)
-    json_data = None
-    if result:
-        json_data = result.get("json_data", None)
-        mapping_metadata= map_all_profiles_to_metadata_format(db_content,json_data, db_name)
     return "".join([f"{question}\nDatabase schema:\n\n{str(db_content)}\nHere are some relevant collections and columns that might help answer the question\n{str(mapping_metadata)}"]), prompt.format(
         script_content=script,
         #database_content=json_to_markdown(db_content),
@@ -155,11 +150,11 @@ def correct(client, question, code, prompt, db_name):
         return "".join([code, response])
     return code
 
-def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwargs):
+def get_response(client, prompt, data, row, script, db_markdown_map=None, mapping_metadata=None, **kwargs):
     question = row["question"]
     dataset_name = row.get("dataset_name", None)
     db_name = row.get("db_name", None)
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name,dataset_name, db_markdown_map)
+    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name,dataset_name, db_markdown_map, mapping_metadata)
     start = time.time()
     print(f"[INFO] Asking question: {question}")
     response1 = client.ask(formatted_q,formatted_prompt, **kwargs)
@@ -170,11 +165,12 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, mapping_metadata=None, tries=6, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
+    dataset_name = row.get("dataset_name", None)
+    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, dataset_name, db_markdown_map, mapping_metadata)
 
     db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
     metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
@@ -292,6 +288,21 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     def thread_wrapper(row_tuple):
         index, row = row_tuple
+
+        question = row["question"]
+        db_name = row.get("db_name", None)
+        dataset_name = row.get("dataset_name", None)
+
+        db_content = ""
+        if db_name and db_markdown_map and db_name in db_markdown_map:
+            db_content = db_markdown_map[db_name]
+
+        result= process_question(question, dataset_name, db_name)
+        json_data = None
+        if result:
+            json_data = result.get("json_data", None)
+            mapping_metadata = map_all_profiles_to_metadata_format(db_content,json_data, db_name)
+            
         row["question_index"] = index + 1
         if use_parallel: 
             return run_models_parallel(
@@ -301,6 +312,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 script=script,
                 models_to_test=models_to_test,
                 db_markdown_map=db_markdown_map,
+                mapping_metadata=mapping_metadata,
                 **kwargs
             )
         else:
@@ -312,6 +324,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 row=row,
                 script=script,
                 db_markdown_map=db_markdown_map,
+                mapping_metadata=mapping_metadata,
                 **kwargs
             )
 

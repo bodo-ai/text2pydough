@@ -22,6 +22,9 @@ def map_all_profiles_to_metadata_format(metadata: dict, profiles: list, graph_na
     """
     result = {}
 
+    if profiles is None:
+        return result
+    
     # Build lookup: {table_path: (collection_name, {column_name: property_name})}
     table_lookup = {}
     for collection_name, collection in metadata[graph_name].items():
