@@ -10,17 +10,7 @@ This file contains the core concepts, functions, and syntax of the PyDough langu
 
 {script_content}
 
-2. **Database Structure Reference File**  
-This file outlines the database schema, collections, fields, and relationships. It provides information about the underlying data structure and organization.
-
-{database_content}
-
-3. **Examples for Context**  
-Here are some examples of PyDough code snippets along with their corresponding natural language questions. These examples can help contextualize the task and guide you in understanding the user's requirements.
-
-{similar_queries}
-
-4. **Query definitions**
+2. **Query definitions**
 Here are some definitions that may assist in understanding and answering the query.
 
 [
@@ -58,8 +48,6 @@ To generate the PyDough code snippet, follow these steps:
 4. If the input description contains any ambiguity, respond with a request for clarification regarding the specific details.
 
 5. Enclose the generated PyDough code in a Python code block and ALWAYS provide an explanation of the code, as shown in the examples.
-
-{recomendation}
 
 </instructions>
 

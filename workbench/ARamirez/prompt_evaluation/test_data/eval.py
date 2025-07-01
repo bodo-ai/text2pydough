@@ -7,12 +7,12 @@ import pydough
 from pydough.unqualified import transform_cell
 from pandas.testing import assert_frame_equal, assert_series_equal
 import re
-from pandas.testing import assert_frame_equal, assert_series_equal
-from pandas.api.types import is_numeric_dtype
 from concurrent.futures import ThreadPoolExecutor
+from pandas.api.types import is_numeric_dtype
 from threading import Lock
 metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
+import logging
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -27,11 +27,6 @@ def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
         df.columns = cols
     return df
 
-import pandas as pd
-import re
-from typing import Optional, List, Tuple
-import logging
-
 def normalize_table(
     df: pd.DataFrame, query_category: str, question: str, sql: str = None
 ) -> pd.DataFrame:
@@ -42,11 +37,11 @@ def normalize_table(
     3. sorting rows using values from first column to last (if query_category is not 'order_by' and question does not ask for ordering)
     4. resetting index
     """
-    # remove duplicate rows, if any
-    df = df.drop_duplicates()
-
+    
     # sort columns in alphabetical order of column names
-    sorted_df = df.reindex(sorted(df.columns), axis=1)
+    df = deduplicate_columns(df)  # remove duplicate columns
+    
+    sorted_df = df.reset_index(drop=True).reindex(sorted(df.columns), axis=1)
 
     # check if query_category is 'order_by' and if question asks for ordering
     has_order_by = False
@@ -110,60 +105,9 @@ def normalize_table(
         sorted_df = _sort_by_all_columns(sorted_df)
 
     # reset index
-    sorted_df = deduplicate_columns(sorted_df)
     sorted_df = sorted_df.reset_index(drop=True)
+
     return sorted_df
-
-
-def _should_preserve_original_order(query_category: str, question: str) -> bool:
-    """Determine if the original row order should be preserved based on query intent."""
-    if query_category.lower() == "order_by":
-        return True
-    
-    # More precise regex pattern for ordering keywords
-    order_pattern = re.compile(
-        r'\b(?:order|sort|arrange|rank|bottom|first|last|highest|lowest)\b',
-        re.IGNORECASE
-    )
-    return bool(order_pattern.search(question))
-
-
-def _extract_order_by_info(sql: str) -> Tuple[List[str], bool]:
-    """
-    Extract ORDER BY columns and direction from SQL query.
-    
-    Returns:
-        Tuple of (column_names, is_ascending)
-    """
-    # Find ORDER BY clause
-    order_by_match = re.search(r'ORDER\s+BY\s+(.+?)(?:LIMIT|;|$)', sql, re.IGNORECASE | re.DOTALL)
-    if not order_by_match:
-        return [], True
-    
-    order_clause = order_by_match.group(1).strip()
-    
-    # Extract column names and direction
-    columns = []
-    is_ascending = True
-    
-    # Split by comma to handle multiple columns
-    column_parts = [part.strip() for part in order_clause.split(',')]
-    
-    for part in column_parts:
-        # Remove table prefixes and extract column name
-        column_match = re.search(r'(?:\w+\.)?(\w+)', part)
-        if column_match:
-            column_name = column_match.group(1)
-            # Skip SQL keywords
-            if column_name.upper() not in ['ASC', 'DESC', 'NULLS', 'FIRST', 'LAST']:
-                columns.append(column_name)
-        
-        # Check for DESC (default to ASC)
-        if re.search(r'\bDESC\b', part, re.IGNORECASE):
-            is_ascending = False
-    
-    return columns, is_ascending
-
 
 def _clean_mixed_type_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -215,41 +159,6 @@ def _clean_mixed_column(series: pd.Series) -> pd.Series:
         return cleaned_series.astype(str).replace(['nan', 'None', '<NA>'], pd.NA)
 
 
-def _apply_sql_ordering(df: pd.DataFrame, sql: str) -> pd.DataFrame:
-    """Apply ordering based on SQL ORDER BY clause with mixed-type handling."""
-    try:
-        order_columns, is_ascending = _extract_order_by_info(sql)
-        
-        if not order_columns:
-            return df
-        
-        # Clean mixed-type columns before sorting
-        cleaned_df = _clean_mixed_type_columns(df)
-        
-        # Filter to columns that exist in the dataframe
-        valid_columns = [col for col in order_columns if col in cleaned_df.columns]
-        
-        if valid_columns:
-            # Add remaining columns for stable sorting
-            remaining_columns = [col for col in cleaned_df.columns if col not in valid_columns]
-            all_sort_columns = valid_columns + remaining_columns
-            
-            # Sort with proper error handling
-            sorted_df = cleaned_df.sort_values(
-                by=all_sort_columns, 
-                ascending=is_ascending,
-                na_position='last'  # Handle NaN values consistently
-            )
-            
-            # Reorder columns to put ORDER BY columns first
-            column_order = remaining_columns + valid_columns
-            return sorted_df[column_order]
-        
-    except Exception as e:
-        logging.warning(f"Failed to apply SQL ordering: {e}. Using default sorting.")
-    
-    return df
-
 
 def _sort_by_all_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Sort dataframe by all columns with proper error handling for mixed types."""
@@ -265,51 +174,7 @@ def _sort_by_all_columns(df: pd.DataFrame) -> pd.DataFrame:
         logging.warning(f"Failed to sort by all columns: {e}. Returning unsorted dataframe.")
         return df
     
-# Enhanced version with additional features
-def normalize_table_enhanced(
-    df: pd.DataFrame,
-    query_category: str,
-    question: str,
-    sql: Optional[str] = None,
-    preserve_dtypes: bool = True,
-    handle_mixed_types: bool = True
-) -> pd.DataFrame:
-    """
-    Enhanced version with additional normalization features.
-    
-    Additional features:
-    - Data type preservation
-    - Mixed type handling
-    - Better error handling and logging
-    - Performance optimizations
-    """
-    if df.empty:
-        return df.copy()
-    
-    original_dtypes = df.dtypes.to_dict() if preserve_dtypes else None
-    
-    try:
-        # Core normalization steps
-        result = normalize_table(df, query_category, question, sql)
-        
-        # Restore data types if requested
-        if preserve_dtypes and original_dtypes:
-            for col, dtype in original_dtypes.items():
-                if col in result.columns:
-                    if handle_mixed_types:
-                        result[col] = pd.to_numeric(result[col], errors='ignore')
-                    else:
-                        try:
-                            result[col] = result[col].astype(dtype)
-                        except (ValueError, TypeError):
-                            logging.warning(f"Could not restore dtype {dtype} for column {col}")
-        
-        return result
-        
-    except Exception as e:
-        logging.error(f"Normalization failed: {e}")
-        return df.copy()  # Return original dataframe on failure
-    
+
 def hard_match(left, right, atol=1e-6, rtol=1e-6,
                  ignore_order=True, **kwargs) -> bool:
     """
@@ -349,7 +214,11 @@ def compare_df(
     Compares two dataframes and returns True if they are the same, else False.
     query_gold and query_gen are the original queries that generated the respective dataframes.
     """
-    # drop duplicates to ensure equivalence
+    
+    #print(f"Info: Comparing DataFrames for question: {question}")
+    original_gold = df_gold.copy()
+    original_gen = df_gen.copy()
+    
     try:
         is_equal = df_gold.values == df_gen.values
         if is_equal.all():
@@ -361,36 +230,97 @@ def compare_df(
                 return True
         except:
             pass
-    
+
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
-    print("df_gold", df_gold)
-    print("df_gen", df_gen)
-    # perform same checks again for normalized tables
-    if df_gold.shape != df_gen.shape:
-        return False
+
+    print(df_gold, df_gen)
+    
     # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
-    df_gen.fillna(-99999, inplace=True)
     df_gold.fillna(-99999, inplace=True)
-    is_equal = df_gold.values == df_gen.values
-    if is_equal.all() == True:
+    df_gen.fillna(-99999, inplace=True)
+    
+    try:
+        #print("Info: Comparing DataFrames using hard match.")
+        is_equal = df_gold.values == df_gen.values
+        if is_equal.all():
+            #print("Info: DataFrames match first check.")
+            return True
+    except:
+        try:
+            is_equal = df_gold.values == df_gen.values
+            if is_equal:
+                return True
+        except:
+            pass
+    #print("Info: Proceeding with secondary check.")
+    return secondary_check(original_gold, original_gen)
+
+def symetric_compare_df(
+    df_a: pd.DataFrame,
+    df_b: pd.DataFrame,
+    query_category: str,
+    question: str,
+    query_gold: str = None,
+    query_gen: str = None,
+    ) -> bool:
+    """
+    Compares two dataframes symmetrically, meaning it checks if both dataframes can be matched to each other.
+    This is useful for cases where the order of the dataframes does not matter.
+    """
+    if df_a.empty and df_b.empty:
+        # If both dataframes are empty, they match
         return True
-    
-    return secondary_check(df_gold, df_gen)
-    
-def series_contents_equal(s1: pd.Series, s2: pd.Series, numeric_tolerance= 1e-5) -> bool:
+    if df_a.empty or df_b.empty:
+        # If either dataframe is empty, they cannot match
+        return False
+    return (
+        compare_df(df_a, df_b, query_category, question, query_gold, query_gen) or #might need to be an AND
+        compare_df(df_b, df_a, query_category, question, query_gen, query_gold)
+    )
+
+def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, round_decimal = 5) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
     have the same length (which should be pre-checked at the DataFrame level).
     """
-    if is_numeric_dtype(s1) and is_numeric_dtype(s2):
+
+    if is_numeric_dtype(s_gold) and is_numeric_dtype(s_gen):
+        
+        # If gold series is bigger than generated series, they cannot be equal
+        if len(s_gold) > len(s_gen):
+            return False
         # Check if the numeric values are equal within a small tolerance
-        return (s1 - s2).abs().max() < numeric_tolerance
-    
-    if s1.dtype != s2.dtype:
+        float_gold = pd.to_numeric(s_gold, errors='coerce').round(round_decimal).reset_index(drop=True)
+        float_gen = pd.to_numeric(s_gen, errors='coerce').round(round_decimal).reset_index(drop=True)
+        
+        if float_gold.isin(float_gen).all():
+            print("Info: Numeric series contents Match. LENIENT")
+            return True
+        
+        # If they are not equal, check if they are within the numeric tolerance
+        for i in range(len(float_gold)):
+            for j in range(len(float_gen)):
+                if abs(float_gold[i] - float_gen[j]) < numeric_tolerance:
+                    break
+            else:
+                # If we didn't break, it means no match was found for this index
+                print(f"Info: Numeric series contents differ at index {i}: {float_gold[i]} vs {float_gen[j]}")
+                return False            
+        print("Info: Numeric series contents Match.")
+        return True
+    # If they are not numeric, check if they are equal directly
+    reset_gold = s_gold.reset_index(drop=True)
+    reset_gen = s_gen.reset_index(drop=True)
+    if reset_gold.dtype != reset_gen.dtype:
         return False
-    return s1.reset_index(drop=True).equals(s2.reset_index(drop=True))
+    if reset_gold.isin(reset_gen).all():
+        print("Info: Series contents Match.")
+        return True
+    else:
+        print("Info: Series contents do not Match.")
+        return False
 
 def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     """
@@ -405,13 +335,16 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
     Returns:
         bool: True if all column contents of df_gold can be uniquely matched in df_gen, False otherwise.
     """
-
     num_gold_cols = df_gold.shape[1]
     num_gen_cols = df_gen.shape[1]
     num_gold_rows = df_gold.shape[0]
     num_gen_rows = df_gen.shape[0]
+    
 
     # 1. Handle df_gold having zero columns
+    if df_gold.empty:
+        return True  # If df_gold is empty, it trivially matches any df_gen
+    
     if num_gold_cols == 0:
         if num_gold_rows == 0: # df_gold is 0x0
             print("Info: df_gold has 0 columns and 0 rows. Trivially True.")
@@ -421,33 +354,37 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
             result = num_gold_rows == num_gen_rows
             return result
 
-    # 2. Row count mismatch (unless df_gold was 0x0, handled above)
-    if num_gold_rows != num_gen_rows:
-        return False
-
-    # 3. Not enough columns in df_gen to match all of df_gold's columns
+    # 2. Not enough columns in df_gen to match all of df_gold's columns
     if num_gold_cols > num_gen_cols:
+        print(f"Info: Not enough columns in df_gen to match all of df_gold's columns: {num_gold_cols} vs {num_gen_cols}.")
+        return False
+    
+    if num_gold_rows > num_gen_rows:
+        print(f"Info: Not enough rows in df_gen to match all of df_gold's rows: {num_gold_rows} vs {num_gen_rows}.")
         return False
     
     # --- Greedy Matching ---
     b_cols_used = [False] * num_gen_cols # Tracks which columns in df_gen have been matched
 
+    print(f"Info: Starting greedy matching")
     for i in range(num_gold_cols):
         series_gold = df_gold.iloc[:, i]
         found_match_for_s_gold = False
         for j in range(num_gen_cols):
             if not b_cols_used[j]: # If df_gen's j-th column is not yet used
                 series_gen = df_gen.iloc[:, j]
-                if series_contents_equal(series_gold, series_gen):
+                print(f"Info: Comparing column {i} of df_gold with column {j} of df_gen.")
+                if series_match(series_gold, series_gen):
                     b_cols_used[j] = True
                     found_match_for_s_gold = True
                     break # Move to the next column in df_gold
         
         if not found_match_for_s_gold:
+            print(f"Info: No match found for column {i} of df_gold in df_gen.")
             return False
-        
+    print("Info: Dataframes match second check.")    
     return True    
-    
+
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
@@ -483,29 +420,26 @@ def query_sqlite_db(
     """
     import sqlite3
 
-    conn = None
-    cur = None
+    connection = None
+    cursor = None
     try:
       
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.execute(query)
-        results = cur.fetchall()
-        colnames = [desc[0] for desc in cur.description]
-        cur.close()
-        conn.close()
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        cursor.execute(query)
+        results = cursor.fetchall()
+        colnames = [desc[0] for desc in cursor.description]
+        cursor.close()
+        connection.close()
         # make into a dataframe
         df = pd.DataFrame(results, columns=colnames)
-      
         # round floats to decimal_points
-        if decimal_points:
-            df = df.round(decimal_points)
         return df, None
     except Exception as e:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
         return None, str(e)
     
 def process_row(row,db_base_path,metadata_base_path):
@@ -517,8 +451,8 @@ def process_row(row,db_base_path,metadata_base_path):
         db_name = row['db_name']
         dataset_name = row['dataset_name']
 
-        db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
-        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
+        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
         print(question, db_name)
 
@@ -529,12 +463,24 @@ def process_row(row,db_base_path,metadata_base_path):
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
-            comparison_result = compare_df(result, extracted_sql,query_category="a", question=question)
+            comparison_result = compare_df(extracted_sql, result, query_category="a", question=question)
             
             return 'Match' if comparison_result else 'No Match', None
         else:
             return 'Query Error', exception
-    return 'Unknown', None  
+    
+    extracted_ground_truth_json = row.get('ground_truth_json')
+    extracted_df_json = row.get('gen_df_json')
+    
+    if extracted_ground_truth_json is None or extracted_df_json is None:
+        return 'Unknown', None
+    
+    ground_truth_df = pd.read_json(extracted_ground_truth_json)
+    gen_df = pd.read_json(extracted_df_json)
+    
+    comparison_result = compare_df(ground_truth_df, gen_df, query_category="a", question=question)
+    
+    return 'Match' if comparison_result else 'No Match', None
 
 def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path):
     """
@@ -549,7 +495,8 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
         return process_row(row, db_base_path, metadata_base_path)
 
     
-    results = list(map(process_and_return, [row for index, row in df.iterrows()]))
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
     # Extract the results into the appropriate columns
     df['comparison_result'] = [result[0] for result in results]
@@ -560,5 +507,3 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     df.to_csv(output_file, index=False)
 
     return output_file, df
-
-compare_output("/home/arami/bodo/text2pydough/workbench/lcar_lab/mlflow_experiments/results/google/gemini-2.0-flash-001/test", "/home/arami/bodo/text2pydough/workbench/lcar_lab/mlflow_experiments/results/google/gemini-2.0-flash-001/responses_2025_05_21-11_35_42.csv","/home/arami/mount-folder/datasets/", "/home/arami/mount-folder/datasets/")
