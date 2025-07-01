@@ -390,6 +390,8 @@ def convert_to_df(last_variable):
 
 def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
     """Executes the Python code and returns the result or raises an exception."""
+    if extracted_code is None:
+        return None, "No code to execute"
     try:
         with metadata_lock:
             pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
