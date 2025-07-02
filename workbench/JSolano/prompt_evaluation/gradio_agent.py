@@ -117,6 +117,90 @@ def run_question(question, server_URL="http://localhost:2024/"):
     df = extract_dataframe(json_data)
     return result, df
 
+def process_question(question, dataset_name, db_name, question_id=None ):
+    """Process a single question and return the results."""
+    # Construct the selected_db_display string dynamically
+    server_url= "http://localhost:2024/"
+    # Initialize client
+    client = Client(server_url)
+    selected_db_display = f"{dataset_name}: {db_name}/{db_name}.sqlite"
+    
+    print(f"\n{'='*80}")
+    if question_id:
+        print(f"Processing Question ID: {question_id}")
+    print(f"Question: {question}")
+    print(f"Database: {selected_db_display}")
+    print(f"{'='*80}")
+    
+    try:
+        result = client.predict(
+            message=question,
+            history=[],
+            architecture_dropdown="ReAct (PyDough)",
+            model_display="Default",#"GCP: gemini-2.5-flash-preview-05-20",
+            include_cheatsheet=False,
+            include_schema=False,
+            retriever_file="cheatsheet_partition_overhaul.md",
+            prompt_file="empty_template.md",
+            temperature=0.1,
+            top_p=0.95,
+            top_k=40,
+            max_steps=25,
+            pydough_tool=False,
+            sql_list_tables=True,
+            sql_schema=True,
+            sql_query=False,
+            sql_query_checker=False,
+            document_kb=False,
+            selected_db_display=selected_db_display,
+            use_sh_query_gen=False,
+            tracking_backend="Phoenix",
+            experiment_name="defog-analysis",
+            api_name="/process_message"
+        )
+        
+        # Extract plain text
+        plain_text = extract_plain_text(result)
+        print(f"\nPlain text response length: {len(plain_text)} characters")
+        
+        # Extract JSON
+        json_data = extract_json(result)
+        if json_data:
+            print(f"JSON extracted successfully: {type(json_data)}")
+        else:
+            print("No JSON data extracted")
+        
+        # Convert to DataFrame
+        df = extract_dataframe(json_data)
+        if df is not None:
+            print(f"DataFrame shape: {df.shape}")
+            print(f"DataFrame columns: {list(df.columns)}")
+        
+        return {
+            'question_id': question_id,
+            'question': question,
+            'dataset_name': dataset_name,
+            'db_name': db_name,
+            'selected_db_display': selected_db_display,
+            'plain_text': plain_text,
+            'json_data': json_data,
+            'dataframe': df,
+            'success': True
+        }
+        
+    except Exception as e:
+        print(f"Error processing question: {e}")
+        return {
+            'question_id': question_id,
+            'question': question,
+            'dataset_name': dataset_name,
+            'db_name': db_name,
+            'selected_db_display': selected_db_display,
+            'error': str(e),
+            'success': False
+        }
+
+
 if __name__ == '__main__':
     sample_question = "What is the make, model and sale price of the car with the highest sale price that was sold on the same day it went out of inventory?"
     result, df = run_question(sample_question)
