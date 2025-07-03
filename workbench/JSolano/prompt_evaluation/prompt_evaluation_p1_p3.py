@@ -29,9 +29,15 @@ import random
 import json
 from gradio_agent import process_question
 
+from dotenv import load_dotenv
+from pathlib import Path
+# Find the .env file in your home directory
+env_path = Path.home() / ".env"
+load_dotenv(dotenv_path=env_path)
+
 # === Credential for google cloud ===
 google_credentials = [ 
-    [os.getenv("GOOGLE_API_KEY_1"), os.getenv("GOOGLE_PROJECT_ID_1")], 
+    [os.getenv("GOOGLE_API_KEY_2"), os.getenv("GOOGLE_PROJECT_ID_2")], 
     [os.getenv("GOOGLE_API_KEY_3"), os.getenv("GOOGLE_PROJECT_ID_3")] 
 ]
 
@@ -146,7 +152,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=3, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=6, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -365,7 +371,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 "config": {
                     "api_key": api_key,
                     "project": project_id,
-                    "region": "us-east1"
+                    "region": "us-east5"
                 }
             },
             {
@@ -463,12 +469,6 @@ def main(git_hash):
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
-    
-    from dotenv import load_dotenv
-    from pathlib import Path
-    # Find the .env file in your home directory
-    env_path = Path.home() / ".env"
-    load_dotenv(dotenv_path=env_path)
 
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
     MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN")
