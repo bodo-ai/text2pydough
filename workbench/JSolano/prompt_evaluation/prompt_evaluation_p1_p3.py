@@ -146,7 +146,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=3, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -464,8 +464,14 @@ def main(git_hash):
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
     
+    from dotenv import load_dotenv
+    from pathlib import Path
+    # Find the .env file in your home directory
+    env_path = Path.home() / ".env"
+    load_dotenv(dotenv_path=env_path)
+
     MLFLOW_TRACKING_URI = "http://mlflow-alb-1071096006.us-east-2.elb.amazonaws.com"
-    MLFLOW_TRACKING_TOKEN = os.environ["MLFLOW_TRACKING_TOKEN"]
+    MLFLOW_TRACKING_TOKEN = os.getenv("MLFLOW_TRACKING_TOKEN")
     #mlflow.gemini.autolog()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     experiment = mlflow.set_experiment(args.experiment_name)
