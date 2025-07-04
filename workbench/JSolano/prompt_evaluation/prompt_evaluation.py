@@ -27,7 +27,7 @@ from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
 import random
 import json
-from gradio_agent import run_question
+from gradio_agent import process_question
 
 # === Helper Functions ===
 
@@ -163,7 +163,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=6, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -279,7 +279,7 @@ def favourite_based_selection(all_runs, question, dataset_name, db_name, questio
         return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
-    response, gradio_df = run_question(question, dataset_name, db_name)
+    response, gradio_df = process_question(question, dataset_name, db_name)
     if gradio_df is None:
         print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
         fallback = random.choice(all_runs)
