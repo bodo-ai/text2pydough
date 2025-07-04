@@ -38,7 +38,8 @@ load_dotenv(dotenv_path=env_path)
 # === Credential for google cloud ===
 google_credentials = [ 
     [os.getenv("GOOGLE_API_KEY_2"), os.getenv("GOOGLE_PROJECT_ID_2")], 
-    [os.getenv("GOOGLE_API_KEY_3"), os.getenv("GOOGLE_PROJECT_ID_3")] 
+    [os.getenv("GOOGLE_API_KEY_3"), os.getenv("GOOGLE_PROJECT_ID_3")],
+    
 ]
 
 # === Helper Functions ===

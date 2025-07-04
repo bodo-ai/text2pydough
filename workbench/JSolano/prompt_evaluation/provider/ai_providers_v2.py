@@ -98,12 +98,12 @@ class ClaudeAIProviderAWS(AIProvider):
 class ClaudeAIProvider(AIProvider):
     def __init__(self, model_id, config=None):
         try:
-            print(f"Config: {config}")
             self.api_key = config["api_key"]
             self.project = config["project"]
             self.location = config["region"]
             self.model_id = model_id
             self.client = AnthropicVertex(project_id=self.project, region=self.location)
+            print(f"Project: {self.project}")
         except KeyError as e:
             raise RuntimeError(f"Missing environment variable: {e}")
 
@@ -213,13 +213,13 @@ class GeminiAIProvider(AIProvider):
 
     def __init__(self, model_id, config=None):
         try:
-            print(f"Config gemini: {config}")
             self.api_key = config["api_key"]
             self.project = config["project"]
             self.location = config["region"]
             self.model_id = model_id
             self.client = genai.Client(vertexai=True, project=self.project, location=self.location)
             self.cache = None  # Initialize cache as None
+            print(f"Project: {self.project}")
         except KeyError:
             raise RuntimeError("Environment variable 'GOOGLE_API_KEY' is required but not set.")
 
