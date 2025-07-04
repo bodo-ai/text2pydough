@@ -39,7 +39,8 @@ load_dotenv(dotenv_path=env_path)
 google_credentials = [ 
     [os.getenv("GOOGLE_API_KEY_2"), os.getenv("GOOGLE_PROJECT_ID_2")], 
     [os.getenv("GOOGLE_API_KEY_3"), os.getenv("GOOGLE_PROJECT_ID_3")],
-    
+    [os.getenv("GOOGLE_API_KEY_4"), os.getenv("GOOGLE_PROJECT_ID_4")],
+    [os.getenv("GOOGLE_API_KEY_5"), os.getenv("GOOGLE_PROJECT_ID_5")]
 ]
 
 # === Helper Functions ===
@@ -681,15 +682,15 @@ def main(git_hash):
         with open(metrics_path, "w") as metrics_file:
             metrics_file.write(metrics_json)
 
-        mlflow.pyfunc.log_model(
-            artifact_path=args.model_id,
-            python_model="gemini_wrapper.py",
-            artifacts={
-                "prompt_file": args.prompt_file,
-                "pydough_file": args.pydough_file,
-                "metrics.json": metrics_path
-            }
-        )
+        # mlflow.pyfunc.log_model(
+        #     artifact_path=args.model_id,
+        #     python_model="gemini_wrapper.py",
+        #     artifacts={
+        #         "prompt_file": args.prompt_file,
+        #         "pydough_file": args.pydough_file,
+        #         "metrics.json": metrics_path
+        #     }
+        # )
 
 if __name__ == "__main__":
     cwd = os.getcwd()
