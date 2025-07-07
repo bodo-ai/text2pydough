@@ -122,11 +122,8 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
 
 def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=None):
     db_content = ""
-    print("name", db_name)
-    print("md", db_markdown_map)
     if db_name and db_markdown_map and db_name in db_markdown_map:
         db_content = db_markdown_map[db_name]
-    print("md", db_content)
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
