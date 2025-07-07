@@ -1,3 +1,7 @@
+import faulthandler
+import signal
+import sys
+
 import pandas as pd
 import os
 import asyncio
@@ -404,37 +408,52 @@ async def main():
 
     start_row = args.start_row
 
-    while  start_row < args.num_questions:
-        # Read questions CSV to check for dataframe_match column
+    MAX_IDLE_ATTEMPTS = 3  # Maximum number of idle checks before stopping
+    WAIT_SECONDS = 180       # Seconds to wait between idle checks
+
+    idle_attempts = 0
+
+    while start_row < args.num_questions:
+        # Read the questions CSV, skipping already processed rows
         df_questions = pd.read_csv(args.questions_csv_path, skiprows=lambda x: x > 0 and x <= start_row)
-        print("df size:")
-        print(len(df_questions))
+        current_df_len = len(df_questions)
+        print("Current DataFrame size:", current_df_len)
 
-        # Filter rows where dataframe_match is False
-        filtered_df = df_questions[df_questions['dataframe_match'] == False]
+        # Check if the file size hasn't changed
+        if current_df_len == 0:
+            idle_attempts += 1
+            print(f"No change detected. Idle attempt {idle_attempts}/{MAX_IDLE_ATTEMPTS}")
+            if idle_attempts >= MAX_IDLE_ATTEMPTS:
+                print("No changes detected for too long. Exiting loop.")
+                break
+            time.sleep(WAIT_SECONDS)
+        else:
+            idle_attempts = 0  # Reset idle counter if file has changed
 
-        # Reformat to original question structure
-        reformatted_questions = filtered_df[['question_id', 'question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
-            .rename(columns={'ground_truth_sql': 'sql'}) \
-            .to_dict(orient='records')
-        
-        new_df = pd.DataFrame(reformatted_questions)
+            # Filter rows where dataframe_match is False
+            filtered_df = df_questions[df_questions['dataframe_match'] == False]
 
-        # Process reprocessed questions
-        await process_questions(
-            questions_df=new_df,
-            output_csv_path=output_csv_path,
-            db_base_path=args.db_base_path,
-            metadata_base_path=args.metadata_base_path,
-            cheatsheet_path=args.cheatsheet_path,
-            num_questions=args.num_questions,
-            start_row=args.start_row,
-            max_feedback_loops=args.max_feedback_loops
-        )
+            # Reformat to original question structure
+            reformatted_questions = filtered_df[['question_id', 'question', 'ground_truth_sql', 'dataset_name', 'db_name']] \
+                .rename(columns={'ground_truth_sql': 'sql'}) \
+                .to_dict(orient='records')
 
-        start_row = start_row + len(df_questions)
-        print("start_row:")
-        print(start_row)
+            new_df = pd.DataFrame(reformatted_questions)
+
+            # Process reprocessed questions
+            await process_questions(
+                questions_df=new_df,
+                output_csv_path=output_csv_path,
+                db_base_path=args.db_base_path,
+                metadata_base_path=args.metadata_base_path,
+                cheatsheet_path=args.cheatsheet_path,
+                num_questions=args.num_questions,
+                start_row=args.start_row,
+                max_feedback_loops=args.max_feedback_loops
+            )
+
+            start_row += current_df_len
+            print("Updated start_row:", start_row)
     
     # Calculate accuracy and create metadata
     results_df = pd.read_csv(output_csv_path)
@@ -477,4 +496,16 @@ async def main():
     print(f"Accuracy: {accuracy:.2%}")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    # Enable fault handler with both stderr and file output
+    faulthandler.enable()
+    faulthandler.enable(file=open('crash.log', 'wb'))
+    
+    # Redirect stdout to get cleaner gdb output
+    sys.stdout = open('output.log', 'w')
+    
+    # Run your main function
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"Main crashed: {e}", file=sys.stderr)
+        raise 

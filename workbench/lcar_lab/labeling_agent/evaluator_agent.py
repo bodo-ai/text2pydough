@@ -384,16 +384,16 @@ class SQLEvaluatorAgent:
         #     temperature=0.99
         # )
         
-        # self.llm = ChatGoogleGenerativeAI(
-        #     model="gemini-2.5-flash-preview-05-20",
-        #     temperature=0.99
-        # )
-
-        self.llm = ChatAnthropicVertex(
-             model_name="claude-3-7-sonnet@20250219",
-             project="solid-drive-448717-p8",
-             location="us-east5"
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash-preview-05-20",
+            temperature=0.99
         )
+
+        # self.llm = ChatAnthropicVertex(
+        #      model_name="claude-3-7-sonnet@20250219",
+        #      project="solid-drive-448717-p8",
+        #      location="us-east5"
+        # )
         
         # Create SQL toolkit for database operations
         self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
