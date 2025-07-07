@@ -122,6 +122,8 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
 
 def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=None):
     db_content = ""
+    print("name", db_name)
+    print("md", db_markdown_map)
     if db_name and db_markdown_map and db_name in db_markdown_map:
         db_content = db_markdown_map[db_name]
 
@@ -167,8 +169,6 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
-
-    print("path",db_name)
 
     db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
     metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
