@@ -168,6 +168,8 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     db_name = row.get("db_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
 
+    print(db_name)
+
     db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
     metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
     
