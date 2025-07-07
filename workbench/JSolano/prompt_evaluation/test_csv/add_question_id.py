@@ -1,7 +1,7 @@
 import csv
 
 input_file = 'complete_corrected_questions_7_4_gtj.csv'
-output_file = 'complete_corrected_questions_7_4_gtj_with_id.csv'
+output_file = '../complete_corrected_questions_7_4_gtj_with_id.csv'
 
 with open(input_file, 'r', newline='', encoding='utf-8') as infile, open(output_file, 'w', newline='', encoding='utf-8') as outfile:
     reader = csv.reader(infile)

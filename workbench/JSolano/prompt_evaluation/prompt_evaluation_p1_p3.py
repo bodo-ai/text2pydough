@@ -8,7 +8,7 @@ import re
 import textwrap
 import time
 from typing import List
-import pandas as pd
+import pandas as pdtri
 from datetime import datetime
 import multiprocessing
 import mlflow
@@ -27,7 +27,7 @@ from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
 import random
 import json
-from gradio_agent import process_question
+from gradio_agent_v2 import process_question
 
 from dotenv import load_dotenv
 from pathlib import Path
@@ -37,10 +37,12 @@ load_dotenv(dotenv_path=env_path)
 
 # === Credential for google cloud ===
 google_credentials = [ 
+    [os.getenv("GOOGLE_API_KEY_1"), os.getenv("GOOGLE_PROJECT_ID_1")],
     [os.getenv("GOOGLE_API_KEY_2"), os.getenv("GOOGLE_PROJECT_ID_2")], 
     [os.getenv("GOOGLE_API_KEY_3"), os.getenv("GOOGLE_PROJECT_ID_3")],
     [os.getenv("GOOGLE_API_KEY_4"), os.getenv("GOOGLE_PROJECT_ID_4")],
-    [os.getenv("GOOGLE_API_KEY_5"), os.getenv("GOOGLE_PROJECT_ID_5")]
+    [os.getenv("GOOGLE_API_KEY_5"), os.getenv("GOOGLE_PROJECT_ID_5")],
+    [os.getenv("GOOGLE_API_KEY_6"), os.getenv("GOOGLE_PROJECT_ID_6")]
 ]
 
 # === Helper Functions ===
@@ -154,10 +156,11 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=6, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, mlflow_run_id, db_markdown_map=None, tries=6, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
+    dataset_name = row["dataset_name"]
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map)
 
     db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
@@ -233,25 +236,46 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(all_runs, question, question_idx)
+    ensemble = ensemble_result(all_runs, question, dataset_name, db_name, mlflow_run_id, question_idx)
     return ensemble, all_runs
 
-def ensemble_result(all_runs, question, question_idx="?"):
+def ensemble_result(all_runs, question, dataset_name, db_name, mlflow_run_id, question_idx="?"):
     """
     Uses dataframe comparison to select the most consistent output.
+    If no valid dataframes, calls Gradio agent as fallback.
     """
     valid_runs = [r for r in all_runs if r["df"] is not None]
+    
     if not valid_runs:
-        print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
-        for r in all_runs:
-            if r["response"]:
-                print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
-                return r["response"], r["duration"], r["usage"], r["model_name"], None
-        return None, 0.0, None
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
+        
+        # Call Gradio agent
+        response = process_question(question, dataset_name, db_name, mlflow_run_id, question_idx)
+        gradio_df = response['dataframe']
+        
+        if gradio_df is None:
+            print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
+            fallback_runs = [r for r in all_runs if r["response"]]
+            fallback = random.choice(fallback_runs) if fallback_runs else None
+            if fallback:
+                return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
+            else:
+                print(f"[ERROR] [Q{question_idx}] No valid fallback run found.")
+                return None, 0.0, None, None, None
+        
+        gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+        
+        # Attempt to reuse duration/usage from a previous Claude run if it exists
+        claude_run = next((r for r in all_runs if r["model_name"] == "claude"), None)
+        duration = claude_run["duration"] if claude_run else None
+        usage = claude_run["usage"] if claude_run else None
+        
+        print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
+        return response, duration, usage, "Gradio agent", gen_df_json
 
     return frequency_based_selection(valid_runs, question, question_idx=question_idx)
 
-def favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx="?"):
+def favourite_based_selection(all_runs, question, dataset_name, db_name, mlflow_run_id, question_idx="?"):
     """
     Selects the Gemini result if available (response not empty and df not None), otherwise Claude (same), otherwise Gradio agent.
     Returns: response, duration, usage, model_name, gen_df_json
@@ -264,21 +288,26 @@ def favourite_based_selection(all_runs, question, dataset_name, db_name, questio
     if gemini_run and gemini_run["response"] and gemini_run["df"] is not None:
         print(f"[INFO] [Q{question_idx}] Early match found. Returning Gemini result.")
         return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
+    
     # Otherwise, prefer Claude if response is not empty and df is not None
     if claude_run and claude_run["response"] and claude_run["df"] is not None:
         print(f"[INFO] [Q{question_idx}] Early match found. Returning Claude result.")
         return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
+    
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
-    response, gradio_df = process_question(question, dataset_name, db_name)
+    response = process_question(question, dataset_name, db_name, mlflow_run_id, question_idx)
+    gradio_df = response['dataframe']
     if gradio_df is None:
         print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
         fallback = random.choice(all_runs)
         return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
     gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+    
     # Use the other fields from the Claude run if available, else None
     duration = claude_run["duration"] if claude_run else None
     usage = claude_run["usage"] if claude_run else None
+    
     # TODO: Add response, duration and usage from Gradio agent
     print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
     return response, duration, usage, "Gradio agent", gen_df_json
@@ -352,7 +381,7 @@ def size_based_selection(valid_runs, question, question_idx="?"):
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, mlflow_run_id, db_markdown_map=None, use_parallel=False, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     
     num_keys = len(google_credentials)
@@ -397,6 +426,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 row=row,
                 script=script,
                 models_to_test=models_to_test,
+                mlflow_run_id=mlflow_run_id,
                 db_markdown_map=db_markdown_map,
                 **kwargs
             )
@@ -480,6 +510,9 @@ def main(git_hash):
 
     with mlflow.start_run(description=args.description, run_name=args.name, tags={"GIT_COMMIT": git_hash}, experiment_id=experiment.experiment_id):
 
+        mlflow_run_id = mlflow.active_run().info.run_id
+        print(f"MLflow run ID: {mlflow_run_id}")
+        
         prompt = read_file(args.prompt_file)
         script = read_file(args.pydough_file)
 
@@ -497,6 +530,7 @@ def main(git_hash):
         questions_df=df,
         script=script,
         threads=args.num_threads,
+        mlflow_run_id=mlflow_run_id,
         db_markdown_map=db_markdown_map,
         use_parallel=args.use_parallel,
         **kwargs
