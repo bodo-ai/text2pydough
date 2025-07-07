@@ -14,6 +14,7 @@ import argparse
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from tqdm import tqdm
+from dynamic_prompt.metadata_converter import convert_metadata
 import mlflow
 
 # Global variable to control logging backend
@@ -79,6 +80,7 @@ async def process_single_question(
     cheatsheet_path: str,
     dataset_name: str,
     db_name: str,
+    metadata: List[Dict],
     question_id: int,
     pbar: tqdm,
     max_feedback_loops: int = 3
@@ -222,7 +224,8 @@ async def process_single_question(
             'dataframe_match': dataframe_comparison_boolean,
             'error': str(e),
             'dataset_name': dataset_name,
-            'db_name': db_name
+            'db_name': db_name,
+            'metadata': metadata
         }
         return result
     
@@ -239,7 +242,8 @@ async def process_single_question(
         'dataframe_match': dataframe_comparison_boolean,
         'error': None,
         'dataset_name': dataset_name,
-        'db_name': db_name
+        'db_name': db_name,
+        'metadata': metadata
     }
     
     return result
@@ -288,9 +292,17 @@ async def process_questions(
             dataset_name = row['dataset_name']
 
             db_path = os.path.join(db_base_path, dataset_name, "databases", f"{db_name}/{db_name}.sqlite")
-            metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+            metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata_2.0")
             metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        
+            if os.path.exists(db_path):
+                # If metadata file does not exist, generate it
+                # From the older metadata graph to the new one
+                os.makedirs(metadata_dir, exist_ok=True)  
+                original_metadata_path = os.path.join(metadata_base_path, dataset_name, f"metadata/{db_name}_graph.json")
+                md = convert_metadata(original_json=json.load(open(original_metadata_path, 'r')))
+                with open(metadata_path, 'w') as f:
+                    json.dump(md, f, indent=2)
+
             if row.get('question_id') is None:
                 return await process_single_question(
                     question=row['question'],
@@ -300,6 +312,7 @@ async def process_questions(
                     cheatsheet_path=cheatsheet_path,
                     dataset_name=dataset_name,
                     db_name=db_name,
+                    metadata=json.load(open(metadata_path, 'r')),
                     question_id=idx + 1,
                     pbar=pbar,
                     max_feedback_loops=max_feedback_loops
@@ -313,6 +326,7 @@ async def process_questions(
                     cheatsheet_path=cheatsheet_path,
                     dataset_name=dataset_name,
                     db_name=db_name,
+                    metadata=json.load(open(metadata_path, 'r')),
                     question_id=row['question_id'],
                     pbar=pbar,
                     max_feedback_loops=max_feedback_loops
