@@ -3,14 +3,14 @@
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 echo $BASE_DIR
 # Set up all required paths
-DB_PATH="${BASE_DIR}/datasets"
-METADATA_PATH="${BASE_DIR}/datasets"
+DB_PATH="${BASE_DIR}/mount-folder/datasets"
+METADATA_PATH="${BASE_DIR}/mount-folder/datasets"
 CHEATSHEET_PATH="${BASE_DIR}/text2pydough/workbench/lcar_lab/labeling_agent/pydough_data/pydough_files/cheatsheet_partition_overhaul.md"
-QUESTIONS_CSV_PATH="${BASE_DIR}/datasets/WikiSQL/wikisql_extracted_train.csv"
+QUESTIONS_CSV_PATH="${BASE_DIR}/mount-folder/datasets/WikiSQL/wikisql_extracted_train.csv"
 OUTPUT_DIR="${BASE_DIR}/mount-folder/labeling_data/gemini_2.0_flash"
 # Default values for optional parameters
-START_ROW=2000
-NUM_QUESTIONS=1500
+START_ROW=7000
+NUM_QUESTIONS=1000
 CONCURRENT_QUESTIONS=5
 MAX_FEEDBACK_LOOPS=5
 # Create output directory if it doesn't exist

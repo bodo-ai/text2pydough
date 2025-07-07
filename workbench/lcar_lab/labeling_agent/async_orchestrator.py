@@ -1,3 +1,7 @@
+import faulthandler
+import signal
+import sys
+
 import pandas as pd
 import os
 import asyncio
@@ -490,4 +494,16 @@ async def main():
     print(f"Accuracy: {accuracy:.2%}")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    # Enable fault handler with both stderr and file output
+    faulthandler.enable()
+    faulthandler.enable(file=open('crash.log', 'wb'))
+    
+    # Redirect stdout to get cleaner gdb output
+    sys.stdout = open('output.log', 'w')
+    
+    # Run your main function
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"Main crashed: {e}", file=sys.stderr)
+        raise
