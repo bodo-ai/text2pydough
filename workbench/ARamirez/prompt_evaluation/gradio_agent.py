@@ -163,3 +163,42 @@ def process_question(question, dataset_name, db_name, question_id=None ):
             'error': str(e),
             'success': False
         }
+    
+def run_question(question, server_URL="http://localhost:2024/"):
+    """
+    Send a question to the Gradio agent and return the result as a Pandas DataFrame.
+    Parameters:
+        question (str): The question to ask.
+        server_URL (str): The URL of the Gradio server. Defaults to localhost.
+    Returns:
+        pd.DataFrame or None: The resulting DataFrame, or None if conversion fails.
+    """
+    client = Client(server_URL)
+    result = client.predict(
+        message=question,
+        history=[],
+        architecture_dropdown="Multi-Agent Supervisor",
+        model_display="GCP: gemini-2.5-flash-preview-05-20",
+        include_cheatsheet=False,
+        include_schema=False,
+        retriever_file="cheatsheet_partition_overhaul.md",
+        prompt_file="system_prompt.md",
+        temperature=0.2,
+        top_p=0.95,
+        top_k=40,
+        max_steps=25,
+        pydough_tool=True,
+        sql_list_tables=True,
+        sql_schema=True,
+        sql_query=False,
+        sql_query_checker=False,
+        document_kb=True,
+        selected_db_display="Defog: Dealership/Dealership.sqlite",
+        use_sh_query_gen=False,
+        tracking_backend="Phoenix",
+        experiment_name="agent-react-sql",
+        api_name="/process_message"
+    )
+    json_data = extract_json(result)
+    df = extract_dataframe(json_data)
+    return result, df

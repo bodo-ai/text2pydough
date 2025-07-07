@@ -1,0 +1,451 @@
+id,question,sql,dataset_name,db_name,response,execution_time,extracted_python_code,usage,model_name,gen_df_json
+4,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;",Defog,Broker,"Let me analyze this request step by step:
+
+1. I need to find Total Active Customers (TAC) who joined on or after January 1, 2023
+2. Group these customers by country
+3. Count the customers for each country
+4. Return the country and the count
+
+From the database structure:
+- `Customers` collection has:
+  - `join_date` field (to filter by join date)
+  - `status` field (to check if active)
+  - `country` field (to group by)
+
+Since TAC is defined as ""Total Active Customers who joined on or after January 1, 2023"", I need to:
+1. Filter customers who joined on or after January 1, 2023
+2. Filter for active customers (assuming status == ""active"" or similar)
+3. Group by country using PARTITION
+4. Count the customers in each country
+
+Let me build the PyDough query:
+
+```python
+# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to include only customers who:
+   - Joined on or after January 1, 2023 (`join_date >= ""2023-01-01""`)
+   - Have an active status (using case-insensitive comparison with `LOWER(status) == ""active""`)
+3. Partitions the filtered customers by `country`
+4. For each country group, calculates:
+   - The country name
+   - The count of customers (TAC) using `COUNT(Customers)`",15.393229722976685,"# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",,claude,"[{""country"":""USA"",""tac_count"":10}]"
+9,"What is the ACP for each ticker type in the past 7 days, inclusive of today? Return the ticker type and the average closing price.ACP = Average Closing Price of tickers in the last 7 days, inclusive of today","SELECT sbTicker.sbTickerType, AVG(sbDailyPrice.sbDpClose) AS ACP FROM sbDailyPrice JOIN sbTicker ON sbDailyPrice.sbDpTickerId = sbTicker.sbTickerId WHERE sbDpDate >= DATE('now', '-7 days') GROUP BY sbTicker.sbTickerType;",Defog,Broker,"Let's analyze this request step by step:
+
+1. We need to find the Average Closing Price (ACP) for each ticker type
+2. The ACP is defined as the average closing price of tickers in the last 7 days, inclusive of today
+3. We need to return the ticker type and the average closing price
+
+Let me think about the approach:
+
+1. First, I need to filter DailyPrices to only include records from the last 7 days (inclusive of today)
+2. Then I need to group these by ticker type (which comes from the ticker relationship)
+3. Calculate the average closing price for each ticker type
+
+From the database structure:
+- `DailyPrices` has a `date` field and a `close` field
+- `DailyPrices` has a relationship to `Tickers` through the `ticker` field
+- `Tickers` has a `ticker_type` field
+
+To filter for the last 7 days inclusive of today, I'll use DATEDIFF to compare dates with 'now'.
+
+Here's the PyDough code:
+
+```python
+# Filter daily prices for the last 7 days (inclusive of today)
+# and get the ticker type from the related ticker
+recent_prices = DailyPrices.WHERE(
+    DATEDIFF(""days"", date, DATETIME('now')) <= 6  # 0-6 days ago = 7 days total
+).CALCULATE(
+    ticker_type = ticker.ticker_type,
+    closing_price = close
+)
+
+# Partition by ticker type and calculate average closing price
+result = recent_prices.PARTITION(
+    name=""ticker_types"", 
+    by=ticker_type
+).CALCULATE(
+    ticker_type = ticker_type,
+    average_closing_price = AVG(DailyPrices.close)
+)
+```
+
+This code:
+1. Starts with the `DailyPrices` collection
+2. Filters to include only prices from the last 7 days (where the difference between the date and today is 6 days or less, which gives us 7 days total including today)
+3. Extracts the ticker type from the related ticker and the closing price
+4. Partitions the filtered data by ticker type
+5. Calculates the average closing price for each ticker type group
+6. Returns the ticker type and its corresponding average closing price",17.839820623397827,"# Filter daily prices for the last 7 days (inclusive of today)
+# and get the ticker type from the related ticker
+recent_prices = DailyPrices.WHERE(
+    DATEDIFF(""days"", date, DATETIME('now')) <= 6  # 0-6 days ago = 7 days total
+).CALCULATE(
+    ticker_type = ticker.ticker_type,
+    closing_price = close
+)
+
+# Partition by ticker type and calculate average closing price
+result = recent_prices.PARTITION(
+    name=""ticker_types"", 
+    by=ticker_type
+).CALCULATE(
+    ticker_type = ticker_type,
+    average_closing_price = AVG(DailyPrices.close)
+)",,claude,"[{""ticker_type"":""etf"",""average_closing_price"":209.75},{""ticker_type"":""mutualfund"",""average_closing_price"":84.3},{""ticker_type"":""stock"",""average_closing_price"":311.5}]"
+12,"What is the number of customers whose name starts with J or ends with 'ez', and who live in a state ending with the letter 'a'?all customer attributes should be matched case insensitively",SELECT COUNT(sbCustId) FROM sbCustomer WHERE (LOWER(sbCustName) LIKE 'j%' OR LOWER(sbCustName) LIKE '%ez') AND LOWER(sbCustState) LIKE '%a';,Defog,Broker,"Let me analyze this request step by step:
+
+1. I need to find customers whose:
+   - Name starts with 'J' OR ends with 'ez' (case insensitive)
+   - AND who live in a state ending with 'a' (case insensitive)
+2. Return the count of such customers
+
+From the database structure:
+- `Customers` collection has `name` and `state` fields
+- I need to use case-insensitive matching as specified
+
+To implement case-insensitive matching, I'll use the `LOWER` function on both the field values and the comparison strings.
+
+For the conditions:
+- Name starts with 'J': `STARTSWITH(LOWER(name), 'j')`
+- Name ends with 'ez': `ENDSWITH(LOWER(name), 'ez')`
+- State ends with 'a': `ENDSWITH(LOWER(state), 'a')`
+
+Here's the PyDough code:
+
+```python
+result = Broker.CALCULATE(
+    num_customers=COUNT(
+        Customers.WHERE(
+            (STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez')) &
+            ENDSWITH(LOWER(state), 'a')
+        )
+    )
+)
+```
+
+This code:
+1. Starts with the high-level `Broker` collection to calculate a count
+2. Counts customers that meet both conditions:
+   - Their name either starts with 'j' OR ends with 'ez' (using lowercase for case-insensitive matching)
+   - AND their state ends with 'a' (also case-insensitive)
+3. Uses the `LOWER` function to convert all strings to lowercase before comparison, ensuring case-insensitive matching
+4. Returns the total count of customers meeting these criteria",13.458523035049438,"result = Broker.CALCULATE(
+    num_customers=COUNT(
+        Customers.WHERE(
+            (STARTSWITH(LOWER(name), 'j') | ENDSWITH(LOWER(name), 'ez')) &
+            ENDSWITH(LOWER(state), 'a')
+        )
+    )
+)",,claude,"[{""num_customers"":2}]"
+61,What were the total quarterly sales in 2023 grouped by customer's state? Represent each quarter as the first date in the quarter. Return the date in format year-month-day,"SELECT CASE WHEN strftime('%m', s.sale_date) BETWEEN '01' AND '03' THEN '2023-01-01' WHEN strftime('%m', s.sale_date) BETWEEN '04' AND '06' THEN '2023-04-01' WHEN strftime('%m', s.sale_date) BETWEEN '07' AND '09' THEN '2023-07-01' ELSE '2023-10-01' END AS quarter, c.state, SUM(s.sale_price) AS total_sales FROM sales AS s JOIN customers AS c ON s.customer_id = c._id WHERE strftime('%Y', s.sale_date) = '2023' GROUP BY c.state, quarter HAVING SUM(s.sale_price) > 0 ORDER BY quarter, c.state;",Defog,Dealership,"Let's analyze this request step by step:
+
+1. We need to find total quarterly sales in 2023
+2. Group these sales by customer's state
+3. Represent each quarter as the first date in the quarter (Q1: 2023-01-01, Q2: 2023-04-01, Q3: 2023-07-01, Q4: 2023-10-01)
+4. Return the date in year-month-day format
+
+From the database structure:
+- `Sales` contains sale information with `sale_date` and `sale_price`
+- Sales are linked to customers through the `customer` relationship
+- Customers have a `state` field
+
+To solve this, I need to:
+1. Filter sales for year 2023
+2. Calculate the quarter for each sale
+3. Map each quarter to its first date
+4. Group by customer state and quarter
+5. Sum the sales for each group
+
+Let me build the PyDough query:
+
+```python
+# First, prepare sales data for 2023 with quarter information
+sales_2023 = Sales.WHERE(YEAR(sale_date) == 2023).CALCULATE(
+    sale_price=sale_price,
+    customer_state=customer.state,
+    quarter=IFF(MONTH(sale_date) <= 3, 1,
+             IFF(MONTH(sale_date) <= 6, 2,
+             IFF(MONTH(sale_date) <= 9, 3, 4))),
+    quarter_start_date=IFF(MONTH(sale_date) <= 3, '2023-01-01',
+                       IFF(MONTH(sale_date) <= 6, '2023-04-01',
+                       IFF(MONTH(sale_date) <= 9, '2023-07-01', '2023-10-01')))
+)
+
+# Group by state and quarter, then calculate total sales
+result = sales_2023.PARTITION(name=""state_quarter_groups"", by=(customer_state, quarter_start_date)).CALCULATE(
+    state=customer_state,
+    quarter_date=quarter_start_date,
+    total_sales=SUM(Sales.sale_price)
+).ORDER_BY(state.ASC(), quarter_date.ASC())
+```
+
+This code:
+1. Filters `Sales` to only include sales from 2023
+2. Calculates the quarter number and corresponding quarter start date for each sale
+3. Gets the customer's state for each sale
+4. Partitions the data by customer state and quarter start date
+5. Calculates the total sales for each state-quarter combination
+6. Orders the results by state and then by quarter date
+
+The quarter start dates are represented as:
+- Q1: 2023-01-01
+- Q2: 2023-04-01
+- Q3: 2023-07-01
+- Q4: 2023-10-01",18.713078260421753,"# First, prepare sales data for 2023 with quarter information
+sales_2023 = Sales.WHERE(YEAR(sale_date) == 2023).CALCULATE(
+    sale_price=sale_price,
+    customer_state=customer.state,
+    quarter=IFF(MONTH(sale_date) <= 3, 1,
+             IFF(MONTH(sale_date) <= 6, 2,
+             IFF(MONTH(sale_date) <= 9, 3, 4))),
+    quarter_start_date=IFF(MONTH(sale_date) <= 3, '2023-01-01',
+                       IFF(MONTH(sale_date) <= 6, '2023-04-01',
+                       IFF(MONTH(sale_date) <= 9, '2023-07-01', '2023-10-01')))
+)
+
+# Group by state and quarter, then calculate total sales
+result = sales_2023.PARTITION(name=""state_quarter_groups"", by=(customer_state, quarter_start_date)).CALCULATE(
+    state=customer_state,
+    quarter_date=quarter_start_date,
+    total_sales=SUM(Sales.sale_price)
+).ORDER_BY(state.ASC(), quarter_date.ASC())",,claude,"[{""state"":""AZ"",""quarter_date"":""2023-01-01"",""total_sales"":47000.0},{""state"":""CA"",""quarter_date"":""2023-01-01"",""total_sales"":26500.0},{""state"":""CA"",""quarter_date"":""2023-04-01"",""total_sales"":105500.0},{""state"":""IL"",""quarter_date"":""2023-01-01"",""total_sales"":30500.0},{""state"":""NY"",""quarter_date"":""2023-04-01"",""total_sales"":30000.0},{""state"":""PA"",""quarter_date"":""2023-04-01"",""total_sales"":26800.0},{""state"":""TX"",""quarter_date"":""2023-01-01"",""total_sales"":61500.0},{""state"":""TX"",""quarter_date"":""2023-04-01"",""total_sales"":44500.0}]"
+73,What is the CAW for male patients. CAW = cohort average weight in kilograms. The gender field can contain either 'female' or 'male',SELECT AVG(weight_kg) AS caw FROM patients WHERE gender = 'Male';,Defog,DermTreatment,"Let me analyze this request step by step:
+
+1. I need to find the CAW (cohort average weight) for male patients
+2. CAW is defined as the cohort average weight in kilograms
+3. The gender field contains either 'female' or 'male'
+
+From the database structure:
+- The `Patients` collection has a `gender` field (string type)
+- The `Patients` collection has a `weight_kg` field (float64 type)
+
+To solve this:
+1. I need to filter patients where gender is 'male'
+2. Calculate the average of their weight_kg values
+3. Return this as the CAW
+
+Since the instruction mentions that string comparisons should be case insensitive using the LOWER function, I'll apply that to the gender comparison.
+
+```python
+result = DermTreatment.CALCULATE(
+    caw_male=AVG(Patients.WHERE(LOWER(gender) == 'male').weight_kg)
+)
+```
+
+This code:
+1. Starts with the high-level `DermTreatment` collection to calculate a global average
+2. Filters the `Patients` collection to include only those where the gender (converted to lowercase) equals 'male'
+3. Calculates the average of the `weight_kg` field for these filtered patients
+4. Returns this value as `caw_male` (the cohort average weight for male patients)",13.142483711242676,"result = DermTreatment.CALCULATE(
+    caw_male=AVG(Patients.WHERE(LOWER(gender) == 'male').weight_kg)
+)",,claude,"[{""caw_male"":83.0}]"
+74,"What is the NPI for each year? Return the year, number of new patients, and NPINPI (new patients increase) = the increase in number of new patients compared to the previous year. New patients are defined as patients starting their first treatment . Only take into account patients with received treatemnts","WITH FirstTreatment AS (SELECT p.patient_id, MIN(t.start_dt) AS first_treatment_date FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id GROUP BY p.patient_id), NewPatientsPerYear AS (SELECT strftime('%Y', first_treatment_date) AS year, COUNT(patient_id) AS new_patients FROM FirstTreatment GROUP BY strftime('%Y', first_treatment_date)), NPI AS (SELECT year, new_patients, new_patients - LAG(new_patients, 1) OVER (ORDER BY year) AS npi FROM NewPatientsPerYear) SELECT year, new_patients, npi FROM NPI ORDER BY year;",Defog,DermTreatment,"Let me analyze this step by step:
+
+1. **Understanding the requirements:**
+   - Calculate NPI (New Patients Increase) for each year
+   - NPI = increase in number of new patients compared to the previous year
+   - New patients = patients starting their first treatment
+   - Only consider patients with received treatments
+   - Return: year, number of new patients, and NPI
+
+2. **Key insights:**
+   - I need to find each patient's first treatment date
+   - Group these by year to count new patients per year
+   - Calculate the year-over-year increase
+
+3. **Approach:**
+   - Start with Patients who have treatments
+   - Find each patient's first treatment (earliest start_dt)
+   - Extract the year from this first treatment
+   - Group by year and count patients
+   - Calculate the increase from previous year using window functions
+
+Let me build the query:
+
+```python
+# Step 1: Find patients with treatments and their first treatment year
+patients_with_first_treatment = Patients.WHERE(
+    HAS(treatments_received) == 1
+).CALCULATE(
+    patient_id,
+    first_treatment_year = YEAR(MIN(treatments_received.start_dt))
+)
+
+# Step 2: Group by year to count new patients per year
+new_patients_by_year = patients_with_first_treatment.PARTITION(
+    name=""years"", 
+    by=first_treatment_year
+).CALCULATE(
+    year = first_treatment_year,
+    num_new_patients = COUNT(Patients)
+)
+
+# Step 3: Calculate NPI (increase from previous year) and order by year
+result = new_patients_by_year.CALCULATE(
+    year,
+    num_new_patients,
+    npi = num_new_patients - PREV(num_new_patients, by=year.ASC(), default=0)
+).ORDER_BY(year.ASC())
+```
+
+This code:
+1. First filters patients to only include those who have received treatments using `HAS(treatments_received) == 1`
+2. For each patient, calculates their first treatment year by finding the minimum start date of all their treatments
+3. Partitions patients by their first treatment year to group them
+4. Counts the number of patients in each year group
+5. Uses the `PREV` window function to calculate the increase from the previous year (NPI)
+6. Orders the results by year in ascending order
+
+The `PREV` function with `default=0` ensures that for the first year, the NPI will be equal to the number of new patients (since there's no previous year to compare to).",17.10812544822693,"# Step 1: Find patients with treatments and their first treatment year
+patients_with_first_treatment = Patients.WHERE(
+    HAS(treatments_received) == 1
+).CALCULATE(
+    patient_id,
+    first_treatment_year = YEAR(MIN(treatments_received.start_dt))
+)
+
+# Step 2: Group by year to count new patients per year
+new_patients_by_year = patients_with_first_treatment.PARTITION(
+    name=""years"", 
+    by=first_treatment_year
+).CALCULATE(
+    year = first_treatment_year,
+    num_new_patients = COUNT(Patients)
+)
+
+# Step 3: Calculate NPI (increase from previous year) and order by year
+result = new_patients_by_year.CALCULATE(
+    year,
+    num_new_patients,
+    npi = num_new_patients - PREV(num_new_patients, by=year.ASC(), default=0)
+).ORDER_BY(year.ASC())",,claude,"[{""year"":2022,""num_new_patients"":6,""npi"":6},{""year"":2023,""num_new_patients"":1,""npi"":-5},{""year"":2025,""num_new_patients"":2,""npi"":1}]"
+107,What was the STR for wallet transactions in the previous month?STR (success transaction rate) = number of successful transactions / total number of transactions. To determine if a transaction is successfull it's status has to be 'success'. Only return the STR in a 0-1 scale,"SELECT (SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 1.0 / COUNT(*)) AS STR FROM wallet_transactions_daily WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'start of month', '-1 month');",Defog,Ewallet,"Let me analyze this request step by step:
+
+1. I need to calculate the STR (Success Transaction Rate) for wallet transactions in the previous month
+2. STR = number of successful transactions / total number of transactions
+3. A transaction is successful if its status is 'success'
+4. I need to return the STR on a 0-1 scale
+
+To solve this, I need to:
+1. Filter transactions from the previous month
+2. Count the total number of transactions in that period
+3. Count the number of successful transactions (status = 'success')
+4. Calculate the ratio
+
+Since I need to work with dates and the ""previous month"", I'll use the DATETIME function to get the current date and calculate the previous month's boundaries.
+
+```python
+# Get transactions from the previous month
+previous_month_transactions = Transactions.WHERE(
+    (created_at >= DATETIME('now', 'start of month', '-1 month')) &
+    (created_at < DATETIME('now', 'start of month'))
+)
+
+# Calculate STR
+result = Ewallet.CALCULATE(
+    str_value = COUNT(previous_month_transactions.WHERE(LOWER(status) == 'success')) / COUNT(previous_month_transactions)
+)
+```
+
+This code:
+1. First filters the `Transactions` collection to get only transactions from the previous month using DATETIME functions
+2. Uses the high-level `Ewallet` collection to calculate the STR
+3. Counts successful transactions (where status equals 'success', using LOWER for case-insensitive comparison)
+4. Divides by the total count of transactions in the previous month
+5. Returns the result as `str_value` on a 0-1 scale",13.280933856964111,"# Get transactions from the previous month
+previous_month_transactions = Transactions.WHERE(
+    (created_at >= DATETIME('now', 'start of month', '-1 month')) &
+    (created_at < DATETIME('now', 'start of month'))
+)
+
+# Calculate STR
+result = Ewallet.CALCULATE(
+    str_value = COUNT(previous_month_transactions.WHERE(LOWER(status) == 'success')) / COUNT(previous_month_transactions)
+)",,claude,"[{""str_value"":1.0}]"
+110,"How many distinct active users sent money per month in 2023? Return the number of active users per month (as a date), starting from the earliest date. Do not include merchants in the query. Only include successful transactions. Return the date in format year-month","SELECT strftime('%Y-%m', t.created_at) AS month, COUNT(DISTINCT t.sender_id) AS active_users FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE t.sender_type = 0 AND t.status = 'success' AND u.status = 'active' AND t.created_at >= '2023-01-01' AND t.created_at < '2024-01-01' GROUP BY month ORDER BY month;",Defog,Ewallet,"This query calculates the number of distinct active users who sent successful transactions each month during 2023.
+
+```python
+monthly_active_senders = Ewallet.Transactions.WHERE(
+    (YEAR(created_at) == 2023) &
+    (LOWER(status) == 'completed') &
+    (LOWER(sender_type) == 'user') &
+    (LOWER(sending_user.status) == 'active')
+).CALCULATE(
+    year_month_key=JOIN_STRINGS('-', YEAR(created_at), LPAD(MONTH(created_at), 2, '0'))
+).PARTITION(
+    name=""monthly_groups"", by=year_month_key
+).CALCULATE(
+    month=year_month_key,
+    num_active_users=NDISTINCT(Transactions.sending_user.uid)
+).ORDER_BY(month.ASC())
+```
+
+### Explanation:
+
+1.  **`Ewallet.Transactions.WHERE(...)`**: We start by filtering the `Transactions` collection to isolate the relevant data.
+    *   `YEAR(created_at) == 2023`: Restricts transactions to the year 2023.
+    *   `LOWER(status) == 'completed'`: Includes only successful transactions.
+    *   `LOWER(sender_type) == 'user'`: Ensures the sender is a user, not a merchant.
+    *   `LOWER(sending_user.status) == 'active'`: Filters for transactions sent by users who are marked as 'active'.
+
+2.  **`.CALCULATE(year_month_key=...)`**: A new field, `year_month_key`, is created to represent the month in a 'YYYY-MM' format. This is done by combining the year and the zero-padded month, which will be used for grouping.
+
+3.  **`.PARTITION(name=""monthly_groups"", by=year_month_key)`**: The filtered transactions are partitioned (grouped) by the `year_month_key`. This creates a separate group for each month in 2023.
+
+4.  **`.CALCULATE(month=..., num_active_users=...)`**: For each monthly group, we calculate the final output.
+    *   `month=year_month_key`: The month identifier is selected for the output.
+    *   `num_active_users=NDISTINCT(Transactions.sending_user.uid)`: We count the number of unique user IDs (`uid`) among the senders in each month's transaction group.
+
+5.  **`.ORDER_BY(month.ASC())`**: The final results are sorted by the month in ascending order, from January to December.",32.79582691192627,"monthly_active_senders = Ewallet.Transactions.WHERE(
+    (YEAR(created_at) == 2023) &
+    (LOWER(status) == 'completed') &
+    (LOWER(sender_type) == 'user') &
+    (LOWER(sending_user.status) == 'active')
+).CALCULATE(
+    year_month_key=JOIN_STRINGS('-', YEAR(created_at), LPAD(MONTH(created_at), 2, '0'))
+).PARTITION(
+    name=""monthly_groups"", by=year_month_key
+).CALCULATE(
+    month=year_month_key,
+    num_active_users=NDISTINCT(Transactions.sending_user.uid)
+).ORDER_BY(month.ASC())","cache_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=16141
+)] cached_content_token_count=16141 candidates_token_count=600 candidates_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=600
+)] prompt_token_count=26184 prompt_tokens_details=[ModalityTokenCount(
+  modality=<MediaModality.TEXT: 'TEXT'>,
+  token_count=26184
+)] thoughts_token_count=2468 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=29252 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",gemini,[]

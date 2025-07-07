@@ -27,7 +27,7 @@ from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
 import random
 import json
-from gradio_agent import run_question
+from gradio_agent import process_question
 
 # === Helper Functions ===
 
@@ -163,7 +163,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, **kwar
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=3, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=6, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -186,6 +186,8 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         if model_info["name"] == "gemini":
             model_specific_kwargs.pop("use_stream", None)
         try:
+            raw_response = None
+            usage = None
             response = client.ask(formatted_q, formatted_prompt, **model_specific_kwargs)
             duration = time.time() - start
             if isinstance(response, tuple):
@@ -256,9 +258,9 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    return frequency_based_selection(valid_runs, question, question_idx=question_idx)
+    return size_based_selection(valid_runs, question, question_idx=question_idx)
 
-def favourite_based_selection(all_runs, question, question_idx="?"):
+def favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx="?"):
     """
     Selects the Gemini result if available (response not empty and df not None), otherwise Claude (same), otherwise Gradio agent.
     Returns: response, duration, usage, model_name, gen_df_json
@@ -277,7 +279,7 @@ def favourite_based_selection(all_runs, question, question_idx="?"):
         return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
-    response, gradio_df = run_question(question)
+    response, gradio_df = process_question(question, dataset_name, db_name)
     if gradio_df is None:
         print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
         fallback = random.choice(all_runs)
@@ -312,7 +314,7 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
     if len(consensus) > 0:
         best_index = max(consensus, key=lambda i: consensus[i])
         best = valid_runs[best_index]
-        best_matches = model_matches[best_index]
+        best_matches = response_matches[best_index]
         best_model = best['model_name']
         
         # Build the detailed consensus message

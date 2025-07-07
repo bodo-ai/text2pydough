@@ -20,6 +20,9 @@ def map_all_profiles_to_metadata_format(metadata: dict, profiles: list, graph_na
     Returns:
         dict: Mapping from table name to collection info and cleaned-up profiles.
     """
+    if not profiles:
+        return {}
+
     result = {}
 
     # Build lookup: {table_path: (collection_name, {column_name: property_name})}
@@ -38,7 +41,7 @@ def map_all_profiles_to_metadata_format(metadata: dict, profiles: list, graph_na
 
     # Process each profile entry
     for table_profile in profiles:
-        table_name = table_profile["table_name"]
+        table_name = "".join(["main.",table_profile["table_name"]])
         if table_name not in table_lookup:
             continue
 
@@ -63,5 +66,4 @@ def map_all_profiles_to_metadata_format(metadata: dict, profiles: list, graph_na
                 "collection": collection_name,
                 "columns": columns_output
             }
-
     return result

@@ -388,10 +388,30 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
+def set_start_of_week(day_of_week):
+    from pydough.configs import DayOfWeek
+    if day_of_week == "Monday":
+        day_of_week = DayOfWeek.MONDAY
+    elif day_of_week == "Sunday":
+        day_of_week = DayOfWeek.SUNDAY
+    else:
+        raise ValueError(f"Invalid day of week: {day_of_week}")
+    
+    configs = pydough.active_session.config
+    configs.start_of_week = day_of_week
+    pydough.active_session.config = configs
+
 def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
     """Executes the Python code and returns the result or raises an exception."""
+    if extracted_code is None:
+        return None, "No code to execute"
     try:
         with metadata_lock:
+            from pydough.configs import DayOfWeek
+            configs = pydough.active_session.config
+            configs.start_of_week = DayOfWeek.MONDAY
+            pydough.active_session.config = configs
+
             pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
             pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
 
