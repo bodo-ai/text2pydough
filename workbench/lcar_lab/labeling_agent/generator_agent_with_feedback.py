@@ -376,19 +376,20 @@ class PydoughGeneratorAgent:
         self.cheatsheet_path = cheatsheet_path
         # Use round-robin Google credentials
         cred = get_next_google_credential()
-        # self.llm = ChatGoogleGenerativeAI(
-        #     model="gemini-2.0-flash",
-        #     temperature=0.99,
-        # )
+        os.environ["GOOGLE_API_KEY"] = cred.api_key
+        self.llm = ChatGoogleGenerativeAI(
+             model="gemini-2.0-flash",
+             temperature=0.99,
+         )
         # self.llm = ChatGoogleGenerativeAI(
         #     model="gemini-2.5-flash-preview-05-20",
         #     temperature=0.99,
         # )
-        self.llm = ChatAnthropicVertex(
-            model_name="claude-sonnet-4@20250514",
-            project=cred.project_id,
-            location="us-east5"
-        )
+        #self.llm = ChatAnthropicVertex(
+        #    model_name="claude-sonnet-4@20250514",
+        #    project=cred.project_id,
+        #    location="us-east5"
+        #)
         
         # Create PyDough execution tool
         self.pydough_tool = PyDoughExecutionTool(
