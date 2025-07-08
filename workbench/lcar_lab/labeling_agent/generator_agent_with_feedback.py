@@ -27,6 +27,7 @@ from pydantic import Field
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
 import io
+from google_cred_manager import get_next_google_credential
 
 load_dotenv()
 
@@ -373,21 +374,20 @@ class PydoughGeneratorAgent:
         self.db_path = db_path
         self.metadata_path = metadata_path
         self.cheatsheet_path = cheatsheet_path
-        
-        #Initialize LLM
+        # Use round-robin Google credentials
+        cred = get_next_google_credential()
+        print(f"GENERATOR: Using Google API key: {cred.api_key} for project {cred.project_id}")
         # self.llm = ChatGoogleGenerativeAI(
         #     model="gemini-2.0-flash",
-        #     temperature=0.99
+        #     temperature=0.99,
         # )
-        
         # self.llm = ChatGoogleGenerativeAI(
         #     model="gemini-2.5-flash-preview-05-20",
-        #     temperature=0.99
+        #     temperature=0.99,
         # )
-
         self.llm = ChatAnthropicVertex(
             model_name="claude-sonnet-4@20250514",
-            project="solid-drive-448717-p8",
+            project=cred.project_id,
             location="us-east5"
         )
         
