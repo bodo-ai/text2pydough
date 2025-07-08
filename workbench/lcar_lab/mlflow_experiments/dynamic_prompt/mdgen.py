@@ -6,8 +6,6 @@ def json_to_markdown(metadata: dict) -> str:
     inferred_reverse_relationships = defaultdict(list)
     fields_per_collection = {}
 
-    print("MEtadata", type(metadata))
-
     # Index reverse relationships and scalar fields
     for collections in metadata.values():
         for collection_name, collection in collections.items():
