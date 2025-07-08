@@ -381,7 +381,6 @@ class SQLEvaluatorAgent:
         self.db = SQLDatabase.from_uri(db_connection_string)
         # Use round-robin Google credentials
         cred = get_next_google_credential()
-        print(f"Using Google API Key: {cred.api_key} for project {cred.project_id}")
         os.environ["GOOGLE_API_KEY"] = cred.api_key
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash-preview-05-20",
