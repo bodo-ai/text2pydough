@@ -7,7 +7,7 @@ def json_to_markdown(metadata: dict) -> str:
     fields_per_collection = {}
 
     # Index reverse relationships and scalar fields
-    for collections in metadata.values():
+    for collections in metadata:
         for collection_name, collection in collections.items():
             props = collection.get("properties", {})
             fields_per_collection[collection_name] = [
