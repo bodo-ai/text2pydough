@@ -87,18 +87,22 @@ async def process_single_question(
 ) -> Dict[str, Any]:
     """
     Process a single question asynchronously.
-    
+
     Args:
-        question: The question to process
-        sql_query: The ground truth SQL query
-        generator_agent: The generator agent instance
-        evaluator_agent: The evaluator agent instance
-        question_id: The ID of the question
-        pbar: Progress bar instance
-        max_feedback_loops: Maximum number of feedback loops between generator and evaluator
-        
+        question: The question to process.
+        sql_query: The ground truth SQL query.
+        db_path: Path to the SQLite database file.
+        metadata_path: Path to the metadata graph JSON file.
+        cheatsheet_path: Path to the cheatsheet markdown file.
+        dataset_name: Name of the dataset being processed.
+        db_name: Name of the database being processed.
+        metadata: Metadata graph as a list of dictionaries.
+        question_id: The ID of the question.
+        pbar: Progress bar instance.
+        max_feedback_loops: Maximum number of feedback loops between generator and evaluator.
+
     Returns:
-        Dictionary containing the processing results
+        Dictionary containing the processing results, including generated responses, evaluation results, and feedback history.
     """
     # Initialize all variables that will be used in the result
     feedback = None
@@ -113,20 +117,16 @@ async def process_single_question(
     attempt_history = []
     
     try:
-        # Initialize agents
-        generator_agent = PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path)
-        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}")
-
         # Execute the ground truth SQL query once
-        sql_result = await run_in_thread(evaluator_agent._convert_sql_to_dataframe, sql_query)
+        sql_result = await run_in_thread(SQLEvaluatorAgent(f"sqlite:///{db_path}")._convert_sql_to_dataframe, sql_query)
         ground_truth_df = pd.read_json(StringIO(sql_result))
         
         # Feedback loop between generator and evaluator
         while feedback_loop_count < max_feedback_loops and not dataframe_comparison_boolean:
             try:
-                # Generate Pydough code and execute
+                # Generate and execute Pydough code using the generator agent
                 generated_code = await run_in_thread(
-                    generator_agent.generate_and_execute,
+                    PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path).generate_and_execute,
                     question,
                     feedback
                 )
@@ -174,9 +174,9 @@ async def process_single_question(
             if len(ground_truth_df) > MAX_ROWS:
                 sql_result = ground_truth_df.iloc[:MAX_ROWS].to_json(orient='records')
             
-            # Get feedback from evaluator
+            # Get feedback from the evaluator agent
             evaluation = await run_in_thread(
-                evaluator_agent.evaluate_responses,
+                SQLEvaluatorAgent(f"sqlite:///{db_path}").evaluate_responses,
                 question=question,
                 ground_truth_sql=sql_query,
                 generated_response=generated_response,
@@ -259,17 +259,20 @@ async def process_questions(
     max_feedback_loops: int = 3
 ) -> None:
     """
-    Process questions from CSV and store results in output CSV asynchronously.
-    
+    Process questions from a CSV file and store results in an output CSV asynchronously.
+
     Args:
-        questions_csv_path: Path to the questions CSV file
-        output_csv_path: Path to store the output CSV
-        db_path: Path to the SQLite database file
-        metadata_path: Path to the metadata graph JSON file
-        cheatsheet_path: Path to the cheatsheet markdown file
-        num_questions: Number of questions to process (None for all)
-        start_row: Row number to start processing from (0-based index)
-        max_feedback_loops: Maximum number of feedback loops between generator and evaluator
+        questions_csv_path: Path to the questions CSV file.
+        output_csv_path: Path to store the output CSV.
+        db_base_path: Base path to the SQLite database files.
+        metadata_base_path: Base path to the metadata graph JSON files.
+        cheatsheet_path: Path to the cheatsheet markdown file.
+        num_questions: Number of questions to process (None for all).
+        start_row: Row number to start processing from (0-based index).
+        max_feedback_loops: Maximum number of feedback loops between generator and evaluator.
+
+    Returns:
+        None. Results are saved to the specified output CSV file.
     """
     
     # Read questions
@@ -355,6 +358,17 @@ async def process_questions(
     pbar.close()
 
 async def main():
+    """
+    Main entry point for processing questions asynchronously.
+
+    Parses command-line arguments, sets up directories, verifies required files, and processes questions.
+
+    Args:
+        None.
+
+    Returns:
+        None. Results and metadata are saved to the specified output directory.
+    """
     # Declare global variable at the start
     global MAX_CONCURRENT_QUESTIONS
     

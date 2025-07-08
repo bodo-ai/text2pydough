@@ -113,20 +113,16 @@ async def process_single_question(
     attempt_history = []
     
     try:
-        # Initialize agents
-        generator_agent = PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path)
-        evaluator_agent = SQLEvaluatorAgent(f"sqlite:///{db_path}")
-
         # Execute the ground truth SQL query once
-        sql_result = await run_in_thread(evaluator_agent._convert_sql_to_dataframe, sql_query)
+        sql_result = await run_in_thread(SQLEvaluatorAgent(f"sqlite:///{db_path}")._convert_sql_to_dataframe, sql_query)
         ground_truth_df = pd.read_json(StringIO(sql_result))
         
         # Feedback loop between generator and evaluator
         while feedback_loop_count < max_feedback_loops and not dataframe_comparison_boolean:
             try:
-                # Generate Pydough code and execute
+                # Generate and execute Pydough code using the generator agent
                 generated_code = await run_in_thread(
-                    generator_agent.generate_and_execute,
+                    PydoughGeneratorAgent(db_path, metadata_path, cheatsheet_path).generate_and_execute,
                     question,
                     feedback
                 )
@@ -174,9 +170,9 @@ async def process_single_question(
             if len(ground_truth_df) > MAX_ROWS:
                 sql_result = ground_truth_df.iloc[:MAX_ROWS].to_json(orient='records')
             
-            # Get feedback from evaluator
+            # Get feedback from the evaluator agent
             evaluation = await run_in_thread(
-                evaluator_agent.evaluate_responses,
+                SQLEvaluatorAgent(f"sqlite:///{db_path}").evaluate_responses,
                 question=question,
                 ground_truth_sql=sql_query,
                 generated_response=generated_response,
