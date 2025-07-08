@@ -131,7 +131,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     print("MEtadata", type(db_content))
     return "".join([f"{question}\nDatabase schema:\n\n{str(db_content)}"]), prompt.format(
         script_content=script,
-        database_content=json_to_markdown(db_content),
+        database_content=json_to_markdown( dict(db_content)),
         similar_queries=similar_code,
         recomendation=recommendation
     )
