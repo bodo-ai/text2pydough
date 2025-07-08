@@ -376,7 +376,6 @@ class PydoughGeneratorAgent:
         self.cheatsheet_path = cheatsheet_path
         # Use round-robin Google credentials
         cred = get_next_google_credential()
-        print(f"GENERATOR: Using Google API key: {cred.api_key} for project {cred.project_id}")
         # self.llm = ChatGoogleGenerativeAI(
         #     model="gemini-2.0-flash",
         #     temperature=0.99,
