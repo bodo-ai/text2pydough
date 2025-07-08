@@ -335,7 +335,7 @@ def prepare_eval_data(args):
     db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
     return prompt, script, data, df, db_markdown_map
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, ensemble_selection_method="size", **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -395,6 +395,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             "df": df,
             "gen_df_json": gen_df_json,
             "sql": row.get("sql", ""),
+            "dataset_name": row.get("dataset_name", ""),
             "db_name": db_name,
         }
 
@@ -414,13 +415,19 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(all_runs, question, question_idx)
+    ensemble = ensemble_result(all_runs, question, question_idx, ensemble_selection_method=ensemble_selection_method)
     return ensemble, all_runs
 
-def ensemble_result(all_runs, question, question_idx="?"):
+def ensemble_result(all_runs, question, question_idx="?", ensemble_selection_method="size"):
     """
     Uses dataframe comparison to select the most consistent output.
     """
+    if ensemble_selection_method == "favourite":
+        dataset_name = all_runs[0]["dataset_name"] if all_runs and "dataset_name" in all_runs[0] else None
+        db_name = all_runs[0]["db_name"] if all_runs and "db_name" in all_runs[0] else None
+        print(f"[INFO] [Q{question_idx}] Favourite-based selection")
+        return favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx=question_idx)
+    
     valid_runs = [r for r in all_runs if r["df"] is not None]
     if not valid_runs:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
@@ -428,9 +435,17 @@ def ensemble_result(all_runs, question, question_idx="?"):
             if r["response"]:
                 print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
-        return None, 0.0, None
+        return None, 0.0, None, None, None
 
-    return size_based_selection(valid_runs, question, question_idx=question_idx)
+    if ensemble_selection_method == "size":
+        print(f"[INFO] [Q{question_idx}] Size-based selection")
+        return size_based_selection(valid_runs, question, question_idx=question_idx)
+    elif ensemble_selection_method == "frequency":
+        print(f"[INFO] [Q{question_idx}] Frequency-based selection")
+        return frequency_based_selection(valid_runs, question, question_idx=question_idx)
+    else:
+        print(f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size.")
+        return size_based_selection(valid_runs, question, question_idx=question_idx)
 
 def favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx="?"):
     """
@@ -533,7 +548,7 @@ def size_based_selection(valid_runs, question, question_idx="?"):
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, ensemble_selection_method="size", tries=1, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     def thread_wrapper(row_tuple):
         index, row = row_tuple
@@ -547,6 +562,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 script=script,
                 models_to_test=models_to_test,
                 db_markdown_map=db_markdown_map,
+                ensemble_selection_method=ensemble_selection_method,
+                tries=tries,
                 **kwargs
             )
             return (ensemble, all_runs)
@@ -608,6 +625,8 @@ def parse_arguments():
     parser.add_argument("--model_id", type=str)
     parser.add_argument("--num_threads", type=int)
     parser.add_argument("--use-parallel", action="store_true")
+    parser.add_argument("--ensemble-selection-method", type=str, choices=["size", "favourite", "frequency"], default="size", help="Ensemble selection method: size, favourite, frequency")
+    parser.add_argument("--tries", type=int, default=1, help="Number of tries for each model in parallel mode")
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
@@ -649,6 +668,8 @@ def main(git_hash):
         threads=args.num_threads,
         db_markdown_map=db_markdown_map,
         use_parallel=args.use_parallel,
+        ensemble_selection_method=args.ensemble_selection_method,
+        tries=args.tries,
         **kwargs
         )
 
