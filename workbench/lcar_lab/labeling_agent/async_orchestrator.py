@@ -317,7 +317,7 @@ async def process_questions(
                     cheatsheet_path=cheatsheet_path,
                     dataset_name=dataset_name,
                     db_name=db_name,
-                    metadata=json.load(open(metadata_path, 'r')),
+                    metadata = json.load(open(metadata_path)) if os.path.exists(metadata_path) else "",
                     question_id=idx + 1,
                     pbar=pbar,
                     max_feedback_loops=max_feedback_loops
