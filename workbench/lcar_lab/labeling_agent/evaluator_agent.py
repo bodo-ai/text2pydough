@@ -22,6 +22,7 @@ from tqdm import tqdm
 import mlflow
 import logging
 from pandas.api.types import is_numeric_dtype
+from google_cred_manager import get_next_google_credential
 
 # Global variable to control logging backend
 
@@ -378,22 +379,19 @@ class SQLEvaluatorAgent:
     def __init__(self, db_connection_string: str):
         """Initialize the SQL evaluator agent with a database connection."""
         self.db = SQLDatabase.from_uri(db_connection_string)
-        
-        # self.llm = ChatGoogleGenerativeAI(
-        #     model="gemini-2.0-flash",
-        #     temperature=0.99
-        # )
-        
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-preview-05-20",
-            temperature=0.99
-        )
+        # Use round-robin Google credentials
+        cred = get_next_google_credential()
+        os.environ["GOOGLE_API_KEY"] = cred.api_key
+        #self.llm = ChatGoogleGenerativeAI(
+        #    model="gemini-2.5-flash-preview-05-20",
+        #    temperature=0.99
+        #)
 
-        # self.llm = ChatAnthropicVertex(
-        #      model_name="claude-3-7-sonnet@20250219",
-        #      project="solid-drive-448717-p8",
-        #      location="us-east5"
-        # )
+        self.llm = ChatAnthropicVertex(
+             model_name="claude-sonnet-4@20250514",
+             project=cred.project_id,
+             location="us-east5"
+        )
         
         # Create SQL toolkit for database operations
         self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
@@ -880,4 +878,4 @@ Question: {input}"""
         pass
 
 if __name__ == "__main__":
-    main() 
+    main()

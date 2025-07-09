@@ -11,7 +11,7 @@ OUTPUT_DIR="${BASE_DIR}/mount-folder/labeling_data/gemini_2.0_flash"
 # Default values for optional parameters
 START_ROW=7000
 NUM_QUESTIONS=1000
-CONCURRENT_QUESTIONS=5
+CONCURRENT_QUESTIONS=15
 MAX_FEEDBACK_LOOPS=5
 # Create output directory if it doesn't exist
 #mkdir -p "${OUTPUT_DIR}"
