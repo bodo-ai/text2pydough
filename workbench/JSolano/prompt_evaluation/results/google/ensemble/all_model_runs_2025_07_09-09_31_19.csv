@@ -1,0 +1,690 @@
+question_index,question,model_name,attempt,response,code,duration,usage,df,gen_df_json,sql,generated_sql,dataset_name,db_name
+1,"For customers with at least 50 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate. To determine if a transaction is successfull it's status has to be 'success'",claude,0,"Let's break down this request:
+
+1. Find customers with at least 50 total transactions
+2. Calculate their transaction success rate (successful transactions / total transactions)
+3. A transaction is successful if its status is 'success'
+4. Return customer name and success rate
+5. Order from lowest to highest success rate
+
+Let me think about the approach:
+- Start with the `Customers` collection
+- Filter for customers who have at least 50 transactions
+- For each customer, calculate:
+  - Total number of transactions
+  - Number of successful transactions (status = 'success')
+  - Success rate = successful transactions / total transactions
+- Order by success rate ascending
+
+From the database structure:
+- `Customers` have `transactions_made` (list of transactions)
+- `Transactions` have a `status` field
+- We need to check if status equals 'success' (case-insensitive as per instructions)
+
+Here's the PyDough code:
+
+```python
+result = Customers.WHERE(
+    COUNT(transactions_made) >= 50
+).CALCULATE(
+    customer_name=name,
+    total_transactions=COUNT(transactions_made),
+    successful_transactions=COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))),
+    success_rate=COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to only include customers with at least 50 transactions using `WHERE(COUNT(transactions_made) >= 50)`
+3. Uses `CALCULATE` to compute:
+   - `customer_name`: The customer's name
+   - `total_transactions`: Total count of all transactions
+   - `successful_transactions`: Count of transactions where status is 'success' (case-insensitive)
+   - `success_rate`: The ratio of successful transactions to total transactions
+4. Orders the results by `success_rate` in ascending order (lowest to highest)","result = Customers.WHERE(
+    COUNT(transactions_made) >= 50
+).CALCULATE(
+    customer_name=name,
+    total_transactions=COUNT(transactions_made),
+    successful_transactions=COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))),
+    success_rate=COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())",15.334704637527466,,"Empty DataFrame
+Columns: [customer_name, total_transactions, successful_transactions, success_rate]
+Index: []",[],"WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  GROUP BY
+    sbtxcustid
+), _s3 AS (
+  SELECT
+    COUNT() AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    LOWER('success') = LOWER(sbtxstatus)
+  GROUP BY
+    sbtxcustid
+)
+SELECT
+  sbcustomer.sbcustname AS customer_name,
+  COALESCE(_s1.agg_0, 0) AS total_transactions,
+  COALESCE(_s3.agg_1, 0) AS successful_transactions,
+  CAST(COALESCE(_s3.agg_1, 0) AS REAL) / COALESCE(_s1.agg_0, 0) AS success_rate
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s1 AS _s1
+  ON _s1.customer_id = sbcustomer.sbcustid
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  NOT _s1.agg_0 IS NULL AND _s1.agg_0 >= 50
+ORDER BY
+  success_rate",Defog,Broker
+1,"For customers with at least 50 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate. To determine if a transaction is successfull it's status has to be 'success'",gemini,0,"```python
+customer_success_rates = Customers.CALCULATE(
+    customer_name=name,
+    total_transactions=COUNT(transactions_made),
+    successful_transactions=COUNT(transactions_made.WHERE(LOWER(status) == 'success'))
+).WHERE(
+    total_transactions >= 50
+).CALCULATE(
+    customer_name=customer_name,
+    success_rate=100.0 * successful_transactions / total_transactions
+).ORDER_BY(success_rate.ASC())
+```
+
+### Explanation
+
+1.  **`Customers.CALCULATE(...)`**: The query starts by iterating through the `Customers` collection. For each customer, it calculates:
+    *   `customer_name`: The name of the customer.
+    *   `total_transactions`: The total count of all transactions associated with the customer using `COUNT(transactions_made)`.
+    *   `successful_transactions`: The count of transactions where the `status` is 'success'. This is done by filtering the `transactions_made` sub-collection before counting. `LOWER()` is used for a case-insensitive comparison.
+
+2.  **`.WHERE(total_transactions >= 50)`**: This filters the results from the previous step, keeping only the customers who have 50 or more total transactions.
+
+3.  **`.CALCULATE(...)`**: A second `CALCULATE` is used to compute the final `success_rate` by dividing the `successful_transactions` by the `total_transactions` and multiplying by 100.0 to get a percentage. It also selects the `customer_name` for the final output.
+
+4.  **`.ORDER_BY(success_rate.ASC())`**: Finally, the result is sorted by the `success_rate` in ascending order, from lowest to highest.","customer_success_rates = Customers.CALCULATE(
+    customer_name=name,
+    total_transactions=COUNT(transactions_made),
+    successful_transactions=COUNT(transactions_made.WHERE(LOWER(status) == 'success'))
+).WHERE(
+    total_transactions >= 50
+).CALCULATE(
+    customer_name=customer_name,
+    success_rate=100.0 * successful_transactions / total_transactions
+).ORDER_BY(success_rate.ASC())",18.110373973846436,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20456)] cached_content_token_count=20456 candidates_token_count=404 candidates_tokens_details=None prompt_token_count=22460 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22460)] thoughts_token_count=1087 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23951 traffic_type=None","Empty DataFrame
+Columns: [customer_name, success_rate]
+Index: []",[],"WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  GROUP BY
+    sbtxcustid
+), _s3 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    LOWER(sbtxstatus) = 'success'
+  GROUP BY
+    sbtxcustid
+)
+SELECT
+  sbcustomer.sbcustname AS customer_name,
+  CAST((
+    100.0 * COALESCE(_s3.agg_0, 0)
+  ) AS REAL) / COALESCE(_s1.agg_1, 0) AS success_rate
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s1 AS _s1
+  ON _s1.customer_id = sbcustomer.sbcustid
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  NOT _s1.agg_1 IS NULL AND _s1.agg_1 >= 50
+ORDER BY
+  success_rate",Defog,Broker
+2,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",claude,0,"Let me analyze this step by step:
+
+1. I need to find customers with '.com' email addresses
+2. These customers must have bought stocks of FAANG companies (AMZN, AAPL, GOOGL, META, or NFLX)
+3. I need to count the distinct number of such customers
+
+From the database structure:
+- `Customers` have an `email` field and `transactions_made` (list of transactions)
+- `Transactions` have a `ticker` relationship to `Tickers`
+- `Tickers` have a `symbol` field that contains the ticker symbol
+
+My approach:
+1. Start with `Customers` collection
+2. Filter for customers with '.com' email addresses using `ENDSWITH`
+3. Filter for customers who have at least one transaction where the ticker symbol contains one of the FAANG symbols
+4. Count the distinct customers
+
+```python
+result = Broker.CALCULATE(
+    num_customers = COUNT(
+        Customers.WHERE(
+            ENDSWITH(email, '.com') & 
+            HAS(
+                transactions_made.WHERE(
+                    CONTAINS(ticker.symbol, 'AMZN') |
+                    CONTAINS(ticker.symbol, 'AAPL') |
+                    CONTAINS(ticker.symbol, 'GOOGL') |
+                    CONTAINS(ticker.symbol, 'META') |
+                    CONTAINS(ticker.symbol, 'NFLX')
+                )
+            ) == 1
+        )
+    )
+)
+```
+
+This code:
+1. Starts with the high-level `Broker` collection to perform a count operation
+2. Filters `Customers` to include only those with emails ending in '.com'
+3. Uses `HAS` to check if the customer has at least one transaction for FAANG stocks
+4. Within the transactions, checks if the ticker symbol contains any of the FAANG ticker symbols
+5. Counts the distinct customers meeting both criteria","result = Broker.CALCULATE(
+    num_customers = COUNT(
+        Customers.WHERE(
+            ENDSWITH(email, '.com') & 
+            HAS(
+                transactions_made.WHERE(
+                    CONTAINS(ticker.symbol, 'AMZN') |
+                    CONTAINS(ticker.symbol, 'AAPL') |
+                    CONTAINS(ticker.symbol, 'GOOGL') |
+                    CONTAINS(ticker.symbol, 'META') |
+                    CONTAINS(ticker.symbol, 'NFLX')
+                )
+            ) == 1
+        )
+    )
+)",15.995131015777588,,"   num_customers
+0              9","[{""num_customers"":9}]",SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,"WITH _s3 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtransaction.sbtxcustid AS customer_id
+  FROM main.sbtransaction AS sbtransaction
+  LEFT JOIN main.sbticker AS sbticker
+    ON sbticker.sbtickerid = sbtransaction.sbtxtickerid
+  WHERE
+    sbticker.sbtickersymbol LIKE '%AAPL%'
+    OR sbticker.sbtickersymbol LIKE '%AMZN%'
+    OR sbticker.sbtickersymbol LIKE '%GOOGL%'
+    OR sbticker.sbtickersymbol LIKE '%META%'
+    OR sbticker.sbtickersymbol LIKE '%NFLX%'
+  GROUP BY
+    sbtransaction.sbtxcustid
+)
+SELECT
+  COUNT() AS num_customers
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  (
+    NOT _s3.agg_0 IS NULL AND _s3.agg_0 > 0 AND sbcustomer.sbcustemail LIKE '%.com'
+  ) = 1",Defog,Broker
+2,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",gemini,0,"This query counts the number of distinct customers who have a '.com' email address and have traded at least one FAANG stock.
+
+```python
+# Define the list of FAANG ticker symbols for clarity and reusability.
+faang_tickers = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+
+# The main query to count the customers.
+# It starts by filtering the 'Customers' collection based on two conditions:
+# 1. The customer's email address ends with '.com'. This is checked using ENDSWITH and LOWER for case-insensitivity.
+# 2. The customer has at least one transaction involving a FAANG stock. This is verified using HAS() on the 'transactions_made' subcollection,
+#    which is filtered to include only transactions where the ticker symbol is in the 'faang_tickers' list.
+# Finally, COUNT() is used on the filtered customer list to get the total number of distinct customers who meet the criteria.
+# The result is calculated at the top-level 'Broker' collection.
+faang_customers_count = Broker.CALCULATE(
+    num_customers=COUNT(
+        Customers.WHERE(
+            (ENDSWITH(LOWER(email), '.com')) &
+            (HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_tickers))) == 1)
+        )
+    )
+)
+```","# Define the list of FAANG ticker symbols for clarity and reusability.
+faang_tickers = ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+
+# The main query to count the customers.
+# It starts by filtering the 'Customers' collection based on two conditions:
+# 1. The customer's email address ends with '.com'. This is checked using ENDSWITH and LOWER for case-insensitivity.
+# 2. The customer has at least one transaction involving a FAANG stock. This is verified using HAS() on the 'transactions_made' subcollection,
+#    which is filtered to include only transactions where the ticker symbol is in the 'faang_tickers' list.
+# Finally, COUNT() is used on the filtered customer list to get the total number of distinct customers who meet the criteria.
+# The result is calculated at the top-level 'Broker' collection.
+faang_customers_count = Broker.CALCULATE(
+    num_customers=COUNT(
+        Customers.WHERE(
+            (ENDSWITH(LOWER(email), '.com')) &
+            (HAS(transactions_made.WHERE(ISIN(ticker.symbol, faang_tickers))) == 1)
+        )
+    )
+)",24.572006464004517,"cache_tokens_details=None cached_content_token_count=None candidates_token_count=310 candidates_tokens_details=None prompt_token_count=22472 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22472)] thoughts_token_count=1392 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=24174 traffic_type=None","   num_customers
+0              9","[{""num_customers"":9}]",SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,"WITH _s3 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtransaction.sbtxcustid AS customer_id
+  FROM main.sbtransaction AS sbtransaction
+  LEFT JOIN main.sbticker AS sbticker
+    ON sbticker.sbtickerid = sbtransaction.sbtxtickerid
+  WHERE
+    sbticker.sbtickersymbol IN ('AMZN', 'AAPL', 'GOOGL', 'META', 'NFLX')
+  GROUP BY
+    sbtransaction.sbtxcustid
+)
+SELECT
+  COUNT() AS num_customers
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  (
+    NOT _s3.agg_0 IS NULL AND _s3.agg_0 > 0
+  ) = 1
+  AND LOWER(sbcustomer.sbcustemail) LIKE '%.com'",Defog,Broker
+3,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",claude,0,"Let me analyze this request step by step:
+
+1. I need to find Total Active Customers (TAC) who joined on or after January 1, 2023
+2. Group these customers by country
+3. Count the customers for each country
+4. Return the country and the count
+
+From the database structure:
+- `Customers` collection has:
+  - `join_date` field (to filter by join date)
+  - `status` field (to check if active)
+  - `country` field (to group by)
+
+Since TAC is defined as ""Total Active Customers who joined on or after January 1, 2023"", I need to:
+1. Filter customers who joined on or after January 1, 2023
+2. Filter for active customers (assuming status == ""active"" or similar)
+3. Group by country using PARTITION
+4. Count the customers in each country
+
+Let me build the PyDough query:
+
+```python
+# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to include only customers who:
+   - Joined on or after January 1, 2023 (`join_date >= ""2023-01-01""`)
+   - Have an active status (using case-insensitive comparison with `LOWER(status) == ""active""`)
+3. Partitions the filtered customers by `country`
+4. For each country group, calculates:
+   - The country name
+   - The count of customers (TAC) using `COUNT(Customers)`","# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",17.30401301383972,,"  country  tac_count
+0     USA         10","[{""country"":""USA"",""tac_count"":10}]","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","WITH _t0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbcustcountry AS country
+  FROM main.sbcustomer
+  WHERE
+    LOWER(sbcuststatus) = 'active' AND sbcustjoindate >= '2023-01-01'
+  GROUP BY
+    sbcustcountry
+)
+SELECT
+  country,
+  COALESCE(agg_0, 0) AS tac_count
+FROM _t0",Defog,Broker
+3,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",gemini,0,"An explanation of the code is below:
+This query first filters the `Customers` collection to include only those who are 'Active' and joined on or after January 1, 2023. It then partitions these filtered customers by their country. Finally, for each country partition, it calculates the country name and the total count of customers within that group, aliasing the count as `tac_count`.
+
+```python
+tac_by_country = Customers.WHERE(
+    (LOWER(status) == 'active') & (join_date >= '2023-01-01')
+).PARTITION(
+    name='country_groups', by=(country)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```","tac_by_country = Customers.WHERE(
+    (LOWER(status) == 'active') & (join_date >= '2023-01-01')
+).PARTITION(
+    name='country_groups', by=(country)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",16.711868286132812,"cache_tokens_details=None cached_content_token_count=None candidates_token_count=171 candidates_tokens_details=None prompt_token_count=22460 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22460)] thoughts_token_count=860 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23491 traffic_type=None","  country  tac_count
+0     USA         10","[{""country"":""USA"",""tac_count"":10}]","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","WITH _t0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbcustcountry AS country
+  FROM main.sbcustomer
+  WHERE
+    LOWER(sbcuststatus) = 'active' AND sbcustjoindate >= '2023-01-01'
+  GROUP BY
+    sbcustcountry
+)
+SELECT
+  country,
+  COALESCE(agg_0, 0) AS tac_count
+FROM _t0",Defog,Broker
+4,How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday.,claude,0,"Let me analyze this request step by step:
+
+1. I need to find transactions for stocks that occurred in each of the last 8 weeks (excluding the current week)
+2. For each week, I need to count:
+   - Total number of transactions
+   - Number of transactions that happened on weekends (Saturday and Sunday)
+
+First, let me think about the approach:
+- I need to filter transactions to only include those from the last 8 weeks (excluding current week)
+- I need to calculate which week each transaction belongs to
+- I need to determine if each transaction happened on a weekend
+- I need to group by week and count transactions
+
+From the database structure:
+- `Transactions` has a `date_time` field
+- `Transactions` has a relationship with `Tickers` through `ticker`
+- I need to filter for stock transactions (based on ticker type)
+
+Let me build this query:
+
+```python
+# First, calculate the date range for the last 8 weeks excluding current week
+# Current week starts from the most recent start of week
+# We need to go back 9 weeks from now and exclude the current week
+transactions_with_week_info = Transactions.WHERE(
+    # Filter for transactions in the last 9 weeks (we'll exclude current week later)
+    DATEDIFF(""weeks"", date_time, DATETIME(""now"")) <= 8
+).WHERE(
+    # Exclude current week
+    DATEDIFF(""weeks"", date_time, DATETIME(""now"")) >= 1
+).WHERE(
+    # Filter for stock transactions
+    ticker.ticker_type == ""STOCK""
+).CALCULATE(
+    # Calculate week offset from now (1 = last week, 2 = two weeks ago, etc.)
+    week_offset = DATEDIFF(""weeks"", date_time, DATETIME(""now"")),
+    # Determine if transaction happened on weekend
+    is_weekend = ISIN(DAYOFWEEK(date_time), (1, 7))  # 1=Sunday, 7=Saturday
+)
+
+# Group by week and calculate counts
+result = transactions_with_week_info.PARTITION(
+    name=""weeks"", 
+    by=week_offset
+).CALCULATE(
+    week_offset = week_offset,
+    total_transactions = COUNT(Transactions),
+    weekend_transactions = SUM(Transactions.CALCULATE(weekend_count = IFF(is_weekend, 1, 0)).weekend_count)
+).ORDER_BY(week_offset.ASC())
+```
+
+This code:
+1. Filters transactions to include only those from the last 8 weeks (excluding the current week)
+2. Filters for stock transactions only (ticker_type == ""STOCK"")
+3. Calculates the week offset from now (1 = last week, 2 = two weeks ago, etc.)
+4. Determines if each transaction happened on a weekend using DAYOFWEEK function
+5. Groups transactions by week using PARTITION
+6. Counts total transactions and weekend transactions for each week
+7. Orders results by week_offset in ascending order (1 to 8)","# First, calculate the date range for the last 8 weeks excluding current week
+# Current week starts from the most recent start of week
+# We need to go back 9 weeks from now and exclude the current week
+transactions_with_week_info = Transactions.WHERE(
+    # Filter for transactions in the last 9 weeks (we'll exclude current week later)
+    DATEDIFF(""weeks"", date_time, DATETIME(""now"")) <= 8
+).WHERE(
+    # Exclude current week
+    DATEDIFF(""weeks"", date_time, DATETIME(""now"")) >= 1
+).WHERE(
+    # Filter for stock transactions
+    ticker.ticker_type == ""STOCK""
+).CALCULATE(
+    # Calculate week offset from now (1 = last week, 2 = two weeks ago, etc.)
+    week_offset = DATEDIFF(""weeks"", date_time, DATETIME(""now"")),
+    # Determine if transaction happened on weekend
+    is_weekend = ISIN(DAYOFWEEK(date_time), (1, 7))  # 1=Sunday, 7=Saturday
+)
+
+# Group by week and calculate counts
+result = transactions_with_week_info.PARTITION(
+    name=""weeks"", 
+    by=week_offset
+).CALCULATE(
+    week_offset = week_offset,
+    total_transactions = COUNT(Transactions),
+    weekend_transactions = SUM(Transactions.CALCULATE(weekend_count = IFF(is_weekend, 1, 0)).weekend_count)
+).ORDER_BY(week_offset.ASC())",21.831107139587402,,,,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",,Defog,Broker
+4,How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday.,gemini,0,"This query calculates the total number of stock transactions and the number of weekend transactions for each of the last 8 weeks, excluding the current week.
+
+```python
+# Define the start and end of the 8-week period, excluding the current week.
+start_of_period = DATETIME('now', 'start of week', '-8 weeks')
+end_of_period = DATETIME('now', 'start of week')
+
+# Filter for stock transactions within the specified date range.
+recent_stock_transactions = Transactions.WHERE(
+    (LOWER(ticker.ticker_type) == 'stock') &
+    (date_time >= start_of_period) &
+    (date_time < end_of_period)
+)
+
+# For each transaction, determine its week and whether it occurred on a weekend.
+transaction_details = recent_stock_transactions.CALCULATE(
+    transaction_week = DATETIME(date_time, 'start of week'),
+    is_weekend = ISIN(DAYNAME(date_time), (""Saturday"", ""Sunday""))
+)
+
+# Group transactions by week and count the total and weekend transactions.
+weekly_summary = transaction_details.PARTITION(name=""weekly_groups"", by=transaction_week).CALCULATE(
+    week = transaction_week,
+    total_transactions = COUNT(Transactions),
+    weekend_transactions = SUM(is_weekend)
+).ORDER_BY(week.ASC())
+
+result = weekly_summary
+```
+
+### Explanation:
+
+1.  **`start_of_period` and `end_of_period`**: We first define the time window. `DATETIME('now', 'start of week')` gets the beginning of the current week. By subtracting 8 weeks from this, we establish the start of our 8-week analysis period. The query filters transactions up to, but not including, the start of the current week.
+2.  **`recent_stock_transactions`**: We start with the `Transactions` collection and apply two filters:
+    *   `LOWER(ticker.ticker_type) == 'stock'`: This selects only transactions related to stocks by checking the `ticker_type` of the associated ticker.
+    *   The date filter ensures we only consider transactions that occurred within our defined 8-week period.
+3.  **`transaction_details`**: In this step, we use `CALCULATE` to derive two new fields for each filtered transaction:
+    *   `transaction_week`: The start date of the week in which the transaction occurred, calculated using `DATETIME(date_time, 'start of week')`. This will be our key for grouping.
+    *   `is_weekend`: A boolean value that is `True` if the transaction's day name is ""Saturday"" or ""Sunday"", determined by the `DAYNAME` and `ISIN` functions.
+4.  **`weekly_summary`**: We use `PARTITION` to group the `transaction_details` by the `transaction_week`. For each weekly group, we `CALCULATE`:
+    *   `week`: The week identifier (the partition key).
+    *   `total_transactions`: The total count of transactions in that week's group using `COUNT(Transactions)`.
+    *   `weekend_transactions`: The count of weekend transactions, calculated by summing the `is_weekend` boolean field (where `True` is treated as 1 and `False` as 0).
+5.  **`ORDER_BY(week.ASC())`**: The final result is sorted by week in ascending order to ensure a chronological and deterministic output.","# Define the start and end of the 8-week period, excluding the current week.
+start_of_period = DATETIME('now', 'start of week', '-8 weeks')
+end_of_period = DATETIME('now', 'start of week')
+
+# Filter for stock transactions within the specified date range.
+recent_stock_transactions = Transactions.WHERE(
+    (LOWER(ticker.ticker_type) == 'stock') &
+    (date_time >= start_of_period) &
+    (date_time < end_of_period)
+)
+
+# For each transaction, determine its week and whether it occurred on a weekend.
+transaction_details = recent_stock_transactions.CALCULATE(
+    transaction_week = DATETIME(date_time, 'start of week'),
+    is_weekend = ISIN(DAYNAME(date_time), (""Saturday"", ""Sunday""))
+)
+
+# Group transactions by week and count the total and weekend transactions.
+weekly_summary = transaction_details.PARTITION(name=""weekly_groups"", by=transaction_week).CALCULATE(
+    week = transaction_week,
+    total_transactions = COUNT(Transactions),
+    weekend_transactions = SUM(is_weekend)
+).ORDER_BY(week.ASC())
+
+result = weekly_summary",30.930267095565796,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20456)] cached_content_token_count=20456 candidates_token_count=788 candidates_tokens_details=None prompt_token_count=22443 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22443)] thoughts_token_count=1884 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=25115 traffic_type=None",,,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",,Defog,Broker
+5,How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount. The week starts on Sunday,claude,0,"Let me analyze this request step by step:
+
+1. Find transactions made by customers from the USA
+2. Filter for transactions made last week (exclusive of the current week)
+3. The week starts on Sunday
+4. Return the number of transactions and total transaction amount
+
+First, let me understand the data model:
+- `Customers` have a `country` field
+- `Customers` have `transactions_made` (a list of transactions)
+- `Transactions` have `date_time` and `amount` fields
+
+To solve this, I need to:
+1. Filter customers from the USA
+2. Access their transactions
+3. Filter transactions for last week (using the fact that weeks start on Sunday)
+4. Count the transactions and sum the amounts
+
+For the date filtering, I need to:
+- Get the current date
+- Find the start of the current week (Sunday)
+- Go back 7 days to get the start of last week
+- Go back 1 day from the start of current week to get the end of last week
+
+Here's the PyDough code:
+
+```python
+# Get transactions from USA customers that occurred last week
+usa_transactions_last_week = Customers.WHERE(
+    LOWER(country) == LOWER(""USA"")
+).transactions_made.WHERE(
+    # Check if transaction date is >= start of last week (Sunday) AND < start of current week (Sunday)
+    (date_time >= DATETIME(""now"", ""start of week"", ""-7 days"")) &
+    (date_time < DATETIME(""now"", ""start of week""))
+)
+
+# Calculate the count and total amount
+result = Broker.CALCULATE(
+    num_transactions=COUNT(usa_transactions_last_week),
+    total_amount=SUM(usa_transactions_last_week.amount)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters for customers where the country is ""USA"" (using case-insensitive comparison with LOWER)
+3. Accesses their `transactions_made`
+4. Filters transactions to include only those from last week:
+   - `DATETIME(""now"", ""start of week"", ""-7 days"")` gets the start of last week (Sunday)
+   - `DATETIME(""now"", ""start of week"")` gets the start of the current week (Sunday)
+   - The WHERE clause ensures we only get transactions >= start of last week AND < start of current week
+5. Uses the high-level `Broker` collection to calculate:
+   - The count of these filtered transactions
+   - The sum of the transaction amounts","# Get transactions from USA customers that occurred last week
+usa_transactions_last_week = Customers.WHERE(
+    LOWER(country) == LOWER(""USA"")
+).transactions_made.WHERE(
+    # Check if transaction date is >= start of last week (Sunday) AND < start of current week (Sunday)
+    (date_time >= DATETIME(""now"", ""start of week"", ""-7 days"")) &
+    (date_time < DATETIME(""now"", ""start of week""))
+)
+
+# Calculate the count and total amount
+result = Broker.CALCULATE(
+    num_transactions=COUNT(usa_transactions_last_week),
+    total_amount=SUM(usa_transactions_last_week.amount)
+)",19.02456021308899,,"   num_transactions  total_amount
+0                11        195200","[{""num_transactions"":11,""total_amount"":195200}]","SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sbtxamount) AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    sbtxdatetime < DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day'
+    )
+    AND sbtxdatetime >= DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day',
+      '-7 day'
+    )
+  GROUP BY
+    sbtxcustid
+), _t0 AS (
+  SELECT
+    SUM(_s1.agg_0) AS agg_0,
+    SUM(_s1.agg_1) AS agg_1
+  FROM main.sbcustomer AS sbcustomer
+  JOIN _s1 AS _s1
+    ON _s1.customer_id = sbcustomer.sbcustid
+  WHERE
+    LOWER('USA') = LOWER(sbcustomer.sbcustcountry)
+)
+SELECT
+  COALESCE(agg_0, 0) AS num_transactions,
+  COALESCE(agg_1, 0) AS total_amount
+FROM _t0",Defog,Broker
+5,How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount. The week starts on Sunday,gemini,0,"This query calculates the total number of transactions and their combined amount for all customers located in the USA during the previous week.
+
+The query operates as follows:
+1.  It starts by filtering the `Transactions` collection.
+2.  The `WHERE` clause selects transactions that meet two criteria:
+    *   The customer's country is 'USA'. This is checked by accessing the related `customer` record and comparing its `country` field in a case-insensitive manner.
+    *   The transaction occurred last week. This is determined using the `DATEDIFF` function, which calculates the difference in full weeks between the transaction's `date_time` and the current time (`DATETIME('now')`). A difference of `1` indicates the transaction was in the previous week, given that weeks start on Sunday as specified.
+3.  Finally, `GRAPH.CALCULATE` is used to compute two aggregate values from this filtered set of transactions:
+    *   `number_of_transactions`: The total count of the filtered transactions.
+    *   `total_transaction_amount`: The sum of the `amount` for all filtered transactions.
+
+```python
+last_week_usa_transactions = Transactions.WHERE(
+    (LOWER(customer.country) == 'usa') & 
+    (DATEDIFF(""weeks"", date_time, DATETIME('now')) == 1)
+)
+
+result = GRAPH.CALCULATE(
+    number_of_transactions=COUNT(last_week_usa_transactions),
+    total_transaction_amount=SUM(last_week_usa_transactions.amount)
+)
+```","last_week_usa_transactions = Transactions.WHERE(
+    (LOWER(customer.country) == 'usa') & 
+    (DATEDIFF(""weeks"", date_time, DATETIME('now')) == 1)
+)
+
+result = GRAPH.CALCULATE(
+    number_of_transactions=COUNT(last_week_usa_transactions),
+    total_transaction_amount=SUM(last_week_usa_transactions.amount)
+)",23.38962149620056,"cache_tokens_details=None cached_content_token_count=None candidates_token_count=349 candidates_tokens_details=None prompt_token_count=22442 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22442)] thoughts_token_count=1596 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=24387 traffic_type=None",,,"SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');",,Defog,Broker

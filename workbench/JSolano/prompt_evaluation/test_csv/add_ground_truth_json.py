@@ -45,8 +45,8 @@ def process_csv(input_csv_path, output_csv_path, db_base_path):
     data.to_csv(output_csv_path, index=False)
 
 def main():
-    input_csv_path = "complete_corrected_questions_7_4.csv"  # Input CSV file path
-    output_csv_path = "../complete_corrected_questions_7_4_gtj.csv"  # Output CSV file path
+    input_csv_path = "corrected_questions.csv"  # Input CSV file path
+    output_csv_path = "corrected_questions_gtj.csv"  # Output CSV file path
     db_base_path = "../test_data/databases/Defog"  # Base folder where the databases are located
 
     # Process the CSV

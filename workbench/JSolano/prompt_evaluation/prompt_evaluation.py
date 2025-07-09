@@ -141,7 +141,7 @@ def correct(client, question, code, prompt, db_name):
     extracted_code = extract_python_code(code)
     env= {"pydough": pydough, "datetime": datetime}
     print(extracted_code)
-    result, error = execute_code_and_extract_result(extracted_code, env, db_name)
+    result, error, sql = execute_code_and_extract_result(extracted_code, env, db_name, start_of_week="Monday")
     if result is None:
         q = f"""Fix this Pydough code: {code}. Error: {error}. Question: {question}."""
         response = client.ask(q, prompt)
@@ -376,25 +376,28 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             if code:
                 print(f"[DEBUG] [Q{question_idx}] Executing code for {model_info['name']}")
                 env = {"pydough": pydough, "datetime": datetime}
-                df, _ = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path)
-                if df is not None:
-                    gen_df_json = df.to_json(orient="records", date_format="iso")
+                gen_df, _, gen_sql = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path, start_of_week="Monday")
+                if gen_df is not None:
+                    gen_df_json = gen_df.to_json(orient="records", date_format="iso")
                 print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if df is not None else 'None'}")
             
         except Exception as e:
-            raw_response, code, duration, usage, df = None, None, time.time() - start, None, None
+            raw_response, code, duration, usage, gen_df = None, None, time.time() - start, None, None
             print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
 
         return {
+            "question_index": question_idx,
+            "question": question,
             "model_name": model_info["name"],
             "attempt": attempt,
             "response": raw_response,
             "code": code,
             "duration": duration,
             "usage": usage,
-            "df": df,
+            "df": gen_df,
             "gen_df_json": gen_df_json,
             "sql": row.get("sql", ""),
+            "generated_sql": gen_sql,
             "dataset_name": row.get("dataset_name", ""),
             "db_name": db_name,
         }
@@ -459,25 +462,25 @@ def favourite_based_selection(all_runs, question, dataset_name, db_name, questio
     # Prefer Gemini if response is not empty and df is not None
     if gemini_run and gemini_run["response"] and gemini_run["df"] is not None:
         print(f"[INFO] [Q{question_idx}] Early match found. Returning Gemini result.")
-        return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"]
+        return gemini_run["response"], gemini_run["duration"], gemini_run["usage"], gemini_run["model_name"], gemini_run["gen_df_json"], gemini_run["generated_sql"]
     # Otherwise, prefer Claude if response is not empty and df is not None
     if claude_run and claude_run["response"] and claude_run["df"] is not None:
         print(f"[INFO] [Q{question_idx}] Early match found. Returning Claude result.")
-        return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"]
+        return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"], claude_run["generated_sql"]
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
     response, gradio_df = process_question(question, dataset_name, db_name)
     if gradio_df is None:
         print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
         fallback = random.choice(all_runs)
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"], fallback.get("generated_sql")
     gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
     # Use the other fields from the Claude run if available, else None
     duration = claude_run["duration"] if claude_run else None
     usage = claude_run["usage"] if claude_run else None
     # TODO: Add response, duration and usage from Gradio agent
     print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
-    return response, duration, usage, "Gradio agent", gen_df_json
+    return response, duration, usage, "Gradio agent", gen_df_json, None
 
 def frequency_based_selection(valid_runs, question, question_idx="?"):
     consensus = defaultdict(int)
@@ -516,17 +519,17 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
         consensus_details = " and ".join(match_breakdown)
         response_details = " and ".join(response_breakdown)
         print(f"[INFO] [Q{question_idx}] Ensemble selected: {best_model} with {consensus[best_index]} matches. {response_details} for the chosen response. {consensus_details} globally. ")
-        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"]
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
     if gemini_runs:
         fallback = random.choice(gemini_runs)
         print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"], fallback["generated_sql"]
     else:
         print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
         fallback = random.choice(valid_runs)
-        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
+        return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"], fallback["generated_sql"]
     
 def size_based_selection(valid_runs, question, question_idx="?"):
     """
@@ -543,10 +546,10 @@ def size_based_selection(valid_runs, question, question_idx="?"):
         best_index = max(size_dict, key=lambda i: size_dict[i])
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
-        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"]
+        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
-        return None, 0.0, None, None, None
+        return None, 0.0, None, None, None, None
 
 def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, ensemble_selection_method="size", tries=1, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
@@ -555,7 +558,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         row["question_index"] = index + 1
         if use_parallel: 
             # Return both the ensemble result and all model runs
-            ensemble, all_runs = run_models_parallel(
+            ensemble_result, all_runs = run_models_parallel(
                 prompt=prompt,
                 data=data,
                 row=row,
@@ -566,7 +569,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 tries=tries,
                 **kwargs
             )
-            return (ensemble, all_runs)
+            return (ensemble_result, all_runs)
         else:
             client = get_provider(provider, model_id)
             return get_response(
@@ -708,6 +711,7 @@ def build_results_df(df, results):
     df["usage"] = [r[2] if len(r) > 2 else None for r in results]
     df["model_name"] = [r[3] if len(r) > 3 else None for r in results]
     df["gen_df_json"] = [r[4] if len(r) > 4 else None for r in results]
+    df["gen_sql"] = [r[5] if len(r) > 5 else None for r in results]
     return df
 
 if __name__ == "__main__":
