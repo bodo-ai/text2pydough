@@ -413,12 +413,13 @@ def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, 
             pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
             pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
 
-        transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
-        exec(transformed_source, {}, local_env)
-        last_variable = list(local_env.values())[-1]
-        result_df = convert_to_df(last_variable)
-        sql = convert_to_sql(last_variable)
-        return result_df, None, sql  # Return result and no exception
+            transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
+            exec(transformed_source, {}, local_env)
+            last_variable = list(local_env.values())[-1]
+            result_df = convert_to_df(last_variable)
+            sql = convert_to_sql(last_variable)
+            return result_df, None, sql  # Return result and no exception
+        
     except Exception as e:
         return None, str(e), None  # Return None as result and exception message
 
@@ -472,7 +473,6 @@ def process_row(row,db_base_path,metadata_base_path):
         db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
         metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        print(question, db_name)
 
         result, exception, gen_sql = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
