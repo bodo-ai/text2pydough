@@ -29,7 +29,7 @@ from collections import defaultdict
 import random
 import json
 from gradio_agent import process_question, run_question
-from profile_to_metadata import map_all_profiles_to_metadata_format
+from profile_to_metadata import map_all_profiles_to_markdown, map_all_profiles_to_metadata_format
 # === Helper Functions ===
 
 models_to_test = [ 
@@ -130,7 +130,7 @@ def format_prompt(prompt, data, question, script, db_name=None, dataset_name=Non
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    return "".join([f"{question}\nDatabase schema:\n\n{json_to_markdown(db_content)}"]), prompt.format(
+    return "".join([f"{question}\nDatabase schema:\n\n{str(db_content)}\nHere are some relevant collections and columns that might help answer the question\n{str(mapping_metadata)}"]), prompt.format(
         script_content=script,
         #database_content=json_to_markdown(db_content),
         #similar_queries=similar_code,
@@ -165,7 +165,7 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, mappin
     #response= correct(client, formatted_q, response1, formatted_prompt, db_name=db_name)
     return response1, duration, None 
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, mapping_metadata=None, tries=1, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, mapping_metadata=None, tries=3, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -235,6 +235,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
             futures = [executor.submit(run_model, model, attempt) for model in models_to_test]
             all_runs.extend(f.result() for f in futures)
 
+        
     print(f"[DEBUG] [Q{question_idx}] Completed all runs. Total: {len(all_runs)}")
     for run in all_runs:
         print(f"[DEBUG] [Q{question_idx}] {run['model_name']} | Attempt: {run['attempt']} | DF: {'✅' if run['df'] is not None else '❌'}")
@@ -243,6 +244,8 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     grouped = {}
     for run in all_runs:
         grouped.setdefault(run["model_name"], []).append(run)
+
+
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
     ensemble = ensemble_result(all_runs, question, question_idx)
@@ -261,7 +264,7 @@ def ensemble_result(all_runs, question, question_idx="?"):
                 return r["response"], r["duration"], r["usage"], r["model_name"], None
         return None, 0.0, None
 
-    return size_based_selection(valid_runs, question, question_idx=question_idx)
+    return frequency_based_selection(valid_runs, question, question_idx=question_idx)
 
 def favourite_based_selection(all_runs, question, question_idx="?"):
     """
@@ -376,12 +379,13 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         db_content = ""
         if db_name and db_markdown_map and db_name in db_markdown_map:
             db_content = db_markdown_map[db_name]
-
+        if dataset_name == 'spider_data':
+            dataset_name = 'Spider'
         result = process_question(question, dataset_name, db_name)
         json_data = None
         if result:
             json_data = result.get("json_data", None)
-            mapping_metadata = map_all_profiles_to_metadata_format(db_content,json_data, db_name)
+            mapping_metadata = map_all_profiles_to_markdown(db_content,json_data, db_name)
             
         row["question_index"] = index + 1
         if use_parallel: 
@@ -419,7 +423,7 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         all_model_runs_per_question = [r[1] for r in results]
         return ensembles, all_model_runs_per_question
     else:
-        return results
+        return results, []
 
 def parse_extra_args(extra_args):
     kwargs = {}
@@ -449,6 +453,7 @@ def main(git_hash):
     debug_log = "debug_log.txt"
     sys.stdout = open("debug_log.txt", "w")
     sys.stderr = sys.stdout
+    print("wut")
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, default="MLFlow")
     parser.add_argument("--name", type=str, default="MLFlow project")
@@ -463,6 +468,7 @@ def main(git_hash):
     parser.add_argument("--num_threads", type=int)
     parser.add_argument("--use-parallel", action="store_true")
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
+    parser.add_argument("--training_path", type=str)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
     
@@ -582,26 +588,65 @@ def main(git_hash):
             non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
             matches_per_complexity_db  = match_df.groupby(["complexity", "db_name"]).size()
 
-            # Combo (difficulty + complexity + db)
-            match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
-            match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
-            match_pct_combo_csv = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
-            match_pct_combo_df.to_csv(match_pct_combo_csv, index=False)
-            mlflow.log_artifact(match_pct_combo_csv)
+            # Combo: difficulty + complexity + db_name
+            match_stats_combo_db_df = (
+                pd.DataFrame({
+                    "total_count": total_per_combo_db,
+                    "match_count": matches_per_combo_db
+                })
+                .fillna(0)
+                .astype(int)
+            )
 
-            # Difficulty + db
-            match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
-            match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
-            match_pct_difficulty_csv = f"{output_path}/match_percentage_per_difficulty_db.csv"
-            match_pct_difficulty_df.to_csv(match_pct_difficulty_csv, index=False)
-            mlflow.log_artifact(match_pct_difficulty_csv)
+            match_stats_combo_db_df["match_percentage"] = (
+                match_stats_combo_db_df["match_count"] / match_stats_combo_db_df["total_count"]
+            )
 
-            # Complexity + db
-            match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
-            match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
-            match_pct_complexity_csv = f"{output_path}/match_percentage_per_complexity_db.csv"
-            match_pct_complexity_df.to_csv(match_pct_complexity_csv, index=False)
-            mlflow.log_artifact(match_pct_complexity_csv)
+            match_stats_combo_db_df = match_stats_combo_db_df.reset_index()
+            match_stats_combo_db_csv = f"{output_path}/match_stats_per_difficulty_complexity_db.csv"
+            match_stats_combo_db_df.to_csv(match_stats_combo_db_csv, index=False)
+            mlflow.log_artifact(match_stats_combo_db_csv)
+
+            # Difficulty + db_name
+            match_stats_difficulty_db_df = (
+                pd.DataFrame({
+                    "total_count": total_per_difficulty_db,
+                    "match_count": matches_per_difficulty_db
+                })
+                .fillna(0)
+                .astype(int)
+            )
+
+            match_stats_difficulty_db_df["match_percentage"] = (
+                match_stats_difficulty_db_df["match_count"] / match_stats_difficulty_db_df["total_count"]
+            )
+
+            match_stats_difficulty_db_df = match_stats_difficulty_db_df.reset_index()
+            match_stats_difficulty_csv = f"{output_path}/match_stats_per_difficulty_db.csv"
+            match_stats_difficulty_db_df.to_csv(match_stats_difficulty_csv, index=False)
+            mlflow.log_artifact(match_stats_difficulty_csv)
+
+
+            # Complexity + db_name
+            match_stats_complexity_db_df = (
+                pd.DataFrame({
+                    "total_count": total_per_complexity_db,
+                    "match_count": matches_per_complexity_db
+                })
+                .fillna(0)
+                .astype(int)
+            )
+
+            match_stats_complexity_db_df["match_percentage"] = (
+                match_stats_complexity_db_df["match_count"] / match_stats_complexity_db_df["total_count"]
+            )
+
+            match_stats_complexity_db_df = match_stats_complexity_db_df.reset_index()
+            match_stats_complexity_csv = f"{output_path}/match_stats_per_complexity_db.csv"
+            match_stats_complexity_db_df.to_csv(match_stats_complexity_csv, index=False)
+            mlflow.log_artifact(match_stats_complexity_csv)
+
+
             # Save raw counts as CSV artifacts if needed
             matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
             matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
@@ -661,6 +706,8 @@ def main(git_hash):
             mlflow.log_artifact(combo_path)
             mlflow.log_artifact(complexity_path)
             mlflow.log_artifact(difficulty_path)
+            if args.training_path:
+                mlflow.log_artifacts(args.training_path, 'train_data')
         mlflow.log_params(filtered_args)
         mlflow.log_params(kwargs)
         mlflow.log_metrics(percentages)
