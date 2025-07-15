@@ -610,6 +610,7 @@ INSERT INTO payments_made (_id, vendor_name, payment_date, payment_amount, payme
 -- Enable foreign key support in SQLite
 PRAGMA foreign_keys = ON;
 
+---DERM TREATMENT SCHEMA
 -- Dimension tables with primary keys
 CREATE TABLE doctors (
     doc_id INTEGER PRIMARY KEY,

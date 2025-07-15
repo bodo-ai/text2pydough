@@ -1,0 +1,2847 @@
+question_index,question,model_name,attempt,response,code,duration,usage,df,gen_df_json,sql,generated_sql,dataset_name,db_name
+1,"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate. To determine if a transaction is successfull it's status has to be 'success'",claude,0,"Let's break down this request:
+
+1. Find customers with at least 5 total transactions
+2. Calculate their transaction success rate (successful transactions / total transactions)
+3. A transaction is successful if its status is 'success'
+4. Return customer name and success rate
+5. Order from lowest to highest success rate
+
+Let me think about the approach:
+- Start with the `Customers` collection
+- Filter for customers who have at least 5 transactions
+- For each customer, calculate:
+  - Total number of transactions
+  - Number of successful transactions (status = 'success')
+  - Success rate = successful transactions / total transactions
+- Order by success rate ascending
+
+From the database structure:
+- `Customers` have `transactions_made` (list of transactions)
+- `Transactions` have a `status` field
+
+Here's the PyDough code:
+
+```python
+result = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to only include customers with at least 5 transactions using `WHERE(COUNT(transactions_made) >= 5)`
+3. Uses `CALCULATE` to compute:
+   - `customer_name`: The customer's name
+   - `success_rate`: Calculated as the percentage of successful transactions (where status equals 'success' case-insensitively) divided by total transactions
+4. Orders the results by `success_rate` in ascending order (lowest to highest)
+
+The success rate is multiplied by 100.0 to express it as a percentage. The `LOWER()` function is used for case-insensitive string comparison as required by the instructions.","result = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())",12.805726528167725,,"  customer_name  success_rate
+0      john doe          60.0
+1    Jane Smith          87.5
+2   Bob Johnson         100.0","[{""customer_name"":""john doe"",""success_rate"":60.0},{""customer_name"":""Jane Smith"",""success_rate"":87.5},{""customer_name"":""Bob Johnson"",""success_rate"":100.0}]","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  GROUP BY
+    sbtxcustid
+), _s3 AS (
+  SELECT
+    COUNT() AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    LOWER('success') = LOWER(sbtxstatus)
+  GROUP BY
+    sbtxcustid
+)
+SELECT
+  sbcustomer.sbcustname AS customer_name,
+  CAST((
+    100.0 * COALESCE(_s3.agg_1, 0)
+  ) AS REAL) / COALESCE(_s1.agg_0, 0) AS success_rate
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s1 AS _s1
+  ON _s1.customer_id = sbcustomer.sbcustid
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  NOT _s1.agg_0 IS NULL AND _s1.agg_0 >= 5
+ORDER BY
+  success_rate",Defog,Broker
+1,"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate. To determine if a transaction is successfull it's status has to be 'success'",gemini,0,"```python
+customer_success_rates = Customers.WHERE(COUNT(transactions_made) >= 5).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == 'success')) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())
+```
+
+### Explanation
+
+1.  **`Customers.WHERE(COUNT(transactions_made) >= 5)`**: This line starts with the `Customers` collection and filters it to include only customers who have made 5 or more transactions by counting the records in the `transactions_made` sub-collection.
+2.  **`.CALCULATE(...)`**: This function is used to compute the required output fields for the filtered customers.
+3.  **`customer_name=name`**: Selects the customer's name and renames it to `customer_name`.
+4.  **`success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == 'success')) / COUNT(transactions_made)`**: This calculates the success rate.
+    *   `COUNT(transactions_made.WHERE(LOWER(status) == 'success'))` counts the number of successful transactions by filtering the `transactions_made` sub-collection for records where the `status` is 'success' (using `LOWER` for case-insensitivity).
+    *   `COUNT(transactions_made)` counts the total number of transactions for the customer.
+    *   The ratio is multiplied by `100.0` to get a percentage.
+5.  **`.ORDER_BY(success_rate.ASC())`**: This sorts the final results in ascending order based on the calculated `success_rate`.","customer_success_rates = Customers.WHERE(COUNT(transactions_made) >= 5).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == 'success')) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())",11.013376474380493,"cache_tokens_details=None cached_content_token_count=None candidates_token_count=386 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=386)] prompt_token_count=22112 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22112)] thoughts_token_count=536 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23034 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","  customer_name  success_rate
+0      john doe          60.0
+1    Jane Smith          87.5
+2   Bob Johnson         100.0","[{""customer_name"":""john doe"",""success_rate"":60.0},{""customer_name"":""Jane Smith"",""success_rate"":87.5},{""customer_name"":""Bob Johnson"",""success_rate"":100.0}]","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  GROUP BY
+    sbtxcustid
+), _s3 AS (
+  SELECT
+    COUNT() AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    LOWER(sbtxstatus) = 'success'
+  GROUP BY
+    sbtxcustid
+)
+SELECT
+  sbcustomer.sbcustname AS customer_name,
+  CAST((
+    100.0 * COALESCE(_s3.agg_1, 0)
+  ) AS REAL) / COALESCE(_s1.agg_0, 0) AS success_rate
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s1 AS _s1
+  ON _s1.customer_id = sbcustomer.sbcustid
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  NOT _s1.agg_0 IS NULL AND _s1.agg_0 >= 5
+ORDER BY
+  success_rate",Defog,Broker
+1,"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate. To determine if a transaction is successfull it's status has to be 'success'",claude,1,"Let's break down this request:
+
+1. Find customers with at least 5 total transactions
+2. Calculate their transaction success rate (successful transactions / total transactions)
+3. A transaction is successful if its status is 'success'
+4. Return customer name and success rate
+5. Order from lowest to highest success rate
+
+Let me think about the approach:
+- Start with the `Customers` collection
+- Filter for customers who have at least 5 transactions
+- For each customer, calculate:
+  - Total number of transactions
+  - Number of successful transactions (status = 'success')
+  - Success rate = successful transactions / total transactions
+- Order by success rate ascending
+
+From the database structure:
+- `Customers` have `transactions_made` (list of transactions)
+- `Transactions` have a `status` field
+
+Here's the PyDough code:
+
+```python
+result = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to only include customers with at least 5 transactions using `WHERE(COUNT(transactions_made) >= 5)`
+3. Uses `CALCULATE` to compute:
+   - `customer_name`: The customer's name
+   - `success_rate`: Calculated as the percentage of successful transactions (where status equals 'success' case-insensitively) divided by total transactions
+4. Orders the results by `success_rate` in ascending order (lowest to highest)
+
+The success rate is multiplied by 100.0 to express it as a percentage. The `LOWER()` function is used for case-insensitive string comparison as required by the instructions.","result = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == LOWER('success'))) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())",17.171143770217896,,"  customer_name  success_rate
+0      john doe          60.0
+1    Jane Smith          87.5
+2   Bob Johnson         100.0","[{""customer_name"":""john doe"",""success_rate"":60.0},{""customer_name"":""Jane Smith"",""success_rate"":87.5},{""customer_name"":""Bob Johnson"",""success_rate"":100.0}]","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  GROUP BY
+    sbtxcustid
+), _s3 AS (
+  SELECT
+    COUNT() AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    LOWER('success') = LOWER(sbtxstatus)
+  GROUP BY
+    sbtxcustid
+)
+SELECT
+  sbcustomer.sbcustname AS customer_name,
+  CAST((
+    100.0 * COALESCE(_s3.agg_1, 0)
+  ) AS REAL) / COALESCE(_s1.agg_0, 0) AS success_rate
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s1 AS _s1
+  ON _s1.customer_id = sbcustomer.sbcustid
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  NOT _s1.agg_0 IS NULL AND _s1.agg_0 >= 5
+ORDER BY
+  success_rate",Defog,Broker
+1,"For customers with at least 5 total transactions, what is their transaction success rate? Return the customer name and success rate, ordered from lowest to highest success rate. To determine if a transaction is successfull it's status has to be 'success'",gemini,1,"This query calculates the transaction success rate for customers who have made at least five transactions.
+
+```python
+customer_success_rates = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == 'success')) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())
+```
+
+### Explanation
+
+1.  **`Customers.WHERE(COUNT(transactions_made) >= 5)`**: This line starts with the `Customers` collection and filters it to include only customers who have a total transaction count of 5 or more.
+2.  **`.CALCULATE(...)`**: For the filtered customers, this function calculates two new fields:
+    *   `customer_name=name`: Selects the customer's name.
+    *   `success_rate=...`: Calculates the success rate as a percentage. It does this by counting the number of transactions with a status of 'success' (case-insensitively), multiplying by 100.0 for percentage formatting, and dividing by the total number of transactions for that customer.
+3.  **`.ORDER_BY(success_rate.ASC())`**: Finally, the result is sorted by the calculated `success_rate` in ascending order, from lowest to highest.","customer_success_rates = Customers.WHERE(
+    COUNT(transactions_made) >= 5
+).CALCULATE(
+    customer_name=name,
+    success_rate=100.0 * COUNT(transactions_made.WHERE(LOWER(status) == 'success')) / COUNT(transactions_made)
+).ORDER_BY(success_rate.ASC())",14.044114589691162,"cache_tokens_details=None cached_content_token_count=None candidates_token_count=306 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=306)] prompt_token_count=22112 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22112)] thoughts_token_count=713 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23131 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","  customer_name  success_rate
+0      john doe          60.0
+1    Jane Smith          87.5
+2   Bob Johnson         100.0","[{""customer_name"":""john doe"",""success_rate"":60.0},{""customer_name"":""Jane Smith"",""success_rate"":87.5},{""customer_name"":""Bob Johnson"",""success_rate"":100.0}]","WITH cust_tx_stats AS (SELECT c.sbCustId, c.sbCustName, COUNT(t.sbTxId) AS total_tx, SUM(CASE WHEN t.sbTxStatus = 'success' THEN 1 ELSE 0 END) AS success_tx FROM sbCustomer AS c JOIN sbTransaction AS t ON c.sbCustId = t.sbTxCustId GROUP BY c.sbCustId, c.sbCustName) SELECT sbCustName, CAST(success_tx AS FLOAT) / total_tx * 100 AS success_rate FROM cust_tx_stats WHERE total_tx >= 5 ORDER BY CASE WHEN success_rate IS NULL THEN 1 ELSE 0 END, success_rate;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  GROUP BY
+    sbtxcustid
+), _s3 AS (
+  SELECT
+    COUNT() AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    LOWER(sbtxstatus) = 'success'
+  GROUP BY
+    sbtxcustid
+)
+SELECT
+  sbcustomer.sbcustname AS customer_name,
+  CAST((
+    100.0 * COALESCE(_s3.agg_1, 0)
+  ) AS REAL) / COALESCE(_s1.agg_0, 0) AS success_rate
+FROM main.sbcustomer AS sbcustomer
+LEFT JOIN _s1 AS _s1
+  ON _s1.customer_id = sbcustomer.sbcustid
+LEFT JOIN _s3 AS _s3
+  ON _s3.customer_id = sbcustomer.sbcustid
+WHERE
+  NOT _s1.agg_0 IS NULL AND _s1.agg_0 >= 5
+ORDER BY
+  success_rate",Defog,Broker
+2,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",claude,0,,,2.8758485317230225,,,No valid genrated df,SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,No valid SQL,Defog,Broker
+2,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",gemini,0,,,2.1649551391601562,,,No valid genrated df,SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,No valid SQL,Defog,Broker
+2,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",claude,1,,,2.327623128890991,,,No valid genrated df,SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,No valid SQL,Defog,Broker
+2,"How many distinct customers with a .com email address bought stocks of FAANG companies (Amazon, Apple, Google, Meta or Netflix)?Customers with a '.com' email address who bought FAANG stocks (ticker symbol contains 'AMZN', 'AAPL', 'GOOGL', 'META' or 'NFLX')",gemini,1,,,2.1653902530670166,,,No valid genrated df,SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction AS t JOIN sbCustomer AS c ON t.sbTxCustId = c.sbCustId JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND (tk.sbTickerSymbol LIKE 'AMZN' OR tk.sbTickerSymbol LIKE 'AAPL' OR tk.sbTickerSymbol LIKE 'GOOGL' OR tk.sbTickerSymbol LIKE 'META' OR tk.sbTickerSymbol LIKE 'NFLX');,No valid SQL,Defog,Broker
+3,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",claude,0,"Let me analyze this request step by step:
+
+1. I need to find Total Active Customers (TAC) who joined on or after January 1, 2023
+2. Group these customers by country
+3. Count the customers for each country
+4. Return the country and the count
+
+From the database structure:
+- `Customers` collection has:
+  - `join_date` field (to filter by join date)
+  - `status` field (to check if active)
+  - `country` field (to group by)
+
+Since TAC is defined as ""Total Active Customers who joined on or after January 1, 2023"", I need to:
+1. Filter customers who joined on or after January 1, 2023
+2. Filter for active customers (assuming status == ""active"" or similar)
+3. Group by country using PARTITION
+4. Count the customers in each country
+
+Let me build the PyDough query:
+
+```python
+# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to include only customers who:
+   - Joined on or after January 1, 2023 (`join_date >= ""2023-01-01""`)
+   - Have an active status (using case-insensitive comparison with `LOWER(status) == ""active""`)
+3. Partitions the filtered customers by `country`
+4. For each country group, calculates:
+   - The country name
+   - The count of customers (TAC) using `COUNT(Customers)`","# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",16.64153027534485,,"  country  tac_count
+0     USA         10","[{""country"":""USA"",""tac_count"":10}]","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","WITH _t0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbcustcountry AS country
+  FROM main.sbcustomer
+  WHERE
+    LOWER(sbcuststatus) = 'active' AND sbcustjoindate >= '2023-01-01'
+  GROUP BY
+    sbcustcountry
+)
+SELECT
+  country,
+  COALESCE(agg_0, 0) AS tac_count
+FROM _t0",Defog,Broker
+3,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",gemini,0,"Based on your request, I will generate a PyDough query to count the total number of active customers (TAC) who joined on or after January 1, 2023, grouped by their country.
+
+### Explanation
+
+1.  **Filter Customers**: The query starts by filtering the `Customers` collection to include only those who are 'Active' and joined on or after January 1, 2023. The `LOWER()` function is used on the `status` field to ensure the comparison is case-insensitive.
+2.  **Partition by Country**: The filtered customers are then partitioned into groups based on their `country` using the `PARTITION` function.
+3.  **Calculate Count**: Finally, `CALCULATE` is used on the partitioned data to compute the count of customers within each country group. The result includes the `country` and the corresponding count, which is named `tac_count`.
+
+### PyDough Code
+
+```python
+# Filter for active customers who joined on or after January 1, 2023
+active_customers_since_2023 = Customers.WHERE(
+    (LOWER(status) == 'active') & (join_date >= '2023-01-01')
+)
+
+# Partition the filtered customers by country and count them
+tac_by_country = active_customers_since_2023.PARTITION(
+    name=""country_groups"", by=country
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```","# Filter for active customers who joined on or after January 1, 2023
+active_customers_since_2023 = Customers.WHERE(
+    (LOWER(status) == 'active') & (join_date >= '2023-01-01')
+)
+
+# Partition the filtered customers by country and count them
+tac_by_country = active_customers_since_2023.PARTITION(
+    name=""country_groups"", by=country
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",14.075358390808105,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20140)] cached_content_token_count=20140 candidates_token_count=333 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=333)] prompt_token_count=22113 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22113)] thoughts_token_count=934 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23380 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","  country  tac_count
+0     USA         10","[{""country"":""USA"",""tac_count"":10}]","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","WITH _t0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbcustcountry AS country
+  FROM main.sbcustomer
+  WHERE
+    LOWER(sbcuststatus) = 'active' AND sbcustjoindate >= '2023-01-01'
+  GROUP BY
+    sbcustcountry
+)
+SELECT
+  country,
+  COALESCE(agg_0, 0) AS tac_count
+FROM _t0",Defog,Broker
+3,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",claude,1,"Let me analyze this request step by step:
+
+1. I need to find Total Active Customers (TAC) who joined on or after January 1, 2023
+2. Group these customers by country
+3. Count the customers for each country
+4. Return the country and the count
+
+From the database structure:
+- `Customers` collection has:
+  - `join_date` field (to filter by join date)
+  - `status` field (to check if active)
+  - `country` field (to group by)
+
+Since TAC is defined as ""Total Active Customers who joined on or after January 1, 2023"", I need to:
+1. Filter customers who joined on or after January 1, 2023
+2. Filter for active customers (assuming status == ""active"" or similar)
+3. Group by country using PARTITION
+4. Count the customers in each country
+
+Let me build the PyDough query:
+
+```python
+# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters to include only customers who:
+   - Joined on or after January 1, 2023 (`join_date >= ""2023-01-01""`)
+   - Have an active status (using case-insensitive comparison with `LOWER(status) == ""active""`)
+3. Partitions the filtered customers by `country`
+4. For each country group, calculates:
+   - The country name
+   - The count of customers (TAC) using `COUNT(Customers)`","# Filter customers who joined on or after January 1, 2023 and are active
+active_customers_2023 = Customers.WHERE(
+    (join_date >= ""2023-01-01"") & 
+    (LOWER(status) == ""active"")
+)
+
+# Partition by country and count the customers
+result = active_customers_2023.PARTITION(
+    name=""countries"", 
+    by=(country,)
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",14.58699083328247,,"  country  tac_count
+0     USA         10","[{""country"":""USA"",""tac_count"":10}]","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","WITH _t0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbcustcountry AS country
+  FROM main.sbcustomer
+  WHERE
+    LOWER(sbcuststatus) = 'active' AND sbcustjoindate >= '2023-01-01'
+  GROUP BY
+    sbcustcountry
+)
+SELECT
+  country,
+  COALESCE(agg_0, 0) AS tac_count
+FROM _t0",Defog,Broker
+3,"How many TAC are there from each country, for customers who joined on or after January 1, 2023? Return the country and the count.TAC = Total Active Customers who joined on or after January 1, 2023",gemini,1,"An explanation of the code will be provided, followed by the PyDough code block.
+
+### Explanation
+
+The user wants to count the number of ""Total Active Customers"" (TAC) for each country. TAC is defined as active customers who joined on or after January 1, 2023.
+
+To achieve this, the following steps are taken:
+
+1.  **Filter Customers**: We start with the `Customers` collection and apply a `WHERE` clause to filter for customers who meet the TAC criteria. This involves two conditions combined with an `&` (AND) operator:
+    *   `LOWER(status) == 'active'`: This checks if the customer's status is 'Active' in a case-insensitive manner.
+    *   `join_date >= ""2023-01-01""`: This filters for customers who joined on or after the specified date.
+
+2.  **Partition by Country**: The filtered customers are then grouped by their `country` using the `PARTITION` function. This creates a logical group for each unique country.
+
+3.  **Calculate Count**: Finally, a `CALCULATE` operation is performed on the partitioned data. For each country group, it calculates:
+    *   `country`: The country name, which is the key used for partitioning.
+    *   `tac_count`: The total count of customers within that country's partition, obtained using `COUNT(Customers)`.
+
+The final result is a list of countries, each with its corresponding count of total active customers who joined since the start of 2023.
+
+```python
+tac_by_country = Customers.WHERE(
+    (LOWER(status) == 'active') & (join_date >= ""2023-01-01"")
+).PARTITION(
+    name=""countries"", by=country
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)
+```","tac_by_country = Customers.WHERE(
+    (LOWER(status) == 'active') & (join_date >= ""2023-01-01"")
+).PARTITION(
+    name=""countries"", by=country
+).CALCULATE(
+    country=country,
+    tac_count=COUNT(Customers)
+)",13.856054544448853,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20140)] cached_content_token_count=20140 candidates_token_count=417 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=417)] prompt_token_count=22113 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22113)] thoughts_token_count=835 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23365 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","  country  tac_count
+0     USA         10","[{""country"":""USA"",""tac_count"":10}]","SELECT sbCustCountry, COUNT(sbCustId) AS TAC FROM sbCustomer WHERE sbCustJoinDate >= '2023-01-01' GROUP BY sbCustCountry;","WITH _t0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    sbcustcountry AS country
+  FROM main.sbcustomer
+  WHERE
+    LOWER(sbcuststatus) = 'active' AND sbcustjoindate >= '2023-01-01'
+  GROUP BY
+    sbcustcountry
+)
+SELECT
+  country,
+  COALESCE(agg_0, 0) AS tac_count
+FROM _t0",Defog,Broker
+4,How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday. The week starts on Monday,claude,0,,,2.5527844429016113,,,No valid genrated df,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",No valid SQL,Defog,Broker
+4,How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday. The week starts on Monday,gemini,0,,,2.646819591522217,,,No valid genrated df,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",No valid SQL,Defog,Broker
+4,How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday. The week starts on Monday,claude,1,,,2.643043279647827,,,No valid genrated df,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",No valid SQL,Defog,Broker
+4,How many transactions for stocks occurred in each of the last 8 weeks excluding the current week? How many of these transactions happened on weekends?Weekend days are Saturday and Sunday. The week starts on Monday,gemini,1,,,2.687046527862549,,,No valid genrated df,"SELECT strftime('%Y-%W', t.sbTxDateTime) AS WEEK, COUNT(t.sbTxId) AS num_transactions, COUNT(CASE WHEN strftime('%w', t.sbTxDateTime) IN ('0', '6') THEN 1 END) AS weekend_transactions FROM sbTransaction AS t JOIN sbTicker AS tk ON t.sbTxTickerId = tk.sbTickerId WHERE tk.sbTickerType = 'stock' AND t.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND t.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",No valid SQL,Defog,Broker
+5,How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount. The week starts on Monday,claude,0,"Let me analyze this request step by step:
+
+1. Find transactions made by customers from the USA
+2. Filter for transactions made last week (exclusive of the current week)
+3. The week starts on Monday
+4. Return the number of transactions and total transaction amount
+
+First, let me understand the data model:
+- `Customers` have a `country` field
+- `Customers` have `transactions_made` (a list of transactions)
+- `Transactions` have `date_time` and `amount` fields
+
+To solve this, I need to:
+1. Filter customers from the USA
+2. Access their transactions
+3. Filter transactions for last week (Monday to Sunday of the previous week)
+4. Count the transactions and sum the amounts
+
+For the date filtering, I need to:
+- Get the current date
+- Find the start of the current week (Monday)
+- Go back 7 days to get the start of last week
+- Go back 1 day from the start of current week to get the end of last week
+
+Here's the PyDough code:
+
+```python
+# Get transactions from USA customers that occurred last week
+usa_transactions_last_week = Customers.WHERE(
+    LOWER(country) == LOWER(""USA"")
+).transactions_made.WHERE(
+    # Start of last week: current date, start of week, minus 7 days
+    (date_time >= DATETIME(""now"", ""start of week"", ""-7 days"")) &
+    # End of last week: current date, start of week, minus 1 day
+    (date_time < DATETIME(""now"", ""start of week""))
+)
+
+# Calculate the count and total amount
+result = Broker.CALCULATE(
+    num_transactions=COUNT(usa_transactions_last_week),
+    total_amount=SUM(usa_transactions_last_week.amount)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters for customers where the country is ""USA"" (using case-insensitive comparison with LOWER)
+3. Accesses the `transactions_made` for these USA customers
+4. Filters transactions to include only those from last week:
+   - `>= DATETIME(""now"", ""start of week"", ""-7 days"")` gives us Monday of last week
+   - `< DATETIME(""now"", ""start of week"")` gives us up to (but not including) Monday of this week
+5. Uses the high-level `Broker` collection to calculate:
+   - The count of these filtered transactions
+   - The sum of the transaction amounts","# Get transactions from USA customers that occurred last week
+usa_transactions_last_week = Customers.WHERE(
+    LOWER(country) == LOWER(""USA"")
+).transactions_made.WHERE(
+    # Start of last week: current date, start of week, minus 7 days
+    (date_time >= DATETIME(""now"", ""start of week"", ""-7 days"")) &
+    # End of last week: current date, start of week, minus 1 day
+    (date_time < DATETIME(""now"", ""start of week""))
+)
+
+# Calculate the count and total amount
+result = Broker.CALCULATE(
+    num_transactions=COUNT(usa_transactions_last_week),
+    total_amount=SUM(usa_transactions_last_week.amount)
+)",21.60440182685852,,"   num_transactions  total_amount
+0                 8        191600","[{""num_transactions"":8,""total_amount"":191600}]","SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sbtxamount) AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    sbtxdatetime < DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day'
+    )
+    AND sbtxdatetime >= DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day',
+      '-7 day'
+    )
+  GROUP BY
+    sbtxcustid
+), _t0 AS (
+  SELECT
+    SUM(_s1.agg_0) AS agg_0,
+    SUM(_s1.agg_1) AS agg_1
+  FROM main.sbcustomer AS sbcustomer
+  JOIN _s1 AS _s1
+    ON _s1.customer_id = sbcustomer.sbcustid
+  WHERE
+    LOWER('USA') = LOWER(sbcustomer.sbcustcountry)
+)
+SELECT
+  COALESCE(agg_0, 0) AS num_transactions,
+  COALESCE(agg_1, 0) AS total_amount
+FROM _t0",Defog,Broker
+5,How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount. The week starts on Monday,gemini,0,"```python
+# Define the start of the current week, assuming the week starts on Monday.
+start_of_current_week = DATETIME('now', 'start of week')
+
+# Define the start of the previous week by subtracting 7 days from the start of the current week.
+start_of_last_week = DATETIME(start_of_current_week, '-7 days')
+
+# Filter transactions to include only those from customers in the USA that occurred last week.
+# The date range is inclusive of the start of last week and exclusive of the start of the current week.
+transactions_from_last_week = Transactions.WHERE(
+    (LOWER(customer.country) == 'usa') &
+    (date_time >= start_of_last_week) &
+    (date_time < start_of_current_week)
+)
+
+# Calculate the total number of transactions and the sum of their amounts.
+result = GRAPH.CALCULATE(
+    num_transactions=COUNT(transactions_from_last_week),
+    total_transaction_amount=SUM(transactions_from_last_week.amount)
+)
+```
+
+### Explanation
+
+1.  **`start_of_current_week`**: This variable is defined using the `DATETIME` function to determine the beginning of the current week (Monday at 00:00:00), based on the current timestamp ('now').
+2.  **`start_of_last_week`**: This variable calculates the start of the previous week by subtracting 7 days from `start_of_current_week`.
+3.  **`transactions_from_last_week`**: This filters the `Transactions` collection based on two conditions combined with a logical AND (`&`):
+    *   It checks if the customer's country is 'usa' using a case-insensitive comparison (`LOWER(customer.country) == 'usa'`).
+    *   It filters transactions where the `date_time` is greater than or equal to the start of last week and less than the start of the current week, effectively selecting all transactions from the previous week.
+4.  **`result`**: Finally, `GRAPH.CALCULATE` is used to compute two aggregate values from the filtered `transactions_from_last_week` collection:
+    *   `num_transactions`: The total count of transactions that meet the criteria.
+    *   `total_transaction_amount`: The sum of the `amount` for all the filtered transactions.","# Define the start of the current week, assuming the week starts on Monday.
+start_of_current_week = DATETIME('now', 'start of week')
+
+# Define the start of the previous week by subtracting 7 days from the start of the current week.
+start_of_last_week = DATETIME(start_of_current_week, '-7 days')
+
+# Filter transactions to include only those from customers in the USA that occurred last week.
+# The date range is inclusive of the start of last week and exclusive of the start of the current week.
+transactions_from_last_week = Transactions.WHERE(
+    (LOWER(customer.country) == 'usa') &
+    (date_time >= start_of_last_week) &
+    (date_time < start_of_current_week)
+)
+
+# Calculate the total number of transactions and the sum of their amounts.
+result = GRAPH.CALCULATE(
+    num_transactions=COUNT(transactions_from_last_week),
+    total_transaction_amount=SUM(transactions_from_last_week.amount)
+)",21.051840782165527,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20140)] cached_content_token_count=20140 candidates_token_count=538 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=538)] prompt_token_count=22095 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22095)] thoughts_token_count=1179 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23812 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",,,"SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');",Faulty generated SQL,Defog,Broker
+5,How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount. The week starts on Monday,claude,1,"Let me analyze this request step by step:
+
+1. Find transactions made by customers from the USA
+2. Filter for transactions made last week (exclusive of the current week)
+3. The week starts on Monday
+4. Return the number of transactions and total transaction amount
+
+First, let me understand the data model:
+- `Customers` have a `country` field
+- `Customers` have `transactions_made` (a list of transactions)
+- `Transactions` have `date_time` and `amount` fields
+
+To solve this, I need to:
+1. Filter customers from the USA
+2. Access their transactions
+3. Filter transactions for last week (using the Monday start of week)
+4. Count the transactions and sum the amounts
+
+For the date filtering, I need to:
+- Get the start of the current week (Monday)
+- Go back 7 days to get the start of last week
+- Go back 1 day from the start of current week to get the end of last week
+
+Here's the PyDough code:
+
+```python
+# Get transactions from USA customers that occurred last week
+usa_transactions_last_week = Customers.WHERE(
+    LOWER(country) == LOWER(""USA"")
+).transactions_made.WHERE(
+    (date_time >= DATETIME(""now"", ""start of week"", ""-7 days"")) &
+    (date_time < DATETIME(""now"", ""start of week""))
+)
+
+# Calculate the count and total amount
+result = Broker.CALCULATE(
+    num_transactions=COUNT(usa_transactions_last_week),
+    total_amount=SUM(usa_transactions_last_week.amount)
+)
+```
+
+This code:
+1. Starts with the `Customers` collection
+2. Filters for customers where the country is ""USA"" (using case-insensitive comparison with LOWER)
+3. Accesses their `transactions_made`
+4. Filters transactions to only include those from last week:
+   - `>= DATETIME(""now"", ""start of week"", ""-7 days"")` gets transactions from the start of last week (Monday)
+   - `< DATETIME(""now"", ""start of week"")` excludes transactions from the current week
+5. Uses the high-level `Broker` collection to calculate:
+   - The count of these filtered transactions
+   - The sum of the transaction amounts","# Get transactions from USA customers that occurred last week
+usa_transactions_last_week = Customers.WHERE(
+    LOWER(country) == LOWER(""USA"")
+).transactions_made.WHERE(
+    (date_time >= DATETIME(""now"", ""start of week"", ""-7 days"")) &
+    (date_time < DATETIME(""now"", ""start of week""))
+)
+
+# Calculate the count and total amount
+result = Broker.CALCULATE(
+    num_transactions=COUNT(usa_transactions_last_week),
+    total_amount=SUM(usa_transactions_last_week.amount)
+)",17.96874475479126,,"   num_transactions  total_amount
+0                 8        191600","[{""num_transactions"":8,""total_amount"":191600}]","SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sbtxamount) AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    sbtxdatetime < DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day'
+    )
+    AND sbtxdatetime >= DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day',
+      '-7 day'
+    )
+  GROUP BY
+    sbtxcustid
+), _t0 AS (
+  SELECT
+    SUM(_s1.agg_0) AS agg_0,
+    SUM(_s1.agg_1) AS agg_1
+  FROM main.sbcustomer AS sbcustomer
+  JOIN _s1 AS _s1
+    ON _s1.customer_id = sbcustomer.sbcustid
+  WHERE
+    LOWER('USA') = LOWER(sbcustomer.sbcustcountry)
+)
+SELECT
+  COALESCE(agg_0, 0) AS num_transactions,
+  COALESCE(agg_1, 0) AS total_amount
+FROM _t0",Defog,Broker
+5,How many transactions were made by customers from the USA last week (exclusive of the current week)? Return the number of transactions and total transaction amount. The week starts on Monday,gemini,1,"This query calculates the total number of transactions and the sum of their amounts for customers located in the USA during the previous week.
+
+1.  **Date Range Definition**:
+    *   `start_of_current_week` is determined by finding the start of the current week from today's date, assuming the week begins on a Monday.
+    *   `start_of_last_week` is calculated by subtracting 7 days from the `start_of_current_week`.
+
+2.  **Filtering Transactions**:
+    *   The `Transactions` collection is filtered to include only records that meet two conditions:
+        *   The customer's country is 'USA' (case-insensitive).
+        *   The `date_time` of the transaction falls within the last week (from `start_of_last_week` up to, but not including, `start_of_current_week`).
+
+3.  **Aggregation**:
+    *   The final `Broker.CALCULATE` call computes two aggregate values from the filtered set of transactions:
+        *   `num_transactions`: The total count of transactions.
+        *   `total_transaction_amount`: The sum of the `amount` for all transactions.
+
+```python
+# Define the start of the current week, assuming the week starts on Monday.
+start_of_current_week = DATETIME('now', 'start of week')
+
+# Define the start of the previous week.
+start_of_last_week = DATETIME(start_of_current_week, '-7 days')
+
+# Filter for transactions from customers in the USA that occurred last week.
+transactions_from_last_week = Transactions.WHERE(
+    (LOWER(customer.country) == 'usa') &
+    (date_time >= start_of_last_week) &
+    (date_time < start_of_current_week)
+)
+
+# Calculate the total number of transactions and their total amount.
+result = Broker.CALCULATE(
+    num_transactions=COUNT(transactions_from_last_week),
+    total_transaction_amount=SUM(transactions_from_last_week.amount)
+)
+```","# Define the start of the current week, assuming the week starts on Monday.
+start_of_current_week = DATETIME('now', 'start of week')
+
+# Define the start of the previous week.
+start_of_last_week = DATETIME(start_of_current_week, '-7 days')
+
+# Filter for transactions from customers in the USA that occurred last week.
+transactions_from_last_week = Transactions.WHERE(
+    (LOWER(customer.country) == 'usa') &
+    (date_time >= start_of_last_week) &
+    (date_time < start_of_current_week)
+)
+
+# Calculate the total number of transactions and their total amount.
+result = Broker.CALCULATE(
+    num_transactions=COUNT(transactions_from_last_week),
+    total_transaction_amount=SUM(transactions_from_last_week.amount)
+)",18.961570262908936,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20140)] cached_content_token_count=20140 candidates_token_count=470 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=470)] prompt_token_count=22095 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22095)] thoughts_token_count=1352 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=23917 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   num_transactions  total_transaction_amount
+0                 6                    154400","[{""num_transactions"":6,""total_transaction_amount"":154400}]","SELECT COUNT(DISTINCT sb.sbTxId) AS num_transactions, SUM(sb.sbTxAmount) AS total_transaction_amount FROM sbTransaction AS sb JOIN sbCustomer AS sc ON sb.sbTxCustId = sc.sbCustId WHERE LOWER(sc.sbCustCountry) = 'usa' AND sb.sbTxDateTime >= DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-7 days') AND sb.sbTxDateTime < DATE('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days');","WITH _s0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sbtxamount) AS agg_1,
+    sbtxcustid AS customer_id
+  FROM main.sbtransaction
+  WHERE
+    sbtxdatetime < DATE(
+      'now',
+      '-' || CAST((
+        CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+      ) % 7 AS TEXT) || ' days',
+      'start of day'
+    )
+    AND sbtxdatetime >= DATETIME(
+      DATE(
+        'now',
+        '-' || CAST((
+          CAST(STRFTIME('%w', DATETIME('now')) AS INTEGER) + 6
+        ) % 7 AS TEXT) || ' days',
+        'start of day'
+      ),
+      '-7 day'
+    )
+  GROUP BY
+    sbtxcustid
+), _t0 AS (
+  SELECT
+    SUM(_s0.agg_0) AS agg_0,
+    SUM(_s0.agg_1) AS agg_1
+  FROM _s0 AS _s0
+  JOIN main.sbcustomer AS sbcustomer
+    ON LOWER(sbcustomer.sbcustcountry) = 'usa' AND _s0.customer_id = sbcustomer.sbcustid
+)
+SELECT
+  COALESCE(agg_0, 0) AS num_transactions,
+  COALESCE(agg_1, 0) AS total_transaction_amount
+FROM _t0",Defog,Broker
+6,"For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order. Week starts on Monday",claude,0,,,2.16410756111145,,,No valid genrated df,"SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p._id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s._id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;",No valid SQL,Defog,Dealership
+6,"For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order. Week starts on Monday",gemini,0,,,2.6873939037323,,,No valid genrated df,"SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p._id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s._id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;",No valid SQL,Defog,Dealership
+6,"For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order. Week starts on Monday",claude,1,,,2.151876449584961,,,No valid genrated df,"SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p._id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s._id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;",No valid SQL,Defog,Dealership
+6,"For sales with sale price over $30,000, how many payments were received in total and on weekends in each of the last 8 calendar weeks (excluding the current week)? Return the week (as a date), total payments received, and weekend payments received in ascending order. Week starts on Monday",gemini,1,,,2.3845794200897217,,,No valid genrated df,"SELECT date(p.payment_date,  '-' || ((strftime('%w', p.payment_date) + 6) % 7) || ' days') AS week, COUNT(p._id) AS total_payments, COUNT(CASE WHEN strftime('%w', p.payment_date) IN ('0', '6') THEN 1 END) AS weekend_payments FROM payments_received AS p JOIN sales AS s ON p.sale_id = s._id WHERE s.sale_price > 30000 AND p.payment_date >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-56 days') AND p.payment_date < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY week ORDER BY week ASC;",No valid SQL,Defog,Dealership
+7,"How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.",claude,0,"Let me analyze this request step by step:
+
+1. I need to find how many sales each salesperson made in the past 30 days (inclusive of today)
+2. Return: salesperson ID, first name, last name, and number of sales
+3. Order by number of sales from most to least
+
+From the database structure:
+- `Salespersons` collection has `sales_made` which links to `Sales`
+- `Sales` has a `sale_date` field
+- I need to filter sales where the sale_date is within the last 30 days from today
+
+To calculate ""past 30 days inclusive of today"", I need to:
+- Use `DATEDIFF` to find the difference between the sale_date and today
+- Include sales where this difference is <= 30 days
+
+Here's my approach:
+1. Start with the `Salespersons` collection
+2. For each salesperson, count their sales made in the past 30 days
+3. Select the required fields (ID, first name, last name, and count)
+4. Order by the count in descending order
+
+```python
+result = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    num_sales=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME(""now"")) <= 30))
+).ORDER_BY(num_sales.DESC())
+```
+
+This code:
+1. Starts with the `Salespersons` collection
+2. Uses `CALCULATE` to create the output fields:
+   - `salesperson_id` from the `_id` field
+   - `first_name` and `last_name` directly from the salesperson record
+   - `num_sales` by counting the sales where the sale_date is within 30 days of today
+3. The `WHERE` clause filters `sales_made` to only include sales where `DATEDIFF(""days"", sale_date, DATETIME(""now"")) <= 30`, which means the difference between the sale date and today is 30 days or less
+4. Orders the results by `num_sales` in descending order (most sales first)","result = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    num_sales=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME(""now"")) <= 30))
+).ORDER_BY(num_sales.DESC())",18.684454917907715,,"    salesperson_id first_name  last_name  num_sales
+0                2       Jane      Smith          3
+1                3    Michael    Johnson          2
+2                1       John        Doe          1
+3                4      Emily      Brown          1
+4                6      Sarah     Taylor          1
+5                5      David     Wilson          0
+6                7     Daniel   Anderson          0
+7                8     Olivia     Thomas          0
+8                9      James    Jackson          0
+9               10     Sophia      White          0
+10              11     Robert    Johnson          0
+11              12   Jennifer      Davis          0
+12              13    Jessica  Rodriguez          0","[{""salesperson_id"":2,""first_name"":""Jane"",""last_name"":""Smith"",""num_sales"":3},{""salesperson_id"":3,""first_name"":""Michael"",""last_name"":""Johnson"",""num_sales"":2},{""salesperson_id"":1,""first_name"":""John"",""last_name"":""Doe"",""num_sales"":1},{""salesperson_id"":4,""first_name"":""Emily"",""last_name"":""Brown"",""num_sales"":1},{""salesperson_id"":6,""first_name"":""Sarah"",""last_name"":""Taylor"",""num_sales"":1},{""salesperson_id"":5,""first_name"":""David"",""last_name"":""Wilson"",""num_sales"":0},{""salesperson_id"":7,""first_name"":""Daniel"",""last_name"":""Anderson"",""num_sales"":0},{""salesperson_id"":8,""first_name"":""Olivia"",""last_name"":""Thomas"",""num_sales"":0},{""salesperson_id"":9,""first_name"":""James"",""last_name"":""Jackson"",""num_sales"":0},{""salesperson_id"":10,""first_name"":""Sophia"",""last_name"":""White"",""num_sales"":0},{""salesperson_id"":11,""first_name"":""Robert"",""last_name"":""Johnson"",""num_sales"":0},{""salesperson_id"":12,""first_name"":""Jennifer"",""last_name"":""Davis"",""num_sales"":0},{""salesperson_id"":13,""first_name"":""Jessica"",""last_name"":""Rodriguez"",""num_sales"":0}]","WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    salesperson_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) <= 30
+  GROUP BY
+    salesperson_id
+)
+SELECT
+  salespersons._id AS salesperson_id,
+  salespersons.first_name,
+  salespersons.last_name,
+  COALESCE(_s1.agg_0, 0) AS num_sales
+FROM main.salespersons AS salespersons
+LEFT JOIN _s1 AS _s1
+  ON _s1.salesperson_id = salespersons._id
+ORDER BY
+  num_sales DESC",Defog,Dealership
+7,"How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.",gemini,0,"This query calculates the number of sales each salesperson has made in the last 30 days.
+
+```python
+sales_in_last_30_days = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    sales_count=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) < 30))
+).ORDER_BY(sales_count.DESC())
+```
+
+### Explanation:
+
+1.  **`Salespersons.CALCULATE(...)`**: The query starts with the `Salespersons` collection and uses `CALCULATE` to compute new fields.
+2.  **`salesperson_id=_id, first_name=first_name, last_name=last_name`**: It selects the salesperson's ID, first name, and last name, renaming `_id` to `salesperson_id` for clarity.
+3.  **`sales_count=COUNT(...)`**: It calculates the total number of sales for each salesperson and assigns it to the `sales_count` field.
+4.  **`sales_made.WHERE(...)`**: Inside the `COUNT`, it accesses the `sales_made` subcollection and filters the sales records using a `WHERE` clause.
+5.  **`DATEDIFF(""days"", sale_date, DATETIME('now')) < 30`**: This condition filters for sales that occurred within the last 30 days. `DATEDIFF` calculates the number of full days between the `sale_date` and the current date (`DATETIME('now')`). The condition `< 30` includes sales from today (0 days difference) up to 29 days ago.
+6.  **`.ORDER_BY(sales_count.DESC())`**: Finally, the result is sorted by the `sales_count` in descending order, showing the top-performing salespersons first.","sales_in_last_30_days = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    sales_count=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME('now')) < 30))
+).ORDER_BY(sales_count.DESC())",16.22016191482544,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16119)] cached_content_token_count=16119 candidates_token_count=431 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=431)] prompt_token_count=23185 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=23185)] thoughts_token_count=988 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=24604 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","    salesperson_id first_name  last_name  sales_count
+0                2       Jane      Smith            3
+1                3    Michael    Johnson            2
+2                1       John        Doe            1
+3                4      Emily      Brown            1
+4                6      Sarah     Taylor            1
+5                5      David     Wilson            0
+6                7     Daniel   Anderson            0
+7                8     Olivia     Thomas            0
+8                9      James    Jackson            0
+9               10     Sophia      White            0
+10              11     Robert    Johnson            0
+11              12   Jennifer      Davis            0
+12              13    Jessica  Rodriguez            0","[{""salesperson_id"":2,""first_name"":""Jane"",""last_name"":""Smith"",""sales_count"":3},{""salesperson_id"":3,""first_name"":""Michael"",""last_name"":""Johnson"",""sales_count"":2},{""salesperson_id"":1,""first_name"":""John"",""last_name"":""Doe"",""sales_count"":1},{""salesperson_id"":4,""first_name"":""Emily"",""last_name"":""Brown"",""sales_count"":1},{""salesperson_id"":6,""first_name"":""Sarah"",""last_name"":""Taylor"",""sales_count"":1},{""salesperson_id"":5,""first_name"":""David"",""last_name"":""Wilson"",""sales_count"":0},{""salesperson_id"":7,""first_name"":""Daniel"",""last_name"":""Anderson"",""sales_count"":0},{""salesperson_id"":8,""first_name"":""Olivia"",""last_name"":""Thomas"",""sales_count"":0},{""salesperson_id"":9,""first_name"":""James"",""last_name"":""Jackson"",""sales_count"":0},{""salesperson_id"":10,""first_name"":""Sophia"",""last_name"":""White"",""sales_count"":0},{""salesperson_id"":11,""first_name"":""Robert"",""last_name"":""Johnson"",""sales_count"":0},{""salesperson_id"":12,""first_name"":""Jennifer"",""last_name"":""Davis"",""sales_count"":0},{""salesperson_id"":13,""first_name"":""Jessica"",""last_name"":""Rodriguez"",""sales_count"":0}]","WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    salesperson_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) < 30
+  GROUP BY
+    salesperson_id
+)
+SELECT
+  salespersons._id AS salesperson_id,
+  salespersons.first_name,
+  salespersons.last_name,
+  COALESCE(_s1.agg_0, 0) AS sales_count
+FROM main.salespersons AS salespersons
+LEFT JOIN _s1 AS _s1
+  ON _s1.salesperson_id = salespersons._id
+ORDER BY
+  sales_count DESC",Defog,Dealership
+7,"How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.",claude,1,"Let me analyze this request step by step:
+
+1. I need to find how many sales each salesperson made in the past 30 days (inclusive of today)
+2. Return: salesperson ID, first name, last name, and number of sales
+3. Order by number of sales from most to least
+
+From the database structure:
+- `Salespersons` collection has `sales_made` which links to `Sales`
+- `Sales` has a `sale_date` field
+- I need to filter sales where the sale_date is within the last 30 days from today
+
+To calculate ""past 30 days inclusive of today"", I need to:
+- Use `DATEDIFF` to find the difference between the sale_date and today
+- Include sales where this difference is <= 30 days
+
+Here's my approach:
+1. Start with the `Salespersons` collection
+2. For each salesperson, count their sales made in the past 30 days
+3. Select the required fields (ID, first name, last name, and count)
+4. Order by the count in descending order
+
+```python
+result = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    num_sales=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME(""now"")) <= 30))
+).ORDER_BY(num_sales.DESC())
+```
+
+This code:
+1. Starts with the `Salespersons` collection
+2. Uses `CALCULATE` to create the output fields:
+   - `salesperson_id` from the `_id` field
+   - `first_name` and `last_name` directly from the salesperson record
+   - `num_sales` by counting the sales where the sale_date is within 30 days of today
+3. The `WHERE` clause filters `sales_made` to only include sales where `DATEDIFF(""days"", sale_date, DATETIME(""now"")) <= 30`, which means the sale happened within the last 30 days (inclusive of today)
+4. Orders the results by `num_sales` in descending order (most sales first)","result = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    num_sales=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, DATETIME(""now"")) <= 30))
+).ORDER_BY(num_sales.DESC())",15.981471300125122,,"    salesperson_id first_name  last_name  num_sales
+0                2       Jane      Smith          3
+1                3    Michael    Johnson          2
+2                1       John        Doe          1
+3                4      Emily      Brown          1
+4                6      Sarah     Taylor          1
+5                5      David     Wilson          0
+6                7     Daniel   Anderson          0
+7                8     Olivia     Thomas          0
+8                9      James    Jackson          0
+9               10     Sophia      White          0
+10              11     Robert    Johnson          0
+11              12   Jennifer      Davis          0
+12              13    Jessica  Rodriguez          0","[{""salesperson_id"":2,""first_name"":""Jane"",""last_name"":""Smith"",""num_sales"":3},{""salesperson_id"":3,""first_name"":""Michael"",""last_name"":""Johnson"",""num_sales"":2},{""salesperson_id"":1,""first_name"":""John"",""last_name"":""Doe"",""num_sales"":1},{""salesperson_id"":4,""first_name"":""Emily"",""last_name"":""Brown"",""num_sales"":1},{""salesperson_id"":6,""first_name"":""Sarah"",""last_name"":""Taylor"",""num_sales"":1},{""salesperson_id"":5,""first_name"":""David"",""last_name"":""Wilson"",""num_sales"":0},{""salesperson_id"":7,""first_name"":""Daniel"",""last_name"":""Anderson"",""num_sales"":0},{""salesperson_id"":8,""first_name"":""Olivia"",""last_name"":""Thomas"",""num_sales"":0},{""salesperson_id"":9,""first_name"":""James"",""last_name"":""Jackson"",""num_sales"":0},{""salesperson_id"":10,""first_name"":""Sophia"",""last_name"":""White"",""num_sales"":0},{""salesperson_id"":11,""first_name"":""Robert"",""last_name"":""Johnson"",""num_sales"":0},{""salesperson_id"":12,""first_name"":""Jennifer"",""last_name"":""Davis"",""num_sales"":0},{""salesperson_id"":13,""first_name"":""Jessica"",""last_name"":""Rodriguez"",""num_sales"":0}]","WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    salesperson_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) <= 30
+  GROUP BY
+    salesperson_id
+)
+SELECT
+  salespersons._id AS salesperson_id,
+  salespersons.first_name,
+  salespersons.last_name,
+  COALESCE(_s1.agg_0, 0) AS num_sales
+FROM main.salespersons AS salespersons
+LEFT JOIN _s1 AS _s1
+  ON _s1.salesperson_id = salespersons._id
+ORDER BY
+  num_sales DESC",Defog,Dealership
+7,"How many sales did each salesperson make in the past 30 days, inclusive of today's date? Return their ID, first name, last name and number of sales made, ordered from most to least sales.",gemini,1,"```python
+sales_in_last_30_days = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    sales_count=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, 'now') < 30))
+).ORDER_BY(sales_count.DESC())
+```
+
+### Explanation
+
+1.  **`Salespersons.CALCULATE(...)`**: The query starts with the `Salespersons` collection and uses `CALCULATE` to compute new fields for each salesperson.
+2.  **`salesperson_id=_id, first_name=first_name, last_name=last_name`**: These expressions select the salesperson's ID, first name, and last name, renaming them for the output.
+3.  **`sales_count=COUNT(...)`**: This calculates the total number of sales for each salesperson that meet the specified criteria and assigns it to the `sales_count` field.
+4.  **`sales_made.WHERE(...)`**: It accesses the `sales_made` subcollection for each salesperson and filters these sales using a `WHERE` clause.
+5.  **`DATEDIFF(""days"", sale_date, 'now') < 30`**: This is the core filtering condition. `DATEDIFF` calculates the number of full days between the `sale_date` and the current date (`'now'`). The condition `< 30` ensures that only sales from today (0 days difference) and the previous 29 days are included, covering the last 30 days inclusively.
+6.  **`.ORDER_BY(sales_count.DESC())`**: Finally, the result is sorted by the `sales_count` in descending order, so the salespersons with the most sales appear first.","sales_in_last_30_days = Salespersons.CALCULATE(
+    salesperson_id=_id,
+    first_name=first_name,
+    last_name=last_name,
+    sales_count=COUNT(sales_made.WHERE(DATEDIFF(""days"", sale_date, 'now') < 30))
+).ORDER_BY(sales_count.DESC())",15.634905099868774,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22164)] cached_content_token_count=22164 candidates_token_count=410 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=410)] prompt_token_count=23185 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=23185)] thoughts_token_count=967 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=24562 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","    salesperson_id first_name  last_name  sales_count
+0                2       Jane      Smith            3
+1                3    Michael    Johnson            2
+2                1       John        Doe            1
+3                4      Emily      Brown            1
+4                6      Sarah     Taylor            1
+5                5      David     Wilson            0
+6                7     Daniel   Anderson            0
+7                8     Olivia     Thomas            0
+8                9      James    Jackson            0
+9               10     Sophia      White            0
+10              11     Robert    Johnson            0
+11              12   Jennifer      Davis            0
+12              13    Jessica  Rodriguez            0","[{""salesperson_id"":2,""first_name"":""Jane"",""last_name"":""Smith"",""sales_count"":3},{""salesperson_id"":3,""first_name"":""Michael"",""last_name"":""Johnson"",""sales_count"":2},{""salesperson_id"":1,""first_name"":""John"",""last_name"":""Doe"",""sales_count"":1},{""salesperson_id"":4,""first_name"":""Emily"",""last_name"":""Brown"",""sales_count"":1},{""salesperson_id"":6,""first_name"":""Sarah"",""last_name"":""Taylor"",""sales_count"":1},{""salesperson_id"":5,""first_name"":""David"",""last_name"":""Wilson"",""sales_count"":0},{""salesperson_id"":7,""first_name"":""Daniel"",""last_name"":""Anderson"",""sales_count"":0},{""salesperson_id"":8,""first_name"":""Olivia"",""last_name"":""Thomas"",""sales_count"":0},{""salesperson_id"":9,""first_name"":""James"",""last_name"":""Jackson"",""sales_count"":0},{""salesperson_id"":10,""first_name"":""Sophia"",""last_name"":""White"",""sales_count"":0},{""salesperson_id"":11,""first_name"":""Robert"",""last_name"":""Johnson"",""sales_count"":0},{""salesperson_id"":12,""first_name"":""Jennifer"",""last_name"":""Davis"",""sales_count"":0},{""salesperson_id"":13,""first_name"":""Jessica"",""last_name"":""Rodriguez"",""sales_count"":0}]","WITH recent_sales AS (SELECT sp._id, sp.first_name, sp.last_name, COUNT(s._id) AS num_sales FROM salespersons AS sp LEFT JOIN sales AS s ON sp._id = s.salesperson_id WHERE s.sale_date >= DATE('now', '-30 days') GROUP BY sp._id) SELECT _id, first_name, last_name, num_sales FROM recent_sales ORDER BY num_sales DESC;","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    salesperson_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) < 30
+  GROUP BY
+    salesperson_id
+)
+SELECT
+  salespersons._id AS salesperson_id,
+  salespersons.first_name,
+  salespersons.last_name,
+  COALESCE(_s1.agg_0, 0) AS sales_count
+FROM main.salespersons AS salespersons
+LEFT JOIN _s1 AS _s1
+  ON _s1.salesperson_id = salespersons._id
+ORDER BY
+  sales_count DESC",Defog,Dealership
+8,"How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.",claude,0,,,2.2076077461242676,,,No valid genrated df,"SELECT c.make, c.model, COUNT(s._id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;",No valid SQL,Defog,Dealership
+8,"How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.",gemini,0,,,2.183950185775757,,,No valid genrated df,"SELECT c.make, c.model, COUNT(s._id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;",No valid SQL,Defog,Dealership
+8,"How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.",claude,1,,,2.128610372543335,,,No valid genrated df,"SELECT c.make, c.model, COUNT(s._id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;",No valid SQL,Defog,Dealership
+8,"How many sales were made for each car model that has 'M5' in its VIN number? Return the make, model and number of sales.When using car makes, model names, engine_type and vin_number, match case-insensitively and allow partial matches using LIKE with wildcards.",gemini,1,,,2.1918065547943115,,,No valid genrated df,"SELECT c.make, c.model, COUNT(s._id) AS num_sales FROM cars AS c LEFT JOIN sales AS s ON c._id = s.car_id WHERE LOWER(c.vin_number) LIKE '%m5%' GROUP BY c.make, c.model;",No valid SQL,Defog,Dealership
+9,How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,claude,0,"Let me analyze this request step by step:
+
+1. I need to find Toyota cars that were sold in the last 30 days (inclusive of today)
+2. I need to count the number of sales and calculate the total revenue
+
+From the database structure:
+- `Cars` have a `make` field to identify Toyota cars
+- `Cars` have `sale_records` which links to `Sales`
+- `Sales` have `sale_date` and `sale_price` fields
+
+To solve this:
+1. Start with `Cars` and filter for Toyota
+2. Access their `sale_records`
+3. Filter sales from the last 30 days
+4. Count the sales and sum the revenue
+
+For the date filtering, I need to use DATEDIFF to check if the sale_date is within 30 days of today.
+
+```python
+result = Cars.WHERE(LOWER(make) == LOWER('Toyota')).sale_records.WHERE(
+    DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30
+).CALCULATE(
+    number_of_sales=COUNT(Sales),
+    total_revenue=SUM(sale_price)
+).SINGULAR()
+```
+
+This code:
+1. Starts with the `Cars` collection
+2. Filters for cars where the make is ""Toyota"" (using case-insensitive comparison with LOWER)
+3. Accesses the `sale_records` relationship to get all sales of Toyota cars
+4. Filters these sales to only include those where the sale_date is within 30 days of today (using DATEDIFF to calculate the difference between sale_date and now)
+5. Uses `CALCULATE` to count the number of sales and sum the sale prices
+6. Uses `SINGULAR()` since the aggregation results in a single record with the totals","result = Cars.WHERE(LOWER(make) == LOWER('Toyota')).sale_records.WHERE(
+    DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30
+).CALCULATE(
+    number_of_sales=COUNT(Sales),
+    total_revenue=SUM(sale_price)
+).SINGULAR()",16.10521674156189,,,,"SELECT COUNT(s._id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');",Faulty generated SQL,Defog,Dealership
+9,How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,gemini,0,"This query calculates the total number of Toyota cars sold and the corresponding revenue generated within the last 30 days, inclusive of the current day.
+
+```python
+# First, we define a contextless expression to filter the 'Sales' collection.
+# This expression selects sales records that meet two criteria:
+# 1. The car associated with the sale is a 'Toyota'. We use LOWER() for a case-insensitive comparison.
+# 2. The sale occurred within the last 30 days, inclusive of today. DATEDIFF calculates the number of full days between the sale_date and now.
+toyota_sales_in_last_30_days = Sales.WHERE(
+    (LOWER(car.make) == 'toyota') &
+    (DATEDIFF(""days"", sale_date, DATETIME('now')) < 30)
+)
+
+# Next, we use the top-level 'Dealership' graph to perform the final aggregations.
+# We calculate the total number of sales by counting the records in our filtered collection.
+# We calculate the total revenue by summing the 'sale_price' from the same filtered collection.
+result = Dealership.CALCULATE(
+    number_of_sales=COUNT(toyota_sales_in_last_30_days),
+    total_revenue=SUM(toyota_sales_in_last_30_days.sale_price)
+)
+```","# First, we define a contextless expression to filter the 'Sales' collection.
+# This expression selects sales records that meet two criteria:
+# 1. The car associated with the sale is a 'Toyota'. We use LOWER() for a case-insensitive comparison.
+# 2. The sale occurred within the last 30 days, inclusive of today. DATEDIFF calculates the number of full days between the sale_date and now.
+toyota_sales_in_last_30_days = Sales.WHERE(
+    (LOWER(car.make) == 'toyota') &
+    (DATEDIFF(""days"", sale_date, DATETIME('now')) < 30)
+)
+
+# Next, we use the top-level 'Dealership' graph to perform the final aggregations.
+# We calculate the total number of sales by counting the records in our filtered collection.
+# We calculate the total revenue by summing the 'sale_price' from the same filtered collection.
+result = Dealership.CALCULATE(
+    number_of_sales=COUNT(toyota_sales_in_last_30_days),
+    total_revenue=SUM(toyota_sales_in_last_30_days.sale_price)
+)",23.44248867034912,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16119)] cached_content_token_count=16119 candidates_token_count=304 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=304)] prompt_token_count=23167 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=23167)] thoughts_token_count=1565 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=25036 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   number_of_sales  total_revenue
+0                0              0","[{""number_of_sales"":0,""total_revenue"":0}]","SELECT COUNT(s._id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');","WITH _s0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sale_price) AS agg_1,
+    car_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) < 30
+  GROUP BY
+    car_id
+), _t0 AS (
+  SELECT
+    SUM(_s0.agg_0) AS agg_0,
+    SUM(_s0.agg_1) AS agg_1
+  FROM _s0 AS _s0
+  JOIN main.cars AS cars
+    ON LOWER(cars.make) = 'toyota' AND _s0.car_id = cars._id
+)
+SELECT
+  COALESCE(agg_0, 0) AS number_of_sales,
+  COALESCE(agg_1, 0) AS total_revenue
+FROM _t0",Defog,Dealership
+9,How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,claude,1,"Let me analyze this request step by step:
+
+1. I need to find Toyota cars that were sold in the last 30 days (inclusive of today)
+2. I need to count the number of sales and calculate the total revenue
+
+From the database structure:
+- `Cars` have a `make` field to identify Toyota cars
+- `Cars` have `sale_records` which links to `Sales`
+- `Sales` have `sale_date` and `sale_price` fields
+
+To solve this:
+1. Start with `Cars` and filter for Toyota
+2. Access their `sale_records`
+3. Filter sales from the last 30 days
+4. Count the sales and sum the revenue
+
+For the date filtering, I need to use DATEDIFF to check if the sale_date is within 30 days of today.
+
+```python
+toyota_sales_last_30_days = Cars.WHERE(
+    LOWER(make) == LOWER('Toyota')
+).sale_records.WHERE(
+    DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30
+)
+
+result = Dealership.CALCULATE(
+    number_of_sales=COUNT(toyota_sales_last_30_days),
+    total_revenue=SUM(toyota_sales_last_30_days.sale_price)
+)
+```
+
+This code:
+1. Starts with the `Cars` collection and filters for Toyota cars (using case-insensitive comparison with LOWER)
+2. Accesses the `sale_records` for these Toyota cars
+3. Filters the sales to include only those where the difference between the sale date and today is 30 days or less
+4. Uses the high-level `Dealership` collection to calculate:
+   - The count of these filtered sales
+   - The sum of the sale prices for total revenue","toyota_sales_last_30_days = Cars.WHERE(
+    LOWER(make) == LOWER('Toyota')
+).sale_records.WHERE(
+    DATEDIFF(""days"", sale_date, DATETIME('now')) <= 30
+)
+
+result = Dealership.CALCULATE(
+    number_of_sales=COUNT(toyota_sales_last_30_days),
+    total_revenue=SUM(toyota_sales_last_30_days.sale_price)
+)",13.53190803527832,,"   number_of_sales  total_revenue
+0                0              0","[{""number_of_sales"":0,""total_revenue"":0}]","SELECT COUNT(s._id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sale_price) AS agg_1,
+    car_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) <= 30
+  GROUP BY
+    car_id
+), _t0 AS (
+  SELECT
+    SUM(_s1.agg_0) AS agg_0,
+    SUM(_s1.agg_1) AS agg_1
+  FROM main.cars AS cars
+  JOIN _s1 AS _s1
+    ON _s1.car_id = cars._id
+  WHERE
+    LOWER('Toyota') = LOWER(cars.make)
+)
+SELECT
+  COALESCE(agg_0, 0) AS number_of_sales,
+  COALESCE(agg_1, 0) AS total_revenue
+FROM _t0",Defog,Dealership
+9,How many Toyota cars were sold in the last 30 days inclusive of today? Return the number of sales and total revenue.,gemini,1,"```python
+toyota_sales_in_last_30_days = Sales.WHERE(
+    (LOWER(car.make) == 'toyota') & 
+    (DATEDIFF(""days"", sale_date, DATETIME('now')) < 30)
+)
+
+result = Dealership.CALCULATE(
+    number_of_sales=COUNT(toyota_sales_in_last_30_days),
+    total_revenue=SUM(toyota_sales_in_last_30_days.sale_price)
+)
+```
+
+### Explanation
+
+1.  **`toyota_sales_in_last_30_days = Sales.WHERE(...)`**: This line filters the `Sales` collection to find only the relevant sales records.
+    *   `LOWER(car.make) == 'toyota'`: It accesses the related `car` for each sale and checks if its `make` is 'Toyota' in a case-insensitive manner.
+    *   `DATEDIFF(""days"", sale_date, DATETIME('now')) < 30`: It calculates the difference in days between the `sale_date` and the current date. The condition `< 30` ensures we only include sales from the last 30 days (inclusive of today, where the difference would be 0).
+2.  **`result = Dealership.CALCULATE(...)`**: This line performs the final aggregation on the filtered sales data.
+    *   `number_of_sales=COUNT(toyota_sales_in_last_30_days)`: It counts the total number of records in the filtered `toyota_sales_in_last_30_days` collection.
+    *   `total_revenue=SUM(toyota_sales_in_last_30_days.sale_price)`: It sums the `sale_price` for all sales in the filtered collection to get the total revenue.","toyota_sales_in_last_30_days = Sales.WHERE(
+    (LOWER(car.make) == 'toyota') & 
+    (DATEDIFF(""days"", sale_date, DATETIME('now')) < 30)
+)
+
+result = Dealership.CALCULATE(
+    number_of_sales=COUNT(toyota_sales_in_last_30_days),
+    total_revenue=SUM(toyota_sales_in_last_30_days.sale_price)
+)",14.799158096313477,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=22164)] cached_content_token_count=22164 candidates_token_count=415 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=415)] prompt_token_count=23167 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=23167)] thoughts_token_count=947 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=24529 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   number_of_sales  total_revenue
+0                0              0","[{""number_of_sales"":0,""total_revenue"":0}]","SELECT COUNT(s._id) AS num_sales, SUM(s.sale_price) AS total_revenue FROM sales AS s JOIN cars AS c ON s.car_id = c._id WHERE c.make = 'Toyota' AND s.sale_date BETWEEN DATE('now', '-30 days') AND DATE('now');","WITH _s0 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(sale_price) AS agg_1,
+    car_id
+  FROM main.sales
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(sale_date, 'start of day'))
+    ) AS INTEGER) < 30
+  GROUP BY
+    car_id
+), _t0 AS (
+  SELECT
+    SUM(_s0.agg_0) AS agg_0,
+    SUM(_s0.agg_1) AS agg_1
+  FROM _s0 AS _s0
+  JOIN main.cars AS cars
+    ON LOWER(cars.make) = 'toyota' AND _s0.car_id = cars._id
+)
+SELECT
+  COALESCE(agg_0, 0) AS number_of_sales,
+  COALESCE(agg_1, 0) AS total_revenue
+FROM _t0",Defog,Dealership
+10,"Calculate the average DDD for each drug. Return the drug name and average DDD value.DDD (defined daily dose) = total drug amount consumed during one treatment / total days of treatment (end - start date in days), where end date is not null",claude,0,,,2.137376308441162,,,No valid genrated df,"SELECT d.drug_name, AVG(t.tot_drug_amt / NULLIF((JULIANDAY(t.end_dt) - JULIANDAY(t.start_dt)), 0)) AS ddd FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE NOT t.end_dt IS NULL GROUP BY d.drug_name;",No valid SQL,Defog,DermTreatment
+10,"Calculate the average DDD for each drug. Return the drug name and average DDD value.DDD (defined daily dose) = total drug amount consumed during one treatment / total days of treatment (end - start date in days), where end date is not null",gemini,0,,,2.2067205905914307,,,No valid genrated df,"SELECT d.drug_name, AVG(t.tot_drug_amt / NULLIF((JULIANDAY(t.end_dt) - JULIANDAY(t.start_dt)), 0)) AS ddd FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE NOT t.end_dt IS NULL GROUP BY d.drug_name;",No valid SQL,Defog,DermTreatment
+10,"Calculate the average DDD for each drug. Return the drug name and average DDD value.DDD (defined daily dose) = total drug amount consumed during one treatment / total days of treatment (end - start date in days), where end date is not null",claude,1,,,2.1749422550201416,,,No valid genrated df,"SELECT d.drug_name, AVG(t.tot_drug_amt / NULLIF((JULIANDAY(t.end_dt) - JULIANDAY(t.start_dt)), 0)) AS ddd FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE NOT t.end_dt IS NULL GROUP BY d.drug_name;",No valid SQL,Defog,DermTreatment
+10,"Calculate the average DDD for each drug. Return the drug name and average DDD value.DDD (defined daily dose) = total drug amount consumed during one treatment / total days of treatment (end - start date in days), where end date is not null",gemini,1,,,2.2004520893096924,,,No valid genrated df,"SELECT d.drug_name, AVG(t.tot_drug_amt / NULLIF((JULIANDAY(t.end_dt) - JULIANDAY(t.start_dt)), 0)) AS ddd FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE NOT t.end_dt IS NULL GROUP BY d.drug_name;",No valid SQL,Defog,DermTreatment
+11,"How many distinct patients had treatments in each of the last 3 months, not including the current month? Out of these, how many had treatments with biologic drugs? Return the month, patient count, and biologic treatment count.Biologic drugs have drug_type = 'biologic'. ",claude,0,"Let me analyze this request step by step:
+
+1. I need to find distinct patients who had treatments in each of the last 3 months (not including the current month)
+2. For each month, I need to count:
+   - Total distinct patients with treatments
+   - Distinct patients with biologic drug treatments (where drug_type = 'biologic')
+3. Return: month, patient count, and biologic treatment count
+
+Let me think about the approach:
+- I need to work with treatments that started in the last 3 months (excluding current month)
+- I need to group by month and count distinct patients
+- I need to identify which treatments used biologic drugs
+
+Here's my solution:
+
+```python
+# First, calculate the date range for the last 3 months excluding current month
+# Get treatments from the last 3 months, excluding current month
+treatments_last_3_months = Treatments.WHERE(
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) >= 1) & 
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) <= 3)
+).CALCULATE(
+    treatment_month = JOIN_STRINGS(""-"", YEAR(start_dt), LPAD(MONTH(start_dt), 2, ""0"")),
+    patient_id = patient_id,
+    is_biologic = IFF(LOWER(drug.drug_type) == ""biologic"", 1, 0)
+)
+
+# Partition by month and calculate distinct patient counts
+result = treatments_last_3_months.PARTITION(
+    name=""months"", 
+    by=treatment_month
+).CALCULATE(
+    month = treatment_month,
+    patient_count = NDISTINCT(Treatments.patient_id),
+    biologic_treatment_count = NDISTINCT(Treatments.WHERE(is_biologic == 1).patient_id)
+).ORDER_BY(month.DESC())
+```
+
+This code:
+1. Filters treatments to only include those that started in the last 3 months (excluding the current month) using `DATEDIFF`
+2. Creates a formatted month string (YYYY-MM) for grouping
+3. Identifies whether each treatment used a biologic drug (case-insensitive comparison)
+4. Partitions the treatments by month
+5. For each month, calculates:
+   - The count of distinct patients who had any treatment
+   - The count of distinct patients who had treatments with biologic drugs
+6. Orders the results by month in descending order (most recent first)","# First, calculate the date range for the last 3 months excluding current month
+# Get treatments from the last 3 months, excluding current month
+treatments_last_3_months = Treatments.WHERE(
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) >= 1) & 
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) <= 3)
+).CALCULATE(
+    treatment_month = JOIN_STRINGS(""-"", YEAR(start_dt), LPAD(MONTH(start_dt), 2, ""0"")),
+    patient_id = patient_id,
+    is_biologic = IFF(LOWER(drug.drug_type) == ""biologic"", 1, 0)
+)
+
+# Partition by month and calculate distinct patient counts
+result = treatments_last_3_months.PARTITION(
+    name=""months"", 
+    by=treatment_month
+).CALCULATE(
+    month = treatment_month,
+    patient_count = NDISTINCT(Treatments.patient_id),
+    biologic_treatment_count = NDISTINCT(Treatments.WHERE(is_biologic == 1).patient_id)
+).ORDER_BY(month.DESC())",17.65688729286194,,"     month  patient_count  biologic_treatment_count
+0  2025-06              1                         0
+1  2025-05              1                         0
+2  2025-04              1                         1","[{""month"":""2025-06"",""patient_count"":1,""biologic_treatment_count"":0},{""month"":""2025-05"",""patient_count"":1,""biologic_treatment_count"":0},{""month"":""2025-04"",""patient_count"":1,""biologic_treatment_count"":1}]","SELECT strftime('%Y-%m', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;","WITH _s2 AS (
+  SELECT
+    COUNT(DISTINCT patient_id) AS agg_1,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    ) AS treatment_month
+  FROM main.treatments
+  WHERE
+    (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', start_dt) AS INTEGER)
+    ) <= 3
+    AND (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', start_dt) AS INTEGER)
+    ) >= 1
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    )
+), _s3 AS (
+  SELECT
+    COUNT(DISTINCT treatments.patient_id) AS agg_0,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    ) AS treatment_month
+  FROM main.treatments AS treatments
+  LEFT JOIN main.drugs AS drugs
+    ON drugs.drug_id = treatments.drug_id
+  WHERE
+    (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) <= 3
+    AND (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) >= 1
+    AND IIF(LOWER(drugs.drug_type) = 'biologic', 1, 0) = 1
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    )
+)
+SELECT
+  _s2.treatment_month AS month,
+  COALESCE(_s2.agg_1, 0) AS patient_count,
+  COALESCE(_s3.agg_0, 0) AS biologic_treatment_count
+FROM _s2 AS _s2
+LEFT JOIN _s3 AS _s3
+  ON _s2.treatment_month = _s3.treatment_month
+ORDER BY
+  month DESC",Defog,DermTreatment
+11,"How many distinct patients had treatments in each of the last 3 months, not including the current month? Out of these, how many had treatments with biologic drugs? Return the month, patient count, and biologic treatment count.Biologic drugs have drug_type = 'biologic'. ",gemini,0,"This query calculates the number of distinct patients treated in each of the last three full months and, of those, how many were treated with biologic drugs.
+
+```python
+date_boundaries = DermTreatment.CALCULATE(
+    start_of_current_month=DATETIME('now', 'start of month'),
+    start_of_period=DATETIME('now', 'start of month', '-3 months')
+)
+
+recent_treatments = date_boundaries.Treatments.WHERE(
+    (start_dt >= start_of_period) & (start_dt < start_of_current_month)
+)
+
+treatments_with_month = recent_treatments.CALCULATE(
+    treatment_month=JOIN_STRINGS(""-"", YEAR(start_dt), MONTH(start_dt))
+)
+
+monthly_patient_counts = treatments_with_month.PARTITION(
+    name=""monthly_groups"", by=(treatment_month)
+).CALCULATE(
+    month=treatment_month,
+    patient_count=NDISTINCT(Treatments.patient_id),
+    biologic_treatment_count=NDISTINCT(Treatments.WHERE(LOWER(drug.drug_type) == 'biologic').patient_id)
+).ORDER_BY(month.ASC())
+```
+
+### Explanation:
+
+1.  **`date_boundaries`**: We first define the time window using the `DermTreatment` graph. `start_of_current_month` is the first day of the current month, and `start_of_period` is the first day of the month three months prior. This establishes our date range for the analysis.
+2.  **`recent_treatments`**: We filter the `Treatments` collection to include only those with a `start_dt` within the last three full months (from `start_of_period` up to, but not including, `start_of_current_month`).
+3.  **`treatments_with_month`**: A new field, `treatment_month`, is created by combining the year and month of the `start_dt`. This field will be used for grouping.
+4.  **`monthly_patient_counts`**:
+    *   The filtered treatments are partitioned into groups by `treatment_month`.
+    *   For each monthly group, we `CALCULATE` three fields:
+        *   `month`: The month identifier for the group.
+        *   `patient_count`: The number of distinct patients (`NDISTINCT(Treatments.patient_id)`) who had any treatment in that month.
+        *   `biologic_treatment_count`: The number of distinct patients who received a biologic drug. This is calculated by first filtering the treatments within the group to where `drug.drug_type` is 'biologic' (case-insensitively) and then counting the distinct patient IDs from that subset.
+    *   Finally, the results are ordered by month in ascending order.","date_boundaries = DermTreatment.CALCULATE(
+    start_of_current_month=DATETIME('now', 'start of month'),
+    start_of_period=DATETIME('now', 'start of month', '-3 months')
+)
+
+recent_treatments = date_boundaries.Treatments.WHERE(
+    (start_dt >= start_of_period) & (start_dt < start_of_current_month)
+)
+
+treatments_with_month = recent_treatments.CALCULATE(
+    treatment_month=JOIN_STRINGS(""-"", YEAR(start_dt), MONTH(start_dt))
+)
+
+monthly_patient_counts = treatments_with_month.PARTITION(
+    name=""monthly_groups"", by=(treatment_month)
+).CALCULATE(
+    month=treatment_month,
+    patient_count=NDISTINCT(Treatments.patient_id),
+    biologic_treatment_count=NDISTINCT(Treatments.WHERE(LOWER(drug.drug_type) == 'biologic').patient_id)
+).ORDER_BY(month.ASC())",22.97421669960022,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16104)] cached_content_token_count=16104 candidates_token_count=635 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=635)] prompt_token_count=25152 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=25152)] thoughts_token_count=1444 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27231 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","    month  patient_count  biologic_treatment_count
+0  2025-4              1                         1
+1  2025-5              1                         0
+2  2025-6              1                         0","[{""month"":""2025-4"",""patient_count"":1,""biologic_treatment_count"":1},{""month"":""2025-5"",""patient_count"":1,""biologic_treatment_count"":0},{""month"":""2025-6"",""patient_count"":1,""biologic_treatment_count"":0}]","SELECT strftime('%Y-%m', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;","WITH _s6 AS (
+  SELECT
+    COUNT(DISTINCT treatments.patient_id) AS agg_1,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) AS treatment_month
+  FROM (VALUES
+    (NULL)) AS _q_0
+  JOIN main.treatments AS treatments
+    ON treatments.start_dt < DATE('now', 'start of month')
+    AND treatments.start_dt >= DATE('now', 'start of month', '-3 month')
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    )
+), _s7 AS (
+  SELECT
+    COUNT(DISTINCT treatments.patient_id) AS agg_0,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) AS treatment_month
+  FROM (VALUES
+    (NULL)) AS _q_1
+  JOIN main.treatments AS treatments
+    ON treatments.start_dt < DATE('now', 'start of month')
+    AND treatments.start_dt >= DATE('now', 'start of month', '-3 month')
+  JOIN main.drugs AS drugs
+    ON LOWER(drugs.drug_type) = 'biologic' AND drugs.drug_id = treatments.drug_id
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    )
+)
+SELECT
+  _s6.treatment_month AS month,
+  COALESCE(_s6.agg_1, 0) AS patient_count,
+  COALESCE(_s7.agg_0, 0) AS biologic_treatment_count
+FROM _s6 AS _s6
+LEFT JOIN _s7 AS _s7
+  ON _s6.treatment_month = _s7.treatment_month
+ORDER BY
+  month",Defog,DermTreatment
+11,"How many distinct patients had treatments in each of the last 3 months, not including the current month? Out of these, how many had treatments with biologic drugs? Return the month, patient count, and biologic treatment count.Biologic drugs have drug_type = 'biologic'. ",claude,1,"Let me analyze this request step by step:
+
+1. I need to find distinct patients who had treatments in each of the last 3 months (not including the current month)
+2. For each month, I need to count:
+   - Total distinct patients with treatments
+   - Distinct patients with biologic drug treatments (where drug_type = 'biologic')
+3. Return: month, patient count, and biologic treatment count
+
+Let me think about the approach:
+- I need to work with treatments that started in the last 3 months (excluding current month)
+- I need to group by month and count distinct patients
+- I need to identify which treatments used biologic drugs
+
+Here's my solution:
+
+```python
+# First, calculate the date range for the last 3 months excluding current month
+# We'll filter treatments that started in the last 3 months
+treatments_last_3_months = Treatments.WHERE(
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) >= 1) & 
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) <= 3)
+).CALCULATE(
+    patient_id=patient_id,
+    treatment_month=JOIN_STRINGS(""-"", YEAR(start_dt), LPAD(MONTH(start_dt), 2, ""0"")),
+    is_biologic=IFF(LOWER(drug.drug_type) == ""biologic"", 1, 0)
+)
+
+# Partition by month to count distinct patients
+monthly_stats = treatments_last_3_months.PARTITION(
+    name=""months"", 
+    by=treatment_month
+).CALCULATE(
+    month=treatment_month,
+    patient_count=NDISTINCT(Treatments.patient_id),
+    biologic_patient_count=NDISTINCT(Treatments.WHERE(is_biologic == 1).patient_id)
+)
+
+# Order by month descending to show most recent first
+result = monthly_stats.ORDER_BY(month.DESC())
+```
+
+This code:
+1. Filters treatments to only include those that started in the last 3 months (excluding the current month) using `DATEDIFF`
+2. Calculates the month in YYYY-MM format and identifies if the treatment used a biologic drug
+3. Partitions the treatments by month
+4. For each month, counts:
+   - Total distinct patients using `NDISTINCT` on patient_id
+   - Distinct patients with biologic treatments by filtering for `is_biologic == 1`
+5. Orders the results by month in descending order to show the most recent month first","# First, calculate the date range for the last 3 months excluding current month
+# We'll filter treatments that started in the last 3 months
+treatments_last_3_months = Treatments.WHERE(
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) >= 1) & 
+    (DATEDIFF(""months"", start_dt, DATETIME(""now"")) <= 3)
+).CALCULATE(
+    patient_id=patient_id,
+    treatment_month=JOIN_STRINGS(""-"", YEAR(start_dt), LPAD(MONTH(start_dt), 2, ""0"")),
+    is_biologic=IFF(LOWER(drug.drug_type) == ""biologic"", 1, 0)
+)
+
+# Partition by month to count distinct patients
+monthly_stats = treatments_last_3_months.PARTITION(
+    name=""months"", 
+    by=treatment_month
+).CALCULATE(
+    month=treatment_month,
+    patient_count=NDISTINCT(Treatments.patient_id),
+    biologic_patient_count=NDISTINCT(Treatments.WHERE(is_biologic == 1).patient_id)
+)
+
+# Order by month descending to show most recent first
+result = monthly_stats.ORDER_BY(month.DESC())",17.7292160987854,,"     month  patient_count  biologic_patient_count
+0  2025-06              1                       0
+1  2025-05              1                       0
+2  2025-04              1                       1","[{""month"":""2025-06"",""patient_count"":1,""biologic_patient_count"":0},{""month"":""2025-05"",""patient_count"":1,""biologic_patient_count"":0},{""month"":""2025-04"",""patient_count"":1,""biologic_patient_count"":1}]","SELECT strftime('%Y-%m', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;","WITH _s2 AS (
+  SELECT
+    COUNT(DISTINCT patient_id) AS agg_1,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    ) AS treatment_month
+  FROM main.treatments
+  WHERE
+    (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', start_dt) AS INTEGER)
+    ) <= 3
+    AND (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', start_dt) AS INTEGER)
+    ) >= 1
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    )
+), _s3 AS (
+  SELECT
+    COUNT(DISTINCT treatments.patient_id) AS agg_0,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    ) AS treatment_month
+  FROM main.treatments AS treatments
+  LEFT JOIN main.drugs AS drugs
+    ON drugs.drug_id = treatments.drug_id
+  WHERE
+    (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) <= 3
+    AND (
+      (
+        CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER)
+      ) * 12 + CAST(STRFTIME('%m', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) >= 1
+    AND IIF(LOWER(drugs.drug_type) = 'biologic', 1, 0) = 1
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CASE
+        WHEN LENGTH(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)) >= 2
+        THEN SUBSTRING(CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), 1, 2)
+        ELSE SUBSTRING('00' || CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER), (
+          2 * -1
+        ))
+      END
+    )
+)
+SELECT
+  _s2.treatment_month AS month,
+  COALESCE(_s2.agg_1, 0) AS patient_count,
+  COALESCE(_s3.agg_0, 0) AS biologic_patient_count
+FROM _s2 AS _s2
+LEFT JOIN _s3 AS _s3
+  ON _s2.treatment_month = _s3.treatment_month
+ORDER BY
+  month DESC",Defog,DermTreatment
+11,"How many distinct patients had treatments in each of the last 3 months, not including the current month? Out of these, how many had treatments with biologic drugs? Return the month, patient count, and biologic treatment count.Biologic drugs have drug_type = 'biologic'. ",gemini,1,"This query calculates the number of distinct patients treated in each of the last three months (excluding the current month) and, within that group, counts how many were treated with biologic drugs.
+
+The process is as follows:
+1.  **Date Calculation**: It first determines the relevant time window by calculating the start of the current month and then finding the date three months prior.
+2.  **Filtering**: It filters the `Treatments` collection to include only those that started within this three-month period.
+3.  **Grouping**: The filtered treatments are then partitioned by month.
+4.  **Aggregation**: For each month's partition, it calculates two values:
+    *   `patient_count`: The total number of distinct patients for that month.
+    *   `biologic_treatment_count`: The number of distinct patients who received a drug with the type 'biologic'. This is done by filtering the treatments within the partition before counting the distinct patients.
+5.  **Sorting**: The final results are sorted by month in ascending order.
+
+```python
+# Define the date range for the last 3 full months
+date_info = DermTreatment.CALCULATE(
+    start_of_current_month=DATETIME('now', 'start of month')
+).CALCULATE(
+    start_of_period=DATETIME(start_of_current_month, '-3 months')
+)
+
+# Filter treatments to the relevant period and extract the month for grouping
+treatments_in_period = date_info.Treatments.WHERE(
+    (start_dt >= start_of_period) & (start_dt < start_of_current_month)
+).CALCULATE(
+    treatment_month=JOIN_STRINGS(""-"", YEAR(start_dt), MONTH(start_dt))
+)
+
+# Partition by month and calculate the distinct patient counts for all treatments and for biologic treatments
+monthly_patient_counts = treatments_in_period.PARTITION(
+    name=""monthly_groups"", by=(treatment_month)
+).CALCULATE(
+    month=treatment_month,
+    patient_count=NDISTINCT(Treatments.patient_id),
+    biologic_treatment_count=NDISTINCT(Treatments.WHERE(LOWER(drug.drug_type) == 'biologic').patient_id)
+).ORDER_BY(month.ASC())
+
+result = monthly_patient_counts
+```","# Define the date range for the last 3 full months
+date_info = DermTreatment.CALCULATE(
+    start_of_current_month=DATETIME('now', 'start of month')
+).CALCULATE(
+    start_of_period=DATETIME(start_of_current_month, '-3 months')
+)
+
+# Filter treatments to the relevant period and extract the month for grouping
+treatments_in_period = date_info.Treatments.WHERE(
+    (start_dt >= start_of_period) & (start_dt < start_of_current_month)
+).CALCULATE(
+    treatment_month=JOIN_STRINGS(""-"", YEAR(start_dt), MONTH(start_dt))
+)
+
+# Partition by month and calculate the distinct patient counts for all treatments and for biologic treatments
+monthly_patient_counts = treatments_in_period.PARTITION(
+    name=""monthly_groups"", by=(treatment_month)
+).CALCULATE(
+    month=treatment_month,
+    patient_count=NDISTINCT(Treatments.patient_id),
+    biologic_treatment_count=NDISTINCT(Treatments.WHERE(LOWER(drug.drug_type) == 'biologic').patient_id)
+).ORDER_BY(month.ASC())
+
+result = monthly_patient_counts",22.133821725845337,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=24156)] cached_content_token_count=24156 candidates_token_count=512 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=512)] prompt_token_count=25152 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=25152)] thoughts_token_count=1571 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27235 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","    month  patient_count  biologic_treatment_count
+0  2025-4              1                         1
+1  2025-5              1                         0
+2  2025-6              1                         0","[{""month"":""2025-4"",""patient_count"":1,""biologic_treatment_count"":1},{""month"":""2025-5"",""patient_count"":1,""biologic_treatment_count"":0},{""month"":""2025-6"",""patient_count"":1,""biologic_treatment_count"":0}]","SELECT strftime('%Y-%m', t.start_dt) AS MONTH, COUNT(DISTINCT t.patient_id) AS patient_count, COUNT(DISTINCT CASE WHEN d.drug_type = 'biologic' THEN t.treatment_id END) AS biologic_treatment_count FROM treatments AS t JOIN drugs AS d ON t.drug_id = d.drug_id WHERE t.start_dt >= date('now', '-3 months', 'start of month') AND t.start_dt < date('now', 'start of month') GROUP BY month;","WITH _s6 AS (
+  SELECT
+    COUNT(DISTINCT treatments.patient_id) AS agg_1,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) AS treatment_month
+  FROM (VALUES
+    (NULL)) AS _q_0
+  JOIN main.treatments AS treatments
+    ON treatments.start_dt < DATE('now', 'start of month')
+    AND treatments.start_dt >= DATETIME(DATE('now', 'start of month'), '-3 month')
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    )
+), _s7 AS (
+  SELECT
+    COUNT(DISTINCT treatments.patient_id) AS agg_0,
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    ) AS treatment_month
+  FROM (VALUES
+    (NULL)) AS _q_1
+  JOIN main.treatments AS treatments
+    ON treatments.start_dt < DATE('now', 'start of month')
+    AND treatments.start_dt >= DATETIME(DATE('now', 'start of month'), '-3 month')
+  JOIN main.drugs AS drugs
+    ON LOWER(drugs.drug_type) = 'biologic' AND drugs.drug_id = treatments.drug_id
+  GROUP BY
+    CONCAT_WS(
+      '-',
+      CAST(STRFTIME('%Y', treatments.start_dt) AS INTEGER),
+      CAST(STRFTIME('%m', treatments.start_dt) AS INTEGER)
+    )
+)
+SELECT
+  _s6.treatment_month AS month,
+  COALESCE(_s6.agg_1, 0) AS patient_count,
+  COALESCE(_s7.agg_0, 0) AS biologic_treatment_count
+FROM _s6 AS _s6
+LEFT JOIN _s7 AS _s7
+  ON _s6.treatment_month = _s7.treatment_month
+ORDER BY
+  month",Defog,DermTreatment
+12,How many patients have a Gmail or Yahoo email address?Patients with gmail or yahoo email addresses,claude,0,,,2.2771525382995605,,,No valid genrated df,SELECT COUNT(*) FROM patients WHERE email LIKE '%@gmail.com' OR email LIKE '%@yahoo.com';,No valid SQL,Defog,DermTreatment
+12,How many patients have a Gmail or Yahoo email address?Patients with gmail or yahoo email addresses,gemini,0,,,2.7841362953186035,,,No valid genrated df,SELECT COUNT(*) FROM patients WHERE email LIKE '%@gmail.com' OR email LIKE '%@yahoo.com';,No valid SQL,Defog,DermTreatment
+12,How many patients have a Gmail or Yahoo email address?Patients with gmail or yahoo email addresses,claude,1,,,2.1074647903442383,,,No valid genrated df,SELECT COUNT(*) FROM patients WHERE email LIKE '%@gmail.com' OR email LIKE '%@yahoo.com';,No valid SQL,Defog,DermTreatment
+12,How many patients have a Gmail or Yahoo email address?Patients with gmail or yahoo email addresses,gemini,1,,,2.357257127761841,,,No valid genrated df,SELECT COUNT(*) FROM patients WHERE email LIKE '%@gmail.com' OR email LIKE '%@yahoo.com';,No valid SQL,Defog,DermTreatment
+13,How many patients have been diagnosed with 'Psoriasis vulgaris' and treated with a biologic drug? Return the distinct count of patients.,claude,0,"Let me analyze this step by step:
+
+1. I need to find patients who:
+   - Have been diagnosed with 'Psoriasis vulgaris'
+   - Have been treated with a biologic drug
+   - Return the distinct count of these patients
+
+2. Looking at the database structure:
+   - `Patients` have `treatments_received` (a list of treatments)
+   - `Treatments` have a `diagnosis` (singular) and a `drug` (singular)
+   - `Diagnoses` have a `diag_name` field
+   - `Drugs` have a `drug_type` field
+
+3. The approach:
+   - Start with `Patients` collection
+   - Filter patients who have at least one treatment where:
+     - The diagnosis name is 'Psoriasis vulgaris' (case-insensitive)
+     - The drug type is 'Biologic' (case-insensitive)
+   - Count these distinct patients
+
+4. Since we need to check if a patient has treatments meeting both conditions, I'll use the `HAS` function with a `WHERE` clause to filter treatments.
+
+```python
+result = DermTreatment.CALCULATE(
+    patient_count=COUNT(
+        Patients.WHERE(
+            HAS(
+                treatments_received.WHERE(
+                    (LOWER(diagnosis.diag_name) == LOWER('Psoriasis vulgaris')) &
+                    (LOWER(drug.drug_type) == LOWER('Biologic'))
+                )
+            ) == 1
+        )
+    )
+)
+```
+
+This code:
+1. Starts with the high-level `DermTreatment` collection to calculate a count
+2. Counts patients from the `Patients` collection
+3. Filters patients using `WHERE` and `HAS` to check if they have at least one treatment that meets both conditions:
+   - The treatment's diagnosis name is 'Psoriasis vulgaris' (using case-insensitive comparison with `LOWER`)
+   - The treatment's drug type is 'Biologic' (using case-insensitive comparison with `LOWER`)
+4. Returns the distinct count of such patients","result = DermTreatment.CALCULATE(
+    patient_count=COUNT(
+        Patients.WHERE(
+            HAS(
+                treatments_received.WHERE(
+                    (LOWER(diagnosis.diag_name) == LOWER('Psoriasis vulgaris')) &
+                    (LOWER(drug.drug_type) == LOWER('Biologic'))
+                )
+            ) == 1
+        )
+    )
+)",18.46840214729309,,"   patient_count
+0              3","[{""patient_count"":3}]",WITH patient_diagnosis_treatment AS (SELECT p.patient_id FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id JOIN diagnoses AS d ON t.diag_id = d.diag_id JOIN drugs AS dr ON t.drug_id = dr.drug_id WHERE d.diag_name = 'Psoriasis vulgaris' AND dr.drug_type = 'biologic') SELECT COUNT(DISTINCT patient_id) FROM patient_diagnosis_treatment;,"WITH _s5 AS (
+  SELECT
+    COUNT() AS agg_0,
+    treatments.patient_id
+  FROM main.treatments AS treatments
+  JOIN main.diagnoses AS diagnoses
+    ON LOWER('Psoriasis vulgaris') = LOWER(diagnoses.diag_name)
+    AND diagnoses.diag_id = treatments.diag_id
+  JOIN main.drugs AS drugs
+    ON LOWER('Biologic') = LOWER(drugs.drug_type) AND drugs.drug_id = treatments.drug_id
+  GROUP BY
+    treatments.patient_id
+)
+SELECT
+  COUNT() AS patient_count
+FROM main.patients AS patients
+LEFT JOIN _s5 AS _s5
+  ON _s5.patient_id = patients.patient_id
+WHERE
+  (
+    NOT _s5.agg_0 IS NULL AND _s5.agg_0 > 0
+  ) = 1",Defog,DermTreatment
+13,How many patients have been diagnosed with 'Psoriasis vulgaris' and treated with a biologic drug? Return the distinct count of patients.,gemini,0,"This query calculates the number of unique patients who have been diagnosed with 'Psoriasis vulgaris' and were treated with a 'biologic' drug.
+
+```python
+result = DermTreatment.CALCULATE(
+    distinct_patient_count=NDISTINCT(
+        Treatments.WHERE(
+            (LOWER(diagnosis.diag_name) == 'psoriasis vulgaris') & 
+            (LOWER(drug.drug_type) == 'biologic')
+        ).patient.patient_id
+    )
+)
+```
+
+### Explanation:
+
+1.  **`DermTreatment.CALCULATE(...)`**: The query starts at the top-level `DermTreatment` graph to compute a single aggregated value.
+2.  **`NDISTINCT(...)`**: This function is used to count the number of unique patient IDs, ensuring that each patient is counted only once, even if they have multiple qualifying treatments.
+3.  **`Treatments.WHERE(...)`**: We filter the `Treatments` collection because it directly links patients, diagnoses, and drugs.
+4.  **`LOWER(diagnosis.diag_name) == 'psoriasis vulgaris'`**: This condition filters for treatments where the associated diagnosis name is 'Psoriasis vulgaris'. `LOWER` is used for a case-insensitive comparison.
+5.  **`LOWER(drug.drug_type) == 'biologic'`**: This condition filters for treatments where the drug type is 'biologic'.
+6.  **`.patient.patient_id`**: For each treatment that meets both criteria, we navigate to the associated `patient` record and retrieve their `patient_id`.
+7.  The final result, `distinct_patient_count`, is the total count of unique patients who satisfy all the specified conditions.","result = DermTreatment.CALCULATE(
+    distinct_patient_count=NDISTINCT(
+        Treatments.WHERE(
+            (LOWER(diagnosis.diag_name) == 'psoriasis vulgaris') & 
+            (LOWER(drug.drug_type) == 'biologic')
+        ).patient.patient_id
+    )
+)",29.89370608329773,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16103)] cached_content_token_count=16103 candidates_token_count=372 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=372)] prompt_token_count=25120 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=25120)] thoughts_token_count=2283 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27775 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   distinct_patient_count
+0                       3","[{""distinct_patient_count"":3}]",WITH patient_diagnosis_treatment AS (SELECT p.patient_id FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id JOIN diagnoses AS d ON t.diag_id = d.diag_id JOIN drugs AS dr ON t.drug_id = dr.drug_id WHERE d.diag_name = 'Psoriasis vulgaris' AND dr.drug_type = 'biologic') SELECT COUNT(DISTINCT patient_id) FROM patient_diagnosis_treatment;,"SELECT
+  COUNT(DISTINCT patients.patient_id) AS distinct_patient_count
+FROM main.treatments AS treatments
+JOIN main.diagnoses AS diagnoses
+  ON LOWER(diagnoses.diag_name) = 'psoriasis vulgaris'
+  AND diagnoses.diag_id = treatments.diag_id
+JOIN main.drugs AS drugs
+  ON LOWER(drugs.drug_type) = 'biologic' AND drugs.drug_id = treatments.drug_id
+JOIN main.patients AS patients
+  ON patients.patient_id = treatments.patient_id",Defog,DermTreatment
+13,How many patients have been diagnosed with 'Psoriasis vulgaris' and treated with a biologic drug? Return the distinct count of patients.,claude,1,"Let me analyze this step by step:
+
+1. I need to find patients who:
+   - Have been diagnosed with 'Psoriasis vulgaris'
+   - Have been treated with a biologic drug
+   - Return the distinct count of these patients
+
+2. Looking at the database structure:
+   - `Patients` have `treatments_received` (a list of treatments)
+   - `Treatments` have a `diagnosis` (singular) and a `drug` (singular)
+   - `Diagnoses` have a `diag_name` field
+   - `Drugs` have a `drug_type` field
+
+3. The approach:
+   - Start with `Patients` collection
+   - Filter patients who have at least one treatment where:
+     - The diagnosis name is 'Psoriasis vulgaris' (case-insensitive)
+     - The drug type is 'Biologic' (case-insensitive)
+   - Count these distinct patients
+
+4. Since we need to check if a patient has treatments meeting both conditions, I'll use the `HAS` function with a `WHERE` clause to filter treatments.
+
+```python
+result = DermTreatment.CALCULATE(
+    patient_count=COUNT(
+        Patients.WHERE(
+            HAS(
+                treatments_received.WHERE(
+                    (LOWER(diagnosis.diag_name) == LOWER('Psoriasis vulgaris')) &
+                    (LOWER(drug.drug_type) == LOWER('Biologic'))
+                )
+            ) == 1
+        )
+    )
+)
+```
+
+This code:
+1. Starts with the high-level `DermTreatment` collection to calculate a global count
+2. Counts patients from the `Patients` collection
+3. Filters patients using `WHERE` and `HAS` to check if they have at least one treatment that meets both conditions:
+   - The treatment's diagnosis name is 'Psoriasis vulgaris' (using case-insensitive comparison with `LOWER`)
+   - The treatment's drug type is 'Biologic' (using case-insensitive comparison with `LOWER`)
+4. Returns the distinct count of such patients","result = DermTreatment.CALCULATE(
+    patient_count=COUNT(
+        Patients.WHERE(
+            HAS(
+                treatments_received.WHERE(
+                    (LOWER(diagnosis.diag_name) == LOWER('Psoriasis vulgaris')) &
+                    (LOWER(drug.drug_type) == LOWER('Biologic'))
+                )
+            ) == 1
+        )
+    )
+)",17.95547842979431,,"   patient_count
+0              3","[{""patient_count"":3}]",WITH patient_diagnosis_treatment AS (SELECT p.patient_id FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id JOIN diagnoses AS d ON t.diag_id = d.diag_id JOIN drugs AS dr ON t.drug_id = dr.drug_id WHERE d.diag_name = 'Psoriasis vulgaris' AND dr.drug_type = 'biologic') SELECT COUNT(DISTINCT patient_id) FROM patient_diagnosis_treatment;,"WITH _s5 AS (
+  SELECT
+    COUNT() AS agg_0,
+    treatments.patient_id
+  FROM main.treatments AS treatments
+  JOIN main.diagnoses AS diagnoses
+    ON LOWER('Psoriasis vulgaris') = LOWER(diagnoses.diag_name)
+    AND diagnoses.diag_id = treatments.diag_id
+  JOIN main.drugs AS drugs
+    ON LOWER('Biologic') = LOWER(drugs.drug_type) AND drugs.drug_id = treatments.drug_id
+  GROUP BY
+    treatments.patient_id
+)
+SELECT
+  COUNT() AS patient_count
+FROM main.patients AS patients
+LEFT JOIN _s5 AS _s5
+  ON _s5.patient_id = patients.patient_id
+WHERE
+  (
+    NOT _s5.agg_0 IS NULL AND _s5.agg_0 > 0
+  ) = 1",Defog,DermTreatment
+13,How many patients have been diagnosed with 'Psoriasis vulgaris' and treated with a biologic drug? Return the distinct count of patients.,gemini,1,"This query calculates the number of unique patients who have been diagnosed with 'Psoriasis vulgaris' and were treated with a 'biologic' drug.
+
+```python
+result = DermTreatment.CALCULATE(
+    distinct_patient_count=NDISTINCT(
+        Treatments.WHERE(
+            (LOWER(diagnosis.diag_name) == 'psoriasis vulgaris') & 
+            (LOWER(drug.drug_type) == 'biologic')
+        ).patient.patient_id
+    )
+)
+```
+
+### Explanation:
+
+1.  **`DermTreatment.CALCULATE(...)`**: The query starts at the top-level `DermTreatment` graph to compute a single aggregated value.
+2.  **`NDISTINCT(...)`**: This function is used to count the number of unique patient IDs, ensuring that each patient is counted only once, even if they have multiple qualifying treatments.
+3.  **`Treatments.WHERE(...)`**: We filter the `Treatments` collection because it directly links patients, diagnoses, and drugs.
+4.  **`LOWER(diagnosis.diag_name) == 'psoriasis vulgaris'`**: This condition filters for treatments where the associated diagnosis name is 'Psoriasis vulgaris'. `LOWER` is used for a case-insensitive comparison.
+5.  **`LOWER(drug.drug_type) == 'biologic'`**: This condition filters for treatments where the drug type is 'biologic'.
+6.  **`.patient.patient_id`**: For each treatment that meets both criteria, we navigate to the associated `patient` record and retrieve their `patient_id`.
+7.  The final result, `distinct_patient_count`, is the total count of unique patients who satisfy all the specified conditions.","result = DermTreatment.CALCULATE(
+    distinct_patient_count=NDISTINCT(
+        Treatments.WHERE(
+            (LOWER(diagnosis.diag_name) == 'psoriasis vulgaris') & 
+            (LOWER(drug.drug_type) == 'biologic')
+        ).patient.patient_id
+    )
+)",29.866215229034424,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=24154)] cached_content_token_count=24154 candidates_token_count=372 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=372)] prompt_token_count=25120 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=25120)] thoughts_token_count=2283 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27775 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   distinct_patient_count
+0                       3","[{""distinct_patient_count"":3}]",WITH patient_diagnosis_treatment AS (SELECT p.patient_id FROM patients AS p JOIN treatments AS t ON p.patient_id = t.patient_id JOIN diagnoses AS d ON t.diag_id = d.diag_id JOIN drugs AS dr ON t.drug_id = dr.drug_id WHERE d.diag_name = 'Psoriasis vulgaris' AND dr.drug_type = 'biologic') SELECT COUNT(DISTINCT patient_id) FROM patient_diagnosis_treatment;,"SELECT
+  COUNT(DISTINCT patients.patient_id) AS distinct_patient_count
+FROM main.treatments AS treatments
+JOIN main.diagnoses AS diagnoses
+  ON LOWER(diagnoses.diag_name) = 'psoriasis vulgaris'
+  AND diagnoses.diag_id = treatments.diag_id
+JOIN main.drugs AS drugs
+  ON LOWER(drugs.drug_type) = 'biologic' AND drugs.drug_id = treatments.drug_id
+JOIN main.patients AS patients
+  ON patients.patient_id = treatments.patient_id",Defog,DermTreatment
+14,"How many treatments did the patient Alice have in the last 6 months, not including the current month?",claude,0,,,2.0171096324920654,,,No valid genrated df,"SELECT COUNT(t.treatment_id) FROM treatments AS t JOIN patients AS p ON t.patient_id = p.patient_id WHERE p.first_name = 'Alice' AND t.start_dt BETWEEN date('now', 'start of month', '-6 months') AND date('now', 'start of month', '-1 day');",No valid SQL,Defog,DermTreatment
+14,"How many treatments did the patient Alice have in the last 6 months, not including the current month?",gemini,0,,,2.6686692237854004,,,No valid genrated df,"SELECT COUNT(t.treatment_id) FROM treatments AS t JOIN patients AS p ON t.patient_id = p.patient_id WHERE p.first_name = 'Alice' AND t.start_dt BETWEEN date('now', 'start of month', '-6 months') AND date('now', 'start of month', '-1 day');",No valid SQL,Defog,DermTreatment
+14,"How many treatments did the patient Alice have in the last 6 months, not including the current month?",claude,1,,,2.1689400672912598,,,No valid genrated df,"SELECT COUNT(t.treatment_id) FROM treatments AS t JOIN patients AS p ON t.patient_id = p.patient_id WHERE p.first_name = 'Alice' AND t.start_dt BETWEEN date('now', 'start of month', '-6 months') AND date('now', 'start of month', '-1 day');",No valid SQL,Defog,DermTreatment
+14,"How many treatments did the patient Alice have in the last 6 months, not including the current month?",gemini,1,,,2.120245933532715,,,No valid genrated df,"SELECT COUNT(t.treatment_id) FROM treatments AS t JOIN patients AS p ON t.patient_id = p.patient_id WHERE p.first_name = 'Alice' AND t.start_dt BETWEEN date('now', 'start of month', '-6 months') AND date('now', 'start of month', '-1 day');",No valid SQL,Defog,DermTreatment
+15,what is average age (in integer years) of all registered male patients with private insurance currently? Private insurance patients have ins_type 'private',claude,0,"Let's break down this request:
+
+1. We need to find the average age of patients who are:
+   - Male (gender = 'male')
+   - Have private insurance (ins_type = 'private')
+   - Currently registered (all patients in the database are registered)
+
+2. Age needs to be calculated as integer years from their date of birth to the current date
+
+Let me think about the approach:
+- Start with the `Patients` collection
+- Filter for male patients with private insurance
+- Calculate their age in years using DATEDIFF
+- Take the average of these ages
+
+Here's the PyDough code:
+
+```python
+result = Patients.WHERE(
+    (LOWER(gender) == 'male') & 
+    (LOWER(ins_type) == 'private')
+).CALCULATE(
+    age_in_years = DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+).CALCULATE(
+    average_age = AVG(age_in_years)
+)
+```
+
+This code:
+1. Starts with the `Patients` collection
+2. Filters patients where:
+   - `gender` is 'male' (using LOWER for case-insensitive comparison)
+   - `ins_type` is 'private' (using LOWER for case-insensitive comparison)
+3. Calculates the age in years for each patient using `DATEDIFF` between their `date_of_birth` and the current date (`DATETIME('now')`)
+4. Calculates the average of all these ages using the `AVG` aggregation function
+
+The DATEDIFF function with ""years"" parameter returns the number of full years between the date of birth and now, which gives us the integer age as requested.","result = Patients.WHERE(
+    (LOWER(gender) == 'male') & 
+    (LOWER(ins_type) == 'private')
+).CALCULATE(
+    age_in_years = DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+).CALCULATE(
+    average_age = AVG(age_in_years)
+)",12.675729513168335,,,,"SELECT AVG(strftime('%Y', 'now') - strftime('%Y', date_of_birth)) AS avg_age FROM patients WHERE gender = 'Male' AND ins_type = 'private';",Faulty generated SQL,Defog,DermTreatment
+15,what is average age (in integer years) of all registered male patients with private insurance currently? Private insurance patients have ins_type 'private',gemini,0,"An elegant solution can be crafted by first filtering the `Patients` collection to isolate male patients with 'private' insurance. Following this, the age of each patient in this filtered group is calculated by determining the difference in years between their `date_of_birth` and the current date. Finally, the average of these calculated ages is computed to arrive at the solution.
+
+```python
+avg_age_of_male_private_patients = DermTreatment.CALCULATE(
+    average_age=AVG(
+        Patients.WHERE(
+            (LOWER(gender) == 'male') & (LOWER(ins_type) == 'private')
+        ).CALCULATE(
+            age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+        ).age_in_years
+    )
+)
+```
+
+### Explanation
+
+1.  **`DermTreatment.CALCULATE(...)`**: This operation is performed at the top level of the graph to compute a single aggregate value.
+2.  **`AVG(...)`**: This function calculates the average of the values provided to it.
+3.  **`Patients.WHERE(...)`**: We start with the `Patients` collection and filter it to include only records where the `gender` is 'male' and the `ins_type` is 'private'. `LOWER()` is used for case-insensitive matching.
+4.  **`.CALCULATE(age_in_years=...)`**: For each patient in the filtered set, a new field `age_in_years` is calculated.
+5.  **`DATEDIFF(""years"", date_of_birth, DATETIME('now'))`**: This function computes the age of each patient in full years by finding the difference between their `date_of_birth` and the current timestamp.
+6.  **`.age_in_years`**: This selects the calculated `age_in_years` from the intermediate collection, providing a list of ages for the `AVG` function to process.
+7.  **`average_age=...`**: The final computed average is assigned to the `average_age` field in the output.","avg_age_of_male_private_patients = DermTreatment.CALCULATE(
+    average_age=AVG(
+        Patients.WHERE(
+            (LOWER(gender) == 'male') & (LOWER(ins_type) == 'private')
+        ).CALCULATE(
+            age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+        ).age_in_years
+    )
+)",29.595722198486328,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20129)] cached_content_token_count=20129 candidates_token_count=463 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=463)] prompt_token_count=25123 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=25123)] thoughts_token_count=2234 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27820 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   average_age
+0         41.0","[{""average_age"":41.0}]","SELECT AVG(strftime('%Y', 'now') - strftime('%Y', date_of_birth)) AS avg_age FROM patients WHERE gender = 'Male' AND ins_type = 'private';","SELECT
+  AVG(
+    CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', date_of_birth) AS INTEGER)
+  ) AS average_age
+FROM main.patients
+WHERE
+  LOWER(gender) = 'male' AND LOWER(ins_type) = 'private'",Defog,DermTreatment
+15,what is average age (in integer years) of all registered male patients with private insurance currently? Private insurance patients have ins_type 'private',claude,1,"Let's break down this request:
+
+1. We need to find the average age of patients who are:
+   - Male (gender = 'male')
+   - Have private insurance (ins_type = 'private')
+   - Currently registered (all patients in the database are registered)
+
+2. Age needs to be calculated as integer years from their date of birth to the current date
+
+Let me think about the approach:
+- Start with the `Patients` collection
+- Filter for male patients with private insurance
+- Calculate their age in years using DATEDIFF
+- Take the average of these ages
+
+Here's the PyDough code:
+
+```python
+result = Patients.WHERE(
+    (LOWER(gender) == 'male') & 
+    (LOWER(ins_type) == 'private')
+).CALCULATE(
+    age_in_years = DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+).CALCULATE(
+    average_age = AVG(age_in_years)
+)
+```
+
+This code:
+1. Starts with the `Patients` collection
+2. Filters to include only patients where:
+   - `gender` is 'male' (using LOWER for case-insensitive comparison)
+   - `ins_type` is 'private' (using LOWER for case-insensitive comparison)
+3. Calculates the age in integer years for each patient using `DATEDIFF` between their `date_of_birth` and the current date (`DATETIME('now')`)
+4. Calculates the average of all these ages using the `AVG` aggregation function
+
+The DATEDIFF function with ""years"" parameter returns the number of full years between the date of birth and now, which gives us the age as an integer.","result = Patients.WHERE(
+    (LOWER(gender) == 'male') & 
+    (LOWER(ins_type) == 'private')
+).CALCULATE(
+    age_in_years = DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+).CALCULATE(
+    average_age = AVG(age_in_years)
+)",12.654702425003052,,,,"SELECT AVG(strftime('%Y', 'now') - strftime('%Y', date_of_birth)) AS avg_age FROM patients WHERE gender = 'Male' AND ins_type = 'private';",Faulty generated SQL,Defog,DermTreatment
+15,what is average age (in integer years) of all registered male patients with private insurance currently? Private insurance patients have ins_type 'private',gemini,1,"An elegant solution can be crafted by first filtering the `Patients` collection to isolate male patients with 'private' insurance. Following this, the age of each patient in this filtered group is calculated by determining the difference in years between their `date_of_birth` and the current date. Finally, the average of these calculated ages is computed to arrive at the solution.
+
+```python
+avg_age_of_male_private_patients = DermTreatment.CALCULATE(
+    average_age=AVG(
+        Patients.WHERE(
+            (LOWER(gender) == 'male') & (LOWER(ins_type) == 'private')
+        ).CALCULATE(
+            age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+        ).age_in_years
+    )
+)
+```
+
+### Explanation
+
+1.  **`DermTreatment.CALCULATE(...)`**: This operation is performed at the top level of the graph to compute a single aggregate value.
+2.  **`AVG(...)`**: This function calculates the average of the values provided to it.
+3.  **`Patients.WHERE(...)`**: We start with the `Patients` collection and filter it to include only records where the `gender` is 'male' and the `ins_type` is 'private'. `LOWER()` is used for case-insensitive matching.
+4.  **`.CALCULATE(age_in_years=...)`**: For each patient in the filtered set, a new field `age_in_years` is calculated.
+5.  **`DATEDIFF(""years"", date_of_birth, DATETIME('now'))`**: This function computes the age of each patient in full years by finding the difference between their `date_of_birth` and the current timestamp.
+6.  **`.age_in_years`**: This selects the calculated `age_in_years` from the intermediate collection, providing a list of ages for the `AVG` function to process.
+7.  **`average_age=...`**: The final computed average is assigned to the `average_age` field in the output.","avg_age_of_male_private_patients = DermTreatment.CALCULATE(
+    average_age=AVG(
+        Patients.WHERE(
+            (LOWER(gender) == 'male') & (LOWER(ins_type) == 'private')
+        ).CALCULATE(
+            age_in_years=DATEDIFF(""years"", date_of_birth, DATETIME('now'))
+        ).age_in_years
+    )
+)",29.15215015411377,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20129)] cached_content_token_count=20129 candidates_token_count=463 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=463)] prompt_token_count=25123 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=25123)] thoughts_token_count=2234 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27820 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>","   average_age
+0         41.0","[{""average_age"":41.0}]","SELECT AVG(strftime('%Y', 'now') - strftime('%Y', date_of_birth)) AS avg_age FROM patients WHERE gender = 'Male' AND ins_type = 'private';","SELECT
+  AVG(
+    CAST(STRFTIME('%Y', DATETIME('now')) AS INTEGER) - CAST(STRFTIME('%Y', date_of_birth) AS INTEGER)
+  ) AS average_age
+FROM main.patients
+WHERE
+  LOWER(gender) = 'male' AND LOWER(ins_type) = 'private'",Defog,DermTreatment
+16,"Calculate the CPUR for each merchant, considering only successful transactions. Return the merchant name and CPUR.CPUR (coupon usage rate) = number of distinct coupons used / number of distinct transactions. Successfull transactions are ones with status == success. You don��t need to filter None, just apply the formula.",claude,0,,,2.076066493988037,,,No valid genrated df,"SELECT m.name, (COUNT(DISTINCT wtd.coupon_id) * 1.0 / NULLIF(COUNT(DISTINCT wtd.txid), 0)) AS CPUR FROM wallet_transactions_daily AS wtd JOIN merchants AS m ON wtd.receiver_id = m.mid WHERE wtd.status = 'success' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+16,"Calculate the CPUR for each merchant, considering only successful transactions. Return the merchant name and CPUR.CPUR (coupon usage rate) = number of distinct coupons used / number of distinct transactions. Successfull transactions are ones with status == success. You don��t need to filter None, just apply the formula.",gemini,0,,,2.9938313961029053,,,No valid genrated df,"SELECT m.name, (COUNT(DISTINCT wtd.coupon_id) * 1.0 / NULLIF(COUNT(DISTINCT wtd.txid), 0)) AS CPUR FROM wallet_transactions_daily AS wtd JOIN merchants AS m ON wtd.receiver_id = m.mid WHERE wtd.status = 'success' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+16,"Calculate the CPUR for each merchant, considering only successful transactions. Return the merchant name and CPUR.CPUR (coupon usage rate) = number of distinct coupons used / number of distinct transactions. Successfull transactions are ones with status == success. You don��t need to filter None, just apply the formula.",claude,1,,,2.3767924308776855,,,No valid genrated df,"SELECT m.name, (COUNT(DISTINCT wtd.coupon_id) * 1.0 / NULLIF(COUNT(DISTINCT wtd.txid), 0)) AS CPUR FROM wallet_transactions_daily AS wtd JOIN merchants AS m ON wtd.receiver_id = m.mid WHERE wtd.status = 'success' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+16,"Calculate the CPUR for each merchant, considering only successful transactions. Return the merchant name and CPUR.CPUR (coupon usage rate) = number of distinct coupons used / number of distinct transactions. Successfull transactions are ones with status == success. You don��t need to filter None, just apply the formula.",gemini,1,,,2.210293769836426,,,No valid genrated df,"SELECT m.name, (COUNT(DISTINCT wtd.coupon_id) * 1.0 / NULLIF(COUNT(DISTINCT wtd.txid), 0)) AS CPUR FROM wallet_transactions_daily AS wtd JOIN merchants AS m ON wtd.receiver_id = m.mid WHERE wtd.status = 'success' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+17,"For users in the US and Canada, how many total notifications were sent in each of the last 3 weeks excluding the current week? How many of those were sent on weekends?Weekends are Saturdays and Sundays. Truncate created_at to week for aggregation.",claude,0,"Let me analyze this request step by step:
+
+1. I need to find users in the US and Canada
+2. For these users, I need to count their notifications from the last 3 weeks (excluding the current week)
+3. I need to truncate the created_at timestamp to week for aggregation
+4. I need to identify which notifications were sent on weekends (Saturday and Sunday)
+5. I need to return the total notifications per week and how many were on weekends
+
+Let me break down the approach:
+
+1. First, I'll filter users by country (US and Canada)
+2. Then access their notifications
+3. Filter notifications to only include those from the last 3 weeks (excluding current week)
+4. Add fields for week truncation and weekend identification
+5. Partition by week and calculate totals
+
+Here's the PyDough code:
+
+```python
+# Get notifications from US and Canada users for the last 3 weeks excluding current week
+us_canada_notifications = Users.WHERE(
+    (LOWER(country) == LOWER('US')) | (LOWER(country) == LOWER('Canada'))
+).notifications.WHERE(
+    # Filter for last 3 weeks excluding current week
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) >= 1) & 
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) <= 3)
+).CALCULATE(
+    # Truncate created_at to start of week
+    week_start = DATETIME(created_at, 'start of week'),
+    # Check if notification was sent on weekend (Saturday=7, Sunday=1)
+    is_weekend = ISIN(DAYOFWEEK(created_at), (1, 7))
+)
+
+# Partition by week and calculate totals
+result = us_canada_notifications.PARTITION(
+    name=""weekly_groups"", 
+    by=week_start
+).CALCULATE(
+    week_start = week_start,
+    total_notifications = COUNT(Notifications),
+    weekend_notifications = SUM(Notifications.is_weekend)
+).ORDER_BY(week_start.DESC())
+```
+
+This code:
+1. Starts with the `Users` collection and filters for users in the US and Canada (using case-insensitive comparison)
+2. Accesses the `notifications` relationship for these users
+3. Filters notifications to include only those from 1-3 weeks ago (excluding the current week) using `DATEDIFF`
+4. Calculates two new fields:
+   - `week_start`: Truncates the created_at timestamp to the start of the week
+   - `is_weekend`: Boolean flag indicating if the notification was sent on a weekend (Saturday=7 or Sunday=1 based on DAYOFWEEK)
+5. Partitions the notifications by `week_start` to group them by week
+6. For each week, calculates:
+   - The total count of notifications
+   - The sum of weekend notifications (summing the boolean is_weekend field)
+7. Orders the results by week_start in descending order (most recent week first)","# Get notifications from US and Canada users for the last 3 weeks excluding current week
+us_canada_notifications = Users.WHERE(
+    (LOWER(country) == LOWER('US')) | (LOWER(country) == LOWER('Canada'))
+).notifications.WHERE(
+    # Filter for last 3 weeks excluding current week
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) >= 1) & 
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) <= 3)
+).CALCULATE(
+    # Truncate created_at to start of week
+    week_start = DATETIME(created_at, 'start of week'),
+    # Check if notification was sent on weekend (Saturday=7, Sunday=1)
+    is_weekend = ISIN(DAYOFWEEK(created_at), (1, 7))
+)
+
+# Partition by week and calculate totals
+result = us_canada_notifications.PARTITION(
+    name=""weekly_groups"", 
+    by=week_start
+).CALCULATE(
+    week_start = week_start,
+    total_notifications = COUNT(Notifications),
+    weekend_notifications = SUM(Notifications.is_weekend)
+).ORDER_BY(week_start.DESC())",24.134765148162842,,,,"SELECT date(n.created_at,  '-' || ((strftime('%w', n.created_at) + 6) % 7) || ' days') AS WEEK, COUNT(*) AS total_notifications, COUNT(CASE WHEN strftime('%w', n.created_at) IN ('0', '6') THEN 1 END) AS weekend_notifications FROM notifications AS n JOIN users AS u ON n.user_id = u.uid WHERE u.country IN ('US', 'CA') AND n.created_at >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-21 days') AND n.created_at < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Faulty generated SQL,Defog,Ewallet
+17,"For users in the US and Canada, how many total notifications were sent in each of the last 3 weeks excluding the current week? How many of those were sent on weekends?Weekends are Saturdays and Sundays. Truncate created_at to week for aggregation.",gemini,0,"This query calculates the total and weekend notifications for users in the US and Canada over the last three weeks, excluding the current week.
+
+```python
+# Define the time window: the start of three weeks ago and the start of the current week.
+start_of_current_week = DATETIME('now', 'start of week')
+start_of_time_window = DATETIME(start_of_current_week, '-3 weeks')
+
+# 1. Start with notifications and add calculated columns for the week and weekend status.
+#    Also, pre-filter notifications to the relevant time window for efficiency.
+notification_info = Ewallet.Notifications.WHERE(
+    (created_at >= start_of_time_window) & (created_at < start_of_current_week)
+).CALCULATE(
+    notification_week=DATETIME(created_at, 'start of week'),
+    is_weekend=ISIN(DAYNAME(created_at), ('Saturday', 'Sunday')),
+    user_country=user.country
+)
+
+# 2. Filter these notifications to include only those from users in the US or Canada.
+#    This approach filters notifications first, which can be more efficient than filtering all users.
+country_notifications = notification_info.WHERE(
+    ISIN(user_country, ('US', 'Canada'))
+)
+
+# 3. Partition the filtered notifications by week to aggregate the counts.
+weekly_summary = country_notifications.PARTITION(
+    name=""weekly_notifications"", by=notification_week
+).CALCULATE(
+    week=notification_week,
+    total_notifications=COUNT(Notifications),
+    weekend_notifications=SUM(is_weekend)
+).ORDER_BY(week.ASC())
+
+```
+
+### Explanation:
+
+1.  **Time Window Definition**: Two contextless expressions, `start_of_current_week` and `start_of_time_window`, are created to define the precise date range for the analysis—the last three full weeks before the current one.
+2.  **Prepare Notification Data**: The query starts with the `Ewallet.Notifications` collection and immediately filters them to the relevant time window. It then uses `CALCULATE` to:
+    *   Create `notification_week` by truncating the `created_at` timestamp to the start of its week. This will be the key for grouping.
+    *   Create a boolean flag `is_weekend` which is true if the notification was sent on a Saturday or Sunday.
+    *   Bring the `user.country` into the context for subsequent filtering.
+3.  **Filter by Country**: The prepared `notification_info` is then filtered to only include notifications where the user's country is 'US' or 'Canada'.
+4.  **Partition and Aggregate**: The `PARTITION` function groups the filtered notifications by `notification_week`.
+5.  **Calculate Final Counts**: Within each weekly group, `CALCULATE` is used to compute:
+    *   `total_notifications`: The total count of notifications in that week's group using `COUNT(Notifications)`.
+    *   `weekend_notifications`: The sum of the `is_weekend` flag, which effectively counts only the notifications that occurred on a weekend.
+6.  **Order Results**: The final result is ordered by the `week` in ascending order to present a clear chronological report.","# Define the time window: the start of three weeks ago and the start of the current week.
+start_of_current_week = DATETIME('now', 'start of week')
+start_of_time_window = DATETIME(start_of_current_week, '-3 weeks')
+
+# 1. Start with notifications and add calculated columns for the week and weekend status.
+#    Also, pre-filter notifications to the relevant time window for efficiency.
+notification_info = Ewallet.Notifications.WHERE(
+    (created_at >= start_of_time_window) & (created_at < start_of_current_week)
+).CALCULATE(
+    notification_week=DATETIME(created_at, 'start of week'),
+    is_weekend=ISIN(DAYNAME(created_at), ('Saturday', 'Sunday')),
+    user_country=user.country
+)
+
+# 2. Filter these notifications to include only those from users in the US or Canada.
+#    This approach filters notifications first, which can be more efficient than filtering all users.
+country_notifications = notification_info.WHERE(
+    ISIN(user_country, ('US', 'Canada'))
+)
+
+# 3. Partition the filtered notifications by week to aggregate the counts.
+weekly_summary = country_notifications.PARTITION(
+    name=""weekly_notifications"", by=notification_week
+).CALCULATE(
+    week=notification_week,
+    total_notifications=COUNT(Notifications),
+    weekend_notifications=SUM(is_weekend)
+).ORDER_BY(week.ASC())",25.295804738998413,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16140)] cached_content_token_count=16140 candidates_token_count=729 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=729)] prompt_token_count=26181 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=26181)] thoughts_token_count=1630 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=28540 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",,,"SELECT date(n.created_at,  '-' || ((strftime('%w', n.created_at) + 6) % 7) || ' days') AS WEEK, COUNT(*) AS total_notifications, COUNT(CASE WHEN strftime('%w', n.created_at) IN ('0', '6') THEN 1 END) AS weekend_notifications FROM notifications AS n JOIN users AS u ON n.user_id = u.uid WHERE u.country IN ('US', 'CA') AND n.created_at >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-21 days') AND n.created_at < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Faulty generated SQL,Defog,Ewallet
+17,"For users in the US and Canada, how many total notifications were sent in each of the last 3 weeks excluding the current week? How many of those were sent on weekends?Weekends are Saturdays and Sundays. Truncate created_at to week for aggregation.",claude,1,"Let me analyze this request step by step:
+
+1. I need to find users in the US and Canada
+2. For these users, I need to count their notifications from the last 3 weeks (excluding the current week)
+3. I need to truncate the created_at timestamp to week for aggregation
+4. I need to identify which notifications were sent on weekends (Saturday and Sunday)
+5. I need to return the total notifications per week and how many were on weekends
+
+Let me break down the approach:
+
+1. First, I'll filter users by country (US and Canada)
+2. Then access their notifications
+3. Filter notifications to only include those from the last 3 weeks (excluding current week)
+4. Add fields for week truncation and weekend identification
+5. Partition by week and calculate totals
+
+Here's the PyDough code:
+
+```python
+# Get notifications from US and Canada users for the last 3 weeks excluding current week
+us_canada_notifications = Users.WHERE(
+    (LOWER(country) == LOWER('US')) | (LOWER(country) == LOWER('Canada'))
+).notifications.WHERE(
+    # Filter for last 3 weeks excluding current week
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) >= 1) & 
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) <= 3)
+).CALCULATE(
+    # Truncate created_at to start of week
+    week_start = DATETIME(created_at, 'start of week'),
+    # Check if notification was sent on weekend (Saturday=7, Sunday=1)
+    is_weekend = ISIN(DAYOFWEEK(created_at), (1, 7))
+)
+
+# Partition by week and calculate totals
+result = us_canada_notifications.PARTITION(
+    name=""weekly_groups"", 
+    by=week_start
+).CALCULATE(
+    week_start = week_start,
+    total_notifications = COUNT(Notifications),
+    weekend_notifications = SUM(Notifications.is_weekend)
+).ORDER_BY(week_start.DESC())
+```
+
+This code:
+1. Starts with the `Users` collection and filters for users in the US and Canada (using case-insensitive comparison)
+2. Accesses the `notifications` relationship for these users
+3. Filters notifications to include only those from 1-3 weeks ago (excluding the current week) using `DATEDIFF`
+4. Calculates two new fields:
+   - `week_start`: Truncates the created_at timestamp to the start of the week
+   - `is_weekend`: Boolean flag indicating if the notification was sent on a weekend (Saturday=7 or Sunday=1 based on DAYOFWEEK)
+5. Partitions the notifications by `week_start` to group them by week
+6. For each week, calculates:
+   - The total count of notifications
+   - The sum of weekend notifications (summing the boolean is_weekend field)
+7. Orders the results by week_start in descending order (most recent week first)","# Get notifications from US and Canada users for the last 3 weeks excluding current week
+us_canada_notifications = Users.WHERE(
+    (LOWER(country) == LOWER('US')) | (LOWER(country) == LOWER('Canada'))
+).notifications.WHERE(
+    # Filter for last 3 weeks excluding current week
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) >= 1) & 
+    (DATEDIFF(""weeks"", created_at, DATETIME('now')) <= 3)
+).CALCULATE(
+    # Truncate created_at to start of week
+    week_start = DATETIME(created_at, 'start of week'),
+    # Check if notification was sent on weekend (Saturday=7, Sunday=1)
+    is_weekend = ISIN(DAYOFWEEK(created_at), (1, 7))
+)
+
+# Partition by week and calculate totals
+result = us_canada_notifications.PARTITION(
+    name=""weekly_groups"", 
+    by=week_start
+).CALCULATE(
+    week_start = week_start,
+    total_notifications = COUNT(Notifications),
+    weekend_notifications = SUM(Notifications.is_weekend)
+).ORDER_BY(week_start.DESC())",21.413009643554688,,,,"SELECT date(n.created_at,  '-' || ((strftime('%w', n.created_at) + 6) % 7) || ' days') AS WEEK, COUNT(*) AS total_notifications, COUNT(CASE WHEN strftime('%w', n.created_at) IN ('0', '6') THEN 1 END) AS weekend_notifications FROM notifications AS n JOIN users AS u ON n.user_id = u.uid WHERE u.country IN ('US', 'CA') AND n.created_at >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-21 days') AND n.created_at < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Faulty generated SQL,Defog,Ewallet
+17,"For users in the US and Canada, how many total notifications were sent in each of the last 3 weeks excluding the current week? How many of those were sent on weekends?Weekends are Saturdays and Sundays. Truncate created_at to week for aggregation.",gemini,1,"This query calculates the total and weekend notifications for users in the US and Canada over the last three weeks, excluding the current week.
+
+```python
+# Define the start of the current week and the start of the 3-week analysis period.
+start_of_current_week = DATETIME('now', 'start of week')
+start_of_period = DATETIME('now', 'start of week', '-3 weeks')
+
+# Filter notifications for users in the US and Canada within the specified date range.
+# Pre-calculate the week of the notification and whether it occurred on a weekend.
+notifications_in_scope = Ewallet.Users.WHERE(
+    ISIN(country, ('US', 'Canada'))
+).notifications.WHERE(
+    (created_at >= start_of_period) & (created_at < start_of_current_week)
+).CALCULATE(
+    notification_week=DATETIME(created_at, 'start of week'),
+    is_weekend=ISIN(DAYNAME(created_at), ('Saturday', 'Sunday'))
+)
+
+# Partition the filtered notifications by week to aggregate the counts.
+weekly_notification_summary = notifications_in_scope.PARTITION(
+    name=""weekly_groups"", by=(notification_week)
+).CALCULATE(
+    week=notification_week,
+    total_notifications=COUNT(Notifications),
+    weekend_notifications=SUM(is_weekend)
+)
+```
+
+### Explanation:
+
+1.  **Time Period Definition**: We first define the time window for our analysis. `start_of_current_week` marks the end of our period (exclusive), and `start_of_period` marks the beginning (inclusive), which is exactly three weeks prior.
+2.  **User and Date Filtering**: The query starts by filtering the `Users` collection to include only those from the 'US' or 'Canada'. It then accesses their `notifications` and filters them to include only those created within the last three weeks, excluding the current week.
+3.  **Data Preparation**: Within the same step, a `CALCULATE` operation creates two new fields for each notification:
+    *   `notification_week`: The `created_at` timestamp is truncated to the start of its week, which will be used for grouping.
+    *   `is_weekend`: A boolean flag is set to `True` if the notification was sent on a 'Saturday' or 'Sunday'.
+4.  **Partition and Aggregation**: The prepared notifications are then partitioned into groups based on the `notification_week`.
+5.  **Final Calculation**: For each weekly group, the query calculates:
+    *   `week`: The start date of the week.
+    *   `total_notifications`: The total count of notifications in that week's group.
+    *   `weekend_notifications`: The sum of the `is_weekend` flags, which effectively counts the number of notifications sent on a weekend.","# Define the start of the current week and the start of the 3-week analysis period.
+start_of_current_week = DATETIME('now', 'start of week')
+start_of_period = DATETIME('now', 'start of week', '-3 weeks')
+
+# Filter notifications for users in the US and Canada within the specified date range.
+# Pre-calculate the week of the notification and whether it occurred on a weekend.
+notifications_in_scope = Ewallet.Users.WHERE(
+    ISIN(country, ('US', 'Canada'))
+).notifications.WHERE(
+    (created_at >= start_of_period) & (created_at < start_of_current_week)
+).CALCULATE(
+    notification_week=DATETIME(created_at, 'start of week'),
+    is_weekend=ISIN(DAYNAME(created_at), ('Saturday', 'Sunday'))
+)
+
+# Partition the filtered notifications by week to aggregate the counts.
+weekly_notification_summary = notifications_in_scope.PARTITION(
+    name=""weekly_groups"", by=(notification_week)
+).CALCULATE(
+    week=notification_week,
+    total_notifications=COUNT(Notifications),
+    weekend_notifications=SUM(is_weekend)
+)",22.414597511291504,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=24210)] cached_content_token_count=24210 candidates_token_count=633 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=633)] prompt_token_count=26181 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=26181)] thoughts_token_count=1472 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=28286 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",,,"SELECT date(n.created_at,  '-' || ((strftime('%w', n.created_at) + 6) % 7) || ' days') AS WEEK, COUNT(*) AS total_notifications, COUNT(CASE WHEN strftime('%w', n.created_at) IN ('0', '6') THEN 1 END) AS weekend_notifications FROM notifications AS n JOIN users AS u ON n.user_id = u.uid WHERE u.country IN ('US', 'CA') AND n.created_at >= date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days', '-21 days') AND n.created_at < date('now',  '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') GROUP BY WEEK;",Faulty generated SQL,Defog,Ewallet
+18,How many active retail merchants have issued coupons? Return the merchant name and the total number of coupons issued.Merchant category should be matched case-insensitively. An active merchant is defined as a merchant with an 'active' status and a category that contains 'retail',claude,0,,,2.1163103580474854,,,No valid genrated df,"SELECT m.name, COUNT(c.cid) AS total_coupons FROM merchants AS m JOIN coupons AS c ON m.mid = c.merchant_id WHERE m.status = 'active' AND LOWER(m.category) LIKE '%retail%' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+18,How many active retail merchants have issued coupons? Return the merchant name and the total number of coupons issued.Merchant category should be matched case-insensitively. An active merchant is defined as a merchant with an 'active' status and a category that contains 'retail',gemini,0,,,2.1772236824035645,,,No valid genrated df,"SELECT m.name, COUNT(c.cid) AS total_coupons FROM merchants AS m JOIN coupons AS c ON m.mid = c.merchant_id WHERE m.status = 'active' AND LOWER(m.category) LIKE '%retail%' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+18,How many active retail merchants have issued coupons? Return the merchant name and the total number of coupons issued.Merchant category should be matched case-insensitively. An active merchant is defined as a merchant with an 'active' status and a category that contains 'retail',claude,1,,,2.2439749240875244,,,No valid genrated df,"SELECT m.name, COUNT(c.cid) AS total_coupons FROM merchants AS m JOIN coupons AS c ON m.mid = c.merchant_id WHERE m.status = 'active' AND LOWER(m.category) LIKE '%retail%' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+18,How many active retail merchants have issued coupons? Return the merchant name and the total number of coupons issued.Merchant category should be matched case-insensitively. An active merchant is defined as a merchant with an 'active' status and a category that contains 'retail',gemini,1,,,2.0843827724456787,,,No valid genrated df,"SELECT m.name, COUNT(c.cid) AS total_coupons FROM merchants AS m JOIN coupons AS c ON m.mid = c.merchant_id WHERE m.status = 'active' AND LOWER(m.category) LIKE '%retail%' GROUP BY m.name;",No valid SQL,Defog,Ewallet
+19,How many wallet transactions were made by users from the US in the last 7 days inclusive of today? Return the number of transactions and total transaction amount.,claude,0,"Let me analyze this request step by step:
+
+1. I need to find wallet transactions made by users from the US
+2. The transactions should be from the last 7 days inclusive of today
+3. I need to return:
+   - The number of transactions
+   - The total transaction amount
+
+Let me break down the approach:
+
+1. First, I need to identify US users from the `Users` collection (where `country` is ""US"")
+2. Then, I need to look at their transactions (using `transactions_sent` relationship)
+3. Filter these transactions to only include those from the last 7 days
+4. Count the transactions and sum their amounts
+
+From the database structure:
+- `Users` has a `country` field
+- `Users` has `transactions_sent` which links to transactions sent by the user
+- `Transactions` has `created_at` timestamp and `amount` fields
+
+To check if a transaction is within the last 7 days, I'll use `DATEDIFF` to compare the transaction's `created_at` with the current date.
+
+```python
+result = Users.WHERE(LOWER(country) == LOWER(""US"")).CALCULATE(
+    num_transactions=COUNT(
+        transactions_sent.WHERE(
+            DATEDIFF(""days"", created_at, DATETIME(""now"")) <= 7
+        )
+    ),
+    total_amount=SUM(
+        transactions_sent.WHERE(
+            DATEDIFF(""days"", created_at, DATETIME(""now"")) <= 7
+        ).amount
+    )
+)
+```
+
+Wait, this would give me per-user results. I need the total across all US users. Let me use the high-level graph to aggregate:
+
+```python
+result = Ewallet.CALCULATE(
+    num_transactions=COUNT(
+        Users.WHERE(LOWER(country) == LOWER(""US"")).transactions_sent.WHERE(
+            DATEDIFF(""days"", created_at, DATETIME(""now"")) <= 7
+        )
+    ),
+    total_amount=SUM(
+        Users.WHERE(LOWER(country) == LOWER(""US"")).transactions_sent.WHERE(
+            DATEDIFF(""days"", created_at, DATETIME(""now"")) <= 7
+        ).amount
+    )
+)
+```
+
+This code:
+1. Starts with the high-level `Ewallet` graph to perform global aggregations
+2. Filters `Users` to only include those from the US (using case-insensitive comparison)
+3. Accesses their `transactions_sent` 
+4. Filters transactions to only include those created within the last 7 days (where the difference between the transaction date and now is 7 days or less)
+5. Counts the filtered transactions for the total number
+6. Sums the `amount` field of the filtered transactions for the total amount","result = Ewallet.CALCULATE(
+    num_transactions=COUNT(
+        Users.WHERE(LOWER(country) == LOWER(""US"")).transactions_sent.WHERE(
+            DATEDIFF(""days"", created_at, DATETIME(""now"")) <= 7
+        )
+    ),
+    total_amount=SUM(
+        Users.WHERE(LOWER(country) == LOWER(""US"")).transactions_sent.WHERE(
+            DATEDIFF(""days"", created_at, DATETIME(""now"")) <= 7
+        ).amount
+    )
+)",19.383055210113525,,"   num_transactions  total_amount
+0                 0             0","[{""num_transactions"":0,""total_amount"":0}]","SELECT COUNT(*) AS num_transactions, SUM(amount) AS total_amount FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE u.country = 'US' AND t.created_at >= DATE('now', '-7 days') AND t.created_at < DATE('now', '+1 day');","WITH _s1 AS (
+  SELECT
+    COUNT() AS agg_0,
+    SUM(amount) AS agg_1,
+    sender_id
+  FROM main.wallet_transactions_daily
+  WHERE
+    CAST((
+      JULIANDAY(DATE(DATETIME('now'), 'start of day')) - JULIANDAY(DATE(created_at, 'start of day'))
+    ) AS INTEGER) <= 7
+  GROUP BY
+    sender_id
+), _t0 AS (
+  SELECT
+    SUM(_s1.agg_0) AS agg_0,
+    SUM(_s1.agg_1) AS agg_1
+  FROM main.users AS users
+  JOIN _s1 AS _s1
+    ON _s1.sender_id = users.uid
+  WHERE
+    LOWER('US') = LOWER(users.country)
+)
+SELECT
+  COALESCE(agg_0, 0) AS num_transactions,
+  COALESCE(agg_1, 0) AS total_amount
+FROM _t0",Defog,Ewallet
+19,How many wallet transactions were made by users from the US in the last 7 days inclusive of today? Return the number of transactions and total transaction amount.,gemini,0,"This query calculates the total number and sum of wallet transactions made by users from the United States within the last seven days.
+
+```python
+# First, filter the transactions to include only those that meet the specified criteria.
+# - The transaction_type must be 'wallet'.
+# - The sending user's country must be 'US'.
+# - The transaction must have occurred within the last 7 days (inclusive of today).
+filtered_transactions = Ewallet.Transactions.WHERE(
+    (LOWER(transaction_type) == 'wallet') &
+    (LOWER(sending_user.country) == 'us') &
+    (DATEDIFF(""days"", created_at, DATETIME('now')) <= 6)
+)
+
+# Then, calculate the total count and sum of the amounts for the filtered transactions.
+result = Ewallet.CALCULATE(
+    number_of_transactions=COUNT(filtered_transactions),
+    total_transaction_amount=SUM(filtered_transactions.amount)
+)
+```
+
+### Explanation:
+
+1.  **`filtered_transactions`**: A contextless expression is created to store the transactions that satisfy all the required conditions.
+2.  **`Ewallet.Transactions.WHERE(...)`**: We start by accessing the `Transactions` collection and applying a `WHERE` clause to filter the records.
+3.  **`LOWER(transaction_type) == 'wallet'`**: This condition filters for transactions specifically of the 'wallet' type, using `LOWER` for a case-insensitive comparison.
+4.  **`LOWER(sending_user.country) == 'us'`**: This condition filters transactions initiated by users whose country is 'US'. It accesses the `country` attribute through the `sending_user` relationship.
+5.  **`DATEDIFF(""days"", created_at, DATETIME('now')) <= 6`**: This filters for transactions created in the last 7 days, including today. `DATEDIFF` calculates the number of full days between the transaction's `created_at` date and the current date (`DATETIME('now')`). A value of `0` means today, and `6` means 6 full days ago, covering a 7-day period.
+6.  **`Ewallet.CALCULATE(...)`**: Finally, we use the top-level `Ewallet` graph to perform aggregations on our filtered set.
+7.  **`number_of_transactions=COUNT(filtered_transactions)`**: This counts the total number of records in our `filtered_transactions` set.
+8.  **`total_transaction_amount=SUM(filtered_transactions.amount)`**: This calculates the sum of the `amount` for all transactions in the filtered set.","# First, filter the transactions to include only those that meet the specified criteria.
+# - The transaction_type must be 'wallet'.
+# - The sending user's country must be 'US'.
+# - The transaction must have occurred within the last 7 days (inclusive of today).
+filtered_transactions = Ewallet.Transactions.WHERE(
+    (LOWER(transaction_type) == 'wallet') &
+    (LOWER(sending_user.country) == 'us') &
+    (DATEDIFF(""days"", created_at, DATETIME('now')) <= 6)
+)
+
+# Then, calculate the total count and sum of the amounts for the filtered transactions.
+result = Ewallet.CALCULATE(
+    number_of_transactions=COUNT(filtered_transactions),
+    total_transaction_amount=SUM(filtered_transactions.amount)
+)",18.935508012771606,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=20176)] cached_content_token_count=20176 candidates_token_count=583 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=583)] prompt_token_count=26159 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=26159)] thoughts_token_count=1076 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27818 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",,,"SELECT COUNT(*) AS num_transactions, SUM(amount) AS total_amount FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE u.country = 'US' AND t.created_at >= DATE('now', '-7 days') AND t.created_at < DATE('now', '+1 day');",Faulty generated SQL,Defog,Ewallet
+19,How many wallet transactions were made by users from the US in the last 7 days inclusive of today? Return the number of transactions and total transaction amount.,claude,1,"Let me analyze this request step by step:
+
+1. I need to find wallet transactions made by users from the US
+2. The transactions should be from the last 7 days inclusive of today
+3. I need to return:
+   - The number of transactions
+   - The total transaction amount
+
+Looking at the database structure:
+- `Users` has a `country` field to identify US users
+- `Users` has `transactions_sent` relationship to access transactions sent by users
+- `Transactions` has `created_at` timestamp and `amount` fields
+
+To solve this:
+1. Filter users from the US (country == 'US')
+2. Access their sent transactions
+3. Filter transactions from the last 7 days (including today)
+4. Count the transactions and sum the amounts
+
+For the date filtering, I'll use DATEDIFF to check if the transaction was created within the last 7 days from now.
+
+```python
+result = Users.WHERE(LOWER(country) == LOWER('US')).transactions_sent.WHERE(
+    DATEDIFF(""days"", created_at, DATETIME('now')) <= 7
+).CALCULATE(
+    num_transactions=COUNT(Transactions),
+    total_amount=SUM(amount)
+).SINGULAR()
+```
+
+This code:
+1. Starts with the `Users` collection
+2. Filters for users where the country is 'US' (using case-insensitive comparison with LOWER)
+3. Accesses the `transactions_sent` relationship to get transactions sent by these US users
+4. Filters transactions where the difference between the created_at date and now is less than or equal to 7 days
+5. Uses `CALCULATE` to:
+   - Count the number of transactions using `COUNT(Transactions)`
+   - Sum the transaction amounts using `SUM(amount)`
+6. Uses `SINGULAR()` since the result is a single aggregated record containing the totals","result = Users.WHERE(LOWER(country) == LOWER('US')).transactions_sent.WHERE(
+    DATEDIFF(""days"", created_at, DATETIME('now')) <= 7
+).CALCULATE(
+    num_transactions=COUNT(Transactions),
+    total_amount=SUM(amount)
+).SINGULAR()",17.44793939590454,,,,"SELECT COUNT(*) AS num_transactions, SUM(amount) AS total_amount FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE u.country = 'US' AND t.created_at >= DATE('now', '-7 days') AND t.created_at < DATE('now', '+1 day');",Faulty generated SQL,Defog,Ewallet
+19,How many wallet transactions were made by users from the US in the last 7 days inclusive of today? Return the number of transactions and total transaction amount.,gemini,1,"This query calculates the total number and value of wallet transactions made by users from the United States within the last seven days.
+
+```python
+# Filter transactions to include only those made by US users of type 'wallet' in the last 7 days.
+recent_us_wallet_transactions = Ewallet.Transactions.WHERE(
+    (LOWER(sending_user.country) == 'us') &
+    (LOWER(transaction_type) == 'wallet') &
+    (DATEDIFF(""days"", created_at, DATETIME('now')) <= 6)
+)
+
+# Calculate the total count and sum of the amounts for the filtered transactions.
+result = Ewallet.CALCULATE(
+    number_of_transactions=COUNT(recent_us_wallet_transactions),
+    total_transaction_amount=SUM(recent_us_wallet_transactions.amount)
+)
+```
+
+### Explanation
+
+1.  **`recent_us_wallet_transactions`**: This variable stores the filtered `Transactions` collection.
+    *   `Ewallet.Transactions.WHERE(...)`: We start by filtering the `Transactions` collection.
+    *   `LOWER(sending_user.country) == 'us'`: This condition filters for transactions where the sending user's country is 'US'. `LOWER` is used for a case-insensitive comparison.
+    *   `LOWER(transaction_type) == 'wallet'`: This ensures we only consider transactions of the 'wallet' type.
+    *   `DATEDIFF(""days"", created_at, DATETIME('now')) <= 6`: This condition filters for transactions that occurred within the last 7 days (inclusive of today). `DATEDIFF` calculates the number of full days between the transaction's `created_at` date and the current time. A value of 0 means today, and a value of 6 means 6 full days ago, covering a 7-day period.
+2.  **`result`**: This variable calculates the final aggregated values.
+    *   `Ewallet.CALCULATE(...)`: We use a top-level `CALCULATE` on the `Ewallet` graph to compute the final metrics.
+    *   `number_of_transactions=COUNT(recent_us_wallet_transactions)`: This counts the total number of records in our filtered transaction set.
+    *   `total_transaction_amount=SUM(recent_us_wallet_transactions.amount)`: This calculates the sum of the `amount` for all transactions in the filtered set.","# Filter transactions to include only those made by US users of type 'wallet' in the last 7 days.
+recent_us_wallet_transactions = Ewallet.Transactions.WHERE(
+    (LOWER(sending_user.country) == 'us') &
+    (LOWER(transaction_type) == 'wallet') &
+    (DATEDIFF(""days"", created_at, DATETIME('now')) <= 6)
+)
+
+# Calculate the total count and sum of the amounts for the filtered transactions.
+result = Ewallet.CALCULATE(
+    number_of_transactions=COUNT(recent_us_wallet_transactions),
+    total_transaction_amount=SUM(recent_us_wallet_transactions.amount)
+)",19.755929231643677,"cache_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=16140)] cached_content_token_count=16140 candidates_token_count=540 candidates_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=540)] prompt_token_count=26159 prompt_tokens_details=[ModalityTokenCount(modality=<MediaModality.TEXT: 'TEXT'>, token_count=26159)] thoughts_token_count=993 tool_use_prompt_token_count=None tool_use_prompt_tokens_details=None total_token_count=27692 traffic_type=<TrafficType.ON_DEMAND: 'ON_DEMAND'>",,,"SELECT COUNT(*) AS num_transactions, SUM(amount) AS total_amount FROM wallet_transactions_daily AS t JOIN users AS u ON t.sender_id = u.uid WHERE u.country = 'US' AND t.created_at >= DATE('now', '-7 days') AND t.created_at < DATE('now', '+1 day');",Faulty generated SQL,Defog,Ewallet
+20,"What are the top 3 most frequently used coupon codes? Return the coupon code, total number of redemptions, and total amount redeemed.",claude,0,,,2.0477075576782227,,,No valid genrated df,"SELECT c.code AS coupon_code, COUNT(t.txid) AS redemption_count, SUM(t.amount) AS total_discount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id GROUP BY c.code ORDER BY CASE WHEN redemption_count IS NULL THEN 1 ELSE 0 END DESC, redemption_count DESC LIMIT 3;",No valid SQL,Defog,Ewallet
+20,"What are the top 3 most frequently used coupon codes? Return the coupon code, total number of redemptions, and total amount redeemed.",gemini,0,,,2.744109630584717,,,No valid genrated df,"SELECT c.code AS coupon_code, COUNT(t.txid) AS redemption_count, SUM(t.amount) AS total_discount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id GROUP BY c.code ORDER BY CASE WHEN redemption_count IS NULL THEN 1 ELSE 0 END DESC, redemption_count DESC LIMIT 3;",No valid SQL,Defog,Ewallet
+20,"What are the top 3 most frequently used coupon codes? Return the coupon code, total number of redemptions, and total amount redeemed.",claude,1,,,2.0290045738220215,,,No valid genrated df,"SELECT c.code AS coupon_code, COUNT(t.txid) AS redemption_count, SUM(t.amount) AS total_discount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id GROUP BY c.code ORDER BY CASE WHEN redemption_count IS NULL THEN 1 ELSE 0 END DESC, redemption_count DESC LIMIT 3;",No valid SQL,Defog,Ewallet
+20,"What are the top 3 most frequently used coupon codes? Return the coupon code, total number of redemptions, and total amount redeemed.",gemini,1,,,2.1558752059936523,,,No valid genrated df,"SELECT c.code AS coupon_code, COUNT(t.txid) AS redemption_count, SUM(t.amount) AS total_discount FROM coupons AS c JOIN wallet_transactions_daily AS t ON c.cid = t.coupon_id GROUP BY c.code ORDER BY CASE WHEN redemption_count IS NULL THEN 1 ELSE 0 END DESC, redemption_count DESC LIMIT 3;",No valid SQL,Defog,Ewallet
