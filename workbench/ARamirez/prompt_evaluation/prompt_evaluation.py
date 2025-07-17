@@ -401,11 +401,14 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
                 if not gen_sql:
                     gen_sql = "Faulty generated SQL"
                 print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if gen_df is not None else 'None'}")
+            else:
+                gen_df, gen_sql = None, "No code generated"
+                
             
         except Exception as e:
             raw_response, code, duration, usage, gen_df = None, None, time.time() - start, None, None
             print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
-        print(f"[DEBUG] [Q{question_idx}] Generated DataFrame: {gen_df}")
+            #print(f"[DEBUG] [Q{question_idx}] Generated DataFrame: {gen_df}")
         return {
             "question_index": question_idx,
             "question": question,
