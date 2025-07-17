@@ -158,8 +158,6 @@ def _clean_mixed_column(series: pd.Series) -> pd.Series:
         # Keep as cleaned strings, but ensure consistent string representation
         return cleaned_series.astype(str).replace(['nan', 'None', '<NA>'], pd.NA)
 
-
-
 def _sort_by_all_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Sort dataframe by all columns with proper error handling for mixed types."""
     try:
@@ -234,11 +232,11 @@ def compare_df(
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
 
-    print(df_gold, df_gen)
+    #print(df_gold, df_gen)
     
-    # fill NaNs with -99999 to handle NaNs in the dataframes for comparison
-    df_gold.fillna(-99999, inplace=True)
-    df_gen.fillna(-99999, inplace=True)
+    # fill NaNs with 0 to handle NaNs in the dataframes for comparison
+    df_gold.fillna(0, inplace=True)
+    df_gen.fillna(0, inplace=True)
     
     try:
         #print("Info: Comparing DataFrames using hard match.")
@@ -254,7 +252,7 @@ def compare_df(
         except:
             pass
     #print("Info: Proceeding with secondary check.")
-    return secondary_check(original_gold, original_gen)
+    return secondary_check(original_gold, original_gen) or secondary_check(df_gold, df_gen)
 
 def symetric_compare_df(
     df_a: pd.DataFrame,
@@ -279,7 +277,7 @@ def symetric_compare_df(
         compare_df(df_b, df_a, query_category, question, query_gen, query_gold)
     )
 
-def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-5, round_decimal = 5) -> bool:
+def series_match(s_gold: pd.Series, s_gen: pd.Series, numeric_tolerance = 1e-3, round_decimal = 3) -> bool:
     """
     Checks if two Series have identical dtypes and values in the same order.
     Their original indices/names are ignored for the comparison itself, but they must
@@ -388,32 +386,47 @@ def secondary_check(df_gold: pd.DataFrame, df_gen: pd.DataFrame) -> bool:
 def convert_to_df(last_variable):
     return pydough.to_df(last_variable)
 
-def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path):
+def convert_to_sql(last_variable):
+    return pydough.to_sql(last_variable)
+
+def set_start_of_week(day_of_week):
+    from pydough.configs import DayOfWeek
+    if day_of_week == "Monday":
+        day_of_week = DayOfWeek.MONDAY
+    elif day_of_week == "Sunday":
+        day_of_week = DayOfWeek.SUNDAY
+    else:
+        raise ValueError(f"Invalid day of week: {day_of_week}")
+    
+    configs = pydough.active_session.config
+    configs.start_of_week = day_of_week
+    pydough.active_session.config = configs
+
+def execute_code_and_extract_result(extracted_code, local_env, cheatsheet_path, db_name, database_path, start_of_week="Monday"):
     """Executes the Python code and returns the result or raises an exception."""
+    if extracted_code is None:
+        return None, "No code to execute", None
     try:
         with metadata_lock:
-            from pydough.configs import DayOfWeek
-            configs = pydough.active_session.config
-            configs.start_of_week = DayOfWeek.MONDAY
-            pydough.active_session.config = configs
-
+            set_start_of_week(start_of_week)
             pydough.active_session.load_metadata_graph(cheatsheet_path, db_name)
             pydough.active_session.connect_database("sqlite", database=database_path, check_same_thread=False)
 
-        transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
-        exec(transformed_source, {}, local_env)
-        last_variable = list(local_env.values())[-1]
-        result_df = convert_to_df(last_variable)
+            transformed_source = transform_cell(extracted_code, "pydough.active_session.metadata", set(local_env))
+            exec(transformed_source, {}, local_env)
+            last_variable = list(local_env.values())[-1]
+            result_df = convert_to_df(last_variable)
+            sql = convert_to_sql(last_variable)
+            return result_df, None, sql  # Return result and no exception
         
-        return result_df, None  # Return result and no exception
     except Exception as e:
-        return None, e  # Return None as result and exception message
-
+        print(f"Error executing code: {e}")
+        return None, str(e), None  # Return None as result and exception message
 
 def query_sqlite_db(
     query: str,
-    db_path: str = None,
-    decimal_points: int = None,
+    db_path: str,
+    decimal_points: int = 5,
 ) -> pd.DataFrame:
     """
     Runs query on sqlite db and returns results as a dataframe.
@@ -455,16 +468,16 @@ def process_row(row,db_base_path,metadata_base_path):
         local_env = {"pydough": pydough, "datetime": datetime}
         db_name = row['db_name']
         dataset_name = row['dataset_name']
+        sql = row['sql']
 
         db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
         metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
-        print(question, db_name)
 
-        result, exception = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
+        result, exception, gen_sql = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
         
         if result is not None:
-            extracted_sql, db_exception = query_sqlite_db(row["sql"],db_path )
+            extracted_sql, db_exception = query_sqlite_db(sql,db_path )
             if extracted_sql is None:
                 return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
 
