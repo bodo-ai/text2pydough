@@ -1,3 +1,4 @@
+# %%# client_example.py
 from gradio_client import Client
 import json
 import pandas as pd
@@ -5,13 +6,6 @@ import re
 import time
 from datetime import datetime
 import os
-
-# -------------------------------------------------------------------
-# ⚙️ Experiment tracking configuration
-# -------------------------------------------------------------------
-EXPERIMENT_NAME = "Ensemble"
-PARENT_RUN_ID = "c4ad9fa8cda949889c8502e69c434d4a"
-# -------------------------------------------------------------------
 
 def extract_plain_text(result):
     """Extract plain text from the agent response."""
@@ -87,9 +81,12 @@ def extract_dataframe(json_data):
         print(f"Error converting to DataFrame: {e}")
         return None
 
-def process_question(client, question, dataset_name, db_name, question_id=None):
+def process_question(question, dataset_name, db_name, question_id=None ):
     """Process a single question and return the results."""
     # Construct the selected_db_display string dynamically
+    server_url= "http://localhost:2025/"
+    # Initialize client
+    client = Client(server_url)
     selected_db_display = f"{dataset_name}: {db_name}/{db_name}.sqlite"
     
     print(f"\n{'='*80}")
@@ -103,27 +100,26 @@ def process_question(client, question, dataset_name, db_name, question_id=None):
         result = client.predict(
             message=question,
             history=[],
-            architecture_dropdown="Multi-Agent Supervisor",
+            architecture_dropdown="ReAct (PyDough)",
             model_display="Default",#"GCP: gemini-2.5-flash-preview-05-20",
             include_cheatsheet=False,
             include_schema=False,
             retriever_file="cheatsheet_partition_overhaul.md",
-            prompt_file="system_prompt.md",
+            prompt_file="empty_template.md",
             temperature=0.1,
             top_p=0.95,
             top_k=40,
             max_steps=25,
-            pydough_tool=True,
+            pydough_tool=False,
             sql_list_tables=True,
             sql_schema=True,
             sql_query=False,
             sql_query_checker=False,
-            document_kb=True,
+            document_kb=False,
             selected_db_display=selected_db_display,
             use_sh_query_gen=False,
-            tracking_backend="MLflow",
-            experiment_name=EXPERIMENT_NAME,
-            parent_run_id=PARENT_RUN_ID,
+            tracking_backend="Phoenix",
+            experiment_name="defog-analysis",
             api_name="/process_message"
         )
         
@@ -167,70 +163,42 @@ def process_question(client, question, dataset_name, db_name, question_id=None):
             'error': str(e),
             'success': False
         }
-
-def main():
-    """Main function to process questions from CSV file."""
-    # Configuration
-    csv_file_path = "../eval_data/defog/async_results_20250702_215431.csv"#test_execution_2025_06_29-05_18_34_QE.csv"
-    server_URL = "http://localhost:2024/"
     
-    # Initialize client
-    print(f"Connecting to server: {server_URL}")
+def run_question(question, server_URL="http://localhost:2024/"):
+    """
+    Send a question to the Gradio agent and return the result as a Pandas DataFrame.
+    Parameters:
+        question (str): The question to ask.
+        server_URL (str): The URL of the Gradio server. Defaults to localhost.
+    Returns:
+        pd.DataFrame or None: The resulting DataFrame, or None if conversion fails.
+    """
     client = Client(server_URL)
-    
-    # Read CSV file
-    print(f"Reading questions from: {csv_file_path}")
-    try:
-        df = pd.read_csv(csv_file_path)
-        print(f"Loaded {len(df)} questions from CSV")
-    except Exception as e:
-        print(f"Error reading CSV file: {e}")
-        return
-    
-    # Process questions sequentially
-    results = []
-    start_time = datetime.now()
-    
-    for index, row in df.iterrows():
-        question = row['question']
-        question_id = row.get('question_id', index + 1)
-        dataset_name = row['dataset_name']
-        db_name = row['db_name']
-        
-        print(f"\nProcessing question {index + 1}/{len(df)}")
-        
-        # Process the question
-        result = process_question(client, question, dataset_name, db_name, question_id)
-        results.append(result)
-        
-        # Add a small delay between requests to avoid overwhelming the server
-        time.sleep(1)
-    
-    # Save final results
-    end_time = datetime.now()
-    total_time = end_time - start_time
-    
-    print(f"\n{'='*80}")
-    print(f"Processing completed!")
-    print(f"Total questions processed: {len(results)}")
-    print(f"Total time: {total_time}")
-    print(f"Average time per question: {total_time / len(results)}")
-    
-    # Create results summary
-    successful_results = [r for r in results if r['success']]
-    failed_results = [r for r in results if not r['success']]
-    
-    print(f"Successful: {len(successful_results)}")
-    print(f"Failed: {len(failed_results)}")
-    
-    # Save final results with "agents_" prefix in the same directory
-    csv_filename = os.path.basename(csv_file_path)
-    output_filename = f"agents_{csv_filename}"
-    output_file = os.path.join(os.path.dirname(csv_file_path), output_filename)
-    
-    results_df = pd.DataFrame(results)
-    results_df.to_csv(output_file, index=False)
-    print(f"Results saved to: {output_file}")
-
-if __name__ == "__main__":
-    main()
+    result = client.predict(
+        message=question,
+        history=[],
+        architecture_dropdown="Multi-Agent Supervisor",
+        model_display="Gemini: gemini-2.5-pro",
+        include_cheatsheet=False,
+        include_schema=False,
+        retriever_file="cheatsheet_partition_overhaul.md",
+        prompt_file="system_prompt.md",
+        temperature=0.2,
+        top_p=0.95,
+        top_k=40,
+        max_steps=25,
+        pydough_tool=True,
+        sql_list_tables=True,
+        sql_schema=True,
+        sql_query=False,
+        sql_query_checker=False,
+        document_kb=True,
+        selected_db_display="Defog: Dealership/Dealership.sqlite",
+        use_sh_query_gen=False,
+        tracking_backend="Phoenix",
+        experiment_name="agent-react-sql",
+        api_name="/process_message"
+    )
+    json_data = extract_json(result)
+    df = extract_dataframe(json_data)
+    return result, df
