@@ -1,47 +1,37 @@
 import re
 
-def map_all_profiles_to_metadata_format(metadata: dict, profiles: list, graph_name) -> dict:
+def build_metadata_lookup(metadata: list, graph_name: str):
     """
-    Maps all table profiles to metadata property names, updates profile descriptions,
-    and returns a dictionary where each key is the table name and value is:
-    {
-      "collection": "CollectionName",
-      "columns": {
-        "property_name": {
-          "profile": "Updated profile description"
-        }
-      }
-    }
-
-    Args:
-        metadata (dict): The metadata JSON.
-        profiles (list): The profile JSON list.
-
-    Returns:
-        dict: Mapping from table name to collection info and cleaned-up profiles.
+    Builds the lookup dictionary for collections and column name mappings from the updated metadata format.
     """
-    result = {}
+    graph_obj = next((g for g in metadata if g['name'] == graph_name), None)
+    if not graph_obj:
+        raise ValueError(f"No graph found with name {graph_name}")
 
-    if profiles is None:
-        return result
-    
-    # Build lookup: {table_path: (collection_name, {column_name: property_name})}
     table_lookup = {}
-    for collection_name, collection in metadata[graph_name].items():
-        table_path = collection["table_path"]
+    for collection in graph_obj["collections"]:
+        table_path = collection["table path"]
         column_map = {
-            prop_info["column_name"]: prop_name
-            for prop_name, prop_info in collection["properties"].items()
-            if prop_info["type"] == "table_column"
+            prop["column name"]: prop["name"]
+            for prop in collection["properties"]
+            if prop["type"] == "table column"
         }
         table_lookup[table_path] = {
-            "collection": collection_name,
+            "collection": collection["name"],
             "column_map": column_map
         }
+    return table_lookup
 
-    # Process each profile entry
+
+def map_all_profiles_to_metadata_format(metadata: list, profiles: list, graph_name: str) -> dict:
+    if not profiles:
+        return {}
+
+    table_lookup = build_metadata_lookup(metadata, graph_name)
+    result = {}
+
     for table_profile in profiles:
-        table_name = table_profile["table_name"]
+        table_name = "main." + table_profile["table_name"]
         if table_name not in table_lookup:
             continue
 
@@ -68,3 +58,45 @@ def map_all_profiles_to_metadata_format(metadata: dict, profiles: list, graph_na
             }
 
     return result
+
+
+def map_all_profiles_to_markdown(metadata: list, profiles: list, graph_name: str) -> str:
+    if not profiles:
+        return ""
+    print(f"profiles: {profiles}")
+    table_lookup = build_metadata_lookup(metadata, graph_name)
+    markdown_lines = []
+    markdown_lines.append(f"### The high-level graph `{graph_name}` collection contains the following columns:\n")
+
+    for table_profile in profiles:
+        table_name = "main." + table_profile["table_name"]
+        if table_name not in table_lookup:
+            continue
+
+        collection_name = table_lookup[table_name]["collection"]
+        markdown_lines.append(f"- **{collection_name}**: A list of {collection_name}.")
+    markdown_lines.append("")
+
+    for table_profile in profiles:
+        table_name = "main." + table_profile["table_name"]
+        if table_name not in table_lookup:
+            continue
+
+        collection_name = table_lookup[table_name]["collection"]
+        column_map = table_lookup[table_name]["column_map"]
+
+        markdown_lines.append(f"### The `{collection_name}` collection contains the following columns:\n")
+
+        for original_col, profile_data in table_profile["columns"].items():
+            if original_col in column_map:
+                metadata_name = column_map[original_col]
+                updated_profile = re.sub(
+                    r'\b' + re.escape(original_col) + r'\b',
+                    metadata_name,
+                    profile_data["profile"]
+                )
+                markdown_lines.append(f"- **{metadata_name}**: {updated_profile.strip()}\n")
+
+        markdown_lines.append("")  # Space between collections
+
+    return "\n".join(markdown_lines)
