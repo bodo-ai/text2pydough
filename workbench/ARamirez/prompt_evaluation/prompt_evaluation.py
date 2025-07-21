@@ -353,7 +353,7 @@ def prepare_eval_data(args):
     db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
     return prompt, script, data, df, db_markdown_map
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_base_path, metadata_base_path, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -577,7 +577,7 @@ def size_based_selection(valid_runs, question, question_idx="?"):
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None, None
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_base_path, metadata_base_path, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     num_keys = len(google_credentials)
     def thread_wrapper(row_tuple):
@@ -632,6 +632,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 row=row,
                 script=script,
                 models_to_test=models_to_test,
+                db_base_path=db_base_path,
+                metadata_base_path=metadata_base_path,
                 db_markdown_map=db_markdown_map,
                 ensemble_selection_method=ensemble_selection_method,
                 tries=tries,
@@ -746,6 +748,8 @@ def main(git_hash):
         questions_df=df,
         script=script,
         threads=args.num_threads,
+        db_base_path=args.db_base_path,
+        metadata_base_path=args.metadata_base_path,
         db_markdown_map=db_markdown_map,
         use_parallel=args.use_parallel,
         use_extrametadata=args.use_extrametadata,
