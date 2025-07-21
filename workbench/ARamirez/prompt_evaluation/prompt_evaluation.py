@@ -28,7 +28,7 @@ from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
 import random
 import json
-from gradio_agent_v2 import process_question
+import gradio_agent_v2
 from contextlib import contextmanager
 from gradio_agent import process_question as gradio_process_question
 from dotenv import load_dotenv
@@ -111,11 +111,11 @@ def prepare_db_markdown_map(df, metadata_base_path, db_base_path):
     dataset_names = df["dataset_name"]
     db_markdown_map = {}
     for db_name, dataset_name in zip(db_names, dataset_names):
-        json_file = os.path.join(metadata_base_path, "metadata", dataset_name, f"{db_name}_graph.json")
+        json_file = os.path.join(metadata_base_path, dataset_name, "metadata", f"{db_name}_graph.json")
         # Only generate if missing
         if not os.path.exists(json_file):
             print(f"[INFO] Generating JSON for: {db_name}")
-            url = f"sqlite:///{os.path.join(db_base_path, 'databases', dataset_name, db_name)}"
+            url = f"sqlite:///{os.path.join(db_base_path, dataset_name, 'databases', db_name, f'{db_name}.sqlite')}"
             print("DB URL:", url)
             engine = create_engine(url)
             md= generate_metadata(engine,db_name)
@@ -357,10 +357,11 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
+    dataset_name = row.get("dataset_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map, extra_metadata)
 
-    db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
-    metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
+    db_path = os.path.join(db_base_path, dataset_name, 'databases', db_name, f"{db_name}.sqlite")
+    metadata_path = os.path.join(metadata_base_path, dataset_name, "metadata", f"{db_name}_graph.json")
     
     print(f"[DEBUG] [Q{question_idx}] Running models for: {question}")
 

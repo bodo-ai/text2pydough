@@ -470,8 +470,8 @@ def process_row(row,db_base_path,metadata_base_path):
         dataset_name = row['dataset_name']
         sql = row['sql']
 
-        db_path = os.path.join(db_base_path, "databases", dataset_name,  f"{db_name}.db")
-        metadata_dir = os.path.join(metadata_base_path, "metadata", dataset_name)
+        db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
 
         result, exception, gen_sql = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
