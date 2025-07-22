@@ -109,6 +109,7 @@ class ClaudeAIProvider(AIProvider):
 
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
+        mlflow.set_tag("model_id", self.model_id)
         try:
             kwargs.setdefault("max_tokens", 20000)
             use_streaming = kwargs.pop("use_stream", True)
@@ -159,6 +160,7 @@ class ClaudeAIProvider(AIProvider):
             
     @mlflow.trace
     def ask_cache(self, prompt):
+        mlflow.set_tag("model_id", self.model_id)
         try:
             kwargs.setdefault("max_tokens", 20000)
             use_streaming = kwargs.pop("use_stream", True)
@@ -241,6 +243,7 @@ class GeminiAIProvider(AIProvider):
     def ask_cached(self, prompt, **kwargs):
         
         """Query the model using the cache."""
+        mlflow.set_tag("model_id", self.model_id)
         if not self.cache:
             raise RuntimeError("Cache has not been created. Please create a cache first.")
         response = self.client.models.generate_content(
@@ -252,6 +255,7 @@ class GeminiAIProvider(AIProvider):
    
     @mlflow.trace
     def ask(self, prompt, system_instruction, **kwargs):
+        mlflow.set_tag("model_id", self.model_id)
         response = self.client.models.generate_content(
             model=self.model_id,
             contents=prompt,
@@ -262,7 +266,9 @@ class GeminiAIProvider(AIProvider):
         )
         return response.text, response.usage_metadata
 
+    @mlflow.trace
     def chat(self, question, prompt, chat=None, **kwargs):
+        mlflow.set_tag("model_id", self.model_id)
         if not chat:
             chat = self.client.chats.create(model=self.model_id)
         response = chat.send_message(
