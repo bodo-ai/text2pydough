@@ -13,7 +13,6 @@ from pydough import parse_json_metadata_from_file
 from datetime import datetime
 import multiprocessing
 import mlflow
-import mlflow.pyfunc
 from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
@@ -333,16 +332,6 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
 
     with open(metrics_path, "w") as metrics_file:
         metrics_file.write(metrics_json)
-
-    mlflow.pyfunc.log_model(
-        artifact_path=args.model_id,
-        python_model="gemini_wrapper.py",
-        artifacts={
-            "prompt_file": args.prompt_file,
-            "pydough_file": args.pydough_file,
-            "metrics.json": metrics_path
-        }
-    )
 
 def prepare_eval_data(args):
     prompt = read_file(args.prompt_file)
