@@ -14,6 +14,7 @@ import aisuite as ai
 from mistralai import Mistral
 import mlflow
 from anthropic import AnthropicVertex
+from mlflow.entities import SpanType
 
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
@@ -107,8 +108,17 @@ class ClaudeAIProvider(AIProvider):
         except KeyError as e:
             raise RuntimeError(f"Missing environment variable: {e}")
 
-    @mlflow.trace
+    @mlflow.trace(span_type=SpanType.LLM)
     def ask(self, prompt, system_instruction, **kwargs):
+        # Set trace-level tags (shown in MLflow UI under "Tags")
+        mlflow.update_current_trace(tags={
+            "model_id": self.model_id
+        })
+
+        # Optional: still add span-level attributes
+        span = mlflow.get_current_active_span()
+        if span:
+            span.set_attribute("model_id", self.model_id)
         try:
             kwargs.setdefault("max_tokens", 20000)
             use_streaming = kwargs.pop("use_stream", True)
@@ -250,8 +260,17 @@ class GeminiAIProvider(AIProvider):
         )
         return response.text, response.usage_metadata
    
-    @mlflow.trace
+    @mlflow.trace(span_type=SpanType.LLM)
     def ask(self, prompt, system_instruction, **kwargs):
+        # Set trace-level tags (shown in MLflow UI under "Tags")
+        mlflow.update_current_trace(tags={
+            "model_id": self.model_id
+        })
+
+        # Optional: still add span-level attributes
+        span = mlflow.get_current_active_span()
+        if span:
+            span.set_attribute("model_id", self.model_id)
         response = self.client.models.generate_content(
             model=self.model_id,
             contents=prompt,
