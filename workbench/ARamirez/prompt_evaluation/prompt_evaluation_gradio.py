@@ -150,7 +150,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
     return "".join(parts), prompt.format(
         script_content=script,
-        #database_content=json_to_markdown(db_content),
+        database_content=generate_markdown_from_metadata(my_graph),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -433,10 +433,10 @@ def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(mlflow_run_id, all_runs, question, question_idx, ensemble_selection_method=ensemble_selection_method)
+    ensemble = ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx, ensemble_selection_method=ensemble_selection_method)
     return ensemble, all_runs
 
-def ensemble_result(mlflow_run_id, all_runs, question, question_idx="?", ensemble_selection_method="size"):
+def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx="?", ensemble_selection_method="size"):
     """
     Uses dataframe comparison to select the most consistent output.
     """
@@ -450,6 +450,7 @@ def ensemble_result(mlflow_run_id, all_runs, question, question_idx="?", ensembl
     valid_runs = [r for r in all_runs if r["df"] is not None]
     if not valid_runs:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
+        print(f"Dataset name: {dataset_name}")
         
         # Call Gradio agent
         response = gradio_agent_v2.process_question(question, dataset_name, db_name, mlflow_run_id, question_idx)

@@ -149,7 +149,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
     return "".join(parts), prompt.format(
         script_content=script,
-        #database_content=json_to_markdown(db_content),
+        database_content=generate_markdown_from_metadata(my_graph),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -590,7 +590,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
         api_key, project_id = google_credentials[index % num_keys]  # Round-robin selection
 
         # Configuations and selected models
-        models_to_test = [ 
+        if model_id == "ensemble":
+            models_to_test = [ 
             {
                 "name": "claude",
                 "provider": "anthropic",
@@ -612,6 +613,20 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 }
             }
         ]
+                    
+        else:
+            models_to_test = [
+                {
+                    "name": "gemini",
+                    "provider": "google",
+                    "model_id": model_id,
+                    "config": {
+                        "api_key": api_key,
+                        "project": project_id,
+                        "region": "us-central1"
+                    }
+                }
+            ]
         
         if use_parallel: 
             # Return both the ensemble result and all model runs
