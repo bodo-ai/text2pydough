@@ -21,7 +21,7 @@ from test_data.eval import compare_output, execute_code_and_extract_result, comp
 import aisuite as ai
 from provider.ai_providers_v2 import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
-from dynamic_prompt.mdgen import json_to_markdown
+from dynamic_prompt.mdgen_v2 import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
@@ -139,10 +139,8 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    graph_name = db_content["metadata"][0].get('name', 'default_graph')
-     # Parse the metadata file using pydough
-    my_graph = parse_json_metadata_from_file(db_content["json_file_path"], graph_name)
-    parts = [f"{question}\nDatabase Schema:\n", generate_markdown_from_metadata(my_graph)]
+
+    parts = [f"{question}\nDatabase Schema:\n", json_to_markdown(db_content['metadata'])]
 
     if extra_metadata:
         print(extra_metadata)
@@ -150,7 +148,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
     return "".join(parts), prompt.format(
         script_content=script,
-        database_content=generate_markdown_from_metadata(my_graph),
+        database_content=json_to_markdown(db_content['metadata']),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -449,32 +447,42 @@ def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, qu
     
     valid_runs = [r for r in all_runs if r["df"] is not None]
     if not valid_runs:
-        print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
-        print(f"Dataset name: {dataset_name}")
+        use_gradio_agent = False
         
-        # Call Gradio agent
-        response = gradio_agent_v2.process_question(question, dataset_name, db_name, mlflow_run_id, question_idx)
-        gradio_df = response['dataframe']
-        
-        if gradio_df is None:
-            print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
-            fallback_runs = [r for r in all_runs if r["response"]]
-            fallback = random.choice(fallback_runs) if fallback_runs else None
-            if fallback:
-                return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
-            else:
-                print(f"[ERROR] [Q{question_idx}] No valid fallback run found.")
+        if use_gradio_agent:
+            print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
+            print(f"Dataset name: {dataset_name}")
+
+            # Call Gradio agent
+            response = gradio_agent_v2.process_question(question, dataset_name, db_name, mlflow_run_id, question_idx)
+            gradio_df = response['dataframe']
+
+            if gradio_df is None:
+                print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
+                fallback_runs = [r for r in all_runs if r["response"]]
+                fallback = random.choice(fallback_runs) if fallback_runs else None
+                if fallback:
+                    return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
+                else:
+                    print(f"[ERROR] [Q{question_idx}] No valid fallback run found.")
+                    return None, 0.0, None, None, None
+
+            gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+
+            # Attempt to reuse duration/usage from a previous Claude run if it exists
+            claude_run = next((r for r in all_runs if r["model_name"] == "claude"), None)
+            duration = claude_run["duration"] if claude_run else None
+            usage = claude_run["usage"] if claude_run else None
+
+            print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
+            return response, duration, usage, "Gradio agent", gen_df_json
+        else:
+            print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
+                for r in all_runs:
+                    if r["response"]:
+                        print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
+                        return r["response"], r["duration"], r["usage"], r["model_name"], None
                 return None, 0.0, None, None, None
-        
-        gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
-        
-        # Attempt to reuse duration/usage from a previous Claude run if it exists
-        claude_run = next((r for r in all_runs if r["model_name"] == "claude"), None)
-        duration = claude_run["duration"] if claude_run else None
-        usage = claude_run["usage"] if claude_run else None
-        
-        print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
-        return response, duration, usage, "Gradio agent", gen_df_json
 
     if ensemble_selection_method == "size":
         print(f"[INFO] [Q{question_idx}] Size-based selection")
@@ -570,6 +578,7 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
 def size_based_selection(valid_runs, question, question_idx="?"):
     """
     Selects the run with the largest dataframe size.
+    If multiple runs have the same largest size, prioritize the response from the model named "claude".
     """
     size_dict = defaultdict(int)
     for i in range(len(valid_runs)):
@@ -580,6 +589,17 @@ def size_based_selection(valid_runs, question, question_idx="?"):
 
     if size_dict and max(size_dict.values()) > -1:
         best_index = max(size_dict, key=lambda i: size_dict[i])
+#         max_size = max(size_dict.values())
+#         candidates = [i for i in size_dict if size_dict[i] == max_size]
+
+#         # Prioritize "claude" if multiple candidates exist
+#         for candidate in candidates:
+#             if valid_runs[candidate]["model_name"] == "claude":
+#                 best_index = candidate
+#                 break
+#         else:
+#             best_index = candidates[0]  # Default to the first candidate
+
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
         return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
