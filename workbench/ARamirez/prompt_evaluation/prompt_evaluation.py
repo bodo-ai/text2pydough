@@ -21,7 +21,7 @@ from test_data.eval import compare_output, execute_code_and_extract_result, comp
 import aisuite as ai
 from provider.ai_providers_v2 import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
-from dynamic_prompt.mdgen import json_to_markdown
+from dynamic_prompt.mdgen_v2 import json_to_markdown
 from sqlalchemy import create_engine, inspect, text
 from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
@@ -138,10 +138,8 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     recommendation = data.get(question, {}).get("context_id", "")
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
-    graph_name = db_content["metadata"][0].get('name', 'default_graph')
-     # Parse the metadata file using pydough
-    my_graph = parse_json_metadata_from_file(db_content["json_file_path"], graph_name)
-    parts = [f"{question}\nDatabase Schema:\n", generate_markdown_from_metadata(my_graph)]
+
+    parts = [f"{question}\nDatabase Schema:\n", json_to_markdown(db_content['metadata'])]
 
     if extra_metadata:
         print(extra_metadata)
@@ -149,7 +147,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
     return "".join(parts), prompt.format(
         script_content=script,
-        database_content=generate_markdown_from_metadata(my_graph),
+        #database_content=json_to_markdown(db_content['metadata']),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -186,9 +184,11 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
     counts = tested_df['comparison_result'].value_counts()
     percentages = counts / total_rows
     filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description', 'extra_args']}
-
+    
+    extra_metrics = False
+    
     # === Conditional Custom Metrics ===
-    if "difficulty" in tested_df.columns and "complexity" in tested_df.columns:
+    if extra_metrics:
         total_per_difficulty = tested_df["difficulty"].value_counts()
         total_per_complexity = tested_df["complexity"].value_counts()
         total_per_combo = tested_df.groupby(["difficulty", "complexity"]).size()
@@ -318,6 +318,7 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
         mlflow.log_artifact(combo_path)
         mlflow.log_artifact(complexity_path)
         mlflow.log_artifact(difficulty_path)
+        
     mlflow.log_params(filtered_args)
     mlflow.log_params(kwargs)
     mlflow.log_metrics(percentages)

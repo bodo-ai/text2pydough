@@ -1,6 +1,7 @@
 import json
 import sys
 from pydough import parse_json_metadata_from_file
+from collections import defaultdict
 
 def generate_markdown_from_metadata(graph):
     """
@@ -118,3 +119,170 @@ if __name__ == "__main__":
         print(f"Error: Could not decode JSON from '{input_file_path}'. Please ensure it's a valid JSON file.")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+        
+
+def json_to_markdown(metadata: list) -> str:
+    markdown = []
+
+    for graph in metadata:
+        graph_name = graph["name"]
+        collections = {col["name"]: col for col in graph["collections"]}
+        relationships = graph.get("relationships", [])
+        fields_per_collection = {}
+        
+        # Create relationship mappings
+        forward_relationships = defaultdict(list)
+        reverse_relationships = defaultdict(list)
+        relationship_by_name = {}
+
+        # Process relationships
+        for rel in relationships:
+            relationship_by_name[rel["name"]] = rel
+            
+            if rel["type"] == "simple join":
+                # Forward relationship: parent -> child
+                forward_relationships[rel["parent collection"]].append(rel)
+            elif rel["type"] == "reverse":
+                # Reverse relationship: child -> parent
+                # Find the original relationship and map it to the child collection
+                original_prop = rel["original property"]
+                original_parent = rel["original parent"]
+                # The reverse relationship should be added to the child collection
+                # of the original relationship
+                if original_prop in relationship_by_name:
+                    original_rel = relationship_by_name[original_prop]
+                    child_collection = original_rel["child collection"]
+                    print(f"Adding reverse relationship {rel['name']} to {child_collection} and original rel {original_rel['name']}")
+                    reverse_relationships[child_collection].append(rel)
+
+        # Header: list of collections
+        markdown.append(f"### The high-level graph `{graph_name}` collection contains the following collections:")
+        for collection_name in collections:
+            markdown.append(f"- **{collection_name}**: A list of {collection_name}.")
+        markdown.append("")
+
+        # Collection-level details
+        for collection_name, collection in collections.items():
+            markdown.append(f"### The `{collection_name}` collection contains the following columns:")
+            props = collection.get("properties", [])
+            prop_map = {p["name"]: p for p in props}
+            fields_per_collection[collection_name] = list(prop_map.keys())
+
+            # Table columns
+            for prop_name, prop_info in prop_map.items():
+                if prop_info["type"] == "table column":
+                    desc_lines = [f"- **{prop_name}**"]
+
+                    # Description
+                    description = prop_info.get("description")
+                    if description:
+                        desc_lines[0] += f": {description}"
+                    else:
+                        desc_lines[0] += f": {get_column_description(prop_name)}"
+
+                    # Sample values
+                    sample_values = prop_info.get("sample values", [])
+                    if sample_values:
+                        values = ", ".join(str(v) for v in sample_values)
+                        desc_lines.append(f"  - Example values: `{values}`")
+
+                    # Synonyms
+                    synonyms = prop_info.get("synonyms", [])
+                    if synonyms:
+                        synonyms_str = ", ".join(synonyms)
+                        desc_lines.append(f"  - Synonyms: _{synonyms_str}_")
+
+                    markdown.extend(desc_lines)
+
+            # Forward (simple join) relationships
+            for rel in forward_relationships.get(collection_name, []):
+                name = rel["name"]
+                other = rel["child collection"]
+                plural = not rel.get("singular", True)
+                desc_lines = [f"- **{name}**"]
+
+                # Description
+                description = rel.get("description")
+                if description:
+                    desc_lines[0] += f": {description}"
+                else:
+                    desc_lines[0] += f": A list of all {other} associated with this record." if plural \
+                        else f": The corresponding {other} for this record."
+
+                markdown.extend(desc_lines)
+                if rel.get("synonyms"):
+                    markdown.append(f"  - Synonyms: _{', '.join(rel['synonyms'])}_")
+
+            # Reverse relationships
+            for rel in reverse_relationships.get(collection_name, []):
+                name = rel["name"]
+                original_parent = rel["original parent"]
+                plural = not rel.get("singular", True)
+                desc_lines = [f"- **{name}**"]
+                
+                description = rel.get("description")
+                if description:
+                    desc_lines[0] += f": {description}"
+                else:
+                    desc_lines[0] += f": A list of all {original_parent} associated with this record." if plural \
+                        else f": The corresponding {original_parent} for this record."
+                
+                markdown.extend(desc_lines)
+                if rel.get("synonyms"):
+                    markdown.append(f"  - Synonyms: _{', '.join(rel['synonyms'])}_")
+
+            markdown.append("")
+
+        # Auto-generated query examples
+        markdown.append("### Example Relationship Queries (Auto-generated)")
+        markdown.append("")
+
+        for collection_name in collections:
+
+            # Forward relationship examples
+            for rel in forward_relationships.get(collection_name, []):
+                other = rel["child collection"]
+                plural = not rel.get("singular", True)
+                fields = fields_per_collection.get(other, [])[:6]
+                fields_str = ", ".join(fields) if fields else "..."
+                markdown.append(
+                    f"To get {'all' if plural else 'the corresponding'} `{other}` from each `{collection_name}`:")
+                markdown.append(f"```python\n{collection_name}.{rel['name']}.CALCULATE({fields_str})\n```")
+                print(f"Adding forward relationship example for {collection_name}.{rel['name']} with fields {fields_str}")
+
+                markdown.append("")
+
+            # Reverse relationship examples
+            for rel in reverse_relationships.get(collection_name, []):
+                original_parent = rel["original parent"]
+                reverse_name = rel["name"]
+                plural = not rel.get("singular", True)
+                reverse_fields = fields_per_collection.get(original_parent, [])[:6]
+                reverse_str = ", ".join(reverse_fields) if reverse_fields else "..."
+                markdown.append(
+                    f"To get {'all' if plural else 'the corresponding'} `{original_parent}` from each `{collection_name}`:")
+                markdown.append(f"```python\n{collection_name}.{reverse_name}.CALCULATE({reverse_str})\n```")
+                print(f"Adding reverse relationship example for {collection_name}.{reverse_name} with fields {reverse_str}")
+                markdown.append("")
+
+    return "\n".join(markdown)
+
+
+def get_column_description(name):
+    name_map = {
+        "key": "A unique identifier",
+        "name": "The name",
+        "comment": "Additional comments or notes",
+        "address": "The address",
+        "phone": "The phone number",
+        "email": "The email",
+    }
+    if name in name_map:
+        return name_map[name]
+    elif name.endswith("_key"):
+        ref = name.replace("_key", "")
+        return f"A foreign key referencing the `{ref}s` collection."
+    else:
+        return f"{name.replace('_', ' ').capitalize()}."
+
+

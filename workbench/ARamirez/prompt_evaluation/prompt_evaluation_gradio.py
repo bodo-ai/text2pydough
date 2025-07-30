@@ -137,7 +137,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
         db_content = db_markdown_map[db_name]
 
     recommendation = data.get(question, {}).get("context_id", "")
-    similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
+    #similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
 
     parts = [f"{question}\nDatabase Schema:\n", json_to_markdown(db_content['metadata'])]
@@ -148,9 +148,9 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
     return "".join(parts), prompt.format(
         script_content=script,
-        database_content=json_to_markdown(db_content['metadata']),
-        similar_queries=similar_code,
-        recomendation=recommendation
+        #database_content=json_to_markdown(db_content['metadata']),
+        similar_queries="",
+        recomendation=""
     )
 
 def correct(client, question, code, prompt, db_name):
@@ -478,11 +478,11 @@ def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, qu
             return response, duration, usage, "Gradio agent", gen_df_json
         else:
             print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
-                for r in all_runs:
-                    if r["response"]:
-                        print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
-                        return r["response"], r["duration"], r["usage"], r["model_name"], None
-                return None, 0.0, None, None, None
+            for r in all_runs:
+                if r["response"]:
+                    print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
+                    return r["response"], r["duration"], r["usage"], r["model_name"], None
+            return None, 0.0, None, None, None
 
     if ensemble_selection_method == "size":
         print(f"[INFO] [Q{question_idx}] Size-based selection")

@@ -117,7 +117,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     input_csv = args.input_csv
-    db_base_path = "/home/gerald8525/repositories/mount-folder/datasets/"
+    db_base_path = "/home/jupyter/mount-folder/datasets/"
 
     print("Starting SQL query processing...")
     process_sql_queries(input_csv, db_base_path)
