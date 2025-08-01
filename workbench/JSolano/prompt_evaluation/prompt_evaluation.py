@@ -28,7 +28,7 @@ from gemini_wrapper import GeminiWrapper
 from collections import defaultdict
 import random
 import json
-from gradio_agent_v2 import process_question
+import gradio_agent_v2
 from contextlib import contextmanager
 from gradio_agent import process_question as gradio_process_question
 from dotenv import load_dotenv
@@ -150,7 +150,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
 
     return "".join(parts), prompt.format(
         script_content=script,
-        #database_content=json_to_markdown(db_content),
+        database_content=json_to_markdown(db_content),
         similar_queries=similar_code,
         recomendation=recommendation
     )
@@ -353,14 +353,15 @@ def prepare_eval_data(args):
     db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
     return prompt, script, data, df, db_markdown_map
 
-def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, **kwargs):
+def run_models_parallel(prompt, data, row, script, models_to_test, db_base_path, metadata_base_path, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
+    dataset_name = row.get("dataset_name", None)
     formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map, extra_metadata)
 
-    db_path = os.path.join("./test_data", "databases", row["dataset_name"], f"{db_name}.db")
-    metadata_path = os.path.join("./test_data", "metadata", row["dataset_name"], f"{db_name}_graph.json")
+    db_path = os.path.join(db_base_path, 'databases', dataset_name, db_name, f"{db_name}.db")
+    metadata_path = os.path.join(metadata_base_path, "metadata", dataset_name, f"{db_name}_graph.json")
     
     print(f"[DEBUG] [Q{question_idx}] Running models for: {question}")
 
@@ -408,7 +409,7 @@ def run_models_parallel(prompt, data, row, script, models_to_test, db_markdown_m
         except Exception as e:
             raw_response, code, duration, usage, gen_df = None, None, time.time() - start, None, None
             print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
-
+            #print(f"[DEBUG] [Q{question_idx}] Generated DataFrame: {gen_df}")
         return {
             "question_index": question_idx,
             "question": question,
@@ -576,7 +577,7 @@ def size_based_selection(valid_runs, question, question_idx="?"):
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None, None
 
-def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, **kwargs):
+def process_questions(data, provider, model_id, prompt, questions_df, script, threads, db_base_path, metadata_base_path, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     num_keys = len(google_credentials)
     def thread_wrapper(row_tuple):
@@ -631,6 +632,8 @@ def process_questions(data, provider, model_id, prompt, questions_df, script, th
                 row=row,
                 script=script,
                 models_to_test=models_to_test,
+                db_base_path=db_base_path,
+                metadata_base_path=metadata_base_path,
                 db_markdown_map=db_markdown_map,
                 ensemble_selection_method=ensemble_selection_method,
                 tries=tries,
@@ -704,6 +707,8 @@ def parse_arguments():
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     kwargs = parse_extra_args(args.extra_args)
+    #print(f"[INFO] Parsed arguments: {vars(args)}")
+    #print(f"[INFO] Additional arguments: {kwargs}")
     return args, kwargs
 
 # === Entry Point ===
@@ -743,6 +748,8 @@ def main(git_hash):
         questions_df=df,
         script=script,
         threads=args.num_threads,
+        db_base_path=args.db_base_path,
+        metadata_base_path=args.metadata_base_path,
         db_markdown_map=db_markdown_map,
         use_parallel=args.use_parallel,
         use_extrametadata=args.use_extrametadata,

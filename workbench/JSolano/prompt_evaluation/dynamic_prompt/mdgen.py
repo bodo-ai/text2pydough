@@ -31,15 +31,15 @@ def json_to_markdown(metadata: dict) -> str:
         reverse = col.get("reverse_relationship_name", "unknown")
         plural = not col.get("singular", True)
         if plural:
-            return f"- **{name}**: A list of all {other} associated with this record (reverse of `{other}.{reverse}`)."
+            return f"- **{name}**: A list of all {other} associated with this record."
         else:
-            return f"- **{name}**: The corresponding {other} for this record (reverse of `{other}.{reverse}`)."
+            return f"- **{name}**: The corresponding {other} for this record."
 
     def describe_inferred_reverse(name, from_collection, reverse_of, singular):
         if singular:
-            return f"- **{name}**: The corresponding {from_collection} for this record (reverse of `{from_collection}.{reverse_of}`)."
+            return f"- **{name}**: The corresponding {from_collection} for this record."
         else:
-            return f"- **{name}**: A list of all {from_collection} associated with this record (reverse of `{from_collection}.{reverse_of}`)."
+            return f"- **{name}**: A list of all {from_collection} associated with this record."
   
     def get_column_description(name):
         name_map = {

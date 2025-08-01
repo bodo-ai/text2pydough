@@ -10,7 +10,7 @@ python prompt_evaluation.py \
     --db-base-path "${DB_PATH}" \
     --metadata-base-path "${METADATA_PATH}" \
     --pydough_file "data/pydough_files/cheatsheet_latest_v2.md" \
-    --prompt_file "data/prompts/prompt_overhaul_rev2.md" \
+    --prompt_file "data/prompts/prompt_overhaul.md" \
     --questions "test_csv/complete_corrected_questions_7_4_gtj_with_id.csv" \
     --provider google \
     --model_id ensemble \
