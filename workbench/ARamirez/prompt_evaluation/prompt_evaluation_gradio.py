@@ -43,7 +43,7 @@ def load_google_credentials(selected_keys=[1]):
     Sets the global google_credentials variable.
     """
         # Find the .env file in your home directory
-    env_path = Path.home() / ".env"
+    env_path = ".env"
     load_dotenv(dotenv_path=env_path)
     global google_credentials
     all_credentials = [
@@ -137,7 +137,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
         db_content = db_markdown_map[db_name]
 
     recommendation = data.get(question, {}).get("context_id", "")
-    #similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
+    similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
 
     parts = [f"{question}\nDatabase Schema:\n", json_to_markdown(db_content['metadata'])]
@@ -149,8 +149,8 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     return "".join(parts), prompt.format(
         script_content=script,
         #database_content=json_to_markdown(db_content['metadata']),
-        similar_queries="",
-        recomendation=""
+        similar_queries=similar_code,
+        recommendation=recommendation
     )
 
 def correct(client, question, code, prompt, db_name):
@@ -447,14 +447,14 @@ def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, qu
     
     valid_runs = [r for r in all_runs if r["df"] is not None]
     if not valid_runs:
-        use_gradio_agent = False
+        use_gradio_agent = True
         
         if use_gradio_agent:
             print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
             print(f"Dataset name: {dataset_name}")
 
             # Call Gradio agent
-            response = gradio_agent_v2.process_question(question, dataset_name, db_name, mlflow_run_id, question_idx)
+            response = gradio_agent_v2.process_question("http://10.128.0.5:2024/", question, dataset_name, db_name, mlflow_run_id, question_id=question_idx, architecture="Multi-Agent Supervisor")
             gradio_df = response['dataframe']
 
             if gradio_df is None:

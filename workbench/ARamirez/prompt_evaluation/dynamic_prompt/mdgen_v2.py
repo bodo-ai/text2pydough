@@ -233,6 +233,7 @@ def json_to_markdown(metadata: list) -> str:
 
             markdown.append("")
 
+        '''
         # Auto-generated query examples
         markdown.append("### Example Relationship Queries (Auto-generated)")
         markdown.append("")
@@ -264,7 +265,7 @@ def json_to_markdown(metadata: list) -> str:
                 markdown.append(f"```python\n{collection_name}.{reverse_name}.CALCULATE({reverse_str})\n```")
                 print(f"Adding reverse relationship example for {collection_name}.{reverse_name} with fields {reverse_str}")
                 markdown.append("")
-
+        '''
     return "\n".join(markdown)
 
 

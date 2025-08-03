@@ -50,7 +50,7 @@ To generate the PyDough code snippet, follow these steps:
    - If you need to use the high-level top collection, use the appropriate name as defined in the Database Structure Reference File.
    - Refer to the provided definitions to answer the query when it requires a specific definition. For example, if the query asks for 'total order value,' use the definition provided.
    - High level graph should be used only for operations like computing averages, totals, frequencies, sum, etc. Do not use it for any other purposes. Also, avoid starting with the high level graph unless you need to perform an global operation to the end of the query.
-   - When compare strings you must use case insensitive by using LOWER function.
+   - When comparing strings you must use case insensitive by using LOWER function, use this in comparations only.
 
 3. Determine if PARTITION is necessary. If it is not required, explore alternative methods such as CALCULATE or aggregations to achieve the desired result. If PARTITION is truly needed, use it appropriately.
    

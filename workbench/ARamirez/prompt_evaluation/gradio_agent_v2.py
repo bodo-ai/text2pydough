@@ -89,8 +89,11 @@ def extract_dataframe(json_data):
         print(f"Error converting to DataFrame: {e}")
         return None
 
-def process_question(client, question, dataset_name, db_name, mlflow_run_id, question_id=None, architecture="SQLATS"):
+def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id, question_id=None, architecture="SQLATS"):
     """Process a single question and return the results."""
+    #initialize the client
+    client = Client(server_URL)
+    
     # Construct the selected_db_display string dynamically
     selected_db_display = f"{dataset_name}: {db_name}/{db_name}.sqlite"
     
