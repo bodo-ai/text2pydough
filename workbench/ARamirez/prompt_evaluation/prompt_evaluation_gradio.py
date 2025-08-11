@@ -341,7 +341,7 @@ def prepare_eval_data(args):
     db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
     return prompt, script, data, df, db_markdown_map
 
-def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test, db_base_path, metadata_base_path, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, **kwargs):
+def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test, db_base_path, metadata_base_path, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, use_gradio_agent=True, **kwargs):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
@@ -431,10 +431,10 @@ def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test
         grouped.setdefault(run["model_name"], []).append(run)
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx, ensemble_selection_method=ensemble_selection_method)
+    ensemble = ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx, ensemble_selection_method=ensemble_selection_method, use_gradio_agent=use_gradio_agent)
     return ensemble, all_runs
 
-def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx="?", ensemble_selection_method="size"):
+def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx="?", ensemble_selection_method="size", use_gradio_agent=True):
     """
     Uses dataframe comparison to select the most consistent output.
     """
@@ -447,7 +447,6 @@ def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, qu
     
     valid_runs = [r for r in all_runs if r["df"] is not None]
     if not valid_runs:
-        use_gradio_agent = True
         
         if use_gradio_agent:
             print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
@@ -607,7 +606,7 @@ def size_based_selection(valid_runs, question, question_idx="?"):
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None, None
 
-def process_questions(mlflow_run_id, data, provider, model_id, prompt, questions_df, script, threads, db_base_path, metadata_base_path, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, **kwargs):
+def process_questions(mlflow_run_id, data, provider, model_id, prompt, questions_df, script, threads, db_base_path, metadata_base_path, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, use_gradio_agent=True, **kwargs):
     print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
     num_keys = len(google_credentials)
     def thread_wrapper(row_tuple):
@@ -669,6 +668,7 @@ def process_questions(mlflow_run_id, data, provider, model_id, prompt, questions
                 ensemble_selection_method=ensemble_selection_method,
                 tries=tries,
                 extra_metadata=mapping_metadata,
+                use_gradio_agent=use_gradio_agent,
                 **kwargs
             )
             return (ensemble_result, all_runs)
@@ -733,6 +733,7 @@ def parse_arguments():
     parser.add_argument("--use-parallel", action="store_true")
     parser.add_argument("--use-extrametadata",  action="store_true", help="Use extra metadata from Gradio agent")
     parser.add_argument("--ensemble-selection-method", type=str, choices=["size", "favourite", "frequency"], default="size", help="Ensemble selection method: size, favourite, frequency")
+    parser.add_argument("--use-gradio-agent", action="store_true", default=False, help="Use Gradio agent when no valid dataframes are available for ensemble")
     parser.add_argument("--tries", type=int, default=1, help="Number of tries for each model in parallel mode")
     parser.add_argument("--keys", nargs="*", type=int, help="Google API key indices to use (e.g., --keys 1 3)")
     parser.add_argument("--extra_args", nargs=argparse.REMAINDER)
@@ -790,6 +791,7 @@ def main(git_hash):
             use_extrametadata=args.use_extrametadata,
             ensemble_selection_method=args.ensemble_selection_method,
             tries=args.tries,
+            use_gradio_agent=args.use_gradio_agent,
             **kwargs
         )
 
