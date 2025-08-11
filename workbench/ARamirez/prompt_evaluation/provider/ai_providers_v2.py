@@ -15,6 +15,7 @@ from mistralai import Mistral
 import mlflow
 from anthropic import AnthropicVertex
 from mlflow.entities import SpanType
+from provider.VertexModelGardenProvider import VertexAIModelGarden
 
 # === Abstract Class for AI Providers ===
 class AIProvider(ABC):
@@ -361,3 +362,74 @@ class MistralAIProvider(AIProvider):
         except Exception as e:
             print(f"AI Suite error: {e}")
             return None
+        
+class ChatgptOssAIProvider(AIProvider):
+    def __init__(self, model_id, config):
+        self.model_id = model_id
+        self.project = config["project"]
+        self.location = config["region"]
+        self.client = VertexAIModelGarden(
+            project=self.project,
+            location=self.location,
+            endpoint_id=self.model_id
+        )
+
+    @mlflow.trace(span_type=SpanType.LLM)
+    def ask(self, prompt, system_instruction, **kwargs):
+        # Set trace-level tags (shown in MLflow UI under "Tags")
+        mlflow.update_current_trace(tags={
+            "model_id": self.model_id
+        })
+
+        # Optional: still add span-level attributes
+        span = mlflow.get_current_active_span()
+        if span:
+            span.set_attribute("model_id", self.model_id)
+        response = self.client.predict_raw(
+            instances=[
+                {
+                    "@requestFormat": "chatCompletions",
+                    "messages": [{"role": "system", "content": system_instruction},
+                                 {"role": "user", "content": prompt}],
+                    **kwargs
+                }
+            ]
+        )
+        return response.predictions['choices'][0]['message']['content'], response.predictions['usage']
+    
+
+class QwenAIProvider(AIProvider):
+    def __init__(self, model_id, config):
+        self.model_id = model_id
+        self.project = config["project"]
+        self.location = config["region"]
+        self.client = VertexAIModelGarden(
+            project=self.project,
+            location=self.location,
+            endpoint_id=self.model_id
+        )
+
+    @mlflow.trace(span_type=SpanType.LLM)
+    def ask(self, prompt, system_instruction, **kwargs):
+        mlflow.update_current_trace(tags={
+            "model_id": self.model_id
+        })
+
+        # Optional: still add span-level attributes
+        span = mlflow.get_current_active_span()
+        if span:
+            span.set_attribute("model_id", self.model_id)
+        response = self.client.predict_raw(
+            instances=[
+                {
+                    "text": system_instruction + prompt
+                }
+            ],
+            parameters={
+                "sampling_params": {
+                    **kwargs
+                }
+            }
+        )
+        print(f"INFO: Asking Qwen model {response.predictions[0]['text']}")
+        return response.predictions[0]['text'], response.predictions[0]['meta_info']
