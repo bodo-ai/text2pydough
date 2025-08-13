@@ -15,6 +15,13 @@ import sys
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import logging
+# Progress bar
+try:
+    from tqdm import tqdm
+except ImportError:
+    # Fallback dummy tqdm in case library missing
+    def tqdm(iterable=None, **kwargs):
+        return iterable if iterable is not None else (lambda x: x)
 
 # Add the current directory to the path to import test_data.eval
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -24,7 +31,7 @@ from test_data.eval import process_row, compare_output
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_dir=None):
+def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_dir=None, num_threads: int = None):
     """
     Evaluate all runs in the all_runs file using test_data.eval functions.
     
@@ -96,9 +103,23 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
                 'has_gen_df_json': pd.notna(row.get('gen_df_json'))
             }
     
-    # Process rows in parallel
-    with ThreadPoolExecutor() as executor:
-        evaluation_results = list(executor.map(process_single_row, [row for _, row in df.iterrows()]))
+    # Determine workers
+    if num_threads is None or num_threads <= 0:
+        num_threads = os.cpu_count() or 4
+
+    logger.info(f"Processing {len(df)} rows with {num_threads} threads ...")
+
+    rows_iterable = [row for _, row in df.iterrows()]
+
+    # Process rows in parallel with progress bar
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        evaluation_results = list(
+            tqdm(
+                executor.map(process_single_row, rows_iterable),
+                total=len(rows_iterable),
+                desc="Evaluating",
+            )
+        )
     
     # Create evaluation DataFrame
     eval_df = pd.DataFrame(evaluation_results)
@@ -261,6 +282,13 @@ Examples:
         action='store_true',
         help='Enable verbose logging'
     )
+
+    parser.add_argument(
+        '--num-threads',
+        type=int,
+        default=None,
+        help='Number of worker threads to use for parallel evaluation (default: CPU count)'
+    )
     
     args = parser.parse_args()
     
@@ -289,7 +317,8 @@ Examples:
             args.all_runs,
             args.db_base_path,
             args.metadata_base_path,
-            args.output_dir
+            args.output_dir,
+            num_threads=args.num_threads
         )
         
         # Print summary
