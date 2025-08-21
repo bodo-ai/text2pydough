@@ -15,6 +15,8 @@ import sys
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import json
+import random
 # Progress bar
 try:
     from tqdm import tqdm
@@ -240,6 +242,84 @@ def print_summary(result_df, question_summary_df):
                     percentage = (count / db_total * 100) if db_total > 0 else 0
                     print(f"    {result_type}: {count} ({percentage:.1f}%)")
     
+    # Ensemble tie-break and finalist statistics (size-based selection)
+    try:
+        rng = random.Random(12345)
+
+        # Compute a question_id locally (same scheme as create_question_summary)
+        tmp_df = result_df.copy()
+        tmp_df['question_id'] = tmp_df['question'].astype(str) + '_' + tmp_df['db_name'].astype(str) + '_' + tmp_df['dataset_name'].astype(str)
+
+        def df_size_from_json(gen_df_json):
+            if not isinstance(gen_df_json, str) or gen_df_json.strip().lower() in ('', 'nan', 'none'):
+                return -1
+            try:
+                # Faster than constructing full pandas objects for size
+                data = json.loads(gen_df_json)
+                if isinstance(data, list) and data:
+                    # Assume uniform keys across rows
+                    num_rows = len(data)
+                    num_cols = len(data[0]) if isinstance(data[0], dict) else 0
+                    return num_rows * num_cols
+                if isinstance(data, list):
+                    return 0
+                if isinstance(data, dict):
+                    # Single object; treat as one row
+                    return len(data)
+                return -1
+            except Exception:
+                # Fallback: attempt cleaning for common escape/newline issues
+                try:
+                    cleaned = gen_df_json.replace('\n', '').replace('\r', '')
+                    data = json.loads(cleaned)
+                    if isinstance(data, list) and data:
+                        return len(data) * (len(data[0]) if isinstance(data[0], dict) else 0)
+                    if isinstance(data, dict):
+                        return len(data)
+                    return -1
+                except Exception:
+                    return -1
+
+        total_questions = tmp_df['question_id'].nunique()
+        tie_questions = 0
+        single_finalist_questions = 0
+        single_match_count = 0
+        tie_match_count = 0
+
+        for qid, group in tmp_df.groupby('question_id'):
+            # Build sizes per row
+            sizes = {}
+            for idx, row in group.iterrows():
+                sizes[idx] = df_size_from_json(row.get('gen_df_json', None))
+            if not sizes:
+                continue
+            max_size = max(sizes.values()) if sizes else -1
+            if max_size <= -1:
+                # No valid finalists for this question
+                continue
+            candidates = [idx for idx, s in sizes.items() if s == max_size]
+            if len(candidates) == 1:
+                single_finalist_questions += 1
+                winner_idx = candidates[0]
+                if str(group.loc[winner_idx, 'comparison_result']).strip() == 'Match':
+                    single_match_count += 1
+            elif len(candidates) > 1:
+                tie_questions += 1
+                winner_idx = rng.choice(candidates)
+                if str(group.loc[winner_idx, 'comparison_result']).strip() == 'Match':
+                    tie_match_count += 1
+
+        tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
+        single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
+        tie_match_pct = (tie_match_count / tie_questions * 100) if tie_questions > 0 else 0.0
+
+        print(f"\nENSEMBLE (size-based) TIE-BREAK STATS:")
+        print(f"  Questions with multiple finalists (tie): {tie_questions}/{total_questions} ({tie_percent:.1f}%)")
+        print(f"  Match rate where only one finalist: {single_match_count}/{single_finalist_questions} ({single_match_pct:.1f}%)")
+        print(f"  Match rate where multiple finalists (random tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
+    except Exception as e:
+        print(f"\n[WARNING] Failed to compute ensemble tie-break statistics: {e}")
+
     print("\n" + "="*80)
 
 def main():
