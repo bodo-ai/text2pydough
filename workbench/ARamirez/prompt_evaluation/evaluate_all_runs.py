@@ -78,32 +78,11 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
         """Process a single row and return evaluation result"""
         try:
             result, exception = process_row(row, db_base_path, metadata_base_path)
-            return {
-                'row_index': row.name,
-                'question': row.get('question', ''),
-                'db_name': row.get('db_name', ''),
-                'dataset_name': row.get('dataset_name', ''),
-                'model_name': row.get('model_name', ''),
-                'attempt': row.get('attempt', 0),
-                'comparison_result': result,
-                'exception': exception,
-                'has_code': pd.notna(row.get('extracted_python_code')),
-                'has_gen_df_json': pd.notna(row.get('gen_df_json'))
-            }
+            # Return only the minimal data needed to reduce memory usage
+            return (result, exception)
         except Exception as e:
             logger.error(f"Error processing row {row.name}: {e}")
-            return {
-                'row_index': row.name,
-                'question': row.get('question', ''),
-                'db_name': row.get('db_name', ''),
-                'dataset_name': row.get('dataset_name', ''),
-                'model_name': row.get('model_name', ''),
-                'attempt': row.get('attempt', 0),
-                'comparison_result': 'Error',
-                'exception': str(e),
-                'has_code': pd.notna(row.get('extracted_python_code')),
-                'has_gen_df_json': pd.notna(row.get('gen_df_json'))
-            }
+            return ('Error', str(e))
     
     # Determine workers
     if num_threads is None or num_threads <= 0:
@@ -111,25 +90,22 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
 
     logger.info(f"Processing {len(df)} rows with {num_threads} threads ...")
 
-    rows_iterable = [row for _, row in df.iterrows()]
+    # Create a generator to avoid duplicating rows in memory
+    rows_iterable = (row for _, row in df.iterrows())
 
-    # Process rows in parallel with progress bar
+    # Process rows in parallel with progress bar, accumulating minimal results
+    comparison_results = []
+    exceptions = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        evaluation_results = list(
-            tqdm(
-                executor.map(process_single_row, rows_iterable),
-                total=len(rows_iterable),
-                desc="Evaluating",
-            )
-        )
-    
-    # Create evaluation DataFrame
-    eval_df = pd.DataFrame(evaluation_results)
+        results_iter = executor.map(process_single_row, rows_iterable)
+        for res, exc in tqdm(results_iter, total=len(df), desc="Evaluating"):
+            comparison_results.append(res)
+            exceptions.append(exc)
     
     # Merge with original data - OUTPUT 1: Identical CSV with extra column
     result_df = df.copy()
-    result_df['comparison_result'] = eval_df['comparison_result']
-    result_df['exception'] = eval_df['exception']
+    result_df['comparison_result'] = comparison_results
+    result_df['exception'] = exceptions
     
     # Create question summary - OUTPUT 2: Unique question IDs with has_match column
     question_summary_df = create_question_summary(result_df)
@@ -149,9 +125,14 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
         question_summary_df.to_csv(question_summary_file, index=False)
         logger.info(f"Saved question summary to: {question_summary_file}")
         
-        # Save detailed evaluation results
+        # Save detailed evaluation results (minimal to reduce disk/memory)
         eval_output_file = os.path.join(output_dir, f'evaluation_details_{timestamp}.csv')
-        eval_df.to_csv(eval_output_file, index=False)
+        evaluation_details_df = pd.DataFrame({
+            'row_index': result_df.index,
+            'comparison_result': comparison_results,
+            'exception': exceptions,
+        })
+        evaluation_details_df.to_csv(eval_output_file, index=False)
         logger.info(f"Saved evaluation details to: {eval_output_file}")
     
     return result_df, question_summary_df
