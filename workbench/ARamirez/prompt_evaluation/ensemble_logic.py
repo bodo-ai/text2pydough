@@ -1,0 +1,505 @@
+import os
+import json
+import random
+from datetime import datetime
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+
+# External dependencies used by selection/ensemble logic
+import gradio_agent_v2
+from test_data.eval import symetric_compare_df
+
+
+# === Global RNG (seeded) ===
+RNG_SEED = 12345
+rng = random.Random(RNG_SEED)
+
+
+def selection_random_tie_break(candidate_indices: List[int], question_idx: Union[int, str] = "?") -> Optional[int]:
+    """
+    Deterministically break ties among candidate indices using a seeded RNG.
+    Returns the chosen index from candidate_indices.
+    """
+    if not candidate_indices:
+        return None
+    chosen = rng.choice(candidate_indices)
+    print(f"[INFO] [Q{question_idx}] Tie-break among {len(candidate_indices)} candidates -> picked index {chosen}")
+    return chosen
+
+
+def favourite_based_selection(
+    all_runs: List[Dict[str, Any]],
+    question: str,
+    dataset_name: Optional[str],
+    db_name: Optional[str],
+    question_idx: Union[int, str] = "?",
+):
+    """
+    Selects the Gemini result if available (response not empty and df not None), otherwise Claude (same), otherwise Gradio agent.
+    Returns: response, duration, usage, model_name, gen_df_json, generated_sql
+    """
+    gemini_run = next((r for r in all_runs if r.get("model_name") == "gemini"), None)
+    claude_run = next((r for r in all_runs if r.get("model_name") == "claude"), None)
+
+    if gemini_run and gemini_run.get("response") and gemini_run.get("df") is not None:
+        print(f"[INFO] [Q{question_idx}] Early match found. Returning Gemini result.")
+        return (
+            gemini_run.get("response"),
+            gemini_run.get("duration"),
+            gemini_run.get("usage"),
+            gemini_run.get("model_name"),
+            gemini_run.get("gen_df_json"),
+            gemini_run.get("generated_sql"),
+        )
+
+    if claude_run and claude_run.get("response") and claude_run.get("df") is not None:
+        print(f"[INFO] [Q{question_idx}] Early match found. Returning Claude result.")
+        return (
+            claude_run.get("response"),
+            claude_run.get("duration"),
+            claude_run.get("usage"),
+            claude_run.get("model_name"),
+            claude_run.get("gen_df_json"),
+            claude_run.get("generated_sql"),
+        )
+
+    print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
+    response = gradio_agent_v2.process_question(
+        "http://10.128.0.5:2024/",
+        question,
+        dataset_name,
+        db_name,
+        None,
+        question_id=question_idx,
+        architecture="Multi-Agent Supervisor",
+    )
+    gradio_df = response.get("dataframe") if isinstance(response, dict) else None
+    if gradio_df is None:
+        print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
+        fallback = rng.choice(all_runs)
+        return (
+            fallback.get("response"),
+            fallback.get("duration"),
+            fallback.get("usage"),
+            fallback.get("model_name"),
+            fallback.get("gen_df_json"),
+            fallback.get("generated_sql"),
+        )
+
+    gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+    duration = claude_run.get("duration") if claude_run else None
+    usage = claude_run.get("usage") if claude_run else None
+    print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
+    return (response, duration, usage, "Gradio agent", gen_df_json, None)
+
+
+def frequency_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+):
+    consensus: Dict[int, int] = defaultdict(int)
+    response_matches: Dict[int, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    model_matches: Dict[str, int] = defaultdict(int)
+
+    for i in range(len(valid_runs)):
+        for j in range(i + 1, len(valid_runs)):
+            if symetric_compare_df(valid_runs[i]["df"], valid_runs[j]["df"], query_category="a", question=question):
+                consensus[i] += 1
+                consensus[j] += 1
+                model_i = valid_runs[i]["model_name"]
+                model_j = valid_runs[j]["model_name"]
+                model_matches[model_i] += 1
+                model_matches[model_j] += 1
+                response_matches[i][model_j] += 1
+                response_matches[j][model_i] += 1
+
+    if len(consensus) > 0:
+        max_votes = max(consensus.values())
+        tied_indices = [i for i, v in consensus.items() if v == max_votes]
+        best_index = tied_indices[0] if len(tied_indices) == 1 else selection_random_tie_break(tied_indices, question_idx)
+        best = valid_runs[best_index]
+        best_matches = response_matches[best_index]
+        best_model = best["model_name"]
+
+        match_breakdown = [f"{match_count} {model_name} matches" for model_name, match_count in model_matches.items()]
+        response_breakdown = [f"{match_count} {model_name} matches" for model_name, match_count in best_matches.items()]
+        consensus_details = " and ".join(match_breakdown)
+        response_details = " and ".join(response_breakdown)
+        print(
+            f"[INFO] [Q{question_idx}] Ensemble selected: {best_model} with {consensus[best_index]} matches. "
+            f"{response_details} for the chosen response. {consensus_details} globally. "
+        )
+        return (
+            best["response"],
+            best["duration"],
+            best["usage"],
+            best["model_name"],
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+
+    gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
+    if gemini_runs:
+        fallback = rng.choice(gemini_runs)
+        print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
+        return (
+            fallback["response"],
+            fallback["duration"],
+            fallback["usage"],
+            fallback["model_name"],
+            fallback.get("gen_df_json"),
+            fallback.get("generated_sql"),
+        )
+    else:
+        print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
+        fallback = rng.choice(valid_runs)
+        return (
+            fallback["response"],
+            fallback["duration"],
+            fallback["usage"],
+            fallback["model_name"],
+            fallback.get("gen_df_json"),
+            fallback.get("generated_sql"),
+        )
+
+
+def size_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+):
+    size_dict: Dict[int, int] = defaultdict(int)
+    for i in range(len(valid_runs)):
+        if "df" in valid_runs[i] and valid_runs[i]["df"] is not None:
+            size_dict[i] = valid_runs[i]["df"].size
+        else:
+            size_dict[i] = -1
+
+    if size_dict and max(size_dict.values()) > -1:
+        max_size = max(size_dict.values())
+        candidates = [i for i, s in size_dict.items() if s == max_size]
+        best_index = candidates[0] if len(candidates) == 1 else selection_random_tie_break(candidates, question_idx)
+        best = valid_runs[best_index]
+        print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
+        return (
+            best["response"],
+            best["duration"],
+            best["usage"],
+            best["model_name"],
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+    else:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
+        return (None, 0.0, None, None, None, None)
+
+
+def random_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+):
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in random_based_selection.")
+        return (None, 0.0, None, None, None, None)
+    chosen = rng.choice(valid_runs)
+    print(f"[INFO] [Q{question_idx}] Random-based selection: {chosen['model_name']}")
+    return (
+        chosen["response"],
+        chosen["duration"],
+        chosen["usage"],
+        chosen["model_name"],
+        chosen.get("gen_df_json"),
+        chosen.get("generated_sql"),
+    )
+
+
+def density_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+):
+    density_dict: Dict[int, float] = defaultdict(float)
+    for i in range(len(valid_runs)):
+        df_obj = valid_runs[i].get("df") if isinstance(valid_runs[i], dict) else None
+        if df_obj is not None:
+            try:
+                rows, cols = df_obj.shape
+                denom = rows * cols
+                if denom > 0:
+                    try:
+                        bytes_used = df_obj.memory_usage(deep=True).sum()
+                    except Exception:
+                        bytes_used = df_obj.memory_usage(deep=False).sum()
+                    density_value = float(bytes_used) / float(denom)
+                    density_dict[i] = density_value
+                else:
+                    density_dict[i] = -1.0
+            except Exception:
+                density_dict[i] = -1.0
+        else:
+            density_dict[i] = -1.0
+
+    if density_dict and max(density_dict.values()) > -1:
+        max_density = max(density_dict.values())
+        candidates = [i for i, d in density_dict.items() if d == max_density]
+        best_index = candidates[0] if len(candidates) == 1 else selection_random_tie_break(candidates, question_idx)
+        best = valid_runs[best_index]
+        print(
+            f"[INFO] [Q{question_idx}] Density-based selection: {best['model_name']} with density {density_dict[best_index]:.2f} bytes/cell."
+        )
+        return (
+            best["response"],
+            best["duration"],
+            best["usage"],
+            best["model_name"],
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+    else:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in density_based_selection.")
+        return (None, 0.0, None, None, None, None)
+
+
+def ensemble_result(
+    mlflow_run_id: Optional[str],
+    all_runs: List[Dict[str, Any]],
+    question: str,
+    dataset_name: Optional[str],
+    db_name: Optional[str],
+    question_idx: Union[int, str] = "?",
+    ensemble_selection_method: str = "size",
+    use_gradio_agent: bool = True,
+):
+    """
+    Uses dataframe comparison to select the most consistent output.
+    Returns one of the selection tuples, typically 6-tuple: (response, duration, usage, model_name, gen_df_json, generated_sql)
+    """
+    print(f"[INFO] [Q{question_idx}] Running ensemble selection with method '{ensemble_selection_method}'")
+    if ensemble_selection_method == "favourite":
+        dataset_name = all_runs[0].get("dataset_name") if all_runs and "dataset_name" in all_runs[0] else None
+        db_name = all_runs[0].get("db_name") if all_runs and "db_name" in all_runs[0] else None
+        print(f"[INFO] [Q{question_idx}] Favourite-based selection")
+        return favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx=question_idx)
+
+    valid_runs = [r for r in all_runs if r.get("df") is not None]
+    if not valid_runs:
+        if use_gradio_agent:
+            print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
+            print(f"Dataset name: {dataset_name}")
+            response = gradio_agent_v2.process_question(
+                "http://10.128.0.5:2024/",
+                question,
+                dataset_name,
+                db_name,
+                mlflow_run_id,
+                question_id=question_idx,
+                architecture="Multi-Agent Supervisor",
+            )
+            gradio_df = response.get("dataframe") if isinstance(response, dict) else None
+            if gradio_df is None:
+                print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
+                fallback_runs = [r for r in all_runs if r.get("response")]
+                fallback = rng.choice(fallback_runs) if fallback_runs else None
+                if fallback:
+                    return (
+                        fallback.get("response"),
+                        fallback.get("duration"),
+                        fallback.get("usage"),
+                        fallback.get("model_name"),
+                        fallback.get("gen_df_json"),
+                        fallback.get("generated_sql"),
+                    )
+                else:
+                    print(f"[ERROR] [Q{question_idx}] No valid fallback run found.")
+                    return (None, 0.0, None, None, None, None)
+
+            gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+            claude_run = next((r for r in all_runs if r.get("model_name") == "claude"), None)
+            duration = claude_run.get("duration") if claude_run else None
+            usage = claude_run.get("usage") if claude_run else None
+            print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
+            return (response, duration, usage, "Gradio agent", gen_df_json, None)
+        else:
+            print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
+            for r in all_runs:
+                if r.get("response"):
+                    print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
+                    return (r["response"], r.get("duration"), r.get("usage"), r.get("model_name"), None, None)
+            return (None, 0.0, None, None, None, None)
+
+    if ensemble_selection_method == "size":
+        print(f"[INFO] [Q{question_idx}] Size-based selection")
+        return size_based_selection(valid_runs, question, question_idx=question_idx)
+    elif ensemble_selection_method == "frequency":
+        print(f"[INFO] [Q{question_idx}] Frequency-based selection")
+        return frequency_based_selection(valid_runs, question, question_idx=question_idx)
+    elif ensemble_selection_method == "random":
+        print(f"[INFO] [Q{question_idx}] Random-based selection")
+        return random_based_selection(valid_runs, question, question_idx=question_idx)
+    elif ensemble_selection_method == "density":
+        print(f"[INFO] [Q{question_idx}] Density-based selection")
+        return density_based_selection(valid_runs, question, question_idx=question_idx)
+    else:
+        print(
+            f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
+        )
+        return size_based_selection(valid_runs, question, question_idx=question_idx)
+
+
+def _row_to_run_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert a row from an all_runs-style DataFrame into the internal run dict
+    expected by the ensemble selection functions.
+    """
+    df_obj = None
+    gen_df_json = row.get("gen_df_json", None)
+    if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0 and gen_df_json.strip().lower() != "nan":
+        try:
+            df_obj = pd.DataFrame(json.loads(gen_df_json))
+        except Exception:
+            try:
+                cleaned = gen_df_json.replace("\n", "").replace("\r", "")
+                df_obj = pd.DataFrame(json.loads(cleaned))
+            except Exception:
+                df_obj = None
+
+    return {
+        "question_index": row.get("question_index", row.get("question_id", "?")),
+        "question": row.get("question", None),
+        "model_name": row.get("model_name", None),
+        "attempt": row.get("attempt", 0),
+        "response": row.get("response", None),
+        "code": row.get("extracted_python_code", row.get("code", None)),
+        "duration": row.get("duration", row.get("execution_time", None)),
+        "usage": row.get("usage", None),
+        "df": df_obj,
+        "gen_df_json": gen_df_json if isinstance(gen_df_json, str) else None,
+        "sql": row.get("sql", ""),
+        "generated_sql": row.get("generated_sql", row.get("gen_sql", None)),
+        "dataset_name": row.get("dataset_name", None),
+        "db_name": row.get("db_name", None),
+    }
+
+
+def _normalize_ensemble_output(ret: Union[Dict[str, Any], List[Any], Tuple[Any, ...], Any]):
+    """
+    Normalize variable-length outputs from ensemble_result into a fixed 6-tuple:
+    (response, duration, usage, model_name, gen_df_json, generated_sql)
+    """
+    if isinstance(ret, dict):
+        return (
+            ret.get("response"),
+            ret.get("execution_time"),
+            ret.get("usage"),
+            ret.get("model_name"),
+            ret.get("gen_df_json"),
+            ret.get("gen_sql") if ret.get("gen_sql") is not None else ret.get("generated_sql"),
+        )
+    if isinstance(ret, (list, tuple)):
+        items: List[Any] = list(ret)
+        if len(items) < 6:
+            items += [None] * (6 - len(items))
+        return tuple(items[:6])
+    return (ret, None, None, None, None, None)
+
+
+def ensemble_from_all_runs_df(
+    all_runs_df: pd.DataFrame,
+    ensemble_selection_method: str = "size",
+    use_gradio_agent: bool = False,
+    mlflow_run_id: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Run ensemble selection per question group from an all_runs-style DataFrame.
+    Returns a DataFrame with one row per question group containing the chosen response and associated metadata.
+    """
+    candidate_keys = [
+        ["question", "dataset_name", "db_name", "question_index"],
+        ["question", "dataset_name", "db_name"],
+        ["question", "db_name"],
+        ["question"],
+    ]
+    group_keys = None
+    for keys in candidate_keys:
+        if all(k in all_runs_df.columns for k in keys):
+            group_keys = keys
+            break
+    if group_keys is None:
+        raise ValueError("all_runs DataFrame lacks required columns to group by question")
+
+    winners: List[Dict[str, Any]] = []
+    for group_values, group_df in all_runs_df.groupby(group_keys):
+        if not isinstance(group_values, tuple):
+            group_values = (group_values,)
+        group_dict = dict(zip(group_keys, group_values))
+        question = group_dict.get("question", None)
+        dataset_name = group_dict.get("dataset_name", None)
+        db_name = group_dict.get("db_name", None)
+        q_index = group_dict.get("question_index", "?")
+
+        runs = [_row_to_run_dict(row) for _, row in group_df.iterrows()]
+
+        _ret = ensemble_result(
+            mlflow_run_id,
+            runs,
+            question,
+            dataset_name,
+            db_name,
+            question_idx=q_index,
+            ensemble_selection_method=ensemble_selection_method,
+            use_gradio_agent=use_gradio_agent,
+        )
+        response, duration, usage, model_name, gen_df_json, generated_sql = _normalize_ensemble_output(_ret)
+
+        winners.append(
+            {
+                "question": question,
+                "dataset_name": dataset_name,
+                "db_name": db_name,
+                "question_index": q_index,
+                "sql": (group_df["sql"].iloc[0] if "sql" in group_df.columns else None),
+                "response": response,
+                "execution_time": duration,
+                "usage": usage,
+                "model_name": model_name,
+                "gen_df_json": gen_df_json,
+                "gen_sql": generated_sql,
+            }
+        )
+
+    return pd.DataFrame(winners)
+
+
+def ensemble_from_all_runs_file(
+    all_runs_path: str,
+    ensemble_selection_method: str = "size",
+    use_gradio_agent: bool = False,
+    output_dir: Optional[str] = None,
+    mlflow_run_id: Optional[str] = None,
+):
+    """
+    Convenience wrapper to run ensemble from an all_runs CSV file.
+    Returns winners_df and optionally writes a CSV to output_dir.
+    """
+    df = pd.read_csv(all_runs_path)
+    winners_df = ensemble_from_all_runs_df(
+        df,
+        ensemble_selection_method=ensemble_selection_method,
+        use_gradio_agent=use_gradio_agent,
+        mlflow_run_id=mlflow_run_id,
+    )
+
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(
+            output_dir, f"ensemble_from_all_runs_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+        )
+        winners_df.to_csv(output_file, index=False)
+        return winners_df, output_file
+    return winners_df, None
+
+

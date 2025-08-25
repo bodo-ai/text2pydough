@@ -9,9 +9,9 @@ python prompt_evaluation.py \
     --experiment_name "Ensemble" \
     --db-base-path "${DB_PATH}" \
     --metadata-base-path "${METADATA_PATH}" \
-    --pydough_file "data/pydough_files/cheatsheet_latest_v2.md" \
-    --prompt_file "data/prompts/prompt_overhaul.md" \
-    --questions "test_csv/complete_corrected_questions_7_4_gtj_with_id.csv" \
+    --pydough_file "data/8_1 files/cheatsheet_8_1.md" \
+    --prompt_file "data/8_1 files/prompt_8_1.md" \
+    --questions "data/8_1 files/complete_corrected_questions_8_1_gtj_with_id.csv" \
     --provider google \
     --model_id ensemble \
     --num_threads 1 \
