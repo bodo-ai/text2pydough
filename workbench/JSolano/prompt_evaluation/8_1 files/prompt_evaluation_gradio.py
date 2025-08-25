@@ -334,7 +334,7 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
 
 def prepare_eval_data(args):
     prompt = read_file(args.prompt_file)
-    script = read_file(args.pydough_file)
+    script = read_file(args.pydough_file) # script is the cheat sheet. 
     with open("./queries_context.json") as f:
         data = json.load(f)
     df = pd.read_csv(args.questions)
