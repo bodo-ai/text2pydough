@@ -474,7 +474,7 @@ Examples:
     parser.add_argument(
         '--ensemble-methods',
         nargs='*',
-        help='List of ensemble selection methods to run and summarize (e.g., size frequency density)'
+        help='List of ensemble selection methods to run and summarize (e.g., size frequency density or "size,frequency,density")'
     )
     
     args = parser.parse_args()
@@ -510,7 +510,38 @@ Examples:
 
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
-        methods_to_use = args.ensemble_methods if args.ensemble_methods and len(args.ensemble_methods) > 0 else [args.ensemble_selection_method]
+        def _normalize_methods(methods_raw):
+            allowed = ['size', 'frequency', 'random', 'density']
+            if not methods_raw:
+                return []
+            # Flatten and split on commas; lowercase and strip
+            tokens = []
+            for item in methods_raw:
+                if isinstance(item, str):
+                    parts = [p.strip().lower() for p in item.replace(';', ',').split(',') if p.strip()]
+                    if parts:
+                        tokens.extend(parts)
+                else:
+                    try:
+                        tokens.append(str(item).strip().lower())
+                    except Exception:
+                        pass
+            # Filter to allowed and de-duplicate preserving order
+            seen = set()
+            normalized = []
+            for t in tokens:
+                if t in allowed and t not in seen:
+                    seen.add(t)
+                    normalized.append(t)
+                elif t not in allowed:
+                    logger.warning(f"Skipping unknown ensemble method: {t}")
+            return normalized
+
+        methods_to_use = _normalize_methods(args.ensemble_methods) if args.ensemble_methods and len(args.ensemble_methods) > 0 else _normalize_methods([args.ensemble_selection_method])
+        if methods_to_use:
+            logger.info(f"Ensemble methods selected: {methods_to_use}")
+        else:
+            logger.info("No valid ensemble methods provided; skipping ensemble comparison.")
 
         ensemble_method_results = None
         if methods_to_use and len(methods_to_use) > 0:
@@ -528,9 +559,6 @@ Examples:
 
                 ensemble_method_results = {}
                 for method in methods_to_use:
-                    if method not in ['size', 'frequency', 'random', 'density']:
-                        logger.warning(f"Skipping unknown ensemble method: {method}")
-                        continue
                     try:
                         winners_df = ensemble_from_all_runs_df(
                             all_runs_df,
