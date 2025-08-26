@@ -281,14 +281,7 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
             candidates = [i for i, v in consensus.items() if v == max_votes]
         elif selection_method == 'random':
             candidates = valid_indices.copy()
-        elif selection_method == 'favourite':
-            # Gemini preferred if valid, else Claude if valid; no tie-break used
-            gemini_idx = next((i for i in valid_indices if str(runs[i]['model_name']).lower() == 'gemini'), None)
-            if gemini_idx is not None:
-                candidates = [gemini_idx]
-            else:
-                claude_idx = next((i for i in valid_indices if str(runs[i]['model_name']).lower() == 'claude'), None)
-                candidates = [claude_idx] if claude_idx is not None else []
+        
         else:
             # Default to size
             sizes = {}
@@ -474,7 +467,7 @@ Examples:
     )
     parser.add_argument(
         '--ensemble-selection-method',
-        choices=['size', 'favourite', 'frequency', 'random', 'density'],
+        choices=['size', 'frequency', 'random', 'density'],
         default='size',
         help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
     )
@@ -535,7 +528,7 @@ Examples:
 
                 ensemble_method_results = {}
                 for method in methods_to_use:
-                    if method not in ['size', 'favourite', 'frequency', 'random', 'density']:
+                    if method not in ['size', 'frequency', 'random', 'density']:
                         logger.warning(f"Skipping unknown ensemble method: {method}")
                         continue
                     try:
