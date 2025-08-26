@@ -460,19 +460,19 @@ Examples:
     )
 
     parser.add_argument(
-        '--num-threads',
+        '--num-threads', '--num_threads',
         type=int,
         default=None,
         help='Number of worker threads to use for parallel evaluation (default: CPU count)'
     )
     parser.add_argument(
-        '--ensemble-selection-method',
+        '--ensemble-selection-method', '--ensemble_selection_method',
         choices=['size', 'frequency', 'random', 'density'],
         default='size',
         help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
     )
     parser.add_argument(
-        '--ensemble-methods',
+        '--ensemble-methods', '--ensemble_methods',
         nargs='*',
         help='List of ensemble selection methods to run and summarize (e.g., size frequency density or "size,frequency,density")'
     )
