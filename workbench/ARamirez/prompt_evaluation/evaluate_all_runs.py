@@ -27,7 +27,8 @@ except ImportError:
 
 # Add the current directory to the path to import test_data.eval
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from test_data.eval import process_row, compare_output
+from test_data.eval import process_row, compare_output, symetric_compare_df
+from ensemble_logic import selection_random_tie_break, ensemble_from_all_runs_df
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -166,7 +167,173 @@ def create_question_summary(df):
     
     return question_summary
 
-def print_summary(result_df, question_summary_df):
+def _parse_df_from_json(gen_df_json):
+    """Parse a pandas DataFrame from a gen_df_json string; return None on failure."""
+    if not isinstance(gen_df_json, str) or gen_df_json.strip().lower() in ('', 'nan', 'none'):
+        return None
+    try:
+        data = json.loads(gen_df_json)
+        if isinstance(data, list):
+            return pd.DataFrame(data)
+        if isinstance(data, dict):
+            return pd.DataFrame([data])
+        return None
+    except Exception:
+        try:
+            cleaned = gen_df_json.replace('\n', '').replace('\r', '')
+            data = json.loads(cleaned)
+            if isinstance(data, list):
+                return pd.DataFrame(data)
+            if isinstance(data, dict):
+                return pd.DataFrame([data])
+            return None
+        except Exception:
+            return None
+
+
+def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
+    """
+    Compute tie-break and finalist statistics using ensemble logic criteria.
+    Returns a dict with keys: total_questions, tie_questions, single_finalist_questions,
+    single_match_count, tie_match_count.
+    """
+    tmp_df = result_df.copy()
+    tmp_df['question_id'] = tmp_df['question'].astype(str) + '_' + tmp_df['db_name'].astype(str) + '_' + tmp_df['dataset_name'].astype(str)
+
+    rng_local = random.Random(12345)
+
+    total_questions = tmp_df['question_id'].nunique()
+    tie_questions = 0
+    single_finalist_questions = 0
+    single_match_count = 0
+    tie_match_count = 0
+
+    for qid, group in tmp_df.groupby('question_id'):
+        # Build runs with parsed DataFrames and keep mapping to original row index
+        runs = []
+        for idx, row in group.iterrows():
+            df_obj = _parse_df_from_json(row.get('gen_df_json'))
+            runs.append({
+                'row_index': idx,
+                'df': df_obj,
+                'model_name': row.get('model_name'),
+            })
+
+        valid_indices = [i for i, r in enumerate(runs) if r['df'] is not None]
+        if not valid_indices:
+            continue
+
+        candidates = []
+        # Determine finalists by selection method
+        if selection_method == 'size':
+            sizes = {}
+            for i in valid_indices:
+                try:
+                    sizes[i] = runs[i]['df'].size
+                except Exception:
+                    sizes[i] = -1
+            if not sizes:
+                continue
+            max_size = max(sizes.values())
+            if max_size <= -1:
+                continue
+            candidates = [i for i, s in sizes.items() if s == max_size]
+        elif selection_method == 'density':
+            densities = {}
+            for i in valid_indices:
+                try:
+                    df_obj = runs[i]['df']
+                    rows, cols = df_obj.shape
+                    denom = rows * cols
+                    if denom <= 0:
+                        densities[i] = -1.0
+                    else:
+                        try:
+                            bytes_used = df_obj.memory_usage(deep=True).sum()
+                        except Exception:
+                            bytes_used = df_obj.memory_usage(deep=False).sum()
+                        densities[i] = float(bytes_used) / float(denom)
+                except Exception:
+                    densities[i] = -1.0
+            if not densities:
+                continue
+            max_density = max(densities.values())
+            if max_density <= -1:
+                continue
+            candidates = [i for i, d in densities.items() if d == max_density]
+        elif selection_method == 'frequency':
+            consensus = {i: 0 for i in valid_indices}
+            for i in range(len(runs)):
+                if i not in valid_indices:
+                    continue
+                for j in range(i + 1, len(runs)):
+                    if j not in valid_indices:
+                        continue
+                    try:
+                        if symetric_compare_df(runs[i]['df'], runs[j]['df'], query_category='a', question=group.iloc[0]['question']):
+                            consensus[i] += 1
+                            consensus[j] += 1
+                    except Exception:
+                        pass
+            if len(consensus) == 0:
+                continue
+            max_votes = max(consensus.values())
+            candidates = [i for i, v in consensus.items() if v == max_votes]
+        elif selection_method == 'random':
+            candidates = valid_indices.copy()
+        elif selection_method == 'favourite':
+            # Gemini preferred if valid, else Claude if valid; no tie-break used
+            gemini_idx = next((i for i in valid_indices if str(runs[i]['model_name']).lower() == 'gemini'), None)
+            if gemini_idx is not None:
+                candidates = [gemini_idx]
+            else:
+                claude_idx = next((i for i in valid_indices if str(runs[i]['model_name']).lower() == 'claude'), None)
+                candidates = [claude_idx] if claude_idx is not None else []
+        else:
+            # Default to size
+            sizes = {}
+            for i in valid_indices:
+                try:
+                    sizes[i] = runs[i]['df'].size
+                except Exception:
+                    sizes[i] = -1
+            if not sizes:
+                continue
+            max_size = max(sizes.values())
+            if max_size <= -1:
+                continue
+            candidates = [i for i, s in sizes.items() if s == max_size]
+
+        if not candidates:
+            continue
+
+        if len(candidates) == 1:
+            single_finalist_questions += 1
+            winner_i = candidates[0]
+            winner_row_idx = runs[winner_i]['row_index']
+            if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
+                single_match_count += 1
+        else:
+            tie_questions += 1
+            # Use ensemble logic tie-break helper (seeded RNG)
+            winner_i = selection_random_tie_break(candidates, question_idx='?')
+            # Fallback to local RNG if helper returns None
+            if winner_i is None:
+                winner_i = rng_local.choice(candidates)
+            winner_row_idx = runs[winner_i]['row_index']
+            if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
+                tie_match_count += 1
+
+    return {
+        'total_questions': total_questions,
+        'tie_questions': tie_questions,
+        'single_finalist_questions': single_finalist_questions,
+        'single_match_count': single_match_count,
+        'tie_match_count': tie_match_count,
+    }
+
+
+def print_summary(result_df, question_summary_df, ensemble_method_results: dict = None, tie_break_stats_per_method: dict = None):
     """
     Print a formatted summary of the evaluation results.
     
@@ -223,83 +390,38 @@ def print_summary(result_df, question_summary_df):
                     percentage = (count / db_total * 100) if db_total > 0 else 0
                     print(f"    {result_type}: {count} ({percentage:.1f}%)")
     
-    # Ensemble tie-break and finalist statistics (size-based selection)
-    try:
-        rng = random.Random(12345)
+    # Ensemble tie-break and finalist statistics per method (if provided)
+    if tie_break_stats_per_method:
+        try:
+            print(f"\nENSEMBLE TIE-BREAK STATS PER METHOD:")
+            for method, stats in tie_break_stats_per_method.items():
+                total_questions = stats.get('total_questions', 0)
+                tie_questions = stats.get('tie_questions', 0)
+                single_finalist_questions = stats.get('single_finalist_questions', 0)
+                single_match_count = stats.get('single_match_count', 0)
+                tie_match_count = stats.get('tie_match_count', 0)
 
-        # Compute a question_id locally (same scheme as create_question_summary)
-        tmp_df = result_df.copy()
-        tmp_df['question_id'] = tmp_df['question'].astype(str) + '_' + tmp_df['db_name'].astype(str) + '_' + tmp_df['dataset_name'].astype(str)
+                tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
+                single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
+                tie_match_pct = (tie_match_count / tie_questions * 100) if tie_questions > 0 else 0.0
 
-        def df_size_from_json(gen_df_json):
-            if not isinstance(gen_df_json, str) or gen_df_json.strip().lower() in ('', 'nan', 'none'):
-                return -1
-            try:
-                # Faster than constructing full pandas objects for size
-                data = json.loads(gen_df_json)
-                if isinstance(data, list) and data:
-                    # Assume uniform keys across rows
-                    num_rows = len(data)
-                    num_cols = len(data[0]) if isinstance(data[0], dict) else 0
-                    return num_rows * num_cols
-                if isinstance(data, list):
-                    return 0
-                if isinstance(data, dict):
-                    # Single object; treat as one row
-                    return len(data)
-                return -1
-            except Exception:
-                # Fallback: attempt cleaning for common escape/newline issues
-                try:
-                    cleaned = gen_df_json.replace('\n', '').replace('\r', '')
-                    data = json.loads(cleaned)
-                    if isinstance(data, list) and data:
-                        return len(data) * (len(data[0]) if isinstance(data[0], dict) else 0)
-                    if isinstance(data, dict):
-                        return len(data)
-                    return -1
-                except Exception:
-                    return -1
+                print(f"  {method}:")
+                print(f"    Questions with multiple finalists (tie): {tie_questions}/{total_questions} ({tie_percent:.1f}%)")
+                print(f"    Match rate where only one finalist: {single_match_count}/{single_finalist_questions} ({single_match_pct:.1f}%)")
+                print(f"    Match rate where multiple finalists (random tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
+        except Exception as e:
+            print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
 
-        total_questions = tmp_df['question_id'].nunique()
-        tie_questions = 0
-        single_finalist_questions = 0
-        single_match_count = 0
-        tie_match_count = 0
-
-        for qid, group in tmp_df.groupby('question_id'):
-            # Build sizes per row
-            sizes = {}
-            for idx, row in group.iterrows():
-                sizes[idx] = df_size_from_json(row.get('gen_df_json', None))
-            if not sizes:
-                continue
-            max_size = max(sizes.values()) if sizes else -1
-            if max_size <= -1:
-                # No valid finalists for this question
-                continue
-            candidates = [idx for idx, s in sizes.items() if s == max_size]
-            if len(candidates) == 1:
-                single_finalist_questions += 1
-                winner_idx = candidates[0]
-                if str(group.loc[winner_idx, 'comparison_result']).strip() == 'Match':
-                    single_match_count += 1
-            elif len(candidates) > 1:
-                tie_questions += 1
-                winner_idx = rng.choice(candidates)
-                if str(group.loc[winner_idx, 'comparison_result']).strip() == 'Match':
-                    tie_match_count += 1
-
-        tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
-        single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
-        tie_match_pct = (tie_match_count / tie_questions * 100) if tie_questions > 0 else 0.0
-
-        print(f"\nENSEMBLE (size-based) TIE-BREAK STATS:")
-        print(f"  Questions with multiple finalists (tie): {tie_questions}/{total_questions} ({tie_percent:.1f}%)")
-        print(f"  Match rate where only one finalist: {single_match_count}/{single_finalist_questions} ({single_match_pct:.1f}%)")
-        print(f"  Match rate where multiple finalists (random tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
-    except Exception as e:
-        print(f"\n[WARNING] Failed to compute ensemble tie-break statistics: {e}")
+    # Per-method ensemble match percentages if provided
+    if ensemble_method_results:
+        try:
+            print(f"\nENSEMBLE METHOD COMPARISON (Match/No Match %):")
+            for method, metrics in ensemble_method_results.items():
+                match_pct = metrics.get('Match', 0.0)
+                no_match_pct = metrics.get('No Match', 0.0)
+                print(f"  {method}: Match {match_pct:.1f}% | No Match {no_match_pct:.1f}%")
+        except Exception as e:
+            print(f"\n[WARNING] Failed to print ensemble method comparison: {e}")
 
     print("\n" + "="*80)
 
@@ -350,6 +472,17 @@ Examples:
         default=None,
         help='Number of worker threads to use for parallel evaluation (default: CPU count)'
     )
+    parser.add_argument(
+        '--ensemble-selection-method',
+        choices=['size', 'favourite', 'frequency', 'random', 'density'],
+        default='size',
+        help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
+    )
+    parser.add_argument(
+        '--ensemble-methods',
+        nargs='*',
+        help='List of ensemble selection methods to run and summarize (e.g., size frequency density)'
+    )
     
     args = parser.parse_args()
     
@@ -381,9 +514,82 @@ Examples:
             args.output_dir,
             num_threads=args.num_threads
         )
-        
+
+        # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
+        # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
+        methods_to_use = args.ensemble_methods if args.ensemble_methods and len(args.ensemble_methods) > 0 else [args.ensemble_selection_method]
+
+        ensemble_method_results = None
+        if methods_to_use and len(methods_to_use) > 0:
+            # Prepare winners per method using all_runs DataFrame
+            try:
+                all_runs_df = pd.read_csv(args.all_runs)
+            except Exception as e:
+                logger.error(f"Failed to reload all_runs file for ensemble methods: {e}")
+                all_runs_df = None
+
+            if all_runs_df is not None:
+                # Ensure extracted code is present if needed downstream
+                if 'extracted_python_code' not in all_runs_df.columns and 'code' in all_runs_df.columns:
+                    all_runs_df['extracted_python_code'] = all_runs_df['code']
+
+                ensemble_method_results = {}
+                for method in methods_to_use:
+                    if method not in ['size', 'favourite', 'frequency', 'random', 'density']:
+                        logger.warning(f"Skipping unknown ensemble method: {method}")
+                        continue
+                    try:
+                        winners_df = ensemble_from_all_runs_df(
+                            all_runs_df,
+                            ensemble_selection_method=method,
+                            use_gradio_agent=False,
+                            mlflow_run_id=None,
+                        )
+                        # Evaluate winners_df similarly to compare_output's per-row logic
+                        # Build a minimal df with columns expected by process_row
+                        winners_eval_df = winners_df.copy()
+                        if 'extracted_python_code' not in winners_eval_df.columns:
+                            winners_eval_df['extracted_python_code'] = winners_eval_df.get('response')
+
+                        # Process each winner row
+                        match_count = 0
+                        no_match_count = 0
+                        total_rows = len(winners_eval_df)
+                        for _, row in winners_eval_df.iterrows():
+                            try:
+                                res, exc = process_row(row, args.db_base_path, args.metadata_base_path)
+                            except Exception:
+                                res = 'Error'
+                            if str(res).strip() == 'Match':
+                                match_count += 1
+                            elif str(res).strip() == 'No Match':
+                                no_match_count += 1
+
+                        match_pct = (match_count / total_rows * 100.0) if total_rows > 0 else 0.0
+                        no_match_pct = (no_match_count / total_rows * 100.0) if total_rows > 0 else 0.0
+                        ensemble_method_results[method] = {
+                            'Match': match_pct,
+                            'No Match': no_match_pct,
+                            'total': total_rows,
+                        }
+                    except Exception as e:
+                        logger.warning(f"Failed computing ensemble winners for method {method}: {e}")
+
+        # Compute tie-break/finalist stats per method using the same list
+        tie_break_stats_per_method = {}
+        for method in methods_to_use:
+            try:
+                tie_break_stats_per_method[method] = _compute_ensemble_stats(result_df, method)
+            except Exception as e:
+                logger.warning(f"Failed computing tie-break stats for method {method}: {e}")
+
         # Print summary
-        print_summary(result_df, question_summary_df)
+        print_summary(
+            result_df,
+            question_summary_df,
+            ensemble_method_results=ensemble_method_results,
+            tie_break_stats_per_method=tie_break_stats_per_method,
+        )
         
         logger.info("Evaluation completed successfully!")
         
