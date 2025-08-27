@@ -303,6 +303,13 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
             for i in valid_indices:
                 try:
                     df_obj = runs[i]['df']
+                    # Ensure df_obj is a pandas DataFrame before processing
+                    if not isinstance(df_obj, pd.DataFrame):
+                        try:
+                            df_obj = pd.DataFrame(df_obj)
+                        except Exception:
+                            densities[i] = -1.0
+                            continue
                     rows, cols = df_obj.shape
                     denom = rows * cols
                     if denom <= 0:
@@ -497,14 +504,22 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
         except Exception as e:
             print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
 
-    # Per-method ensemble match percentages if provided
+    # Per-method ensemble results using ALL QUESTIONS as denominator (if provided)
     if ensemble_method_results:
         try:
-            print(f"\nENSEMBLE METHOD COMPARISON (Match/No Match %):")
+            print(f"\nENSEMBLE METHOD RESULTS (All questions as denominator):")
             for method, metrics in ensemble_method_results.items():
-                match_pct = metrics.get('Match', 0.0)
-                no_match_pct = metrics.get('No Match', 0.0)
-                print(f"  {method}: Match {match_pct:.1f}% | No Match {no_match_pct:.1f}%")
+                total_q = metrics.get('total_questions', 0)
+                m_cnt = metrics.get('match_count', 0)
+                nm_cnt = metrics.get('no_match_count', 0)
+                qe_cnt = metrics.get('query_error_count', 0)
+                m_pct = metrics.get('match_pct_all', 0.0)
+                nm_pct = metrics.get('no_match_pct_all', 0.0)
+                qe_pct = metrics.get('query_error_pct_all', 0.0)
+                print(f"  {method}:")
+                print(f"    Match: {m_cnt}/{total_q} ({m_pct:.1f}%)")
+                print(f"    No Match: {nm_cnt}/{total_q} ({nm_pct:.1f}%)")
+                print(f"    Query Error: {qe_cnt}/{total_q} ({qe_pct:.1f}%)")
         except Exception as e:
             print(f"\n[WARNING] Failed to print ensemble method comparison: {e}")
 
@@ -683,25 +698,38 @@ Examples:
                             winners_eval_df['extracted_python_code'] = winners_eval_df.get('response')
 
                         # Process each winner row
+                        total_questions = len(question_summary_df)
                         match_count = 0
                         no_match_count = 0
+                        qe_count_measured = 0
                         total_rows = len(winners_eval_df)
                         for _, row in winners_eval_df.iterrows():
                             try:
                                 res, exc = process_row(row, args.db_base_path, args.metadata_base_path)
                             except Exception:
                                 res = 'Error'
-                            if str(res).strip() == 'Match':
+                            outcome = str(res).strip()
+                            if outcome == 'Match':
                                 match_count += 1
-                            elif str(res).strip() == 'No Match':
+                            elif outcome == 'No Match':
                                 no_match_count += 1
+                            else:
+                                qe_count_measured += 1
 
-                        match_pct = (match_count / total_rows * 100.0) if total_rows > 0 else 0.0
-                        no_match_pct = (no_match_count / total_rows * 100.0) if total_rows > 0 else 0.0
+                        # Treat any missing winners as Query Error to keep denominator as all questions
+                        missing_questions = max(0, total_questions - total_rows)
+                        query_error_count = qe_count_measured + missing_questions
+                        match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                        no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                        query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
                         ensemble_method_results[method] = {
-                            'Match': match_pct,
-                            'No Match': no_match_pct,
-                            'total': total_rows,
+                            'match_count': match_count,
+                            'no_match_count': no_match_count,
+                            'query_error_count': query_error_count,
+                            'total_questions': total_questions,
+                            'match_pct_all': match_pct_all,
+                            'no_match_pct_all': no_match_pct_all,
+                            'query_error_pct_all': query_error_pct_all,
                         }
                     except Exception as e:
                         logger.warning(f"Failed computing ensemble winners for method {method}: {e}")
