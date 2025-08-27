@@ -413,7 +413,7 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
     }
 
 
-def print_summary(result_df, question_summary_df, ensemble_method_results: dict = None, tie_break_stats_per_method: dict = None):
+def print_summary(result_df, question_summary_df, ensemble_method_results: dict = None, tie_break_stats_per_method: dict = None, final_winner_results_per_method: dict = None):
     """
     Print a formatted summary of the evaluation results.
     
@@ -488,21 +488,31 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
                 tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
                 single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
                 tie_match_pct = (tie_match_count / tie_questions * 100) if tie_questions > 0 else 0.0
-                # Winner outcome rates
-                winner_match_pct = (winner_match_count / considered_questions * 100) if considered_questions > 0 else 0.0
-                winner_nomatch_pct = (winner_no_match_count / considered_questions * 100) if considered_questions > 0 else 0.0
-                winner_qerr_pct = (winner_query_error_count / considered_questions * 100) if considered_questions > 0 else 0.0
-
                 print(f"  {method}:")
                 print(f"    Questions with multiple finalists (tie): {tie_questions}/{total_questions} ({tie_percent:.1f}%)")
                 print(f"    Match rate where only one finalist: {single_match_count}/{single_finalist_questions} ({single_match_pct:.1f}%)")
                 print(f"    Match rate where multiple finalists (random tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
-                print(f"    Winner outcome rates across questions considered:")
-                print(f"      Match: {winner_match_count}/{considered_questions} ({winner_match_pct:.1f}%)")
-                print(f"      No Match: {winner_no_match_count}/{considered_questions} ({winner_nomatch_pct:.1f}%)")
-                print(f"      Query Error: {winner_query_error_count}/{considered_questions} ({winner_qerr_pct:.1f}%)")
         except Exception as e:
             print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
+
+    # Final ensemble per-method results using winners' eval_result across all questions
+    if final_winner_results_per_method:
+        try:
+            print(f"\nFINAL ENSEMBLE PER-METHOD RESULTS:")
+            for method, metrics in final_winner_results_per_method.items():
+                total_q = metrics.get('total_questions', 0)
+                m_cnt = metrics.get('winner_match_count', 0)
+                nm_cnt = metrics.get('winner_no_match_count', 0)
+                qe_cnt = metrics.get('winner_query_error_count_adjusted', 0)
+                m_pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                nm_pct = (nm_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                qe_pct = (qe_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                print(f"  {method}:")
+                print(f"    Match: {m_cnt}/{total_q} ({m_pct:.1f}%)")
+                print(f"    No Match: {nm_cnt}/{total_q} ({nm_pct:.1f}%)")
+                print(f"    Query Error: {qe_cnt}/{total_q} ({qe_pct:.1f}%)")
+        except Exception as e:
+            print(f"\n[WARNING] Failed to print final ensemble per-method results: {e}")
 
     # Per-method ensemble results using ALL QUESTIONS as denominator (if provided)
     if ensemble_method_results:
@@ -742,12 +752,34 @@ Examples:
             except Exception as e:
                 logger.warning(f"Failed computing tie-break stats for method {method}: {e}")
 
+        # Build final per-method winner outcome results using tie_break_stats (winners across questions considered)
+        final_winner_results_per_method = {}
+        try:
+            for method, stats in tie_break_stats_per_method.items():
+                total_questions = stats.get('total_questions', 0)
+                considered_questions = stats.get('considered_questions', 0)
+                w_match = stats.get('winner_match_count', 0)
+                w_nomatch = stats.get('winner_no_match_count', 0)
+                w_qerr = stats.get('winner_query_error_count', 0)
+                # Adjust query error count to reflect all questions as denominator
+                missing = max(0, total_questions - considered_questions)
+                w_qerr_adjusted = w_qerr + missing
+                final_winner_results_per_method[method] = {
+                    'total_questions': total_questions,
+                    'winner_match_count': w_match,
+                    'winner_no_match_count': w_nomatch,
+                    'winner_query_error_count_adjusted': w_qerr_adjusted,
+                }
+        except Exception as e:
+            logger.warning(f"Failed building final per-method winner results: {e}")
+
         # Print summary
         print_summary(
             result_df,
             question_summary_df,
             ensemble_method_results=ensemble_method_results,
             tie_break_stats_per_method=tie_break_stats_per_method,
+            final_winner_results_per_method=final_winner_results_per_method,
         )
         
         logger.info("Evaluation completed successfully!")
