@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import json
 import random
+try:
+    import mlflow
+except Exception:
+    mlflow = None
 # Progress bar
 try:
     from tqdm import tqdm
@@ -537,6 +541,89 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
 
     print("\n" + "="*80)
 
+def _log_mlflow_stats(args,
+                      result_df: pd.DataFrame,
+                      question_summary_df: pd.DataFrame,
+                      tie_break_stats_per_method: dict = None,
+                      final_winner_results_per_method: dict = None):
+    """Log Overall, Question-level, Tie-break and Final ensemble results into MLflow."""
+    if getattr(args, 'disable_mlflow', False):
+        return
+    if mlflow is None:
+        logger.warning("MLflow not available; skipping MLflow logging.")
+        return
+
+    try:
+        # Optional setup
+        if getattr(args, 'mlflow_uri', None):
+            mlflow.set_tracking_uri(args.mlflow_uri)
+        if getattr(args, 'mlflow_experiment', None):
+            mlflow.set_experiment(args.mlflow_experiment)
+
+        started_here = False
+        if mlflow.active_run() is None:
+            run_name = getattr(args, 'mlflow_run_name', None) or 'evaluate_all_runs'
+            mlflow.start_run(run_name=run_name)
+            started_here = True
+
+        # Overall results
+        total_runs = len(result_df)
+        comparison_counts = result_df['comparison_result'].value_counts()
+        total_percentages = (comparison_counts / total_runs * 100).round(2)
+        mlflow.log_metric('overall_total_runs', int(total_runs))
+        for result_type, count in comparison_counts.items():
+            mlflow.log_metric(f'overall_count_{str(result_type).replace(" ", "_")}', int(count))
+            pct_val = float(total_percentages[result_type]) if result_type in total_percentages else 0.0
+            mlflow.log_metric(f'overall_pct_{str(result_type).replace(" ", "_")}', pct_val)
+
+        # Question-level results
+        total_questions = len(question_summary_df)
+        questions_with_match = int(question_summary_df['has_match'].sum())
+        questions_without_match = int(total_questions - questions_with_match)
+        pct_with_match = (questions_with_match / total_questions * 100.0) if total_questions > 0 else 0.0
+        pct_without_match = (questions_without_match / total_questions * 100.0) if total_questions > 0 else 0.0
+        mlflow.log_metric('questions_total', int(total_questions))
+        mlflow.log_metric('questions_with_match', int(questions_with_match))
+        mlflow.log_metric('questions_without_match', int(questions_without_match))
+        mlflow.log_metric('questions_with_match_pct', float(pct_with_match))
+        mlflow.log_metric('questions_without_match_pct', float(pct_without_match))
+
+        # Tie-break stats per-method
+        if tie_break_stats_per_method:
+            for key, stats in tie_break_stats_per_method.items():
+                prefix = f'tb__{key}'.replace(' ', '_')
+                for metric_name in [
+                    'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
+                    'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
+                    'winner_query_error_count']:
+                    value = stats.get(metric_name)
+                    if value is not None:
+                        mlflow.log_metric(f'{prefix}__{metric_name}', float(value))
+
+        # Final ensemble per-method results
+        if final_winner_results_per_method:
+            for key, metrics in final_winner_results_per_method.items():
+                prefix = f'final__{key}'.replace(' ', '_')
+                total_q = int(metrics.get('total_questions', 0))
+                m_cnt = int(metrics.get('winner_match_count', 0))
+                nm_cnt = int(metrics.get('winner_no_match_count', 0))
+                qe_cnt = int(metrics.get('winner_query_error_count_adjusted', 0))
+                m_pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                nm_pct = (nm_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                qe_pct = (qe_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                mlflow.log_metric(f'{prefix}__total_questions', total_q)
+                mlflow.log_metric(f'{prefix}__winner_match_count', m_cnt)
+                mlflow.log_metric(f'{prefix}__winner_no_match_count', nm_cnt)
+                mlflow.log_metric(f'{prefix}__winner_query_error_count', qe_cnt)
+                mlflow.log_metric(f'{prefix}__winner_match_pct', float(m_pct))
+                mlflow.log_metric(f'{prefix}__winner_no_match_pct', float(nm_pct))
+                mlflow.log_metric(f'{prefix}__winner_query_error_pct', float(qe_pct))
+
+        if started_here:
+            mlflow.end_run()
+    except Exception as e:
+        logger.warning(f"Failed to log MLflow metrics: {e}")
+
 def main():
     """Main function to run the evaluation script."""
     parser = argparse.ArgumentParser(
@@ -609,6 +696,25 @@ Examples:
         '--eval-column', '--eval_column',
         default='eval_result',
         help='Name of the column to use when --use-eval-result-only is enabled (default: eval_result)'
+    )
+
+    # MLflow options
+    parser.add_argument(
+        '--mlflow-uri', '--mlflow_uri',
+        help='Override MLflow tracking URI (e.g., file:./mlruns)'
+    )
+    parser.add_argument(
+        '--mlflow-experiment', '--mlflow_experiment',
+        help='MLflow experiment name to log metrics under'
+    )
+    parser.add_argument(
+        '--mlflow-run-name', '--mlflow_run_name',
+        help='MLflow run name to use when starting a run'
+    )
+    parser.add_argument(
+        '--disable-mlflow', '--disable_mlflow',
+        action='store_true',
+        help='Skip MLflow logging'
     )
     
     args = parser.parse_args()
@@ -813,6 +919,15 @@ Examples:
             result_df,
             question_summary_df,
             ensemble_method_results=ensemble_method_results,
+            tie_break_stats_per_method=tie_break_stats_per_method,
+            final_winner_results_per_method=final_winner_results_per_method,
+        )
+
+        # Log stats to MLflow
+        _log_mlflow_stats(
+            args,
+            result_df,
+            question_summary_df,
             tie_break_stats_per_method=tie_break_stats_per_method,
             final_winner_results_per_method=final_winner_results_per_method,
         )
