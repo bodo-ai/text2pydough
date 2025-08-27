@@ -262,6 +262,12 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
     single_match_count = 0
     tie_match_count = 0
 
+    # Track overall selected-winner outcomes per method
+    considered_questions = 0  # questions where at least one candidate existed
+    winner_match_count = 0
+    winner_no_match_count = 0
+    winner_query_error_count = 0
+
     for qid, group in tmp_df.groupby('question_id'):
         # Build runs with parsed DataFrames and keep mapping to original row index
         runs = []
@@ -371,12 +377,32 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
             if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
                 tie_match_count += 1
 
+        # Count winner outcome categories
+        try:
+            considered_questions += 1
+            outcome = str(group.loc[winner_row_idx, 'comparison_result']).strip()
+            if outcome == 'Match':
+                winner_match_count += 1
+            elif outcome == 'No Match':
+                winner_no_match_count += 1
+            else:
+                # Treat any other status as Query Error (includes 'Query Error', 'SQL error', 'Unknown')
+                winner_query_error_count += 1
+        except Exception:
+            # If any lookup fails, count as query error for robustness
+            considered_questions += 1
+            winner_query_error_count += 1
+
     return {
         'total_questions': total_questions,
         'tie_questions': tie_questions,
         'single_finalist_questions': single_finalist_questions,
         'single_match_count': single_match_count,
         'tie_match_count': tie_match_count,
+        'considered_questions': considered_questions,
+        'winner_match_count': winner_match_count,
+        'winner_no_match_count': winner_no_match_count,
+        'winner_query_error_count': winner_query_error_count,
     }
 
 
@@ -447,15 +473,27 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
                 single_finalist_questions = stats.get('single_finalist_questions', 0)
                 single_match_count = stats.get('single_match_count', 0)
                 tie_match_count = stats.get('tie_match_count', 0)
+                considered_questions = stats.get('considered_questions', 0)
+                winner_match_count = stats.get('winner_match_count', 0)
+                winner_no_match_count = stats.get('winner_no_match_count', 0)
+                winner_query_error_count = stats.get('winner_query_error_count', 0)
 
                 tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
                 single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
                 tie_match_pct = (tie_match_count / tie_questions * 100) if tie_questions > 0 else 0.0
+                # Winner outcome rates
+                winner_match_pct = (winner_match_count / considered_questions * 100) if considered_questions > 0 else 0.0
+                winner_nomatch_pct = (winner_no_match_count / considered_questions * 100) if considered_questions > 0 else 0.0
+                winner_qerr_pct = (winner_query_error_count / considered_questions * 100) if considered_questions > 0 else 0.0
 
                 print(f"  {method}:")
                 print(f"    Questions with multiple finalists (tie): {tie_questions}/{total_questions} ({tie_percent:.1f}%)")
                 print(f"    Match rate where only one finalist: {single_match_count}/{single_finalist_questions} ({single_match_pct:.1f}%)")
                 print(f"    Match rate where multiple finalists (random tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
+                print(f"    Winner outcome rates across questions considered:")
+                print(f"      Match: {winner_match_count}/{considered_questions} ({winner_match_pct:.1f}%)")
+                print(f"      No Match: {winner_no_match_count}/{considered_questions} ({winner_nomatch_pct:.1f}%)")
+                print(f"      Query Error: {winner_query_error_count}/{considered_questions} ({winner_qerr_pct:.1f}%)")
         except Exception as e:
             print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
 
