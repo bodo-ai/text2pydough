@@ -29,6 +29,59 @@ def selection_random_tie_break(candidate_indices: List[int], question_idx: Union
     return chosen
 
 
+def selection_density_tie_break(
+    candidate_indices: List[int],
+    runs: List[Dict[str, Any]],
+    question_idx: Union[int, str] = "?",
+) -> Optional[int]:
+    """
+    Break ties among candidate indices by choosing the run with the highest
+    bytes-per-cell density of its dataframe. Falls back to random tie-break
+    if density cannot distinguish candidates.
+    """
+    if not candidate_indices:
+        return None
+
+    densities: Dict[int, float] = {}
+    for i in candidate_indices:
+        df_obj = runs[i].get("df") if isinstance(runs[i], dict) else None
+        density_value = -1.0
+        if df_obj is not None:
+            try:
+                rows, cols = df_obj.shape
+                denom = rows * cols
+                if denom > 0:
+                    try:
+                        bytes_used = df_obj.memory_usage(deep=True).sum()
+                    except Exception:
+                        bytes_used = df_obj.memory_usage(deep=False).sum()
+                    density_value = float(bytes_used) / float(denom)
+            except Exception:
+                density_value = -1.0
+        densities[i] = density_value
+
+    if not densities:
+        return selection_random_tie_break(candidate_indices, question_idx)
+
+    max_density = max(densities.values())
+    if max_density <= -1.0:
+        # No valid densities computed
+        return selection_random_tie_break(candidate_indices, question_idx)
+
+    density_candidates = [i for i, d in densities.items() if d == max_density]
+    if len(density_candidates) == 1:
+        chosen = density_candidates[0]
+        print(
+            f"[INFO] [Q{question_idx}] Density tie-break -> picked index {chosen} with density {max_density:.2f}."
+        )
+        return chosen
+
+    print(
+        f"[INFO] [Q{question_idx}] Density tie-break still tied among {len(density_candidates)} candidates."
+    )
+    return selection_random_tie_break(density_candidates, question_idx)
+
+
 def favourite_based_selection(
     all_runs: List[Dict[str, Any]],
     question: str,
@@ -119,7 +172,11 @@ def frequency_based_selection(
     if len(consensus) > 0:
         max_votes = max(consensus.values())
         tied_indices = [i for i, v in consensus.items() if v == max_votes]
-        best_index = tied_indices[0] if len(tied_indices) == 1 else selection_random_tie_break(tied_indices, question_idx)
+        best_index = (
+            tied_indices[0]
+            if len(tied_indices) == 1
+            else selection_density_tie_break(tied_indices, valid_runs, question_idx)
+        )
         best = valid_runs[best_index]
         best_matches = response_matches[best_index]
         best_model = best["model_name"]
@@ -181,7 +238,11 @@ def size_based_selection(
     if size_dict and max(size_dict.values()) > -1:
         max_size = max(size_dict.values())
         candidates = [i for i, s in size_dict.items() if s == max_size]
-        best_index = candidates[0] if len(candidates) == 1 else selection_random_tie_break(candidates, question_idx)
+        best_index = (
+            candidates[0]
+            if len(candidates) == 1
+            else selection_density_tie_break(candidates, valid_runs, question_idx)
+        )
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
         return (
