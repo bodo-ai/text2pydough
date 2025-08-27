@@ -34,6 +34,60 @@ from ensemble_logic import selection_random_tie_break, ensemble_from_all_runs_df
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def _normalize_eval_result_to_comparison(value: str) -> str:
+    """Normalize eval_result values into comparison_result categories.
+
+    Output space: 'Match', 'No Match', 'Query Error'.
+    """
+    if value is None:
+        return 'Query Error'
+    text = str(value).strip()
+    if text.lower() == 'match':
+        return 'Match'
+    if text.replace(' ', '').lower() == 'nomatch':
+        return 'No Match'
+    if text.lower() == 'no match':
+        return 'No Match'
+    # Collapse all other error-like statuses into Query Error
+    if 'error' in text.lower() or 'unknown' in text.lower() or 'sql' in text.lower() or 'query' in text.lower():
+        return 'Query Error'
+    return 'Query Error'
+
+def evaluate_from_eval_column(all_runs_file: str, output_dir: str = None, eval_column: str = 'eval_result'):
+    """
+    Build result_df and question_summary_df using an existing eval_result column without executing code.
+
+    Returns tuple: (result_df, question_summary_df)
+    """
+    logger.info(f"Loading all_runs file (eval-only): {all_runs_file}")
+    try:
+        df = pd.read_csv(all_runs_file)
+    except Exception as e:
+        logger.error(f"Failed to read all_runs file: {e}")
+        raise
+
+    if eval_column not in df.columns:
+        raise ValueError(f"Column '{eval_column}' not found in input CSV")
+
+    result_df = df.copy()
+    result_df['comparison_result'] = result_df[eval_column].map(_normalize_eval_result_to_comparison)
+    # Keep an exception column for schema parity; not applicable in eval-only
+    result_df['exception'] = None
+
+    question_summary_df = create_question_summary(result_df)
+
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y_%m_%d-%H_%M_%S')
+        output_file = os.path.join(output_dir, f'evaluated_all_runs_{timestamp}.csv')
+        result_df.to_csv(output_file, index=False)
+        logger.info(f"Saved evaluated results to: {output_file}")
+        question_summary_file = os.path.join(output_dir, f'question_summary_{timestamp}.csv')
+        question_summary_df.to_csv(question_summary_file, index=False)
+        logger.info(f"Saved question summary to: {question_summary_file}")
+
+    return result_df, question_summary_df
+
 def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_dir=None, num_threads: int = None):
     """
     Evaluate all runs in the all_runs file using test_data.eval functions.
@@ -476,6 +530,16 @@ Examples:
         nargs='*',
         help='List of ensemble selection methods to run and summarize (e.g., size frequency density or "size,frequency,density")'
     )
+    parser.add_argument(
+        '--use-eval-result-only', '--use_eval_result_only',
+        action='store_true',
+        help='Use the eval_result column from the CSV instead of executing code'
+    )
+    parser.add_argument(
+        '--eval-column', '--eval_column',
+        default='eval_result',
+        help='Name of the column to use when --use-eval-result-only is enabled (default: eval_result)'
+    )
     
     args = parser.parse_args()
     
@@ -488,25 +552,33 @@ Examples:
         logger.error(f"All runs file not found: {args.all_runs}")
         sys.exit(1)
     
-    # Validate paths
-    if not os.path.exists(args.db_base_path):
-        logger.error(f"Database base path not found: {args.db_base_path}")
-        sys.exit(1)
-    
-    if not os.path.exists(args.metadata_base_path):
-        logger.error(f"Metadata base path not found: {args.metadata_base_path}")
-        sys.exit(1)
+    # Validate paths only when executing code
+    if not args.use_eval_result_only:
+        if not os.path.exists(args.db_base_path):
+            logger.error(f"Database base path not found: {args.db_base_path}")
+            sys.exit(1)
+        if not os.path.exists(args.metadata_base_path):
+            logger.error(f"Metadata base path not found: {args.metadata_base_path}")
+            sys.exit(1)
     
     try:
         # Run evaluation
-        logger.info("Starting evaluation...")
-        result_df, question_summary_df = evaluate_all_runs(
-            args.all_runs,
-            args.db_base_path,
-            args.metadata_base_path,
-            args.output_dir,
-            num_threads=args.num_threads
-        )
+        if args.use_eval_result_only:
+            logger.info("Starting evaluation (using eval_result only, no code execution)...")
+            result_df, question_summary_df = evaluate_from_eval_column(
+                args.all_runs,
+                args.output_dir,
+                eval_column=args.eval_column,
+            )
+        else:
+            logger.info("Starting evaluation (executing code)...")
+            result_df, question_summary_df = evaluate_all_runs(
+                args.all_runs,
+                args.db_base_path,
+                args.metadata_base_path,
+                args.output_dir,
+                num_threads=args.num_threads
+            )
 
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
@@ -544,7 +616,7 @@ Examples:
             logger.info("No valid ensemble methods provided; skipping ensemble comparison.")
 
         ensemble_method_results = None
-        if methods_to_use and len(methods_to_use) > 0:
+        if (methods_to_use and len(methods_to_use) > 0) and (not args.use_eval_result_only):
             # Prepare winners per method using all_runs DataFrame
             try:
                 all_runs_df = pd.read_csv(args.all_runs)
