@@ -28,7 +28,7 @@ except ImportError:
 # Add the current directory to the path to import test_data.eval
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_data.eval import process_row, compare_output, symetric_compare_df
-from ensemble_logic import selection_random_tie_break, ensemble_from_all_runs_df
+from ensemble_logic import selection_random_tie_break, selection_density_tie_break, ensemble_from_all_runs_df
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -245,7 +245,7 @@ def _parse_df_from_json(gen_df_json):
             return None
 
 
-def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
+def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_breaker: str = 'random'):
     """
     Compute tie-break and finalist statistics using ensemble logic criteria.
     Returns a dict with keys: total_questions, tie_questions, single_finalist_questions,
@@ -375,9 +375,14 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str):
                 single_match_count += 1
         else:
             tie_questions += 1
-            # Use ensemble logic tie-break helper (seeded RNG)
-            winner_i = selection_random_tie_break(candidates, question_idx='?')
-            # Fallback to local RNG if helper returns None
+            # Use selected tie-breaker
+            if tie_breaker == 'density':
+                # Build minimal runs for density tie-breaker
+                tb_runs = runs
+                winner_i = selection_density_tie_break(candidates, tb_runs, question_idx='?')
+            else:
+                winner_i = selection_random_tie_break(candidates, question_idx='?')
+            # Fallbacks
             if winner_i is None:
                 winner_i = rng_local.choice(candidates)
             winner_row_idx = runs[winner_i]['row_index']
@@ -481,9 +486,6 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
                 single_match_count = stats.get('single_match_count', 0)
                 tie_match_count = stats.get('tie_match_count', 0)
                 considered_questions = stats.get('considered_questions', 0)
-                winner_match_count = stats.get('winner_match_count', 0)
-                winner_no_match_count = stats.get('winner_no_match_count', 0)
-                winner_query_error_count = stats.get('winner_query_error_count', 0)
 
                 tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
                 single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
@@ -594,6 +596,11 @@ Examples:
         help='List of ensemble selection methods to run and summarize (e.g., size frequency density or "size,frequency,density")'
     )
     parser.add_argument(
+        '--tie-breakers', '--tie_breakers',
+        nargs='*',
+        help='List of tie-breaker methods to run for finalists (random, density). Default: random'
+    )
+    parser.add_argument(
         '--use-eval-result-only', '--use_eval_result_only',
         action='store_true',
         help='Use the eval_result column from the CSV instead of executing code'
@@ -673,6 +680,32 @@ Examples:
             return normalized
 
         methods_to_use = _normalize_methods(args.ensemble_methods) if args.ensemble_methods and len(args.ensemble_methods) > 0 else _normalize_methods([args.ensemble_selection_method])
+        def _normalize_tie_breakers(tb_raw):
+            allowed_tb = ['random', 'density']
+            if not tb_raw:
+                return ['random']
+            tokens = []
+            for item in tb_raw:
+                if isinstance(item, str):
+                    parts = [p.strip().lower() for p in item.replace(';', ',').split(',') if p.strip()]
+                    if parts:
+                        tokens.extend(parts)
+                else:
+                    try:
+                        tokens.append(str(item).strip().lower())
+                    except Exception:
+                        pass
+            seen = set()
+            normalized = []
+            for t in tokens:
+                if t in allowed_tb and t not in seen:
+                    seen.add(t)
+                    normalized.append(t)
+                elif t not in allowed_tb:
+                    logger.warning(f"Skipping unknown tie-breaker: {t}")
+            return normalized if normalized else ['random']
+
+        tie_breakers_to_use = _normalize_tie_breakers(args.tie_breakers)
         if methods_to_use:
             logger.info(f"Ensemble methods selected: {methods_to_use}")
         else:
@@ -747,15 +780,17 @@ Examples:
         # Compute tie-break/finalist stats per method using the same list
         tie_break_stats_per_method = {}
         for method in methods_to_use:
-            try:
-                tie_break_stats_per_method[method] = _compute_ensemble_stats(result_df, method)
-            except Exception as e:
-                logger.warning(f"Failed computing tie-break stats for method {method}: {e}")
+            for tb in tie_breakers_to_use:
+                key = f"{method}|tb:{tb}"
+                try:
+                    tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb)
+                except Exception as e:
+                    logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb}: {e}")
 
         # Build final per-method winner outcome results using tie_break_stats (winners across questions considered)
         final_winner_results_per_method = {}
         try:
-            for method, stats in tie_break_stats_per_method.items():
+            for key, stats in tie_break_stats_per_method.items():
                 total_questions = stats.get('total_questions', 0)
                 considered_questions = stats.get('considered_questions', 0)
                 w_match = stats.get('winner_match_count', 0)
@@ -764,7 +799,7 @@ Examples:
                 # Adjust query error count to reflect all questions as denominator
                 missing = max(0, total_questions - considered_questions)
                 w_qerr_adjusted = w_qerr + missing
-                final_winner_results_per_method[method] = {
+                final_winner_results_per_method[key] = {
                     'total_questions': total_questions,
                     'winner_match_count': w_match,
                     'winner_no_match_count': w_nomatch,
