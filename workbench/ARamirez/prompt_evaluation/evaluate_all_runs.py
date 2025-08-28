@@ -21,6 +21,11 @@ try:
     import mlflow
 except Exception:
     mlflow = None
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+except Exception:
+    load_dotenv = None
 # Progress bar
 try:
     from tqdm import tqdm
@@ -554,6 +559,19 @@ def _log_mlflow_stats(args,
         return
 
     try:
+        # Load credentials from ~/.env if available (align with prompt_evaluation)
+        if load_dotenv is not None:
+            try:
+                env_path = Path.home() / ".env"
+                load_dotenv(dotenv_path=env_path)
+                logger.info(f"Loaded MLflow credentials from {env_path}")
+            except Exception:
+                pass
+
+        # Allow token override via CLI argument
+        if getattr(args, 'mlflow_token', None):
+            os.environ['MLFLOW_TRACKING_TOKEN'] = str(args.mlflow_token)
+
         # Optional setup
         if getattr(args, 'mlflow_uri', None):
             mlflow.set_tracking_uri(args.mlflow_uri)
@@ -710,6 +728,10 @@ Examples:
     parser.add_argument(
         '--mlflow-run-name', '--mlflow_run_name',
         help='MLflow run name to use when starting a run'
+    )
+    parser.add_argument(
+        '--mlflow-token', '--mlflow_token',
+        help='MLflow tracking token to authenticate API requests'
     )
     parser.add_argument(
         '--disable-mlflow', '--disable_mlflow',
