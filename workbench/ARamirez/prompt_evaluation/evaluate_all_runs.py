@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import json
 import random
+import re
 try:
     import mlflow
 except Exception:
@@ -559,6 +560,10 @@ def _log_mlflow_stats(args,
         return
 
     try:
+        def _sanitize_mlflow_name(name: str) -> str:
+            # Replace disallowed '|' with ':' and any other invalid chars with '_'
+            name = name.replace('|', ':')
+            return re.sub(r'[^A-Za-z0-9_.:\-\/ ]', '_', name)
         # Load credentials from ~/.env if available (align with prompt_evaluation)
         if load_dotenv is not None:
             try:
@@ -609,7 +614,7 @@ def _log_mlflow_stats(args,
         # Tie-break stats per-method
         if tie_break_stats_per_method:
             for key, stats in tie_break_stats_per_method.items():
-                prefix = f'tb__{key}'.replace(' ', '_')
+                prefix = _sanitize_mlflow_name(f'tb__{key}')
                 for metric_name in [
                     'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
                     'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
@@ -621,7 +626,7 @@ def _log_mlflow_stats(args,
         # Final ensemble per-method results
         if final_winner_results_per_method:
             for key, metrics in final_winner_results_per_method.items():
-                prefix = f'final__{key}'.replace(' ', '_')
+                prefix = _sanitize_mlflow_name(f'final__{key}')
                 total_q = int(metrics.get('total_questions', 0))
                 m_cnt = int(metrics.get('winner_match_count', 0))
                 nm_cnt = int(metrics.get('winner_no_match_count', 0))
