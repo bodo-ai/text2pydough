@@ -38,7 +38,7 @@ except ImportError:
 # Add the current directory to the path to import test_data.eval
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_data.eval import process_row, compare_output, symetric_compare_df
-from ensemble_logic import selection_random_tie_break, selection_density_tie_break, ensemble_from_all_runs_df
+from ensemble_logic import selection_random_tie_break, selection_density_tie_break, selection_size_tie_break, ensemble_from_all_runs_df
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -390,6 +390,9 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
                 # Build minimal runs for density tie-breaker
                 tb_runs = runs
                 winner_i = selection_density_tie_break(candidates, tb_runs, question_idx='?')
+            elif tie_breaker == 'size':
+                tb_runs = runs
+                winner_i = selection_size_tie_break(candidates, tb_runs, question_idx='?')
             else:
                 winner_i = selection_random_tie_break(candidates, question_idx='?')
             # Fallbacks
@@ -503,7 +506,9 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
                 print(f"  {method}:")
                 print(f"    Questions with multiple finalists (tie): {tie_questions}/{total_questions} ({tie_percent:.1f}%)")
                 print(f"    Match rate where only one finalist: {single_match_count}/{single_finalist_questions} ({single_match_pct:.1f}%)")
-                print(f"    Match rate where multiple finalists (random tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
+                # Reflect selected tie-breaker in label
+                tb_label = method.split('|tb:')[-1] if '|tb:' in method else 'random'
+                print(f"    Match rate where multiple finalists ({tb_label} tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
         except Exception as e:
             print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
 
@@ -708,7 +713,7 @@ Examples:
     parser.add_argument(
         '--tie-breakers', '--tie_breakers',
         nargs='*',
-        help='List of tie-breaker methods to run for finalists (random, density). Default: random'
+        help='List of tie-breaker methods to run for finalists (random, density, size). Default: random'
     )
     parser.add_argument(
         '--use-eval-result-only', '--use_eval_result_only',
@@ -814,7 +819,7 @@ Examples:
 
         methods_to_use = _normalize_methods(args.ensemble_methods) if args.ensemble_methods and len(args.ensemble_methods) > 0 else _normalize_methods([args.ensemble_selection_method])
         def _normalize_tie_breakers(tb_raw):
-            allowed_tb = ['random', 'density']
+            allowed_tb = ['random', 'density', 'size']
             if not tb_raw:
                 return ['random']
             tokens = []

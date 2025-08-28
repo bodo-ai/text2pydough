@@ -82,6 +82,51 @@ def selection_density_tie_break(
     return selection_random_tie_break(density_candidates, question_idx)
 
 
+def selection_size_tie_break(
+    candidate_indices: List[int],
+    runs: List[Dict[str, Any]],
+    question_idx: Union[int, str] = "?",
+) -> Optional[int]:
+    """
+    Break ties among candidate indices by choosing the run with the largest
+    DataFrame size (number of elements). Falls back to random tie-break
+    if size cannot distinguish candidates or no valid sizes are available.
+    """
+    if not candidate_indices:
+        return None
+
+    sizes: Dict[int, int] = {}
+    for i in candidate_indices:
+        df_obj = runs[i].get("df") if isinstance(runs[i], dict) else None
+        size_value = -1
+        if df_obj is not None:
+            try:
+                size_value = int(df_obj.size)
+            except Exception:
+                size_value = -1
+        sizes[i] = size_value
+
+    if not sizes:
+        return selection_random_tie_break(candidate_indices, question_idx)
+
+    max_size = max(sizes.values())
+    if max_size <= -1:
+        # No valid sizes computed
+        return selection_random_tie_break(candidate_indices, question_idx)
+
+    size_candidates = [i for i, s in sizes.items() if s == max_size]
+    if len(size_candidates) == 1:
+        chosen = size_candidates[0]
+        print(
+            f"[INFO] [Q{question_idx}] Size tie-break -> picked index {chosen} with size {max_size}."
+        )
+        return chosen
+
+    print(
+        f"[INFO] [Q{question_idx}] Size tie-break still tied among {len(size_candidates)} candidates."
+    )
+    return selection_random_tie_break(size_candidates, question_idx)
+
 def favourite_based_selection(
     all_runs: List[Dict[str, Any]],
     question: str,
