@@ -13,6 +13,7 @@ from threading import Lock
 metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
 import logging
+import multiprocessing as mp
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -212,47 +213,25 @@ def compare_df(
     Compares two dataframes and returns True if they are the same, else False.
     query_gold and query_gen are the original queries that generated the respective dataframes.
     """
-    
-    #print(f"Info: Comparing DataFrames for question: {question}")
+
     original_gold = df_gold.copy()
     original_gen = df_gen.copy()
-    
-    try:
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
-            return True
-    except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
+
+    if df_gold.equals(df_gen):
+        return True
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
 
-    #print(df_gold, df_gen)
-    
-    # fill NaNs with 0 to handle NaNs in the dataframes for comparison
     df_gold.fillna(0, inplace=True)
     df_gen.fillna(0, inplace=True)
-    
-    try:
-        #print("Info: Comparing DataFrames using hard match.")
-        is_equal = df_gold.values == df_gen.values
-        if is_equal.all():
-            #print("Info: DataFrames match first check.")
-            return True
-    except:
-        try:
-            is_equal = df_gold.values == df_gen.values
-            if is_equal:
-                return True
-        except:
-            pass
-    #print("Info: Proceeding with secondary check.")
+
+    if df_gold.equals(df_gen):
+        return True
+
+    # Si no son iguales, usar el secondary_check
     return secondary_check(original_gold, original_gen) or secondary_check(df_gold, df_gen)
+
 
 def symetric_compare_df(
     df_a: pd.DataFrame,
@@ -464,13 +443,14 @@ def process_row(row,db_base_path,metadata_base_path):
     extracted_code = row.get('extracted_python_code')
     question= row.get('question')
     
+    db_name = row['db_name']
+    dataset_name = row['dataset_name']
+    sql = row['sql']
+    db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
+    
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
-        db_name = row['db_name']
-        dataset_name = row['dataset_name']
-        sql = row['sql']
 
-        db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
         metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
 
@@ -487,17 +467,22 @@ def process_row(row,db_base_path,metadata_base_path):
         else:
             return 'Query Error', exception
     
-    extracted_ground_truth_json = row.get('ground_truth_json')
-    extracted_df_json = row.get('gen_df_json')
+    ground_truth_json, db_exception = query_sqlite_db(sql, db_path)
+
+    if db_exception is not None:
+        return 'SQL error', None
     
+    extracted_ground_truth_json = ground_truth_json
+    extracted_df_json = row.get('gen_df_json')
+
     if extracted_ground_truth_json is None or extracted_df_json is None:
         return 'Unknown', None
     
-    ground_truth_df = pd.read_json(extracted_ground_truth_json)
+    ground_truth_df = extracted_ground_truth_json
     gen_df = pd.read_json(extracted_df_json)
     
     comparison_result = compare_df(ground_truth_df, gen_df, query_category="a", question=question)
-    
+
     return 'Match' if comparison_result else 'No Match', None
 
 def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path):
@@ -509,8 +494,34 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     # Read the CSV file into a Pandas DataFrame
     df = pd.read_csv(csv_file_path)
 
+    def _timeout_runner(q, row_obj, base, meta):
+        try:
+            res = process_row(row_obj, base, meta)
+            q.put(("ok", res))
+        except BaseException as e:
+            q.put(("err", str(e)))
+
+    def process_row_with_timeout(row_obj, base, meta, timeout_seconds=300):
+        q = mp.Queue()
+        p = mp.Process(target=_timeout_runner, args=(q, row_obj, base, meta))
+        p.daemon = True
+        p.start()
+        try:
+            status, payload = q.get(timeout=timeout_seconds)
+        except Exception:
+            if p.is_alive():
+                p.terminate()
+            p.join()
+            print(f"[TIMEOUT] process_row exceeded {timeout_seconds} seconds for question: {getattr(row_obj, 'question', '<unknown>')}")
+            return ('Query Error', f'Timeout after {timeout_seconds} seconds')
+        else:
+            p.join()
+            if status == 'ok':
+                return payload
+            return ('Query Error', payload)
+
     def process_and_return(row):
-        return process_row(row, db_base_path, metadata_base_path)
+        return process_row_with_timeout(row, db_base_path, metadata_base_path, timeout_seconds=60)
 
     
     with ThreadPoolExecutor() as executor:
