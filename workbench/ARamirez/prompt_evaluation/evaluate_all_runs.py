@@ -647,6 +647,41 @@ def _log_mlflow_stats(args,
                 mlflow.log_metric(f'{prefix}__winner_no_match_pct', float(nm_pct))
                 mlflow.log_metric(f'{prefix}__winner_query_error_pct', float(qe_pct))
 
+        # Best_(statistic) logs using final winner results (match criterion)
+        if final_winner_results_per_method:
+            try:
+                best_key = None
+                best_match_pct = -1.0
+                per_key_percentages = {}
+                for key, metrics in final_winner_results_per_method.items():
+                    total_q = int(metrics.get('total_questions', 0))
+                    m_cnt = int(metrics.get('winner_match_count', 0))
+                    nm_cnt = int(metrics.get('winner_no_match_count', 0))
+                    qe_cnt = int(metrics.get('winner_query_error_count_adjusted', 0))
+                    if total_q > 0:
+                        match_pct = (m_cnt / total_q) * 100.0
+                        no_match_pct = (nm_cnt / total_q) * 100.0
+                        query_error_pct = (qe_cnt / total_q) * 100.0
+                    else:
+                        match_pct = 0.0
+                        no_match_pct = 0.0
+                        query_error_pct = 0.0
+                    per_key_percentages[key] = (match_pct, no_match_pct, query_error_pct)
+                    if match_pct > best_match_pct:
+                        best_match_pct = match_pct
+                        best_key = key
+
+                if best_key is not None:
+                    # Store pairing name as a parameter (string) and percentages as metrics
+                    mlflow.log_param('Best_Ensemble_Pairing', _sanitize_mlflow_name(str(best_key)))
+                    m_pct, nm_pct, qe_pct = per_key_percentages[best_key]
+                    mlflow.log_metric('Best_Match', float(m_pct))
+                    mlflow.log_metric('Best_No_Match', float(nm_pct))
+                    mlflow.log_metric('Best_Query_Error', float(qe_pct))
+            except Exception:
+                # Non-fatal; continue without best-of logs
+                pass
+
         if started_here:
             mlflow.end_run()
     except Exception as e:
