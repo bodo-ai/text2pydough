@@ -127,6 +127,30 @@ def selection_size_tie_break(
     )
     return selection_random_tie_break(size_candidates, question_idx)
 
+
+def select_tie_break_index(
+    candidate_indices: List[int],
+    runs: List[Dict[str, Any]],
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+) -> Optional[int]:
+    """
+    Central dispatcher for tie-break selection among candidate indices.
+    Supported methods: "random" (default), "density", "size".
+    Returns the chosen candidate index or None if no candidates provided.
+    """
+    if not candidate_indices:
+        return None
+    if len(candidate_indices) == 1:
+        return candidate_indices[0]
+
+    method = (tie_break_method or "random").strip().lower()
+    if method == "density":
+        return selection_density_tie_break(candidate_indices, runs, question_idx)
+    if method == "size":
+        return selection_size_tie_break(candidate_indices, runs, question_idx)
+    return selection_random_tie_break(candidate_indices, question_idx)
+
 def favourite_based_selection(
     all_runs: List[Dict[str, Any]],
     question: str,
@@ -197,6 +221,7 @@ def frequency_based_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
     question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
 ):
     consensus: Dict[int, int] = defaultdict(int)
     response_matches: Dict[int, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -217,10 +242,8 @@ def frequency_based_selection(
     if len(consensus) > 0:
         max_votes = max(consensus.values())
         tied_indices = [i for i, v in consensus.items() if v == max_votes]
-        best_index = (
-            tied_indices[0]
-            if len(tied_indices) == 1
-            else selection_density_tie_break(tied_indices, valid_runs, question_idx)
+        best_index = select_tie_break_index(
+            tied_indices, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
         )
         best = valid_runs[best_index]
         best_matches = response_matches[best_index]
@@ -272,6 +295,7 @@ def size_based_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
     question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
 ):
     size_dict: Dict[int, int] = defaultdict(int)
     for i in range(len(valid_runs)):
@@ -283,10 +307,8 @@ def size_based_selection(
     if size_dict and max(size_dict.values()) > -1:
         max_size = max(size_dict.values())
         candidates = [i for i, s in size_dict.items() if s == max_size]
-        best_index = (
-            candidates[0]
-            if len(candidates) == 1
-            else selection_density_tie_break(candidates, valid_runs, question_idx)
+        best_index = select_tie_break_index(
+            candidates, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
         )
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
@@ -327,6 +349,7 @@ def density_based_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
     question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
 ):
     density_dict: Dict[int, float] = defaultdict(float)
     for i in range(len(valid_runs)):
@@ -352,7 +375,9 @@ def density_based_selection(
     if density_dict and max(density_dict.values()) > -1:
         max_density = max(density_dict.values())
         candidates = [i for i, d in density_dict.items() if d == max_density]
-        best_index = candidates[0] if len(candidates) == 1 else selection_random_tie_break(candidates, question_idx)
+        best_index = select_tie_break_index(
+            candidates, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
         best = valid_runs[best_index]
         print(
             f"[INFO] [Q{question_idx}] Density-based selection: {best['model_name']} with density {density_dict[best_index]:.2f} bytes/cell."
@@ -439,6 +464,7 @@ def ensemble_result(
     question_idx: Union[int, str] = "?",
     ensemble_selection_method: str = "size",
     use_gradio_agent: bool = True,
+    tie_break_method: str = "random",
 ):
     """
     Uses dataframe comparison to select the most consistent output.
@@ -499,16 +525,16 @@ def ensemble_result(
 
     if ensemble_selection_method == "size":
         print(f"[INFO] [Q{question_idx}] Size-based selection")
-        return size_based_selection(valid_runs, question, question_idx=question_idx)
+        return size_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "frequency":
         print(f"[INFO] [Q{question_idx}] Frequency-based selection")
-        return frequency_based_selection(valid_runs, question, question_idx=question_idx)
+        return frequency_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "random":
         print(f"[INFO] [Q{question_idx}] Random-based selection")
         return random_based_selection(valid_runs, question, question_idx=question_idx)
     elif ensemble_selection_method == "density":
         print(f"[INFO] [Q{question_idx}] Density-based selection")
-        return density_based_selection(valid_runs, question, question_idx=question_idx)
+        return density_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "agent_indiv_grade":
         print(f"[INFO] [Q{question_idx}] Agent-individual-grade selection (LLM)" )
         return agent_indiv_grade_selection(valid_runs, question, question_idx=question_idx)
@@ -516,7 +542,7 @@ def ensemble_result(
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
         )
-        return size_based_selection(valid_runs, question, question_idx=question_idx)
+        return size_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
 
 
 def _row_to_run_dict(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -581,6 +607,7 @@ def ensemble_from_all_runs_df(
     ensemble_selection_method: str = "size",
     use_gradio_agent: bool = False,
     mlflow_run_id: Optional[str] = None,
+    tie_break_method: str = "random",
 ) -> pd.DataFrame:
     """
     Run ensemble selection per question group from an all_runs-style DataFrame.
@@ -621,6 +648,7 @@ def ensemble_from_all_runs_df(
             question_idx=q_index,
             ensemble_selection_method=ensemble_selection_method,
             use_gradio_agent=use_gradio_agent,
+            tie_break_method=tie_break_method,
         )
         response, duration, usage, model_name, gen_df_json, generated_sql = _normalize_ensemble_output(_ret)
 
@@ -649,6 +677,7 @@ def ensemble_from_all_runs_file(
     use_gradio_agent: bool = False,
     output_dir: Optional[str] = None,
     mlflow_run_id: Optional[str] = None,
+    tie_break_method: str = "random",
 ):
     """
     Convenience wrapper to run ensemble from an all_runs CSV file.
@@ -660,6 +689,7 @@ def ensemble_from_all_runs_file(
         ensemble_selection_method=ensemble_selection_method,
         use_gradio_agent=use_gradio_agent,
         mlflow_run_id=mlflow_run_id,
+        tie_break_method=tie_break_method,
     )
 
     if output_dir:
