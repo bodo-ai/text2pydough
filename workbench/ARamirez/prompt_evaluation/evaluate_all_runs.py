@@ -358,6 +358,9 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
             candidates = [i for i, v in consensus.items() if v == max_votes]
         elif selection_method == 'random':
             candidates = valid_indices.copy()
+        elif selection_method == 'agent_indiv_grade':
+            # Stats-only path: treat as having all valid candidates; tie-breaker decides winner
+            candidates = valid_indices.copy()
         
         else:
             # Default to size
@@ -736,7 +739,7 @@ Examples:
     )
     parser.add_argument(
         '--ensemble-selection-method', '--ensemble_selection_method',
-        choices=['size', 'frequency', 'random', 'density'],
+        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade'],
         default='size',
         help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
     )
@@ -826,7 +829,7 @@ Examples:
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
         def _normalize_methods(methods_raw):
-            allowed = ['size', 'frequency', 'random', 'density']
+            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade']
             if not methods_raw:
                 return []
             # Flatten and split on commas; lowercase and strip

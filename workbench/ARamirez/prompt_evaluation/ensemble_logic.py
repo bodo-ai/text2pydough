@@ -370,6 +370,66 @@ def density_based_selection(
         return (None, 0.0, None, None, None, None)
 
 
+def agent_indiv_grade_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+):
+    """
+    Use LLM-based grading from scooring.evaluate_dataframes to select the best candidate.
+    Falls back to random selection if grading fails for any reason.
+    """
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in agent_indiv_grade_selection.")
+        return (None, 0.0, None, None, None, None)
+
+    try:
+        # Import lazily to avoid heavy deps unless method is actually used
+        from scooring import evaluate_dataframes as llm_evaluate_dataframes
+    except Exception as e:
+        print(
+            f"[WARNING] [Q{question_idx}] Failed importing LLM grader (scooring.evaluate_dataframes): {e}. Falling back to random."
+        )
+        return random_based_selection(valid_runs, question, question_idx=question_idx)
+
+    # Build list of candidate JSON strings for grading
+    candidates: List[str] = []
+    for run in valid_runs:
+        gen_df_json = run.get("gen_df_json")
+        if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
+            candidates.append(gen_df_json)
+        else:
+            # As a fallback, serialize the DataFrame if present
+            df_obj = run.get("df")
+            try:
+                serialized = df_obj.to_json(orient="records", date_format="iso") if df_obj is not None else ""
+            except Exception:
+                serialized = ""
+            candidates.append(serialized)
+
+    try:
+        best_index = llm_evaluate_dataframes(question=question, dataframes=candidates)
+        if not isinstance(best_index, int) or best_index < 0 or best_index >= len(valid_runs):
+            raise ValueError("Invalid best_index returned by LLM grader")
+        best = valid_runs[best_index]
+        print(
+            f"[INFO] [Q{question_idx}] agent_indiv_grade selected: {best.get('model_name')} (candidate #{best_index})."
+        )
+        return (
+            best.get("response"),
+            best.get("duration"),
+            best.get("usage"),
+            best.get("model_name"),
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+    except Exception as e:
+        print(
+            f"[WARNING] [Q{question_idx}] LLM grading failed in agent_indiv_grade_selection: {e}. Falling back to random."
+        )
+        return random_based_selection(valid_runs, question, question_idx=question_idx)
+
+
 def ensemble_result(
     mlflow_run_id: Optional[str],
     all_runs: List[Dict[str, Any]],
@@ -449,6 +509,9 @@ def ensemble_result(
     elif ensemble_selection_method == "density":
         print(f"[INFO] [Q{question_idx}] Density-based selection")
         return density_based_selection(valid_runs, question, question_idx=question_idx)
+    elif ensemble_selection_method == "agent_indiv_grade":
+        print(f"[INFO] [Q{question_idx}] Agent-individual-grade selection (LLM)" )
+        return agent_indiv_grade_selection(valid_runs, question, question_idx=question_idx)
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
