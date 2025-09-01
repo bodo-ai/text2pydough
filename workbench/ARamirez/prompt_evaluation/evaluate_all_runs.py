@@ -216,18 +216,33 @@ def create_question_summary(df):
     df['question_id'] = df['question'].astype(str) + '_' + df['db_name'].astype(str) + '_' + df['dataset_name'].astype(str)
     
     # Group by question_id and check if any result is a match
-    question_groups = df.groupby('question_id').agg({
+    agg_dict = {
         'question': 'first',
         'db_name': 'first', 
         'dataset_name': 'first',
         'comparison_result': lambda x: 'Match' if 'Match' in x.values else 'No Match'
-    }).reset_index()
+    }
+    # Carry complexity/difficulty if present
+    if 'complexity' in df.columns:
+        agg_dict['complexity'] = 'first'
+    if 'difficulty' in df.columns:
+        agg_dict['difficulty'] = 'first'
+
+    question_groups = df.groupby('question_id').agg(agg_dict).reset_index()
     
     # Create the has_match column
     question_groups['has_match'] = question_groups['comparison_result'] == 'Match'
     
     # Reorder columns for better readability
-    question_summary = question_groups[['question_id', 'question', 'db_name', 'dataset_name', 'comparison_result', 'has_match']]
+    base_cols = ['question_id', 'question', 'db_name', 'dataset_name', 'comparison_result', 'has_match']
+    # Insert optional columns in a stable order if present
+    if 'complexity' in question_groups.columns:
+        base_cols.insert(4, 'complexity')
+    if 'difficulty' in question_groups.columns:
+        # After complexity if both exist, otherwise before comparison_result
+        insert_pos = 5 if 'complexity' in question_groups.columns else 4
+        base_cols.insert(insert_pos, 'difficulty')
+    question_summary = question_groups[base_cols]
     
     return question_summary
 
@@ -277,6 +292,35 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
     winner_match_count = 0
     winner_no_match_count = 0
     winner_query_error_count = 0
+
+    # Optional breakdowns by complexity and difficulty if columns exist
+    has_complexity = 'complexity' in tmp_df.columns
+    has_difficulty = 'difficulty' in tmp_df.columns
+
+    def _new_stats_dict():
+        return {
+            'total_questions': 0,
+            'tie_questions': 0,
+            'single_finalist_questions': 0,
+            'single_match_count': 0,
+            'tie_match_count': 0,
+            'considered_questions': 0,
+            'winner_match_count': 0,
+            'winner_no_match_count': 0,
+            'winner_query_error_count': 0,
+        }
+
+    by_complexity = {}
+    by_difficulty = {}
+
+    def _safe_label(val):
+        try:
+            if pd.isna(val):
+                return 'Unknown'
+        except Exception:
+            pass
+        text = str(val).strip()
+        return text if text else 'Unknown'
 
     for qid, group in tmp_df.groupby('question_id'):
         # Build runs with parsed DataFrames and keep mapping to original row index
@@ -380,12 +424,33 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
         if not candidates:
             continue
 
+        # Determine breakdown buckets for this question
+        comp_label = _safe_label(group['complexity'].iloc[0]) if has_complexity else None
+        diff_label = _safe_label(group['difficulty'].iloc[0]) if has_difficulty else None
+        comp_stats = by_complexity.setdefault(comp_label, _new_stats_dict()) if has_complexity else None
+        diff_stats = by_difficulty.setdefault(diff_label, _new_stats_dict()) if has_difficulty else None
+
+        # Increment per-bucket total questions
+        if comp_stats is not None:
+            comp_stats['total_questions'] += 1
+        if diff_stats is not None:
+            diff_stats['total_questions'] += 1
+
         if len(candidates) == 1:
             single_finalist_questions += 1
             winner_i = candidates[0]
             winner_row_idx = runs[winner_i]['row_index']
             if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
                 single_match_count += 1
+            # Per-bucket single finalist counters
+            if comp_stats is not None:
+                comp_stats['single_finalist_questions'] += 1
+                if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
+                    comp_stats['single_match_count'] += 1
+            if diff_stats is not None:
+                diff_stats['single_finalist_questions'] += 1
+                if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
+                    diff_stats['single_match_count'] += 1
         else:
             tie_questions += 1
             # Use selected tie-breaker
@@ -404,6 +469,15 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
             winner_row_idx = runs[winner_i]['row_index']
             if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
                 tie_match_count += 1
+            # Per-bucket tie finalist counters
+            if comp_stats is not None:
+                comp_stats['tie_questions'] += 1
+                if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
+                    comp_stats['tie_match_count'] += 1
+            if diff_stats is not None:
+                diff_stats['tie_questions'] += 1
+                if str(group.loc[winner_row_idx, 'comparison_result']).strip() == 'Match':
+                    diff_stats['tie_match_count'] += 1
 
         # Count winner outcome categories
         try:
@@ -416,10 +490,33 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
             else:
                 # Treat any other status as Query Error (includes 'Query Error', 'SQL error', 'Unknown')
                 winner_query_error_count += 1
+            # Per-bucket winner outcomes
+            if comp_stats is not None:
+                comp_stats['considered_questions'] += 1
+                if outcome == 'Match':
+                    comp_stats['winner_match_count'] += 1
+                elif outcome == 'No Match':
+                    comp_stats['winner_no_match_count'] += 1
+                else:
+                    comp_stats['winner_query_error_count'] += 1
+            if diff_stats is not None:
+                diff_stats['considered_questions'] += 1
+                if outcome == 'Match':
+                    diff_stats['winner_match_count'] += 1
+                elif outcome == 'No Match':
+                    diff_stats['winner_no_match_count'] += 1
+                else:
+                    diff_stats['winner_query_error_count'] += 1
         except Exception:
             # If any lookup fails, count as query error for robustness
             considered_questions += 1
             winner_query_error_count += 1
+            if comp_stats is not None:
+                comp_stats['considered_questions'] += 1
+                comp_stats['winner_query_error_count'] += 1
+            if diff_stats is not None:
+                diff_stats['considered_questions'] += 1
+                diff_stats['winner_query_error_count'] += 1
 
     return {
         'total_questions': total_questions,
@@ -431,6 +528,8 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
         'winner_match_count': winner_match_count,
         'winner_no_match_count': winner_no_match_count,
         'winner_query_error_count': winner_query_error_count,
+        'by_complexity': by_complexity if has_complexity else None,
+        'by_difficulty': by_difficulty if has_difficulty else None,
     }
 
 
@@ -464,6 +563,29 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
     print(f"\nQUESTION-LEVEL RESULTS (Total unique questions: {total_questions}):")
     print(f"  Questions with at least one match: {questions_with_match} ({questions_with_match/total_questions*100:.1f}%)")
     print(f"  Questions with no matches: {questions_without_match} ({questions_without_match/total_questions*100:.1f}%)")
+
+    # Question-level breakdowns by complexity/difficulty when present
+    try:
+        if 'complexity' in question_summary_df.columns:
+            by_comp = question_summary_df.groupby('complexity')['has_match'].agg(['sum', 'count']).reset_index()
+            print(f"\nBY COMPLEXITY (question-level has_match):")
+            for _, row in by_comp.iterrows():
+                label = str(row['complexity']) if str(row['complexity']).strip() else 'Unknown'
+                total = int(row['count'])
+                matches = int(row['sum'])
+                pct = (matches / total * 100.0) if total > 0 else 0.0
+                print(f"  {label}: {matches}/{total} ({pct:.1f}%)")
+        if 'difficulty' in question_summary_df.columns:
+            by_diff = question_summary_df.groupby('difficulty')['has_match'].agg(['sum', 'count']).reset_index()
+            print(f"\nBY DIFFICULTY (question-level has_match):")
+            for _, row in by_diff.iterrows():
+                label = str(row['difficulty']) if str(row['difficulty']).strip() else 'Unknown'
+                total = int(row['count'])
+                matches = int(row['sum'])
+                pct = (matches / total * 100.0) if total > 0 else 0.0
+                print(f"  {label}: {matches}/{total} ({pct:.1f}%)")
+    except Exception as e:
+        print(f"\n[WARNING] Failed to compute complexity/difficulty breakdowns: {e}")
     
     # Model-wise statistics
     if 'model_name' in result_df.columns:
@@ -512,6 +634,63 @@ def print_summary(result_df, question_summary_df, ensemble_method_results: dict 
                 # Reflect selected tie-breaker in label
                 tb_label = method.split('|tb:')[-1] if '|tb:' in method else 'random'
                 print(f"    Match rate where multiple finalists ({tb_label} tie-break): {tie_match_count}/{tie_questions} ({tie_match_pct:.1f}%)")
+
+                # Per-complexity and per-difficulty breakdowns for this pairing
+                try:
+                    by_comp = stats.get('by_complexity')
+                    if by_comp:
+                        print(f"    By complexity:")
+                        for label, comp_stats in by_comp.items():
+                            tq = comp_stats.get('total_questions', 0)
+                            tie_q = comp_stats.get('tie_questions', 0)
+                            sfq = comp_stats.get('single_finalist_questions', 0)
+                            sm = comp_stats.get('single_match_count', 0)
+                            tm = comp_stats.get('tie_match_count', 0)
+                            tie_pct_c = (tie_q / tq * 100.0) if tq > 0 else 0.0
+                            sm_pct_c = (sm / sfq * 100.0) if sfq > 0 else 0.0
+                            tm_pct_c = (tm / tie_q * 100.0) if tie_q > 0 else 0.0
+                            safe_label = str(label) if str(label).strip() else 'Unknown'
+                            print(f"      {safe_label}: ties {tie_q}/{tq} ({tie_pct_c:.1f}%), single-finalist match {sm}/{sfq} ({sm_pct_c:.1f}%), tie match {tm}/{tie_q} ({tm_pct_c:.1f}%)")
+                        # Winner outcome breakdowns by complexity
+                        print(f"    Final winner outcomes by complexity:")
+                        for label, comp_stats in by_comp.items():
+                            cq = comp_stats.get('considered_questions', 0)
+                            wm = comp_stats.get('winner_match_count', 0)
+                            wnm = comp_stats.get('winner_no_match_count', 0)
+                            wqe = comp_stats.get('winner_query_error_count', 0)
+                            wm_pct = (wm / cq * 100.0) if cq > 0 else 0.0
+                            wnm_pct = (wnm / cq * 100.0) if cq > 0 else 0.0
+                            wqe_pct = (wqe / cq * 100.0) if cq > 0 else 0.0
+                            safe_label = str(label) if str(label).strip() else 'Unknown'
+                            print(f"      {safe_label}: Match {wm}/{cq} ({wm_pct:.1f}%), No Match {wnm}/{cq} ({wnm_pct:.1f}%), Query Error {wqe}/{cq} ({wqe_pct:.1f}%)")
+                    by_diff = stats.get('by_difficulty')
+                    if by_diff:
+                        print(f"    By difficulty:")
+                        for label, diff_stats in by_diff.items():
+                            tq = diff_stats.get('total_questions', 0)
+                            tie_q = diff_stats.get('tie_questions', 0)
+                            sfq = diff_stats.get('single_finalist_questions', 0)
+                            sm = diff_stats.get('single_match_count', 0)
+                            tm = diff_stats.get('tie_match_count', 0)
+                            tie_pct_d = (tie_q / tq * 100.0) if tq > 0 else 0.0
+                            sm_pct_d = (sm / sfq * 100.0) if sfq > 0 else 0.0
+                            tm_pct_d = (tm / tie_q * 100.0) if tie_q > 0 else 0.0
+                            safe_label = str(label) if str(label).strip() else 'Unknown'
+                            print(f"      {safe_label}: ties {tie_q}/{tq} ({tie_pct_d:.1f}%), single-finalist match {sm}/{sfq} ({sm_pct_d:.1f}%), tie match {tm}/{tie_q} ({tm_pct_d:.1f}%)")
+                        # Winner outcome breakdowns by difficulty
+                        print(f"    Final winner outcomes by difficulty:")
+                        for label, diff_stats in by_diff.items():
+                            cq = diff_stats.get('considered_questions', 0)
+                            wm = diff_stats.get('winner_match_count', 0)
+                            wnm = diff_stats.get('winner_no_match_count', 0)
+                            wqe = diff_stats.get('winner_query_error_count', 0)
+                            wm_pct = (wm / cq * 100.0) if cq > 0 else 0.0
+                            wnm_pct = (wnm / cq * 100.0) if cq > 0 else 0.0
+                            wqe_pct = (wqe / cq * 100.0) if cq > 0 else 0.0
+                            safe_label = str(label) if str(label).strip() else 'Unknown'
+                            print(f"      {safe_label}: Match {wm}/{cq} ({wm_pct:.1f}%), No Match {wnm}/{cq} ({wnm_pct:.1f}%), Query Error {wqe}/{cq} ({wqe_pct:.1f}%)")
+                except Exception as e:
+                    print(f"    [WARNING] Failed pairing breakdowns: {e}")
         except Exception as e:
             print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
 
@@ -619,6 +798,31 @@ def _log_mlflow_stats(args,
         mlflow.log_metric('questions_with_match_pct', float(pct_with_match))
         mlflow.log_metric('questions_without_match_pct', float(pct_without_match))
 
+        # Question-level breakdowns by complexity/difficulty
+        try:
+            if 'complexity' in question_summary_df.columns:
+                comp_group = question_summary_df.groupby('complexity')['has_match'].agg(['sum', 'count']).reset_index()
+                for _, row in comp_group.iterrows():
+                    label = _sanitize_mlflow_name(str(row['complexity']))
+                    total = int(row['count'])
+                    matches = int(row['sum'])
+                    pct = (matches / total * 100.0) if total > 0 else 0.0
+                    mlflow.log_metric(f'questions_by_complexity__{label}__total', total)
+                    mlflow.log_metric(f'questions_by_complexity__{label}__with_match', matches)
+                    mlflow.log_metric(f'questions_by_complexity__{label}__with_match_pct', float(pct))
+            if 'difficulty' in question_summary_df.columns:
+                diff_group = question_summary_df.groupby('difficulty')['has_match'].agg(['sum', 'count']).reset_index()
+                for _, row in diff_group.iterrows():
+                    label = _sanitize_mlflow_name(str(row['difficulty']))
+                    total = int(row['count'])
+                    matches = int(row['sum'])
+                    pct = (matches / total * 100.0) if total > 0 else 0.0
+                    mlflow.log_metric(f'questions_by_difficulty__{label}__total', total)
+                    mlflow.log_metric(f'questions_by_difficulty__{label}__with_match', matches)
+                    mlflow.log_metric(f'questions_by_difficulty__{label}__with_match_pct', float(pct))
+        except Exception:
+            pass
+
         # Tie-break stats per-method
         if tie_break_stats_per_method:
             for key, stats in tie_break_stats_per_method.items():
@@ -630,6 +834,33 @@ def _log_mlflow_stats(args,
                     value = stats.get(metric_name)
                     if value is not None:
                         mlflow.log_metric(f'{prefix}__{metric_name}', float(value))
+
+                # Per-bucket breakdowns by complexity and difficulty
+                try:
+                    by_comp = stats.get('by_complexity') if isinstance(stats, dict) else None
+                    if by_comp:
+                        for bucket, comp_stats in by_comp.items():
+                            bucket_label = _sanitize_mlflow_name(str(bucket))
+                            for metric_name in [
+                                'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
+                                'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
+                                'winner_query_error_count']:
+                                value = comp_stats.get(metric_name)
+                                if value is not None:
+                                    mlflow.log_metric(f'{prefix}__by_complexity__{bucket_label}__{metric_name}', float(value))
+                    by_diff = stats.get('by_difficulty') if isinstance(stats, dict) else None
+                    if by_diff:
+                        for bucket, diff_stats in by_diff.items():
+                            bucket_label = _sanitize_mlflow_name(str(bucket))
+                            for metric_name in [
+                                'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
+                                'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
+                                'winner_query_error_count']:
+                                value = diff_stats.get(metric_name)
+                                if value is not None:
+                                    mlflow.log_metric(f'{prefix}__by_difficulty__{bucket_label}__{metric_name}', float(value))
+                except Exception:
+                    pass
 
         # Final ensemble per-method results
         if final_winner_results_per_method:
