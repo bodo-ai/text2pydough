@@ -89,7 +89,7 @@ def extract_dataframe(json_data):
         print(f"Error converting to DataFrame: {e}")
         return None
 
-def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id, question_id=None, architecture="SQLATS"):
+def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=None, question_id=None, architecture="SQLATS"):
     """Process a single question and return the results."""
     #initialize the client
     client = Client(server_URL)
@@ -122,8 +122,10 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id,
             top_k=40,
             max_steps=25,
             # --- SQLATS-specific parameters (ignored by other architectures) ----
-            n_candidates=10,      # Number of candidate rollouts per search step
-            sqlats_max_depth=5, # Maximum beam-search depth
+            n_candidates=5,            # Number of candidate rollouts per search step
+            sqlats_max_depth=15,    # Maximum beam-search depth
+            sqlats_exploration_weight=1.0,  # UCB exploration weight
+
             # ------------------------------------------------------------------
             pydough_tool=True,
             sql_list_tables=True,
@@ -133,10 +135,10 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id,
             document_kb=True,
             selected_db_display=selected_db_display,
             use_sh_query_gen=False,
-            tracking_backend="Phoenix",
-            experiment_name=EXPERIMENT_NAME,
-            parent_run_id=mlflow_run_id,
-            child_run_name=str(question_id) if question_id is not None else "",
+            tracking_backend="Phoenix",#"MLflow",
+            experiment_name="sqlats-multiagent",
+            #parent_run_id=PARENT_RUN_ID,
+            #child_run_name=str(question_id) if question_id is not None else "",
             api_name="/process_message"
         )
         
