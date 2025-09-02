@@ -1119,7 +1119,7 @@ Examples:
             logger.info("No valid ensemble methods provided; skipping ensemble comparison.")
 
         ensemble_method_results = None
-        if (methods_to_use and len(methods_to_use) > 0) and (not args.use_eval_result_only):
+        if (methods_to_use and len(methods_to_use) > 0):
             # Prepare winners per (method, tie-breaker) using all_runs DataFrame
             try:
                 all_runs_df = pd.read_csv(args.all_runs)
@@ -1132,6 +1132,8 @@ Examples:
                 if 'extracted_python_code' not in all_runs_df.columns and 'code' in all_runs_df.columns:
                     all_runs_df['extracted_python_code'] = all_runs_df['code']
 
+                # In eval-only mode we will assess winners using the eval_result column
+                # Otherwise, we will execute process_row as before
                 ensemble_method_results = {}
                 for method in methods_to_use:
                     for tb in tie_breakers_to_use:
@@ -1144,46 +1146,84 @@ Examples:
                                 mlflow_run_id=None,
                                 tie_break_method=tb,
                             )
-                            # Evaluate winners_df similarly to compare_output's per-row logic
-                            # Build a minimal df with columns expected by process_row
-                            winners_eval_df = winners_df.copy()
-                            if 'extracted_python_code' not in winners_eval_df.columns:
-                                winners_eval_df['extracted_python_code'] = winners_eval_df.get('response')
 
-                            # Process each winner row
                             total_questions = len(question_summary_df)
-                            match_count = 0
-                            no_match_count = 0
-                            qe_count_measured = 0
-                            total_rows = len(winners_eval_df)
-                            for _, row in winners_eval_df.iterrows():
-                                try:
-                                    res, exc = process_row(row, args.db_base_path, args.metadata_base_path)
-                                except Exception:
-                                    res = 'Error'
-                                outcome = str(res).strip()
-                                if outcome == 'Match':
-                                    match_count += 1
-                                elif outcome == 'No Match':
-                                    no_match_count += 1
-                                else:
-                                    qe_count_measured += 1
 
-                            # Treat any missing winners as Query Error to keep denominator as all questions
-                            missing_questions = max(0, total_questions - total_rows)
-                            query_error_count = qe_count_measured + missing_questions
-                            match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                            no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                            query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                            ensemble_method_results[key] = {
-                                'match_count': match_count,
-                                'no_match_count': no_match_count,
-                                'query_error_count': query_error_count,
-                                'total_questions': total_questions,
-                                'match_pct_all': match_pct_all,
-                                'no_match_pct_all': no_match_pct_all,
-                                'query_error_pct_all': query_error_pct_all,
-                            }
+                            if not args.use_eval_result_only:
+                                # Execute code to evaluate winners like compare_output
+                                winners_eval_df = winners_df.copy()
+                                if 'extracted_python_code' not in winners_eval_df.columns:
+                                    winners_eval_df['extracted_python_code'] = winners_eval_df.get('response')
+
+                                match_count = 0
+                                no_match_count = 0
+                                qe_count_measured = 0
+                                total_rows = len(winners_eval_df)
+                                for _, row in winners_eval_df.iterrows():
+                                    try:
+                                        res, exc = process_row(row, args.db_base_path, args.metadata_base_path)
+                                    except Exception:
+                                        res = 'Error'
+                                    outcome = str(res).strip()
+                                    if outcome == 'Match':
+                                        match_count += 1
+                                    elif outcome == 'No Match':
+                                        no_match_count += 1
+                                    else:
+                                        qe_count_measured += 1
+
+                                # Treat any missing winners as Query Error to keep denominator as all questions
+                                missing_questions = max(0, total_questions - total_rows)
+                                query_error_count = qe_count_measured + missing_questions
+                                match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                                no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                                query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                                ensemble_method_results[key] = {
+                                    'match_count': match_count,
+                                    'no_match_count': no_match_count,
+                                    'query_error_count': query_error_count,
+                                    'total_questions': total_questions,
+                                    'match_pct_all': match_pct_all,
+                                    'no_match_pct_all': no_match_pct_all,
+                                    'query_error_pct_all': query_error_pct_all,
+                                }
+                            else:
+                                # Eval-only path: use eval_result mappings to assess winners
+                                # Build join keys available in both winners_df and all_runs_df
+                                join_keys = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in all_runs_df.columns]
+                                merged = winners_df.merge(all_runs_df, on=join_keys, how='left', suffixes=('_winner', ''))
+
+                                # Normalize eval_result to comparison_result categories for winners
+                                if 'eval_result' in merged.columns:
+                                    merged['winner_comparison'] = merged['eval_result'].map(_normalize_eval_result_to_comparison)
+                                elif 'comparison_result' in merged.columns:
+                                    merged['winner_comparison'] = merged['comparison_result']
+                                else:
+                                    merged['winner_comparison'] = None
+
+                                match_count = int((merged['winner_comparison'] == 'Match').sum())
+                                no_match_count = int((merged['winner_comparison'] == 'No Match').sum())
+                                qe_measured = int((merged['winner_comparison'].isna()) | (merged['winner_comparison'] == 'Query Error'))
+                                qe_measured = int(((merged['winner_comparison'].isna()) | (merged['winner_comparison'] == 'Query Error')).sum())
+
+                                # Treat any missing winners (no DF to select) as Query Error to keep denominator constant
+                                total_rows = len(winners_df)
+                                missing_questions = max(0, total_questions - total_rows)
+                                query_error_count = qe_measured + missing_questions
+
+                                match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                                no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                                query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
+
+                                ensemble_method_results[key] = {
+                                    'match_count': match_count,
+                                    'no_match_count': no_match_count,
+                                    'query_error_count': int(query_error_count),
+                                    'total_questions': int(total_questions),
+                                    'match_pct_all': float(match_pct_all),
+                                    'no_match_pct_all': float(no_match_pct_all),
+                                    'query_error_pct_all': float(query_error_pct_all),
+                                }
                         except Exception as e:
                             logger.warning(f"Failed computing ensemble winners for method {method} with tie-breaker {tb}: {e}")
 
