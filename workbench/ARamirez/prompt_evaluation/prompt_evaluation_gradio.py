@@ -34,6 +34,90 @@ from dotenv import load_dotenv
 from pathlib import Path
 from profile_to_metadata import map_all_profiles_to_markdown, map_all_profiles_to_metadata_format
 from dynamic_prompt.mdgen_v2 import generate_markdown_from_metadata
+from ensemble_logic import ensemble_result
+
+# === Custom Tee class for dual output ===
+class Tee:
+    """
+    A class that writes to multiple file-like objects simultaneously.
+    Useful for writing to both terminal and file at the same time.
+    """
+    def __init__(self, *files):
+        self.files = files
+    
+    def write(self, data):
+        for f in self.files:
+            f.write(data)
+            f.flush()  # Ensure immediate output
+    
+    def flush(self):
+        for f in self.files:
+            f.flush()
+
+# === Timeout helpers (60s) ===
+def _execute_code_child(extracted_code, cheatsheet_path, db_name, database_path, start_of_week="Monday"):
+    # Recreate minimal environment in the child process to avoid pickling issues
+    import pydough as _pydough
+    from datetime import datetime as _datetime
+    from test_data.eval import execute_code_and_extract_result as _inner_exec
+    env = {"pydough": _pydough, "datetime": _datetime}
+    return _inner_exec(extracted_code, env, cheatsheet_path, db_name, database_path, start_of_week=start_of_week)
+
+def _call_in_process_with_timeout(target, args=(), kwargs=None, timeout_seconds=60, label=""):
+    import multiprocessing as _mp
+    if kwargs is None:
+        kwargs = {}
+    result_queue = _mp.Queue()
+
+    def _runner(q, fn, a, k):
+        try:
+            res = fn(*a, **k)
+            q.put(("ok", res))
+        except BaseException as e:
+            q.put(("err", str(e)))
+
+    p = _mp.Process(target=_runner, args=(result_queue, target, args, kwargs))
+    p.daemon = True
+    p.start()
+    try:
+        status, payload = result_queue.get(timeout=timeout_seconds)
+    except Exception:
+        if p.is_alive():
+            p.terminate()
+        p.join()
+        try:
+            name = label or getattr(target, "__name__", "<call>")
+        except Exception:
+            name = label or "<call>"
+        print(f"[TIMEOUT] {name} exceeded {timeout_seconds} seconds. Terminated child process.")
+        return None, f"Timeout after {timeout_seconds} seconds"
+    else:
+        p.join()
+        if status == "ok":
+            return payload, None
+        return None, payload
+
+def execute_code_with_timeout(extracted_code, cheatsheet_path, db_name, database_path, start_of_week="Monday", timeout_seconds=60):
+    payload, err = _call_in_process_with_timeout(
+        _execute_code_child,
+        args=(extracted_code, cheatsheet_path, db_name, database_path, start_of_week),
+        timeout_seconds=timeout_seconds,
+        label="execute_code_and_extract_result",
+    )
+    if err:
+        return None, err, None
+    return payload
+
+def gradio_process_question_with_timeout(*args, timeout_seconds=180, **kwargs):
+    def _child(*c_args, **c_kwargs):
+        import gradio_agent_v2 as _gav2
+        return _gav2.process_question(*c_args, **c_kwargs)
+    payload, err = _call_in_process_with_timeout(
+        _child, args=args, kwargs=kwargs, timeout_seconds=timeout_seconds, label="gradio_agent_v2.process_question"
+    )
+    if err:
+        return {"dataframe": None}
+    return payload
 
 # === Credential for google cloud ===
 def load_google_credentials(selected_keys=[1]):
@@ -145,7 +229,7 @@ def format_prompt(prompt, data, question, script, db_name=None, db_markdown_map=
     similar_code = data.get(question, {}).get("similar_queries", "similar pydough code not found")
     question = data.get(question, {}).get("redefined_question", question)
 
-    parts = [f"{question}\nDatabase Schema:\n", json_to_markdown(db_content['metadata'])]
+    parts = [f"{question}\n\nDatabase Schema:\n\n", json_to_markdown(db_content['metadata'])]
 
     if extra_metadata:
         print(extra_metadata)
@@ -189,139 +273,132 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
     total_rows = len(tested_df)
     counts = tested_df['comparison_result'].value_counts()
     percentages = counts / total_rows
-    filtered_args = {key: value for key, value in vars(args).items() if key not in ['name', 'description', 'extra_args']}
+    percentages_dict = percentages.to_dict()
 
-    # === Conditional Custom Metrics ===
-    if "difficulty" in tested_df.columns and "complexity" in tested_df.columns:
-        total_per_difficulty = tested_df["difficulty"].value_counts()
-        total_per_complexity = tested_df["complexity"].value_counts()
-        total_per_combo = tested_df.groupby(["difficulty", "complexity"]).size()
+    # Filter parameters for logging
+    filtered_args = {
+        key: value
+        for key, value in vars(args).items()
+        if key not in ['name', 'description', 'extra_args']
+    }
 
-        match_df = tested_df[tested_df["comparison_result"] == "Match"]
-        non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
+    try:
+        # === Conditional Custom Metrics ===
+        if "difficulty" in tested_df.columns and "complexity" in tested_df.columns:
+            total_per_difficulty = tested_df["difficulty"].value_counts()
+            total_per_complexity = tested_df["complexity"].value_counts()
+            total_per_combo = tested_df.groupby(["difficulty", "complexity"]).size()
 
-        matches_per_difficulty = match_df["difficulty"].value_counts()
-        matches_per_complexity = match_df["complexity"].value_counts()
-        matches_per_combo = match_df.groupby(["difficulty", "complexity"]).size()
+            match_df = tested_df[tested_df["comparison_result"] == "Match"]
+            non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
 
-        match_pct_difficulty = matches_per_difficulty / total_per_difficulty
-        match_pct_complexity = matches_per_complexity / total_per_complexity
-        match_pct_combo = matches_per_combo / total_per_combo
+            matches_per_difficulty = match_df["difficulty"].value_counts()
+            matches_per_complexity = match_df["complexity"].value_counts()
+            matches_per_combo = match_df.groupby(["difficulty", "complexity"]).size()
 
-        for diff, pct in match_pct_difficulty.items():
-            mlflow.log_metric(f"match_pct_difficulty_{diff}", pct)
+            match_pct_difficulty = matches_per_difficulty / total_per_difficulty
+            match_pct_complexity = matches_per_complexity / total_per_complexity
+            match_pct_combo = matches_per_combo / total_per_combo
 
-        for comp, pct in match_pct_complexity.items():
-            mlflow.log_metric(f"match_pct_complexity_{comp}", pct)
+            non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
+            non_matches_per_complexity = non_match_df["complexity"].value_counts()
+            non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
 
-        for (diff, comp), pct in match_pct_combo.items():
-            mlflow.log_metric(f"match_pct_{diff}_{comp}", pct)
+            no_match_pct_difficulty = non_matches_per_difficulty / total_per_difficulty
+            no_match_pct_complexity = non_matches_per_complexity / total_per_complexity
+            no_match_pct_combo = non_matches_per_combo / total_per_combo
 
-        non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
-        non_matches_per_complexity = non_match_df["complexity"].value_counts()
-        non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
+            # Grouping by db_name, difficulty, and complexity
+            matches_per_combo_db = match_df.groupby(["difficulty", "complexity", "db_name"]).size()
+            total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
 
-        no_match_pct_difficulty = non_matches_per_difficulty / total_per_difficulty
-        no_match_pct_complexity = non_matches_per_complexity / total_per_complexity
-        no_match_pct_combo = non_matches_per_combo / total_per_combo
+            matches_per_difficulty_db = match_df.groupby(["difficulty", "db_name"]).size()
+            total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
 
-        for diff, pct in no_match_pct_difficulty.items():
-            mlflow.log_metric(f"no_match_pct_difficulty_{diff}", pct)
+            matches_per_complexity_db = match_df.groupby(["complexity", "db_name"]).size()
+            total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
 
-        for comp, pct in no_match_pct_complexity.items():
-            mlflow.log_metric(f"no_match_pct_complexity_{comp}", pct)
+            # === Save calculated metrics as CSVs ===
+            os.makedirs(output_path, exist_ok=True)
 
-        for (diff, comp), pct in no_match_pct_combo.items():
-            mlflow.log_metric(f"no_match_pct_{diff}_{comp}", pct) 
-        total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
-        total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
-        total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
-        non_matches_per_combo_per_database = non_match_df.groupby(["difficulty","complexity", "db_name"]).size()
-        matches_per_combo_db  = match_df.groupby(["difficulty", "complexity","db_name"]).size()
-        non_matches_difficulty_per_database = non_match_df.groupby(["difficulty", "db_name"]).size()
-        matches_per_difficulty_db  = match_df.groupby(["difficulty", "db_name"]).size()
-        non_matches_complexity_per_database = non_match_df.groupby(["complexity", "db_name"]).size()
-        matches_per_complexity_db  = match_df.groupby(["complexity", "db_name"]).size()
+            # Match % per difficulty+complexity+db
+            match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
+            match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
+            match_pct_combo_path = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
+            match_pct_combo_df.to_csv(match_pct_combo_path, index=False)
+            mlflow.log_artifact(match_pct_combo_path)
 
-        # Combo (difficulty + complexity + db)
-        match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
-        match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
-        match_pct_combo_csv = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
-        match_pct_combo_df.to_csv(match_pct_combo_csv, index=False)
-        mlflow.log_artifact(match_pct_combo_csv)
+            # Match % per difficulty+db
+            match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
+            match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
+            match_pct_difficulty_path = f"{output_path}/match_percentage_per_difficulty_db.csv"
+            match_pct_difficulty_df.to_csv(match_pct_difficulty_path, index=False)
+            mlflow.log_artifact(match_pct_difficulty_path)
 
-        # Difficulty + db
-        match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
-        match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
-        match_pct_difficulty_csv = f"{output_path}/match_percentage_per_difficulty_db.csv"
-        match_pct_difficulty_df.to_csv(match_pct_difficulty_csv, index=False)
-        mlflow.log_artifact(match_pct_difficulty_csv)
+            # Match % per complexity+db
+            match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
+            match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
+            match_pct_complexity_path = f"{output_path}/match_percentage_per_complexity_db.csv"
+            match_pct_complexity_df.to_csv(match_pct_complexity_path, index=False)
+            mlflow.log_artifact(match_pct_complexity_path)
 
-        # Complexity + db
-        match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
-        match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
-        match_pct_complexity_csv = f"{output_path}/match_percentage_per_complexity_db.csv"
-        match_pct_complexity_df.to_csv(match_pct_complexity_csv, index=False)
-        mlflow.log_artifact(match_pct_complexity_csv)
-        # Save raw counts as CSV artifacts if needed
-        matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
-        matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
-        matches_per_combo.to_csv(f"{output_path}/match_count_per_difficulty_complexity.csv")
+            # === Save Raw Match Counts ===
+            matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
+            matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
+            matches_per_combo.to_csv(f"{output_path}/match_count_per_difficulty_complexity.csv")
 
-        mlflow.log_artifact(f"{output_path}/match_count_per_difficulty.csv")
-        mlflow.log_artifact(f"{output_path}/match_count_per_complexity.csv")
-        mlflow.log_artifact(f"{output_path}/match_count_per_difficulty_complexity.csv")
-        # Group by db_name, difficulty, and complexity
-        count_combo = df.groupby(['db_name', 'difficulty', 'complexity']).size().reset_index(name='count')
-        total_combo = count_combo['count'].sum()
-        count_combo['percentage'] = (count_combo['count'] / total_combo) * 100
+            mlflow.log_artifact(f"{output_path}/match_count_per_difficulty.csv")
+            mlflow.log_artifact(f"{output_path}/match_count_per_complexity.csv")
+            mlflow.log_artifact(f"{output_path}/match_count_per_difficulty_complexity.csv")
 
-        # Group by db_name and complexity
-        count_complexity_db = df.groupby(['db_name', 'complexity']).size().reset_index(name='count')
-        total_complexity = count_complexity_db['count'].sum()
-        count_complexity_db['percentage'] = (count_complexity_db['count'] / total_complexity) * 100
+            # === Distribution Reports ===
+            output_dir = f"{output_path}/distribution_reports"
+            os.makedirs(output_dir, exist_ok=True)
 
-        # Group by db_name and difficulty (optional)
-        count_difficulty_db = df.groupby(['db_name', 'difficulty']).size().reset_index(name='count')
-        total_difficulty = count_difficulty_db['count'].sum()
-        count_difficulty_db['percentage'] = (count_difficulty_db['count'] / total_difficulty) * 100
+            # db_name + difficulty + complexity
+            count_combo = tested_df.groupby(['db_name', 'difficulty', 'complexity']).size().reset_index(name='count')
+            total_combo = count_combo['count'].sum()
+            count_combo['percentage'] = (count_combo['count'] / total_combo) * 100
+            combo_path = f"{output_dir}/distribution_difficulty_complexity.csv"
+            count_combo.to_csv(combo_path, index=False)
 
-        # === Group and Calculate Percentage by difficulty
-        count_difficulty = df.groupby('difficulty').size().reset_index(name='count')
-        total_difficulty = count_difficulty['count'].sum()
-        count_difficulty['percentage'] = (count_difficulty['count'] / total_difficulty) * 100
+            # db_name + complexity
+            count_complexity_db = tested_df.groupby(['db_name', 'complexity']).size().reset_index(name='count')
+            total_complexity = count_complexity_db['count'].sum()
+            count_complexity_db['percentage'] = (count_complexity_db['count'] / total_complexity) * 100
+            complexity_db_path = f"{output_dir}/distribution_complexity_db.csv"
+            count_complexity_db.to_csv(complexity_db_path, index=False)
 
-        # === Group and Calculate Percentage by complexity
-        count_complexity = df.groupby('complexity').size().reset_index(name='count')
-        total_complexity = count_complexity['count'].sum()
-        count_complexity['percentage'] = (count_complexity['count'] / total_complexity) * 100
+            # db_name + difficulty
+            count_difficulty_db = tested_df.groupby(['db_name', 'difficulty']).size().reset_index(name='count')
+            total_difficulty = count_difficulty_db['count'].sum()
+            count_difficulty_db['percentage'] = (count_difficulty_db['count'] / total_difficulty) * 100
+            difficulty_db_path = f"{output_dir}/distribution_difficulty_db.csv"
+            count_difficulty_db.to_csv(difficulty_db_path, index=False)
 
-        output_dir = f"{output_path}/distribution_reports"
-        os.makedirs(output_dir, exist_ok=True)
+            # overall difficulty
+            count_difficulty = tested_df.groupby('difficulty').size().reset_index(name='count')
+            total_difficulty = count_difficulty['count'].sum()
+            count_difficulty['percentage'] = (count_difficulty['count'] / total_difficulty) * 100
+            overall_difficulty_path = f"{output_dir}/overall_distribution_difficulty.csv"
+            count_difficulty.to_csv(overall_difficulty_path, index=False)
 
-        combo_path = f"{output_dir}/distribution_difficulty_complexity.csv"
-        complexity_path = f"{output_dir}/distribution_complexity_db.csv"
-        difficulty_path = f"{output_dir}/distribution_difficulty_db.csv"
-        count_complexity_db.to_csv(complexity_path, index=False)
-        count_difficulty_db.to_csv(difficulty_path, index=False)
+            # overall complexity
+            count_complexity = tested_df.groupby('complexity').size().reset_index(name='count')
+            total_complexity = count_complexity['count'].sum()
+            count_complexity['percentage'] = (count_complexity['count'] / total_complexity) * 100
+            overall_complexity_path = f"{output_dir}/overall_distribution_complexity.csv"
+            count_complexity.to_csv(overall_complexity_path, index=False)
 
-        mlflow.log_artifact(difficulty_path)
-        mlflow.log_artifact(complexity_path)
-        count_combo.to_csv(combo_path, index=False)
-        count_complexity.to_csv(complexity_path, index=False)
-        count_difficulty.to_csv(difficulty_path, index=False)
-        difficulty_path = f"{output_dir}/overall_distribution_difficulty.csv"
-        complexity_path = f"{output_dir}/overall_distribution_complexity.csv"
-
-        count_difficulty.to_csv(difficulty_path, index=False)
-        count_complexity.to_csv(complexity_path, index=False)
-
-        mlflow.log_artifact(difficulty_path)
-        mlflow.log_artifact(complexity_path)
-
-        mlflow.log_artifact(combo_path)
-        mlflow.log_artifact(complexity_path)
-        mlflow.log_artifact(difficulty_path)
+            # Log artifacts once
+            mlflow.log_artifact(combo_path)
+            mlflow.log_artifact(complexity_db_path)
+            mlflow.log_artifact(difficulty_db_path)
+            mlflow.log_artifact(overall_complexity_path)
+            mlflow.log_artifact(overall_difficulty_path)
+    except Exception as e:
+        print(f"Error in logging MLflow metrics: {e}")
+        raise
     mlflow.log_params(filtered_args)
     mlflow.log_params(kwargs)
     mlflow.log_metrics(percentages)
@@ -346,34 +423,45 @@ def prepare_eval_data(args):
     db_markdown_map = prepare_db_markdown_map(df, args.metadata_base_path, args.db_base_path)
     return prompt, script, data, df, db_markdown_map
 
-def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test, db_base_path, metadata_base_path, db_markdown_map=None, tries=1, ensemble_selection_method="size", extra_metadata=None, use_gradio_agent=True, **kwargs):
+def run_models_parallel(
+    mlflow_run_id, prompt, data, row, script, models_to_test,
+    db_base_path, metadata_base_path, db_markdown_map=None,
+    tries=1, ensemble_selection_method="size", extra_metadata=None,
+    use_gradio_agent=True, **kwargs
+):
     question = row["question"]
     question_idx = row.get("question_index", "?")
     db_name = row.get("db_name", None)
     dataset_name = row.get("dataset_name", None)
-    formatted_q, formatted_prompt = format_prompt(prompt, data, question, script, db_name, db_markdown_map, extra_metadata)
+    formatted_q, formatted_prompt = format_prompt(
+        prompt, data, question, script, db_name,
+        db_markdown_map, extra_metadata
+    )
 
-    db_path = os.path.join(db_base_path, dataset_name, 'databases', db_name, f"{db_name}.sqlite")
-    metadata_path = os.path.join(metadata_base_path, dataset_name, "metadata", f"{db_name}_graph.json")
+    db_path = os.path.join(
+        db_base_path, dataset_name, 'databases', db_name, f"{db_name}.sqlite"
+    )
+    metadata_path = os.path.join(
+        metadata_base_path, dataset_name, "metadata", f"{db_name}_graph.json"
+    )
     
     print(f"[DEBUG] [Q{question_idx}] Running models for: {question}")
 
     def run_model(model_info, attempt):
-        attempt = attempt+1
+        attempt = attempt + 1
         provider_name = model_info["provider"]
         model_id = model_info["model_id"]
         config = model_info["config"]
-        print(f"[DEBUG] [Q{question_idx}] Running model {model_info['name']} (attempt {(attempt+1)})")
+        print(f"[DEBUG] [Q{question_idx}] Running model {model_info['name']} (attempt {attempt})")
         client = get_provider(provider_name, model_id, config=config)
         start = time.time()
         model_specific_kwargs = dict(kwargs)
-        gen_df_json = "No valid genrated df"
+        gen_df_json = "No valid generated df"
         gen_sql = "No valid SQL"
         if model_info["name"] == "gemini":
             model_specific_kwargs.pop("use_stream", None)
         try:
-            raw_response = None
-            usage = None
+            raw_response, usage, code, gen_df = None, None, None, None
             response = client.ask(formatted_q, formatted_prompt, **model_specific_kwargs)
             duration = time.time() - start
             if isinstance(response, tuple):
@@ -384,11 +472,13 @@ def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test
             print(f"[DEBUG] [Q{question_idx}] Code generated by {model_info['name']}:\n{code}")
 
             gen_df_json = None
-            
             if code:
                 print(f"[DEBUG] [Q{question_idx}] Executing code for {model_info['name']}")
                 env = {"pydough": pydough, "datetime": datetime}
-                gen_df, _, gen_sql = execute_code_and_extract_result(code, env, metadata_path, db_name, db_path, start_of_week="Monday")
+                # Execute with 60s timeout in a separate process
+                gen_df, _, gen_sql = execute_code_with_timeout(
+                    code, metadata_path, db_name, db_path, start_of_week="Monday", timeout_seconds=300
+                )
                 if gen_df is not None:
                     gen_df_json = gen_df.to_json(orient="records", date_format="iso")
                 if not gen_sql:
@@ -396,12 +486,11 @@ def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test
                 print(f"[DEBUG] [Q{question_idx}] DataFrame from {model_info['name']} is {'valid' if gen_df is not None else 'None'}")
             else:
                 gen_df, gen_sql = None, "No code generated"
-                
-            
+
         except Exception as e:
             raw_response, code, duration, usage, gen_df = None, None, time.time() - start, None, None
             print(f"[ERROR] [Q{question_idx}] Model {model_info['name']} failed on attempt {attempt}: {e}")
-            #print(f"[DEBUG] [Q{question_idx}] Generated DataFrame: {gen_df}")
+
         return {
             "question_index": question_idx,
             "question": question,
@@ -421,81 +510,27 @@ def run_models_parallel(mlflow_run_id, prompt, data, row, script, models_to_test
 
     all_runs = []
     for attempt in range(tries):
-        with ThreadPoolExecutor(max_workers=len(models_to_test)) as executor:
-            futures = [executor.submit(run_model, model, attempt) for model in models_to_test]
-            all_runs.extend(f.result() for f in futures)
+        for model in models_to_test:   # <-- now sequential
+            result = run_model(model, attempt)
+            all_runs.append(result)
 
     print(f"[DEBUG] [Q{question_idx}] Completed all runs. Total: {len(all_runs)}")
     for run in all_runs:
-        print(f"[DEBUG] [Q{question_idx}] {run['model_name']} | Attempt: {(run['attempt'])} | DF: {'✅' if run['df'] is not None else '❌'}")
+        print(f"[DEBUG] [Q{question_idx}] {run['model_name']} | Attempt: {run['attempt']} | DF: {'✅' if run['df'] is not None else '❌'}")
 
     # Group runs by model name
     grouped = {}
     for run in all_runs:
         grouped.setdefault(run["model_name"], []).append(run)
+
     # Fallback: use ensemble result
     print(f"[INFO] [Q{question_idx}] No early match found. Running ensemble fallback...")
-    ensemble = ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx, ensemble_selection_method=ensemble_selection_method, use_gradio_agent=use_gradio_agent)
+    ensemble = ensemble_result(
+        mlflow_run_id, all_runs, question, dataset_name, db_name,
+        question_idx, ensemble_selection_method=ensemble_selection_method,
+        use_gradio_agent=use_gradio_agent
+    )
     return ensemble, all_runs
-
-def ensemble_result(mlflow_run_id, all_runs, question, dataset_name, db_name, question_idx="?", ensemble_selection_method="size", use_gradio_agent=True):
-    """
-    Uses dataframe comparison to select the most consistent output.
-    """
-    print(f"[INFO] [Q{question_idx}] Running ensemble selection with method '{ensemble_selection_method}'")
-    if ensemble_selection_method == "favourite":
-        dataset_name = all_runs[0]["dataset_name"] if all_runs and "dataset_name" in all_runs[0] else None
-        db_name = all_runs[0]["db_name"] if all_runs and "db_name" in all_runs[0] else None
-        print(f"[INFO] [Q{question_idx}] Favourite-based selection")
-        return favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx=question_idx)
-    
-    valid_runs = [r for r in all_runs if r["df"] is not None]
-    if not valid_runs:
-        
-        if use_gradio_agent:
-            print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
-            print(f"Dataset name: {dataset_name}")
-
-            # Call Gradio agent
-            response = gradio_agent_v2.process_question("http://10.128.0.5:2024/", question, dataset_name, db_name, mlflow_run_id, question_id=question_idx, architecture="Multi-Agent Supervisor")
-            gradio_df = response['dataframe']
-
-            if gradio_df is None:
-                print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
-                fallback_runs = [r for r in all_runs if r["response"]]
-                fallback = random.choice(fallback_runs) if fallback_runs else None
-                if fallback:
-                    return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"]
-                else:
-                    print(f"[ERROR] [Q{question_idx}] No valid fallback run found.")
-                    return None, 0.0, None, None, None
-
-            gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
-
-            # Attempt to reuse duration/usage from a previous Claude run if it exists
-            claude_run = next((r for r in all_runs if r["model_name"] == "claude"), None)
-            duration = claude_run["duration"] if claude_run else None
-            usage = claude_run["usage"] if claude_run else None
-
-            print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
-            return response, duration, usage, "Gradio agent", gen_df_json
-        else:
-            print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
-            for r in all_runs:
-                if r["response"]:
-                    print(f"[INFO] Using raw response from {r['model_name']} despite no DF.")
-                    return r["response"], r["duration"], r["usage"], r["model_name"], None
-            return None, 0.0, None, None, None
-
-    if ensemble_selection_method == "size":
-        print(f"[INFO] [Q{question_idx}] Size-based selection")
-        return size_based_selection(valid_runs, question, question_idx=question_idx)
-    elif ensemble_selection_method == "frequency":
-        print(f"[INFO] [Q{question_idx}] Frequency-based selection")
-        return frequency_based_selection(valid_runs, question, question_idx=question_idx)
-    else:
-        print(f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size.")
-        return size_based_selection(valid_runs, question, question_idx=question_idx)
 
 def favourite_based_selection(all_runs, question, dataset_name, db_name, question_idx="?"):
     """
@@ -578,11 +613,12 @@ def frequency_based_selection(valid_runs, question, question_idx="?"):
         fallback = random.choice(valid_runs)
         return fallback["response"], fallback["duration"], fallback["usage"], fallback["model_name"], fallback["gen_df_json"], fallback["generated_sql"]
     
-def size_based_selection(valid_runs, question, question_idx="?"):
+def size_based_selection(valid_runs, question, dataset_name, db_name, question_idx="?"):
     """
     Selects the run with the largest dataframe size.
     If multiple runs have the same largest size, prioritize the response from the model named "claude".
     """
+    
     size_dict = defaultdict(int)
     for i in range(len(valid_runs)):
         if "df" in valid_runs[i] and valid_runs[i]["df"] is not None:
@@ -591,74 +627,102 @@ def size_based_selection(valid_runs, question, question_idx="?"):
             size_dict[i] = -1  # Mark as invalid
 
     if size_dict and max(size_dict.values()) > -1:
-        best_index = max(size_dict, key=lambda i: size_dict[i])
-#         max_size = max(size_dict.values())
-#         candidates = [i for i in size_dict if size_dict[i] == max_size]
+        # Compute all candidates with the maximum size
+        max_size = max(size_dict.values())
+        candidates = [i for i, s in size_dict.items() if s == max_size]
+        # If tie, use deterministic random tie-break
+        if len(candidates) == 1:
+            best_index = candidates[0] 
+            best = valid_runs[best_index]
+            print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
+            return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
+        else:
+#             print("Calling gradio agent SQLATS to choose the best result")
+#             response = gradio_process_question_with_timeout("http://10.128.0.5:2025/", question, "BIRD", db_name, question_id=question_idx, architecture="SQLATS", timeout_seconds=180)
+#             gradio_df = response['dataframe']
 
-#         # Prioritize "claude" if multiple candidates exist
-#         for candidate in candidates:
-#             if valid_runs[candidate]["model_name"] == "claude":
-#                 best_index = candidate
-#                 break
-#         else:
-#             best_index = candidates[0]  # Default to the first candidate
+#             if gradio_df is None:
+#                 best_index = candidates[0] 
+#                 best = valid_runs[best_index]
+#                 print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
+#                 return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
 
-        best = valid_runs[best_index]
-        print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
-        return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
+#             gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+
+#             # Attempt to reuse duration/usage from a previous Claude run if it exists
+#             claude_run = next((r for r in valid_runs if r["model_name"] == "claude"), None)
+#             duration = claude_run["duration"] if claude_run else None
+#             usage = claude_run["usage"] if claude_run else None
+
+#             print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
+#             return response, duration, usage, "Gradio agent", gen_df_json
+            best_index = candidates[0] 
+            best = valid_runs[best_index]
+            print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
+            return best["response"], best["duration"], best["usage"], best["model_name"], best["gen_df_json"], best["generated_sql"]
+
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return None, 0.0, None, None, None, None
 
-def process_questions(mlflow_run_id, data, provider, model_id, prompt, questions_df, script, threads, db_base_path, metadata_base_path, db_markdown_map=None, use_parallel=False, use_extrametadata=False, ensemble_selection_method="size", tries=1, use_gradio_agent=True, **kwargs):
-    print(f"[INFO] Processing {len(questions_df)} questions with {threads} threads using provider: {provider}, model_id: {model_id}")
+def process_questions(
+    mlflow_run_id,
+    data,
+    provider,
+    model_id,
+    prompt,
+    questions_df,
+    script,
+    threads, 
+    db_base_path,
+    metadata_base_path,
+    db_markdown_map=None,
+    use_parallel=False,
+    use_extrametadata=False,
+    ensemble_selection_method="size",
+    tries=1,
+    use_gradio_agent=True,
+    **kwargs
+):
+    print(f"[INFO] Processing {len(questions_df)} questions using provider: {provider}, model_id: {model_id}")
     num_keys = len(google_credentials)
-    def thread_wrapper(row_tuple):
-        index, row = row_tuple
+
+    def process_single_question(index, row):
         row["question_index"] = index + 1
         question = row["question"]
         db_name = row.get("db_name", None)
         dataset_name = row.get("dataset_name", None)
         mapping_metadata = None
+
         if use_extrametadata:
             if db_name and db_markdown_map and db_name in db_markdown_map:
                 db_content = db_markdown_map[db_name]
-            if dataset_name == 'spider_data':
-                dataset_name = 'Spider'
+            if dataset_name == "spider_data":
+                dataset_name = "Spider"
             result = gradio_process_question(question, dataset_name, db_name)
             if result:
                 json_data = result.get("json_data", None)
-                mapping_metadata = map_all_profiles_to_markdown(db_content['metadata'],json_data, db_name)
-            
-        # Select Google credentials in a round-robin manner
-        api_key, project_id = google_credentials[index % num_keys]  # Round-robin selection
+                mapping_metadata = map_all_profiles_to_markdown(
+                    db_content["metadata"], json_data, db_name
+                )
 
-        # Configuations and selected models
-        models_to_test = [ 
-            {
-                "name": "claude",
-                "provider": "anthropic",
-                "model_id": "claude-opus-4@20250514",
-                "config": {
-                    "api_key": api_key,
-                    "project": project_id,
-                    "region": "us-east5"
-                }
-            },
+        # Selección round-robin de credenciales
+        api_key, project_id = google_credentials[index % num_keys]
+
+        models_to_test = [
             {
                 "name": "gemini",
                 "provider": "google",
-                "model_id": "gemini-2.5-pro",
+                "model_id": "projects/316936339319/locations/us-central1/endpoints/5954430508988366848",
                 "config": {
                     "api_key": api_key,
                     "project": project_id,
-                    "region": "us-central1"
-                }
+                    "region": "us-central1",
+                },
             }
         ]
-        
-        if use_parallel: 
-            # Return both the ensemble result and all model runs
+
+        if use_parallel:
             ensemble_result, all_runs = run_models_parallel(
                 mlflow_run_id=mlflow_run_id,
                 prompt=prompt,
@@ -673,7 +737,7 @@ def process_questions(mlflow_run_id, data, provider, model_id, prompt, questions
                 tries=tries,
                 extra_metadata=mapping_metadata,
                 use_gradio_agent=use_gradio_agent,
-                **kwargs
+                **kwargs,
             )
             return (ensemble_result, all_runs)
         else:
@@ -686,14 +750,34 @@ def process_questions(mlflow_run_id, data, provider, model_id, prompt, questions
                 script=script,
                 db_markdown_map=db_markdown_map,
                 extra_metadata=mapping_metadata,
-                **kwargs
+                **kwargs,
             )
 
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        results = list(executor.map(thread_wrapper, questions_df.iterrows()))
+    # Parallelize across questions if threads > 1
+    results = [None] * len(questions_df)
+    num_workers = threads if threads and threads > 1 else 1
+    if num_workers > 1:
+        print(f"[INFO] Running per-question processing with {num_workers} threads")
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_idx = {}
+            for idx, row in questions_df.iterrows():
+                future = executor.submit(process_single_question, idx, row)
+                future_to_idx[future] = idx
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as e:
+                    print(f"[ERROR] Failed processing question index {idx + 1}: {e}")
+                    # Fallback placeholder on exception to keep alignment
+                    results[idx] = (None, 0.0, None, None, None)
+    else:
+        print(f"[INFO] Running per-question processing sequentially")
+        for index, row in questions_df.iterrows():
+            results[index] = process_single_question(index, row)
 
     if use_parallel:
-        # results is a list of (ensemble, all_runs) tuples
         ensembles = [r[0] for r in results]
         all_model_runs_per_question = [r[1] for r in results]
         return ensembles, all_model_runs_per_question
@@ -766,70 +850,83 @@ def mlflow_run_context(args, git_hash):
 def main(git_hash):
     print(f"[INFO] Starting prompt evaluation.")
     debug_log = "debug_log.txt"
-    sys.stdout = open("debug_log.txt", "w")
-    sys.stderr = sys.stdout
-    args, kwargs = parse_arguments()
+    
+    # Set up dual output: both terminal and file
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    debug_file = open("debug_log.txt", "w")
+    
+    try:
+        # Create Tee objects for stdout and stderr
+        sys.stdout = Tee(original_stdout, debug_file)
+        sys.stderr = Tee(original_stderr, debug_file)
+        args, kwargs = parse_arguments()
 
-    # Load Google credentials based on --keys argument
-    load_google_credentials(args.keys)
+        # Load Google credentials based on --keys argument
+        load_google_credentials(args.keys)
 
-    with mlflow_run_context(args, git_hash):
-        prompt, script, data, df, db_markdown_map = prepare_eval_data(args)
+        with mlflow_run_context(args, git_hash):
+            prompt, script, data, df, db_markdown_map = prepare_eval_data(args)
 
-        # Retrieve the mlflow run ID
-        mlflow_run_id = mlflow.active_run().info.run_id
+            # Retrieve the mlflow run ID
+            mlflow_run_id = mlflow.active_run().info.run_id
 
-        results, all_model_runs_per_question = process_questions(
-            mlflow_run_id,
-            data,
-            provider=args.provider.lower(),
-            model_id=args.model_id,
-            prompt=prompt,
-            questions_df=df,
-            script=script,
-            threads=args.num_threads,
-            db_base_path=args.db_base_path,
-            metadata_base_path=args.metadata_base_path,
-            db_markdown_map=db_markdown_map,
-            use_parallel=args.use_parallel,
-            use_extrametadata=args.use_extrametadata,
-            ensemble_selection_method=args.ensemble_selection_method,
-            tries=args.tries,
-            use_gradio_agent=args.use_gradio_agent,
-            **kwargs
-        )
+            results, all_model_runs_per_question = process_questions(
+                mlflow_run_id,
+                data,
+                provider=args.provider.lower(),
+                model_id=args.model_id,
+                prompt=prompt,
+                questions_df=df,
+                script=script,
+                threads=args.num_threads,
+                db_base_path=args.db_base_path,
+                metadata_base_path=args.metadata_base_path,
+                db_markdown_map=db_markdown_map,
+                use_parallel=args.use_parallel,
+                use_extrametadata=args.use_extrametadata,
+                ensemble_selection_method=args.ensemble_selection_method,
+                tries=args.tries,
+                use_gradio_agent=args.use_gradio_agent,
+                **kwargs
+            )
 
-        # Existing output (ensemble/winner per question)
-        df = build_results_df(df, results)
+            # Existing output (ensemble/winner per question)
+            df = build_results_df(df, results)
 
-        output_path = f"./results/{args.provider}/{args.model_id}"
-        os.makedirs(output_path, exist_ok=True)
-        output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-        df.to_csv(output_file, index=False)
+            output_path = f"./results/{args.provider}/{args.model_id}"
+            os.makedirs(output_path, exist_ok=True)
+            output_file = f"{output_path}/responses_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+            df.to_csv(output_file, index=False)
 
-        # --- NEW: Output all model runs (for parallel mode) ---
-        if args.use_parallel:
-            # all_model_runs_per_question is a list of lists of dicts
-            flat_runs = []
-            for runs in all_model_runs_per_question:
-                flat_runs.extend(runs)
-            # Build DataFrame
-            all_runs_df = pd.DataFrame(flat_runs)
-            all_runs_csv = f"{output_path}/all_model_runs_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
-            all_runs_df.to_csv(all_runs_csv, index=False)
-            mlflow.log_artifact(all_runs_csv)
+            # --- NEW: Output all model runs (for parallel mode) ---
+            if args.use_parallel:
+                # all_model_runs_per_question is a list of lists of dicts
+                flat_runs = []
+                for runs in all_model_runs_per_question:
+                    flat_runs.extend(runs)
+                # Build DataFrame
+                all_runs_df = pd.DataFrame(flat_runs)
+                all_runs_csv = f"{output_path}/all_model_runs_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
+                all_runs_df.to_csv(all_runs_csv, index=False)
+                mlflow.log_artifact(all_runs_csv)
 
-        test_path = f"{output_path}/test"
-        os.makedirs(test_path, exist_ok=True)
-        tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
+            test_path = f"{output_path}/test"
+            os.makedirs(test_path, exist_ok=True)
+            tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
 
-        log_mlflow_metrics_and_artifacts(
-            tested_df, output_path, args, kwargs, tested_file, debug_log
-        )
+            log_mlflow_metrics_and_artifacts(
+                tested_df, output_path, args, kwargs, tested_file, debug_log
+            )
+    finally:
+        # Restore original stdout/stderr and close debug file
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        debug_file.close()
 
 def build_results_df(df, results):
     df["response"] = [r[0] for r in results]
-    df["execution_time"] = [r[1] for r in results if r[1] is not None]
+    df["execution_time"] = [r[1] if len(r) > 1 else None for r in results]
     df["extracted_python_code"] = df["response"].apply(extract_python_code)
     df["usage"] = [r[2] if len(r) > 2 else None for r in results]
     df["model_name"] = [r[3] if len(r) > 3 else None for r in results]
