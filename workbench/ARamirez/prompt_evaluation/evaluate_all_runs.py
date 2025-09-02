@@ -776,6 +776,45 @@ def _log_mlflow_stats(args,
             mlflow.start_run(run_name=run_name)
             started_here = True
 
+        # Log parameters used to call the script (masking sensitive values)
+        try:
+            # Log the exact command invocation
+            try:
+                mlflow.log_param('script_command', ' '.join(sys.argv))
+            except Exception:
+                pass
+
+            # Helper to serialize values
+            def _serialize_param_value(val):
+                try:
+                    if val is None:
+                        return None
+                    if isinstance(val, (list, tuple)):
+                        return ','.join([str(v) for v in val])
+                    if isinstance(val, dict):
+                        return json.dumps(val)
+                    return str(val)
+                except Exception:
+                    return str(val)
+
+            for k, v in vars(args).items():
+                if v is None:
+                    continue
+                name = _sanitize_mlflow_name(f'arg__{k}')
+                lower_k = str(k).lower()
+                value_to_log = _serialize_param_value(v)
+                if any(s in lower_k for s in ['token', 'password', 'secret', 'key', 'credential']):
+                    # Avoid leaking secrets; indicate presence without value
+                    value_to_log = '***'
+                try:
+                    mlflow.log_param(name, value_to_log)
+                except Exception:
+                    # Best-effort; continue on individual failures
+                    pass
+        except Exception:
+            # Non-fatal if parameter logging fails
+            pass
+
         # Overall results
         total_runs = len(result_df)
         comparison_counts = result_df['comparison_result'].value_counts()
