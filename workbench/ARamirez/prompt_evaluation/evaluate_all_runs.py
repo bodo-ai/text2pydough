@@ -1175,25 +1175,10 @@ Examples:
                 # Otherwise, we will execute process_row as before
                 ensemble_method_results = {}
                 for method in methods_to_use:
-                    # Optimization: agent_indiv_grade does not depend on tie-breakers.
-                    # Compute winners once and reuse across all requested tie-breakers to avoid repeated LLM grading.
-                    precomputed_winners_df = None
-                    if method == 'agent_indiv_grade':
-                        try:
-                            precomputed_winners_df = ensemble_from_all_runs_df(
-                                all_runs_df,
-                                ensemble_selection_method=method,
-                                use_gradio_agent=False,
-                                mlflow_run_id=None,
-                                tie_break_method=tie_breakers_to_use[0] if tie_breakers_to_use else 'random',
-                            )
-                        except Exception as e:
-                            logger.warning(f"Failed precomputing winners for agent_indiv_grade: {e}")
-
                     for tb in tie_breakers_to_use:
                         key = f"{method}|tb:{tb}"
                         try:
-                            winners_df = precomputed_winners_df if precomputed_winners_df is not None else ensemble_from_all_runs_df(
+                            winners_df = ensemble_from_all_runs_df(
                                 all_runs_df,
                                 ensemble_selection_method=method,
                                 use_gradio_agent=False,

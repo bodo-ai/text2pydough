@@ -399,6 +399,7 @@ def agent_indiv_grade_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
     question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
 ):
     """
     Use LLM-based grading from scooring.evaluate_dataframes to select the best candidate.
@@ -410,7 +411,7 @@ def agent_indiv_grade_selection(
 
     try:
         # Import lazily to avoid heavy deps unless method is actually used
-        from scooring import evaluate_dataframes as llm_evaluate_dataframes
+        from scooring_dspy import evaluate_single_dataframe as llm_evaluate_single
     except Exception as e:
         print(
             f"[WARNING] [Q{question_idx}] Failed importing LLM grader (scooring.evaluate_dataframes): {e}. Falling back to random."
@@ -433,12 +434,36 @@ def agent_indiv_grade_selection(
             candidates.append(serialized)
 
     try:
-        best_index = llm_evaluate_dataframes(question=question, dataframes=candidates)
-        if not isinstance(best_index, int) or best_index < 0 or best_index >= len(valid_runs):
-            raise ValueError("Invalid best_index returned by LLM grader")
+        # Score each candidate individually using the LLM grader
+        scores: List[int] = []
+        for df_json in candidates:
+            try:
+                score_val = llm_evaluate_single(question, df_json)
+                if not isinstance(score_val, (int, float)):
+                    score_val = -1
+            except Exception:
+                score_val = -1
+            scores.append(int(score_val))
+
+        if not scores:
+            return random_based_selection(valid_runs, question, question_idx=question_idx)
+
+        max_score = max(scores)
+        tied_indices = [i for i, s in enumerate(scores) if s == max_score]
+
+        if len(tied_indices) == 1:
+            best_index = tied_indices[0]
+        else:
+            # Resolve ties according to requested tie_break_method using existing tie-break helpers
+            best_index = select_tie_break_index(
+                tied_indices, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+            )
+            if best_index is None:
+                best_index = rng.choice(tied_indices)
+
         best = valid_runs[best_index]
         print(
-            f"[INFO] [Q{question_idx}] agent_indiv_grade selected: {best.get('model_name')} (candidate #{best_index})."
+            f"[INFO] [Q{question_idx}] agent_indiv_grade selected: {best.get('model_name')} (candidate #{best_index}) with score {max_score}."
         )
         return (
             best.get("response"),
@@ -537,7 +562,7 @@ def ensemble_result(
         return density_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "agent_indiv_grade":
         print(f"[INFO] [Q{question_idx}] Agent-individual-grade selection (LLM)" )
-        return agent_indiv_grade_selection(valid_runs, question, question_idx=question_idx)
+        return agent_indiv_grade_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
