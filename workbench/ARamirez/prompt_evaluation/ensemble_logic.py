@@ -329,11 +329,33 @@ def random_based_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
     question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
 ):
     if not valid_runs:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in random_based_selection.")
         return (None, 0.0, None, None, None, None)
-    chosen = rng.choice(valid_runs)
+
+    # If only one candidate, return it directly
+    if len(valid_runs) == 1:
+        chosen = valid_runs[0]
+        print(f"[INFO] [Q{question_idx}] Random-based selection: single candidate {chosen['model_name']}")
+        return (
+            chosen["response"],
+            chosen["duration"],
+            chosen["usage"],
+            chosen["model_name"],
+            chosen.get("gen_df_json"),
+            chosen.get("generated_sql"),
+        )
+
+    # Multiple candidates: defer to standard tie-break dispatcher for consistency
+    candidate_indices = list(range(len(valid_runs)))
+    best_index = select_tie_break_index(
+        candidate_indices, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+    )
+    if best_index is None:
+        best_index = rng.choice(candidate_indices)
+    chosen = valid_runs[best_index]
     print(f"[INFO] [Q{question_idx}] Random-based selection: {chosen['model_name']}")
     return (
         chosen["response"],
