@@ -815,6 +815,24 @@ def _log_mlflow_stats(args,
             # Non-fatal if parameter logging fails
             pass
 
+        # Log any extra CLI params that were not defined in argparse but passed by the user
+        try:
+            extra_cli_params = getattr(args, 'extra_cli_params', None)
+            if isinstance(extra_cli_params, dict) and extra_cli_params:
+                for k, v in extra_cli_params.items():
+                    name = _sanitize_mlflow_name(str(k))
+                    lower_k = str(k).lower()
+                    value_to_log = _serialize_param_value(v)
+                    if any(s in lower_k for s in ['token', 'password', 'secret', 'key', 'credential']):
+                        value_to_log = '***'
+                    try:
+                        mlflow.log_param(name, value_to_log)
+                    except Exception:
+                        pass
+        except Exception:
+            # Continue even if extra-params logging fails
+            pass
+
         # Overall results
         total_runs = len(result_df)
         comparison_counts = result_df['comparison_result'].value_counts()
@@ -1057,7 +1075,44 @@ Examples:
         help='Skip MLflow logging'
     )
     
-    args = parser.parse_args()
+    # Parse known args, capturing any unknown flags for MLflow logging
+    args, _unknown_cli_tokens = parser.parse_known_args()
+    # Re-parse from sys.argv to retain exact token order for unknowns
+    try:
+        argv_tokens = sys.argv[1:]
+    except Exception:
+        argv_tokens = []
+    extra_cli_params = {}
+    try:
+        idx = 0
+        while idx < len(argv_tokens):
+            token = argv_tokens[idx]
+            if isinstance(token, str) and token.startswith('--'):
+                raw = token[2:]
+                # Skip if this flag is defined in argparse schema
+                defined = any(raw == a or raw.replace('-', '_') == a.replace('-', '_') for a in vars(args).keys())
+                if defined:
+                    # If this known flag takes a value, skip its value too
+                    # Heuristic: if next token exists and doesn't start with '-', assume it's a value
+                    if (idx + 1) < len(argv_tokens) and not str(argv_tokens[idx + 1]).startswith('-'):
+                        idx += 1
+                else:
+                    if '=' in raw:
+                        key, val = raw.split('=', 1)
+                        extra_cli_params[key] = val
+                    else:
+                        # Lookahead for value
+                        if (idx + 1) < len(argv_tokens) and not str(argv_tokens[idx + 1]).startswith('-'):
+                            extra_cli_params[raw] = argv_tokens[idx + 1]
+                            idx += 1
+                        else:
+                            extra_cli_params[raw] = True
+            idx += 1
+    except Exception:
+        # Best-effort; ignore failures
+        pass
+    # Attach for downstream MLflow logging
+    setattr(args, 'extra_cli_params', extra_cli_params)
     
     # Set logging level
     if args.verbose:
