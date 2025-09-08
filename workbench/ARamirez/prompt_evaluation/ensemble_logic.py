@@ -502,6 +502,109 @@ def agent_indiv_grade_selection(
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
 
+def binary_comp_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+):
+    """
+    Round-robin pairwise comparison using LLM binary evaluator from scooring_agents.
+    Each candidate gains +1 score for every other candidate it wins against.
+    The highest total score wins; ties are resolved via the configured tie-breaker.
+    """
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in binary_comp_selection.")
+        return (None, 0.0, None, None, None, None)
+
+    # Lazy import to avoid heavy deps unless used
+    try:
+        from scooring_agents import evaluate_binary_dataframes as llm_evaluate_binary
+    except Exception as e:
+        print(
+            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents.evaluate_binary_dataframes): {e}. Falling back to random."
+        )
+        return random_based_selection(valid_runs, question, question_idx=question_idx)
+
+    # Prepare JSON strings for each candidate
+    candidates: List[str] = []
+    for run in valid_runs:
+        gen_df_json = run.get("gen_df_json")
+        if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
+            candidates.append(gen_df_json)
+        else:
+            df_obj = run.get("df")
+            try:
+                serialized = df_obj.to_json(orient="records", date_format="iso") if df_obj is not None else ""
+            except Exception:
+                serialized = ""
+            candidates.append(serialized)
+
+    n = len(candidates)
+    if n == 1:
+        best = valid_runs[0]
+        print(f"[INFO] [Q{question_idx}] binary_comp_selection: single candidate {best.get('model_name')}")
+        return (
+            best.get("response"),
+            best.get("duration"),
+            best.get("usage"),
+            best.get("model_name"),
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+
+    scores: List[int] = [0] * n
+
+    # Round-robin pairwise comparisons
+    for i in range(n):
+        for j in range(i + 1, n):
+            try:
+                result = llm_evaluate_binary(question, [candidates[i], candidates[j]])
+                # result may be string or int; map 0->i wins, 1->j wins
+                if isinstance(result, str):
+                    result = result.strip()
+                    pair_idx = int(result) if result.isdigit() else None
+                elif isinstance(result, (int, float)):
+                    pair_idx = int(result)
+                else:
+                    pair_idx = None
+            except Exception:
+                pair_idx = None
+
+            if pair_idx == 0:
+                scores[i] += 1
+            elif pair_idx == 1:
+                scores[j] += 1
+            else:
+                # Ignore invalid/undecided outcomes; rely on tie-breaker later
+                pass
+
+    max_score = max(scores) if scores else -1
+    tied_indices = [idx for idx, s in enumerate(scores) if s == max_score]
+
+    if len(tied_indices) == 1:
+        best_index = tied_indices[0]
+    else:
+        # Resolve ties using existing tie-break helpers
+        best_index = select_tie_break_index(
+            tied_indices, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
+        if best_index is None:
+            best_index = rng.choice(tied_indices)
+
+    best = valid_runs[best_index]
+    print(
+        f"[INFO] [Q{question_idx}] binary_comp_selection selected: {best.get('model_name')} (candidate #{best_index}) with score {max_score}."
+    )
+    return (
+        best.get("response"),
+        best.get("duration"),
+        best.get("usage"),
+        best.get("model_name"),
+        best.get("gen_df_json"),
+        best.get("generated_sql"),
+    )
+
 def ensemble_result(
     mlflow_run_id: Optional[str],
     all_runs: List[Dict[str, Any]],
@@ -585,6 +688,9 @@ def ensemble_result(
     elif ensemble_selection_method == "agent_indiv_grade":
         print(f"[INFO] [Q{question_idx}] Agent-individual-grade selection (LLM)" )
         return agent_indiv_grade_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+    elif ensemble_selection_method == "binary_comp_selection":
+        print(f"[INFO] [Q{question_idx}] Binary-comp selection (pairwise LLM)" )
+        return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
