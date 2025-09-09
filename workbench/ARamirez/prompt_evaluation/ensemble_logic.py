@@ -417,6 +417,152 @@ def density_based_selection(
         return (None, 0.0, None, None, None, None)
 
 
+def reverse_size_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+):
+    """
+    Select candidate with the SMALLEST DataFrame size (> -1). Falls back when none valid.
+    """
+    size_dict: Dict[int, int] = defaultdict(int)
+    for i in range(len(valid_runs)):
+        if "df" in valid_runs[i] and valid_runs[i]["df"] is not None:
+            try:
+                size_dict[i] = int(valid_runs[i]["df"].size)
+            except Exception:
+                size_dict[i] = -1
+        else:
+            size_dict[i] = -1
+
+    # Filter to valid sizes (> -1)
+    valid_sizes = [s for s in size_dict.values() if s > -1]
+    if size_dict and len(valid_sizes) > 0:
+        min_size = min(valid_sizes)
+        candidates = [i for i, s in size_dict.items() if s == min_size]
+        best_index = select_tie_break_index(
+            candidates, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
+        best = valid_runs[best_index]
+        print(f"[INFO] [Q{question_idx}] Reverse size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
+        return (
+            best["response"],
+            best["duration"],
+            best["usage"],
+            best["model_name"],
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+    else:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in reverse_size_based_selection.")
+        return (None, 0.0, None, None, None, None)
+
+
+def reverse_density_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+):
+    """
+    Select candidate with the LOWEST bytes-per-cell density (> -1). Falls back when none valid.
+    """
+    density_dict: Dict[int, float] = defaultdict(float)
+    for i in range(len(valid_runs)):
+        df_obj = valid_runs[i].get("df") if isinstance(valid_runs[i], dict) else None
+        if df_obj is not None:
+            try:
+                rows, cols = df_obj.shape
+                denom = rows * cols
+                if denom > 0:
+                    try:
+                        bytes_used = df_obj.memory_usage(deep=True).sum()
+                    except Exception:
+                        bytes_used = df_obj.memory_usage(deep=False).sum()
+                    density_value = float(bytes_used) / float(denom)
+                    density_dict[i] = density_value
+                else:
+                    density_dict[i] = -1.0
+            except Exception:
+                density_dict[i] = -1.0
+        else:
+            density_dict[i] = -1.0
+
+    # Filter to valid densities (> -1)
+    valid_densities = [d for d in density_dict.values() if d > -1]
+    if density_dict and len(valid_densities) > 0:
+        min_density = min(valid_densities)
+        candidates = [i for i, d in density_dict.items() if d == min_density]
+        best_index = select_tie_break_index(
+            candidates, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
+        best = valid_runs[best_index]
+        print(
+            f"[INFO] [Q{question_idx}] Reverse density-based selection: {best['model_name']} with density {density_dict[best_index]:.2f} bytes/cell."
+        )
+        return (
+            best["response"],
+            best["duration"],
+            best["usage"],
+            best["model_name"],
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+    else:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in reverse_density_based_selection.")
+        return (None, 0.0, None, None, None, None)
+
+
+def reverse_frequency_based_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+):
+    """
+    Select the candidate with the FEWEST consensus matches across pairs.
+    """
+    consensus: Dict[int, int] = defaultdict(int)
+
+    for i in range(len(valid_runs)):
+        for j in range(i + 1, len(valid_runs)):
+            try:
+                if symetric_compare_df(valid_runs[i]["df"], valid_runs[j]["df"], query_category="a", question=question):
+                    consensus[i] += 1
+                    consensus[j] += 1
+            except Exception:
+                # Ignore comparison failures; treat as no match contributing to lower consensus
+                pass
+
+    if len(consensus) > 0:
+        # Consider all indices present in valid_runs even if absent from consensus dict (default 0)
+        for idx in range(len(valid_runs)):
+            if idx not in consensus:
+                consensus[idx] = 0
+        min_votes = min(consensus.values())
+        tied_indices = [i for i, v in consensus.items() if v == min_votes]
+        best_index = select_tie_break_index(
+            tied_indices, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
+        best = valid_runs[best_index]
+        print(
+            f"[INFO] [Q{question_idx}] Reverse frequency-based selection: {best['model_name']} with {consensus[best_index]} matches (lowest)."
+        )
+        return (
+            best["response"],
+            best["duration"],
+            best["usage"],
+            best["model_name"],
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+    else:
+        # If consensus empty (shouldn't happen with any valid_runs), fall back to random
+        print(f"[WARNING] [Q{question_idx}] No consensus computed in reverse_frequency_based_selection. Falling back to random.")
+        return random_based_selection(valid_runs, question, question_idx=question_idx)
+
+
 def agent_indiv_grade_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
@@ -685,6 +831,15 @@ def ensemble_result(
     elif ensemble_selection_method == "density":
         print(f"[INFO] [Q{question_idx}] Density-based selection")
         return density_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+    elif ensemble_selection_method == "reverse_size":
+        print(f"[INFO] [Q{question_idx}] Reverse size-based selection")
+        return reverse_size_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+    elif ensemble_selection_method == "reverse_density":
+        print(f"[INFO] [Q{question_idx}] Reverse density-based selection")
+        return reverse_density_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+    elif ensemble_selection_method == "reverse_frequency":
+        print(f"[INFO] [Q{question_idx}] Reverse frequency-based selection")
+        return reverse_frequency_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "agent_indiv_grade":
         print(f"[INFO] [Q{question_idx}] Agent-individual-grade selection (LLM)" )
         return agent_indiv_grade_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
