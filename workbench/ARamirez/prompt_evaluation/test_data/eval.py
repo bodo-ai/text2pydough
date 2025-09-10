@@ -438,54 +438,136 @@ def query_sqlite_db(
         if connection:
             connection.close()
         return None, str(e)
+
+def bird_eval(predicted_sql,ground_truth, db_path):
+    """
+    Compare the results of executing two SQL queries against the database.
+    Returns 1 if the results match, 0 otherwise.
     
-def process_row(row,db_base_path,metadata_base_path):
+    Args:
+        predicted_sql: The generated SQL query to test
+        ground_truth: The reference SQL query
+        db_path: Path to the SQLite database
+        
+    Returns:
+        int: 1 if results match, 0 otherwise
+    """
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    # Connect to the database
+    cursor = conn.cursor()
+    cursor.execute(predicted_sql)
+    predicted_res = cursor.fetchall()
+    cursor.execute(ground_truth)
+    ground_truth_res = cursor.fetchall()
+
+    res = 0
+    if set(predicted_res) == set(ground_truth_res):
+        res = 1
+    return res 
+
+def process_row(row, db_base_path, metadata_base_path):
+    """
+    Process a single row to evaluate both DataFrame comparison (custom_eval) and SQL execution comparison (bird_eval).
+    
+    Returns:
+        tuple: (custom_eval_result, custom_eval_exception, bird_eval_result, bird_eval_exception)
+    """
     extracted_code = row.get('extracted_python_code')
-    question= row.get('question')
-    
+    question = row.get('question')
     db_name = row['db_name']
     dataset_name = row['dataset_name']
     sql = row['sql']
     db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
     
+    # Initialize default return values
+    custom_eval_result = 'Unknown'
+    custom_eval_exception = None
+    bird_eval_result = 'Unknown'
+    bird_eval_exception = None
+    
+    # Case 1: We have extracted Python code to execute
     if pd.notna(extracted_code): 
         local_env = {"pydough": pydough, "datetime": datetime}
-
         metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
 
-        result, exception, gen_sql = execute_code_and_extract_result(extracted_code, local_env, metadata_path, db_name, db_path)
+        # Execute the PyDough code
+        result_df, execution_exception, generated_sql = execute_code_and_extract_result(
+            extracted_code, local_env, metadata_path, db_name, db_path
+        )
         
-        if result is not None:
-            extracted_sql, db_exception = query_sqlite_db(sql,db_path )
-            if extracted_sql is None:
-                return 'SQL error', db_exception  # If query failed, return 'Unknown' and exception
-
-            comparison_result = compare_df(extracted_sql, result, query_category="a", question=question)
+        if result_df is not None:
+            # Get ground truth DataFrame by executing the reference SQL
+            ground_truth_df, sql_exception = query_sqlite_db(sql, db_path)
             
-            return 'Match' if comparison_result else 'No Match', None
+            if ground_truth_df is None:
+                # SQL execution failed
+                custom_eval_result = 'SQL Error'
+                custom_eval_exception = sql_exception
+                bird_eval_result = 'SQL Error'
+                bird_eval_exception = sql_exception
+            else:
+                # Custom evaluation: DataFrame comparison
+                try:
+                    df_comparison_success = compare_df(
+                        ground_truth_df, result_df, query_category="a", question=question
+                    )
+                    custom_eval_result = 'Match' if df_comparison_success else 'No Match'
+                except Exception as e:
+                    custom_eval_result = 'Comparison Error'
+                    custom_eval_exception = str(e)
+                
+                # Bird evaluation: SQL execution comparison
+                if generated_sql is not None:
+                    try:
+                        sql_comparison_result = bird_eval(generated_sql, sql, db_path)
+                        bird_eval_result = 'Match' if sql_comparison_result == 1 else 'No Match'
+                    except Exception as e:
+                        bird_eval_result = 'Comparison Error'
+                        bird_eval_exception = str(e)
+                else:
+                    bird_eval_result = 'No SQL Generated'
         else:
-            return 'Query Error', exception
+            # PyDough code execution failed
+            custom_eval_result = 'Query Error'
+            custom_eval_exception = execution_exception
+            bird_eval_result = 'Query Error'
+            bird_eval_exception = execution_exception
     
-    ground_truth_json, db_exception = query_sqlite_db(sql, db_path)
-
-    if db_exception is not None:
-        return 'SQL error', None
+    # Case 2: No extracted code, try to use pre-computed DataFrame from CSV
+    else:
+        # Get ground truth DataFrame
+        ground_truth_df, sql_exception = query_sqlite_db(sql, db_path)
+        
+        if sql_exception is not None:
+            custom_eval_result = 'SQL Error'
+            custom_eval_exception = sql_exception
+            bird_eval_result = 'Not Available'
+            return custom_eval_result, custom_eval_exception, bird_eval_result, bird_eval_exception
+        
+        # Try to get generated DataFrame from CSV
+        generated_df_json = row.get('gen_df_json')
+        
+        if generated_df_json is not None and ground_truth_df is not None:
+            try:
+                generated_df = pd.read_json(generated_df_json)
+                df_comparison_success = compare_df(
+                    ground_truth_df, generated_df, query_category="a", question=question
+                )
+                custom_eval_result = 'Match' if df_comparison_success else 'No Match'
+                bird_eval_result = 'Not Available' 
+            except Exception as e:
+                custom_eval_result = 'Comparison Error'
+                custom_eval_exception = str(e)
+                bird_eval_result = 'Not Available'
+        else:
+            custom_eval_result = 'Insufficient Data'
+            bird_eval_result = 'Not Available'
     
-    extracted_ground_truth_json = ground_truth_json
-    extracted_df_json = row.get('gen_df_json')
+    return custom_eval_result, custom_eval_exception, bird_eval_result, bird_eval_exception
 
-    if extracted_ground_truth_json is None or extracted_df_json is None:
-        return 'Unknown', None
-    
-    ground_truth_df = extracted_ground_truth_json
-    gen_df = pd.read_json(extracted_df_json)
-    
-    comparison_result = compare_df(ground_truth_df, gen_df, query_category="a", question=question)
-
-    return 'Match' if comparison_result else 'No Match', None
-
-def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path):
+def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path):
     """
     Extracts and returns the value of a specific variable from Python code in a CSV file.
     Returns:
@@ -513,12 +595,12 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
                 p.terminate()
             p.join()
             print(f"[TIMEOUT] process_row exceeded {timeout_seconds} seconds for question: {getattr(row_obj, 'question', '<unknown>')}")
-            return ('Query Error', f'Timeout after {timeout_seconds} seconds')
+            return ('Timeout Error', f'Timeout after {timeout_seconds} seconds', 'Timeout Error', f'Timeout after {timeout_seconds} seconds')
         else:
             p.join()
             if status == 'ok':
                 return payload
-            return ('Query Error', payload)
+            return ('Processing Error', str(payload), 'Processing Error', str(payload))
 
     def process_and_return(row):
         return process_row_with_timeout(row, db_base_path, metadata_base_path, timeout_seconds=60)
@@ -527,9 +609,11 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     with ThreadPoolExecutor() as executor:
         results = list(executor.map(process_and_return, [row for index, row in df.iterrows()]))
 
-    # Extract the results into the appropriate columns
-    df['comparison_result'] = [result[0] for result in results]
-    df['exception'] = [result[1] for result in results]
+    # Extract the results into columns named after the evaluation methods
+    df['custom_eval'] = [result[0] for result in results]
+    df['custom_eval_exception'] = [result[1] for result in results]
+    df['bird_eval'] = [result[2] for result in results]
+    df['bird_eval_exception'] = [result[3] for result in results]
     
     output_file = f"{folder_path}/test_execution_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
     # Save the modified DataFrame to a new CSV

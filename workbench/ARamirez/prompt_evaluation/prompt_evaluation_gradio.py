@@ -17,7 +17,7 @@ from mlflow.pyfunc import PythonModel
 from concurrent.futures import ThreadPoolExecutor
 import pydough
 from utils import autocommit, get_git_commit, modified_files, untracked_files, download_database
-from test_data.eval import compare_output, execute_code_and_extract_result, compare_df, symetric_compare_df
+from test_data.eval import custom_eval, execute_code_and_extract_result, compare_df, symetric_compare_df
 import aisuite as ai
 from provider.ai_providers_v2 import *
 from dynamic_prompt.generate_pydough_metadata import generate_metadata
@@ -271,9 +271,15 @@ def get_response(client, prompt, data, row, script, db_markdown_map=None, extra_
 
 def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, tested_file, debug_log="debug_log.txt"):
     total_rows = len(tested_df)
-    counts = tested_df['comparison_result'].value_counts()
-    percentages = counts / total_rows
-    percentages_dict = percentages.to_dict()
+    
+    # Calculate metrics for both evaluation methods
+    custom_eval_counts = tested_df['custom_eval'].value_counts()
+    custom_eval_percentages = custom_eval_counts / total_rows
+    custom_eval_percentages_dict = custom_eval_percentages.to_dict()
+    
+    bird_eval_counts = tested_df['bird_eval'].value_counts()
+    bird_eval_percentages = bird_eval_counts / total_rows
+    bird_eval_percentages_dict = bird_eval_percentages.to_dict()
 
     # Filter parameters for logging
     filtered_args = {
@@ -289,67 +295,99 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
             total_per_complexity = tested_df["complexity"].value_counts()
             total_per_combo = tested_df.groupby(["difficulty", "complexity"]).size()
 
-            match_df = tested_df[tested_df["comparison_result"] == "Match"]
-            non_match_df = tested_df[tested_df["comparison_result"] != "Match"]
+            # Custom eval metrics by difficulty/complexity
+            custom_eval_match_df = tested_df[tested_df["custom_eval"] == "Match"]
+            custom_eval_non_match_df = tested_df[tested_df["custom_eval"] != "Match"]
 
-            matches_per_difficulty = match_df["difficulty"].value_counts()
-            matches_per_complexity = match_df["complexity"].value_counts()
-            matches_per_combo = match_df.groupby(["difficulty", "complexity"]).size()
+            custom_eval_matches_per_difficulty = custom_eval_match_df["difficulty"].value_counts()
+            custom_eval_matches_per_complexity = custom_eval_match_df["complexity"].value_counts()
+            custom_eval_matches_per_combo = custom_eval_match_df.groupby(["difficulty", "complexity"]).size()
 
-            match_pct_difficulty = matches_per_difficulty / total_per_difficulty
-            match_pct_complexity = matches_per_complexity / total_per_complexity
-            match_pct_combo = matches_per_combo / total_per_combo
+            custom_eval_match_pct_difficulty = custom_eval_matches_per_difficulty / total_per_difficulty
+            custom_eval_match_pct_complexity = custom_eval_matches_per_complexity / total_per_complexity
+            custom_eval_match_pct_combo = custom_eval_matches_per_combo / total_per_combo
 
-            non_matches_per_difficulty = non_match_df["difficulty"].value_counts()
-            non_matches_per_complexity = non_match_df["complexity"].value_counts()
-            non_matches_per_combo = non_match_df.groupby(["difficulty", "complexity"]).size()
+            # Bird eval metrics by difficulty/complexity (only for available results)
+            bird_eval_available_df = tested_df[tested_df["bird_eval"].isin(["Match", "No Match"])]
+            if len(bird_eval_available_df) > 0:
+                bird_eval_match_df = tested_df[tested_df["bird_eval"] == "Match"]
+                
+                bird_eval_matches_per_difficulty = bird_eval_match_df["difficulty"].value_counts()
+                bird_eval_matches_per_complexity = bird_eval_match_df["complexity"].value_counts()
+                bird_eval_matches_per_combo = bird_eval_match_df.groupby(["difficulty", "complexity"]).size()
 
-            no_match_pct_difficulty = non_matches_per_difficulty / total_per_difficulty
-            no_match_pct_complexity = non_matches_per_complexity / total_per_complexity
-            no_match_pct_combo = non_matches_per_combo / total_per_combo
+                # Only calculate percentages for cases where bird_eval was available
+                bird_eval_total_per_difficulty = bird_eval_available_df["difficulty"].value_counts()
+                bird_eval_total_per_complexity = bird_eval_available_df["complexity"].value_counts()
+                bird_eval_total_per_combo = bird_eval_available_df.groupby(["difficulty", "complexity"]).size()
 
-            # Grouping by db_name, difficulty, and complexity
-            matches_per_combo_db = match_df.groupby(["difficulty", "complexity", "db_name"]).size()
+                bird_eval_match_pct_difficulty = bird_eval_matches_per_difficulty / bird_eval_total_per_difficulty
+                bird_eval_match_pct_complexity = bird_eval_matches_per_complexity / bird_eval_total_per_complexity
+                bird_eval_match_pct_combo = bird_eval_matches_per_combo / bird_eval_total_per_combo
+
+            # Grouping by db_name, difficulty, and complexity for custom_eval
+            custom_eval_matches_per_combo_db = custom_eval_match_df.groupby(["difficulty", "complexity", "db_name"]).size()
             total_per_combo_db = tested_df.groupby(["difficulty", "complexity", "db_name"]).size()
 
-            matches_per_difficulty_db = match_df.groupby(["difficulty", "db_name"]).size()
+            custom_eval_matches_per_difficulty_db = custom_eval_match_df.groupby(["difficulty", "db_name"]).size()
             total_per_difficulty_db = tested_df.groupby(["difficulty", "db_name"]).size()
 
-            matches_per_complexity_db = match_df.groupby(["complexity", "db_name"]).size()
+            custom_eval_matches_per_complexity_db = custom_eval_match_df.groupby(["complexity", "db_name"]).size()
             total_per_complexity_db = tested_df.groupby(["complexity", "db_name"]).size()
 
             # === Save calculated metrics as CSVs ===
             os.makedirs(output_path, exist_ok=True)
 
-            # Match % per difficulty+complexity+db
-            match_pct_combo_df = (matches_per_combo_db / total_per_combo_db).reset_index()
-            match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "match_percentage"]
-            match_pct_combo_path = f"{output_path}/match_percentage_per_difficulty_complexity_db.csv"
-            match_pct_combo_df.to_csv(match_pct_combo_path, index=False)
-            mlflow.log_artifact(match_pct_combo_path)
+            # Custom eval metrics
+            custom_eval_match_pct_combo_df = (custom_eval_matches_per_combo_db / total_per_combo_db).reset_index()
+            custom_eval_match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "custom_eval_match_percentage"]
+            custom_eval_match_pct_combo_path = f"{output_path}/custom_eval_match_percentage_per_difficulty_complexity_db.csv"
+            custom_eval_match_pct_combo_df.to_csv(custom_eval_match_pct_combo_path, index=False)
+            mlflow.log_artifact(custom_eval_match_pct_combo_path)
 
-            # Match % per difficulty+db
-            match_pct_difficulty_df = (matches_per_difficulty_db / total_per_difficulty_db).reset_index()
-            match_pct_difficulty_df.columns = ["difficulty", "db_name", "match_percentage"]
-            match_pct_difficulty_path = f"{output_path}/match_percentage_per_difficulty_db.csv"
-            match_pct_difficulty_df.to_csv(match_pct_difficulty_path, index=False)
-            mlflow.log_artifact(match_pct_difficulty_path)
+            # Custom eval match % per difficulty+db
+            custom_eval_match_pct_difficulty_df = (custom_eval_matches_per_difficulty_db / total_per_difficulty_db).reset_index()
+            custom_eval_match_pct_difficulty_df.columns = ["difficulty", "db_name", "custom_eval_match_percentage"]
+            custom_eval_match_pct_difficulty_path = f"{output_path}/custom_eval_match_percentage_per_difficulty_db.csv"
+            custom_eval_match_pct_difficulty_df.to_csv(custom_eval_match_pct_difficulty_path, index=False)
+            mlflow.log_artifact(custom_eval_match_pct_difficulty_path)
 
-            # Match % per complexity+db
-            match_pct_complexity_df = (matches_per_complexity_db / total_per_complexity_db).reset_index()
-            match_pct_complexity_df.columns = ["complexity", "db_name", "match_percentage"]
-            match_pct_complexity_path = f"{output_path}/match_percentage_per_complexity_db.csv"
-            match_pct_complexity_df.to_csv(match_pct_complexity_path, index=False)
-            mlflow.log_artifact(match_pct_complexity_path)
+            # Custom eval match % per complexity+db
+            custom_eval_match_pct_complexity_df = (custom_eval_matches_per_complexity_db / total_per_complexity_db).reset_index()
+            custom_eval_match_pct_complexity_df.columns = ["complexity", "db_name", "custom_eval_match_percentage"]
+            custom_eval_match_pct_complexity_path = f"{output_path}/custom_eval_match_percentage_per_complexity_db.csv"
+            custom_eval_match_pct_complexity_df.to_csv(custom_eval_match_pct_complexity_path, index=False)
+            mlflow.log_artifact(custom_eval_match_pct_complexity_path)
+
+            # Bird eval metrics (only if available)
+            if len(bird_eval_available_df) > 0:
+                # Similar metrics for bird_eval where applicable
+                bird_eval_matches_per_combo_db = bird_eval_match_df.groupby(["difficulty", "complexity", "db_name"]).size()
+                bird_eval_total_per_combo_db = bird_eval_available_df.groupby(["difficulty", "complexity", "db_name"]).size()
+                
+                bird_eval_match_pct_combo_df = (bird_eval_matches_per_combo_db / bird_eval_total_per_combo_db).reset_index()
+                bird_eval_match_pct_combo_df.columns = ["difficulty", "complexity", "db_name", "bird_eval_match_percentage"]
+                bird_eval_match_pct_combo_path = f"{output_path}/bird_eval_match_percentage_per_difficulty_complexity_db.csv"
+                bird_eval_match_pct_combo_df.to_csv(bird_eval_match_pct_combo_path, index=False)
+                mlflow.log_artifact(bird_eval_match_pct_combo_path)
 
             # === Save Raw Match Counts ===
-            matches_per_difficulty.to_csv(f"{output_path}/match_count_per_difficulty.csv")
-            matches_per_complexity.to_csv(f"{output_path}/match_count_per_complexity.csv")
-            matches_per_combo.to_csv(f"{output_path}/match_count_per_difficulty_complexity.csv")
+            custom_eval_matches_per_difficulty.to_csv(f"{output_path}/custom_eval_match_count_per_difficulty.csv")
+            custom_eval_matches_per_complexity.to_csv(f"{output_path}/custom_eval_match_count_per_complexity.csv")
+            custom_eval_matches_per_combo.to_csv(f"{output_path}/custom_eval_match_count_per_difficulty_complexity.csv")
 
-            mlflow.log_artifact(f"{output_path}/match_count_per_difficulty.csv")
-            mlflow.log_artifact(f"{output_path}/match_count_per_complexity.csv")
-            mlflow.log_artifact(f"{output_path}/match_count_per_difficulty_complexity.csv")
+            mlflow.log_artifact(f"{output_path}/custom_eval_match_count_per_difficulty.csv")
+            mlflow.log_artifact(f"{output_path}/custom_eval_match_count_per_complexity.csv")
+            mlflow.log_artifact(f"{output_path}/custom_eval_match_count_per_difficulty_complexity.csv")
+
+            if len(bird_eval_available_df) > 0:
+                bird_eval_matches_per_difficulty.to_csv(f"{output_path}/bird_eval_match_count_per_difficulty.csv")
+                bird_eval_matches_per_complexity.to_csv(f"{output_path}/bird_eval_match_count_per_complexity.csv")
+                bird_eval_matches_per_combo.to_csv(f"{output_path}/bird_eval_match_count_per_difficulty_complexity.csv")
+
+                mlflow.log_artifact(f"{output_path}/bird_eval_match_count_per_difficulty.csv")
+                mlflow.log_artifact(f"{output_path}/bird_eval_match_count_per_complexity.csv")
+                mlflow.log_artifact(f"{output_path}/bird_eval_match_count_per_difficulty_complexity.csv")
 
             # === Distribution Reports ===
             output_dir = f"{output_path}/distribution_reports"
@@ -359,7 +397,45 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
             count_combo = tested_df.groupby(['db_name', 'difficulty', 'complexity']).size().reset_index(name='count')
             total_combo = count_combo['count'].sum()
             count_combo['percentage'] = (count_combo['count'] / total_combo) * 100
+            combo_path = f"{output_dir}/distribution_db_difficulty_complexity.csv"
+            os.makedirs(output_dir, exist_ok=True)
+
+            # db_name + difficulty + complexity
+            count_combo = tested_df.groupby(['db_name', 'difficulty', 'complexity']).size().reset_index(name='count')
+            total_combo = count_combo['count'].sum()
+            count_combo['percentage'] = (count_combo['count'] / total_combo) * 100
             combo_path = f"{output_dir}/distribution_difficulty_complexity.csv"
+            count_combo.to_csv(combo_path, index=False)
+
+            # db_name + complexity
+            count_complexity_db = tested_df.groupby(['db_name', 'complexity']).size().reset_index(name='count')
+            total_complexity = count_complexity_db['count'].sum()
+            count_complexity_db['percentage'] = (count_complexity_db['count'] / total_complexity) * 100
+            complexity_db_path = f"{output_dir}/distribution_complexity_db.csv"
+            count_complexity_db.to_csv(complexity_db_path, index=False)
+
+            # db_name + difficulty
+            count_difficulty_db = tested_df.groupby(['db_name', 'difficulty']).size().reset_index(name='count')
+            total_difficulty = count_difficulty_db['count'].sum()
+            count_difficulty_db['percentage'] = (count_difficulty_db['count'] / total_difficulty) * 100
+            difficulty_db_path = f"{output_dir}/distribution_difficulty_db.csv"
+            count_difficulty_db.to_csv(difficulty_db_path, index=False)
+
+            # overall difficulty
+            count_difficulty = tested_df.groupby('difficulty').size().reset_index(name='count')
+            total_difficulty = count_difficulty['count'].sum()
+            count_difficulty['percentage'] = (count_difficulty['count'] / total_difficulty) * 100
+            overall_difficulty_path = f"{output_dir}/overall_distribution_difficulty.csv"
+            count_difficulty.to_csv(overall_difficulty_path, index=False)
+
+            # overall complexity
+            count_complexity = tested_df.groupby('complexity').size().reset_index(name='count')
+            total_complexity = count_complexity['count'].sum()
+            count_complexity['percentage'] = (count_complexity['count'] / total_complexity) * 100
+            overall_complexity_path = f"{output_dir}/overall_distribution_complexity.csv"
+            count_complexity.to_csv(overall_complexity_path, index=False)
+
+            # Log artifacts once
             count_combo.to_csv(combo_path, index=False)
 
             # db_name + complexity
@@ -399,16 +475,28 @@ def log_mlflow_metrics_and_artifacts(tested_df, output_path, args, kwargs, teste
     except Exception as e:
         print(f"Error in logging MLflow metrics: {e}")
         raise
+    
     mlflow.log_params(filtered_args)
     mlflow.log_params(kwargs)
-    mlflow.log_metrics(percentages)
+    
+    # Log metrics for both evaluation methods
+    custom_eval_metrics = {f"custom_eval_{k}": v for k, v in custom_eval_percentages_dict.items()}
+    bird_eval_metrics = {f"bird_eval_{k}": v for k, v in bird_eval_percentages_dict.items()}
+    
+    mlflow.log_metrics(custom_eval_metrics)
+    mlflow.log_metrics(bird_eval_metrics)
     mlflow.log_metric("total_queries", total_rows)
     mlflow.log_artifact(tested_file)
     debug_log = f"debug_log.txt"
     mlflow.log_artifact(debug_log)
 
-    percentages_dict = percentages.to_dict()
-    metrics_json = json.dumps(percentages_dict, indent=4)
+    # Create combined metrics JSON
+    combined_metrics = {
+        "custom_eval": custom_eval_percentages_dict,
+        "bird_eval": bird_eval_percentages_dict,
+        "total_queries": total_rows
+    }
+    metrics_json = json.dumps(combined_metrics, indent=4)
     metrics_path = "./metrics.json"
 
     with open(metrics_path, "w") as metrics_file:
@@ -551,7 +639,7 @@ def favourite_based_selection(all_runs, question, dataset_name, db_name, questio
         return claude_run["response"], claude_run["duration"], claude_run["usage"], claude_run["model_name"], claude_run["gen_df_json"], claude_run["generated_sql"]
     # Otherwise, call Gradio agent
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
-    response, gradio_df = process_question(question, dataset_name, db_name)
+    response, gradio_df = gradio_process_question(question, dataset_name, db_name)
     if gradio_df is None:
         print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
         fallback = random.choice(all_runs)
@@ -913,7 +1001,7 @@ def main(git_hash):
 
             test_path = f"{output_path}/test"
             os.makedirs(test_path, exist_ok=True)
-            tested_file, tested_df = compare_output(test_path, output_file, args.db_base_path, args.metadata_base_path)
+            tested_file, tested_df = custom_eval(test_path, output_file, args.db_base_path, args.metadata_base_path)
 
             log_mlflow_metrics_and_artifacts(
                 tested_df, output_path, args, kwargs, tested_file, debug_log
