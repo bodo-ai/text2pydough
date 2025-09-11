@@ -14,13 +14,16 @@ metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
 import logging
 import multiprocessing as mp
-def _process_row_timeout_runner(q, row_obj, base, meta):
-    try:
-        res = process_row(row_obj, base, meta)
-        q.put(("ok", res))
-    except BaseException as e:
-        q.put(("err", str(e)))
+try:
+    # Prefer package-relative import if available
+    from .Sqlite_cache import SqliteCache  # type: ignore
+except Exception:
+    # Fallback to same-directory import when not in a package context
+    from Sqlite_cache import SqliteCache
 
+# Shared SQLite query cache (opt-in directory via env var)
+_SQLITE_CACHE_DIR = os.environ.get("SQLITE_CACHE_DIR", "/tmp/sql_cache")
+_SQL_CACHE = SqliteCache(_SQLITE_CACHE_DIR, read_only=False)
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -415,94 +418,49 @@ def query_sqlite_db(
     decimal_points: int = 5,
 ) -> pd.DataFrame:
     """
-    Runs query on sqlite db and returns results as a dataframe.
-    This assumes that you have the evaluation databases set up in defog_data/sqlite_dbs/.
-    If you don't, you can follow the instructions in the README of the defog-data repo to set it up.
-
-    timeout: time in seconds to wait for query to finish before timing out
-    decimal_points: number of decimal points to round floats to
+    Runs query on sqlite db using the shared SqliteCache and returns (df, error_str).
     """
-    import sqlite3
-
-    connection = None
-    cursor = None
     try:
-      
-        connection = sqlite3.connect(db_path)
-        cursor = connection.cursor()
-        cursor.execute(query)
-        results = cursor.fetchall()
-        colnames = [desc[0] for desc in cursor.description]
-        cursor.close()
-        connection.close()
-        # make into a dataframe
-        df = pd.DataFrame(results, columns=colnames)
-        # round floats to decimal_points
+        df = _SQL_CACHE.execute(db_path, query)
+        # Detect error DataFrame produced by cache layer
+        if isinstance(df, pd.DataFrame) and "Exec_error" in df.columns:
+            try:
+                err_msg = str(df["Exec_error"].iloc[0]) if not df.empty else "Unknown SQL error"
+            except Exception:
+                err_msg = "SQL execution error"
+            return None, err_msg
+        # Optionally round floats for consistency if requested
+        if df is not None and decimal_points is not None:
+            try:
+                df = df.copy()
+                for c in df.select_dtypes(include=["float", "float32", "float64"]).columns:
+                    df[c] = df[c].round(decimal_points)
+            except Exception:
+                pass
         return df, None
     except Exception as e:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
         return None, str(e)
 
-def bird_eval(predicted_sql, ground_truth, db_path, predicted_df=None):
+def bird_eval(predicted_sql, ground_truth, db_path):
     """
-    Compare the results of executing two SQL queries against the database.
-    If predicted_sql is None but predicted_df is provided, compare the DataFrame 
-    against the ground truth SQL execution result using the same set logic.
-    Returns 1 if the results match, 0 otherwise.
-    
-    Args:
-        predicted_sql: The generated SQL query to test (can be None)
-        ground_truth: The reference SQL query
-        db_path: Path to the SQLite database
-        predicted_df: Optional DataFrame to use when predicted_sql is None
-        question: The question context for DataFrame comparison
-        
-    Returns:
-        int: 1 if results match, 0 otherwise
+    Compare results of executing two SQL queries via SqliteCache.
+    Returns 1 if row sets match (order-insensitive), else 0. Errors -> 0.
     """
-    import sqlite3
-    
-    # Get ground truth results
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute(ground_truth)
-    ground_truth_res = cursor.fetchall()
-    
-    # Case 1: We have predicted SQL - use original logic
-    if predicted_sql is not None:
-        cursor.execute(predicted_sql)
-        predicted_res = cursor.fetchall()
-        conn.close()
-        
-        res = 0
-        if set(predicted_res) == set(ground_truth_res):
-            res = 1
-        return res
-    
-    # Case 2: No predicted SQL but we have a DataFrame
-    elif predicted_df is not None:
-        conn.close()
-        
-        # Convert DataFrame to the same format as SQL results (list of tuples)
+    def _rows_set(df: pd.DataFrame):
+        if df is None:
+            return set()
         try:
-            # Convert DataFrame rows to tuples, similar to cursor.fetchall()
-            predicted_res = [tuple(row) for row in predicted_df.values]
-            
-            # Use the same set comparison logic as Case 1
-            res = 0
-            if set(predicted_res) == set(ground_truth_res):
-                res = 1
-            return res
+            # Replace NaN with None to be closer to raw sqlite output semantics
+            df_safe = df.where(pd.notna(df), None)
+            return set(map(tuple, df_safe.to_numpy()))
         except Exception:
-            return 0
-    
-    # Case 3: Neither SQL nor DataFrame available
-    else:
-        conn.close()
-        return 0 
+            return set()
+
+    pred_df, err1 = query_sqlite_db(predicted_sql, db_path)
+    gt_df, err2 = query_sqlite_db(ground_truth, db_path)
+    if err1 is not None or err2 is not None:
+        return 0
+    return 1 if _rows_set(pred_df) == _rows_set(gt_df) else 0
 
 def process_row(row, db_base_path, metadata_base_path):
     """
@@ -557,12 +515,15 @@ def process_row(row, db_base_path, metadata_base_path):
                     custom_eval_exception = str(e)
                 
                 # Bird evaluation: SQL execution comparison
-                try:
-                    sql_comparison_result = bird_eval(generated_sql, sql, db_path, predicted_df=result_df)
-                    bird_eval_result = 'Match' if sql_comparison_result == 1 else 'No Match'
-                except Exception as e:
-                    bird_eval_result = 'Comparison Error'
-                    bird_eval_exception = str(e)
+                if generated_sql is not None:
+                    try:
+                        sql_comparison_result = bird_eval(generated_sql, sql, db_path)
+                        bird_eval_result = 'Match' if sql_comparison_result == 1 else 'No Match'
+                    except Exception as e:
+                        bird_eval_result = 'Comparison Error'
+                        bird_eval_exception = str(e)
+                else:
+                    bird_eval_result = 'No SQL Generated'
         else:
             # PyDough code execution failed
             custom_eval_result = 'Query Error'
@@ -591,20 +552,11 @@ def process_row(row, db_base_path, metadata_base_path):
                     ground_truth_df, generated_df, query_category="a", question=question
                 )
                 custom_eval_result = 'Match' if df_comparison_success else 'No Match'
-                
-                # Use bird_eval with DataFrame since no SQL is available
-                try:
-                    sql_comparison_result = bird_eval(None, sql, db_path, predicted_df=generated_df)
-                    bird_eval_result = 'Match' if sql_comparison_result == 1 else 'No Match'
-                except Exception as bird_e:
-                    bird_eval_result = 'Comparison Error'
-                    bird_eval_exception = str(bird_e)
-                    
+                bird_eval_result = 'Not Available' 
             except Exception as e:
                 custom_eval_result = 'Comparison Error'
                 custom_eval_exception = str(e)
-                bird_eval_result = 'Comparison Error'
-                bird_eval_exception = str(e)
+                bird_eval_result = 'Not Available'
         else:
             custom_eval_result = 'Insufficient Data'
             bird_eval_result = 'Not Available'
@@ -620,9 +572,16 @@ def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path):
     # Read the CSV file into a Pandas DataFrame
     df = pd.read_csv(csv_file_path)
 
+    def _timeout_runner(q, row_obj, base, meta):
+        try:
+            res = process_row(row_obj, base, meta)
+            q.put(("ok", res))
+        except BaseException as e:
+            q.put(("err", str(e)))
+
     def process_row_with_timeout(row_obj, base, meta, timeout_seconds=300):
         q = mp.Queue()
-        p = mp.Process(target=_process_row_timeout_runner, args=(q, row_obj, base, meta))
+        p = mp.Process(target=_timeout_runner, args=(q, row_obj, base, meta))
         p.daemon = True
         p.start()
         try:

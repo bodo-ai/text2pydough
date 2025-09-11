@@ -63,20 +63,30 @@ def _execute_code_child(extracted_code, cheatsheet_path, db_name, database_path,
     env = {"pydough": _pydough, "datetime": _datetime}
     return _inner_exec(extracted_code, env, cheatsheet_path, db_name, database_path, start_of_week=start_of_week)
 
+# Top-level runner function for multiprocessing (must be picklable on spawn-based platforms like macOS/Windows)
+def _mp_runner(q, fn, a, k):
+    try:
+        res = fn(*a, **k)
+        q.put(("ok", res))
+    except BaseException as e:
+        # Return the exception as a string to avoid pickling issues
+        try:
+            q.put(("err", str(e)))
+        except Exception:
+            q.put(("err", "Unhandled error in child process"))
+
+# Top-level wrapper for calling gradio agent in a child process
+def _gradio_agent_child(*c_args, **c_kwargs):
+    import gradio_agent_v2 as _gav2
+    return _gav2.process_question(*c_args, **c_kwargs)
+
 def _call_in_process_with_timeout(target, args=(), kwargs=None, timeout_seconds=60, label=""):
     import multiprocessing as _mp
     if kwargs is None:
         kwargs = {}
     result_queue = _mp.Queue()
 
-    def _runner(q, fn, a, k):
-        try:
-            res = fn(*a, **k)
-            q.put(("ok", res))
-        except BaseException as e:
-            q.put(("err", str(e)))
-
-    p = _mp.Process(target=_runner, args=(result_queue, target, args, kwargs))
+    p = _mp.Process(target=_mp_runner, args=(result_queue, target, args, kwargs))
     p.daemon = True
     p.start()
     try:
@@ -109,11 +119,8 @@ def execute_code_with_timeout(extracted_code, cheatsheet_path, db_name, database
     return payload
 
 def gradio_process_question_with_timeout(*args, timeout_seconds=180, **kwargs):
-    def _child(*c_args, **c_kwargs):
-        import gradio_agent_v2 as _gav2
-        return _gav2.process_question(*c_args, **c_kwargs)
     payload, err = _call_in_process_with_timeout(
-        _child, args=args, kwargs=kwargs, timeout_seconds=timeout_seconds, label="gradio_agent_v2.process_question"
+        _gradio_agent_child, args=args, kwargs=kwargs, timeout_seconds=timeout_seconds, label="gradio_agent_v2.process_question"
     )
     if err:
         return {"dataframe": None}
@@ -541,6 +548,63 @@ def run_models_parallel(
         model_id = model_info["model_id"]
         config = model_info["config"]
         print(f"[DEBUG] [Q{question_idx}] Running model {model_info['name']} (attempt {attempt})")
+        # Handle Gradio agent as a special model candidate
+        if model_info["name"] == "gradio_agent":
+            try:
+                start = time.time()
+                endpoint = config.get("endpoint", "http://10.128.0.5:2025/")
+                architecture = config.get("architecture", "SQLATS")
+                timeout_seconds = config.get("timeout_seconds", 180)
+                ga_response = gradio_process_question_with_timeout(
+                    endpoint,
+                    question,
+                    "BIRD",
+                    db_name,
+                    mlflow_run_id,
+                    question_id=question_idx,
+                    architecture=architecture,
+                    timeout_seconds=timeout_seconds,
+                )
+                duration = time.time() - start
+                gradio_df = ga_response.get("dataframe") if isinstance(ga_response, dict) else None
+                gen_df_json = None
+                if gradio_df is not None:
+                    gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
+
+                return {
+                    "question_index": question_idx,
+                    "question": question,
+                    "model_name": model_info["name"],
+                    "attempt": attempt,
+                    "response": ga_response,
+                    "code": None,
+                    "duration": duration,
+                    "usage": None,
+                    "df": gradio_df,
+                    "gen_df_json": gen_df_json,
+                    "sql": row.get("sql", ""),
+                    "generated_sql": None,
+                    "dataset_name": row.get("dataset_name", ""),
+                    "db_name": db_name,
+                }
+            except Exception as e:
+                print(f"[ERROR] [Q{question_idx}] Gradio agent failed on attempt {attempt}: {e}")
+                return {
+                    "question_index": question_idx,
+                    "question": question,
+                    "model_name": model_info["name"],
+                    "attempt": attempt,
+                    "response": None,
+                    "code": None,
+                    "duration": time.time() - start,
+                    "usage": None,
+                    "df": None,
+                    "gen_df_json": None,
+                    "sql": row.get("sql", ""),
+                    "generated_sql": None,
+                    "dataset_name": row.get("dataset_name", ""),
+                    "db_name": db_name,
+                }
         client = get_provider(provider_name, model_id, config=config)
         start = time.time()
         model_specific_kwargs = dict(kwargs)
@@ -787,7 +851,7 @@ def process_questions(
                 db_content = db_markdown_map[db_name]
             if dataset_name == "spider_data":
                 dataset_name = "Spider"
-            result = gradio_process_question(question, dataset_name, db_name)
+            result = gradio_process_question(question, "BIRD", db_name)
             if result:
                 json_data = result.get("json_data", None)
                 mapping_metadata = map_all_profiles_to_markdown(
@@ -805,10 +869,23 @@ def process_questions(
                 "config": {
                     "api_key": api_key,
                     "project": project_id,
-                    "region": "us-central1",
-                },
+                    "region": "us-central1"
+                }
             }
         ]
+
+        # Optionally include Gradio agent as another model candidate
+        if use_gradio_agent:
+            models_to_test.append({
+                "name": "gradio_agent",
+                "provider": "gradio",
+                "model_id": "SQLATS",
+                "config": {
+                    "endpoint": "http://localhost:2025/",
+                    "architecture": "SQLATS",
+                    "timeout_seconds": 180,
+                },
+            })
 
         if use_parallel:
             ensemble_result, all_runs = run_models_parallel(
@@ -859,7 +936,10 @@ def process_questions(
                 except Exception as e:
                     print(f"[ERROR] Failed processing question index {idx + 1}: {e}")
                     # Fallback placeholder on exception to keep alignment
-                    results[idx] = (None, 0.0, None, None, None)
+                    if use_parallel:
+                        results[idx] = (None, [])
+                    else:
+                        results[idx] = (None, 0.0, None, None, None)
     else:
         print(f"[INFO] Running per-question processing sequentially")
         for index, row in questions_df.iterrows():
@@ -992,7 +1072,8 @@ def main(git_hash):
                 # all_model_runs_per_question is a list of lists of dicts
                 flat_runs = []
                 for runs in all_model_runs_per_question:
-                    flat_runs.extend(runs)
+                    if isinstance(runs, list):
+                        flat_runs.extend(runs)
                 # Build DataFrame
                 all_runs_df = pd.DataFrame(flat_runs)
                 all_runs_csv = f"{output_path}/all_model_runs_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.csv"
@@ -1013,19 +1094,41 @@ def main(git_hash):
         debug_file.close()
 
 def build_results_df(df, results):
-    df["response"] = [r[0] for r in results]
-    df["execution_time"] = [r[1] if len(r) > 1 else None for r in results]
+    def get_field(result_entry, index):
+        # Handle None entries gracefully
+        if result_entry is None:
+            return None
+        # If dict-like, try common keys
+        if isinstance(result_entry, dict):
+            key_order = [
+                "response",
+                "execution_time",
+                "usage",
+                "model_name",
+                "gen_df_json",
+                "gen_sql",
+            ]
+            key = key_order[index] if index < len(key_order) else None
+            return result_entry.get(key) if key else None
+        # If sequence-like, index with bounds check
+        try:
+            return result_entry[index] if len(result_entry) > index else None
+        except Exception:
+            return None
+
+    df["response"] = [get_field(r, 0) for r in results]
+    df["execution_time"] = [get_field(r, 1) for r in results]
     df["extracted_python_code"] = df["response"].apply(extract_python_code)
-    df["usage"] = [r[2] if len(r) > 2 else None for r in results]
-    df["model_name"] = [r[3] if len(r) > 3 else None for r in results]
-    df["gen_df_json"] = [r[4] if len(r) > 4 else None for r in results]
-    df["gen_sql"] = [r[5] if len(r) > 5 else None for r in results]
+    df["usage"] = [get_field(r, 2) for r in results]
+    df["model_name"] = [get_field(r, 3) for r in results]
+    df["gen_df_json"] = [get_field(r, 4) for r in results]
+    df["gen_sql"] = [get_field(r, 5) for r in results]
     return df
 
 if __name__ == "__main__":
     cwd = os.getcwd()
-    db_path = './test_data/TPCH.db'
-    download_database(db_path)
+    #db_path = './test_data/TPCH.db'
+    #download_database(db_path)
     #if untracked_files(cwd) or modified_files(cwd):
     #    autocommit(cwd)
     main(get_git_commit(cwd))

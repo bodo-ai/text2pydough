@@ -84,7 +84,7 @@ def extract_dataframe(json_data):
 def process_question(question, dataset_name, db_name, question_id=None ):
     """Process a single question and return the results."""
     # Construct the selected_db_display string dynamically
-    server_url= "http://10.128.0.5:2025/"
+    server_url= "http://localhost:2025/"
     # Initialize client
     client = Client(server_url)
     selected_db_display = f"{dataset_name}: {db_name}/{db_name}.sqlite"

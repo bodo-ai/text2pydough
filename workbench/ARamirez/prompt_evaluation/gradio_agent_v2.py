@@ -120,10 +120,10 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=
             temperature=0.2,
             top_p=0.95,
             top_k=40,
-            max_steps=25,
+            max_steps=40,
             # --- SQLATS-specific parameters (ignored by other architectures) ----
-            n_candidates=5,            # Number of candidate rollouts per search step
-            sqlats_max_depth=15,    # Maximum beam-search depth
+            n_candidates=12,            # Number of candidate rollouts per search step
+            sqlats_max_depth=30,    # Maximum beam-search depth
             sqlats_exploration_weight=1.0,  # UCB exploration weight
 
             # ------------------------------------------------------------------
