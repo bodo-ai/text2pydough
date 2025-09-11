@@ -8,8 +8,6 @@ import os
 import re
 import textwrap
 import pydough
-import hashlib
-from typing import List, Tuple
 
 
 load_dotenv()
@@ -50,7 +48,41 @@ REMEMBER: The score must ALWAYS be a number from 0 to 10, never True/False or ot
 
 """
 
-class DataFrameEvaluator(dspy.Signature):
+
+EVALUATION_BINARY_PROMPT = """You are an expert data analyst evaluating the quality of DataFrames returned for specific questions. You will have to choose between two dataframe options according to the following criteria 
+
+
+Question asked: {question}
+DataFrame 1: {dataframe_1}
+DataFrame 2: {dataframe_2}
+
+Evaluate it on these criteria:
+- Empty DataFrames or incorrect structure: Verify the DataFrame contains data and has the expected columns and rows  
+Columns that don't answer the question: Ensure all included columns are relevant to the user's query  
+- Unnecessary duplicate data: Identify and handle redundant rows or information that doesn't add value  
+- Inappropriate data types for the query: Confirm data types (numeric, string, datetime) are suitable for the analysis  
+Missing critical information to answer the question: Verify all essential data needed to address the query is present  
+- Inadequate ordering of results: Check that results are sorted in a logical, meaningful way for the user  
+Communication quality: Is the DataFrame structure clear, concise, and free of data inconsistencies? Assess whether the presentation is easy to understand, properly formatted, and contains accurate, consistent data throughout.
+Important: Be thorough but not overly strict. Minor stylistic variations, synonyms, or differences in ordering should not incur large penalties as long as the essential information is present and correct.
+Guidelines: 
+ Use a score from 0 to 10
+- Score 8-10: Excellent/optimal for the question
+- Score 5-7: Good with minor improvements needed
+- Score 3-4: Adequate but with significant room for improvement  
+- Score 0-2: Severely lacking in that dimension
+- Focus deductions on substantive omissions rather than minor variations.  
+- Verify that the DataFrame addresses all items requested in the question.
+
+You must respond with EXACTLY this JSON format (no additional text):
+{{
+"best_index": "index of the best df"
+}}
+
+Remember handle the indez like python
+"""
+
+class DataFrame_Evaluator(dspy.Signature):
     """Evaluate the quality of a DataFrame result for a specific database query."""
 
     question: str = dspy.InputField(desc="The original question asked by the user")
@@ -60,11 +92,20 @@ class DataFrameEvaluator(dspy.Signature):
 
 
 lm = dspy.LM('gemini/gemini-2.5-pro', api_key = os.getenv("GOOGLE_API_KEY_1"), temperature=0)
-qa = dspy.ChainOfThought(DataFrameEvaluator)
+qa = dspy.ChainOfThought(DataFrame_Evaluator)
 
-# Simple in-process cache to avoid re-scoring the same (question, candidates) repeatedly
-# Keyed by (question, sha1_of_candidates_list)
-_EVAL_DATAFRAMES_CACHE: dict = {}
+class DataFrame_Binary_Evaluator(dspy.Signature):
+    """Evaluate the quality of a DataFrame result for a specific database query."""
+
+    question: str = dspy.InputField(desc="The original question asked by the user")
+    dataframe_1: str = dspy.InputField(desc="String representation of the DataFrame result to evaluate")
+    dataframe_2: str = dspy.InputField(desc="String representation of the DataFrame result to evaluate")
+    evaluation_criteria: str = dspy.InputField(desc="Detailed criteria for evaluating DataFrame quality")
+    evaluation: str = dspy.OutputField(desc="JSON evaluation with score (0-10) and reasoning")
+
+
+bi = dspy.ChainOfThought(DataFrame_Binary_Evaluator)
+
 
 def extract_json_evaluation(text):
     try:
@@ -78,38 +119,29 @@ def extract_json_evaluation(text):
         return {"score": 0, "reasoning": "Invalid JSON format"}
 
 def evaluate_dataframes_csv():
-    df = pd.read_csv("prueba.csv")  
-    
+    df = pd.read_csv("prueba.csv")    
     results = []
-    
     for i, row in df.iterrows():
         question = row["question"]
         db_name = row["db_name"]        
-
         dataframe_str = (row.get("gen_df_json", ""))  
-        
         with dspy.context(lm=lm):
             response = qa(
                 question=question,
                 dataframe=dataframe_str,
                 evaluation_criteria=EVALUATION_PROMPT
             )
-            
             print(f"Question: {question}")
             print(f"Evaluation: {response.evaluation}")
             print("-" * 50)
-            
-
             results.append({
                 'question': question,
                 'dataframe': dataframe_str,
                 'evaluation': response.evaluation
             })
-        
-
         break
-    
     return results
+
 
 def evaluate_single_dataframe(question, dataframe_str):
     with dspy.context(lm=lm):
@@ -120,49 +152,42 @@ def evaluate_single_dataframe(question, dataframe_str):
         )
         
         evaluation_json = extract_json_evaluation(response.evaluation)
-        return evaluation_json.get("score", 0)
+        return evaluation_json.get("score", 0) 
+    
+def evaluate_binary_dataframes(question, dataframes_list):  
+    df_1 = dataframes_list[0]
+    df_2 = dataframes_list[1]  
+    with dspy.context(lm=lm):
+        response = bi(
+            question=question,
+            dataframe_1=df_1,
+            dataframe_2=df_2,
+            evaluation_criteria=EVALUATION_BINARY_PROMPT
+        )
+    evaluation_data = json.loads(response.evaluation)
+    best_index = evaluation_data["best_index"]    
+    return best_index
 
 def evaluate_dataframes(question, dataframes_list):
-    # Build a stable fingerprint for the candidate list to enable caching
-    try:
-        joined = "\x1e".join([str(x) for x in dataframes_list])
-        fp = hashlib.sha1(joined.encode("utf-8")).hexdigest()
-    except Exception:
-        # Fallback: convert list to JSON string for hashing if anything goes wrong
-        try:
-            fp = hashlib.sha1(json.dumps(list(map(str, dataframes_list)), ensure_ascii=False).encode("utf-8")).hexdigest()
-        except Exception:
-            fp = None
-
-    cache_key = (question, fp)
-    if fp is not None and cache_key in _EVAL_DATAFRAMES_CACHE:
-        return _EVAL_DATAFRAMES_CACHE[cache_key]
-
     best_score = -1
-    best_index = 0
-
+    best_index = 0 
     for i, dataframe_str in enumerate(dataframes_list):
         score = evaluate_single_dataframe(question, dataframe_str)
+        
         if score > best_score:
             best_score = score
             best_index = i
-
-    if fp is not None:
-        _EVAL_DATAFRAMES_CACHE[cache_key] = best_index
     return best_index
 
 if __name__ == "__main__":
     
     sample_question = "What are the sales by region?"
     sample_dataframes = [
-        "DataFrame 1: {'region': ['North', 'South'], 'sales': [100, 200]}",
-        "DataFrame 2: {'region': ['North', 'South', 'East'], 'sales': [100, 200, 150], 'product': ['A', 'B', 'C']}",
+        "DataFrame 1: {'region': ['North', 'South', 'East'], 'sales': [100, 200, 150], 'product': ['A', 'B', 'C']}",
+        "DataFrame 2: {'region': ['North', 'South'], 'sales': [100, 200]}",
         "DataFrame 3: {'total_sales': [450]}"
     ]
 
     
-    score = evaluate_single_dataframe(sample_question, sample_dataframes[0])
-    print(f"Score: {score}")
-    
-    best_index = evaluate_dataframes(sample_question, sample_dataframes)
+    best_index = evaluate_binary_dataframes(sample_question, sample_dataframes)
     print(f"Índice del mejor DataFrame: {best_index}")

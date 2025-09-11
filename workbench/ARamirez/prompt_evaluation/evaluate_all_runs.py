@@ -352,6 +352,20 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
             if max_size <= -1:
                 continue
             candidates = [i for i, s in sizes.items() if s == max_size]
+        elif selection_method == 'reverse_size':
+            sizes = {}
+            for i in valid_indices:
+                try:
+                    sizes[i] = runs[i]['df'].size
+                except Exception:
+                    sizes[i] = -1
+            if not sizes:
+                continue
+            valid_sizes = [s for s in sizes.values() if s > -1]
+            if len(valid_sizes) == 0:
+                continue
+            min_size = min(valid_sizes)
+            candidates = [i for i, s in sizes.items() if s == min_size]
         elif selection_method == 'density':
             densities = {}
             for i in valid_indices:
@@ -382,6 +396,37 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
             if max_density <= -1:
                 continue
             candidates = [i for i, d in densities.items() if d == max_density]
+        elif selection_method == 'reverse_density':
+            densities = {}
+            for i in valid_indices:
+                try:
+                    df_obj = runs[i]['df']
+                    # Ensure df_obj is a pandas DataFrame before processing
+                    if not isinstance(df_obj, pd.DataFrame):
+                        try:
+                            df_obj = pd.DataFrame(df_obj)
+                        except Exception:
+                            densities[i] = -1.0
+                            continue
+                    rows, cols = df_obj.shape
+                    denom = rows * cols
+                    if denom <= 0:
+                        densities[i] = -1.0
+                    else:
+                        try:
+                            bytes_used = df_obj.memory_usage(deep=True).sum()
+                        except Exception:
+                            bytes_used = df_obj.memory_usage(deep=False).sum()
+                        densities[i] = float(bytes_used) / float(denom)
+                except Exception:
+                    densities[i] = -1.0
+            if not densities:
+                continue
+            valid_densities = [d for d in densities.values() if d > -1]
+            if len(valid_densities) == 0:
+                continue
+            min_density = min(valid_densities)
+            candidates = [i for i, d in densities.items() if d == min_density]
         elif selection_method == 'frequency':
             consensus = {i: 0 for i in valid_indices}
             for i in range(len(runs)):
@@ -400,6 +445,24 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
                 continue
             max_votes = max(consensus.values())
             candidates = [i for i, v in consensus.items() if v == max_votes]
+        elif selection_method == 'reverse_frequency':
+            consensus = {i: 0 for i in valid_indices}
+            for i in range(len(runs)):
+                if i not in valid_indices:
+                    continue
+                for j in range(i + 1, len(runs)):
+                    if j not in valid_indices:
+                        continue
+                    try:
+                        if symetric_compare_df(runs[i]['df'], runs[j]['df'], query_category='a', question=group.iloc[0]['question']):
+                            consensus[i] += 1
+                            consensus[j] += 1
+                    except Exception:
+                        pass
+            if len(consensus) == 0:
+                continue
+            min_votes = min(consensus.values())
+            candidates = [i for i, v in consensus.items() if v == min_votes]
         elif selection_method == 'random':
             candidates = valid_indices.copy()
         elif selection_method == 'agent_indiv_grade':
@@ -1030,7 +1093,7 @@ Examples:
     )
     parser.add_argument(
         '--ensemble-selection-method', '--ensemble_selection_method',
-        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection'],
+        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'reverse_size', 'reverse_frequency', 'reverse_density'],
         default='size',
         help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
     )
@@ -1157,7 +1220,7 @@ Examples:
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
         def _normalize_methods(methods_raw):
-            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection']
+            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'reverse_size', 'reverse_frequency', 'reverse_density']
             if not methods_raw:
                 return []
             # Flatten and split on commas; lowercase and strip
