@@ -14,6 +14,13 @@ metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
 import logging
 import multiprocessing as mp
+def _process_row_timeout_runner(q, row_obj, base, meta):
+    try:
+        res = process_row(row_obj, base, meta)
+        q.put(("ok", res))
+    except BaseException as e:
+        q.put(("err", str(e)))
+
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -494,16 +501,9 @@ def compare_output(folder_path, csv_file_path, db_base_path, metadata_base_path)
     # Read the CSV file into a Pandas DataFrame
     df = pd.read_csv(csv_file_path)
 
-    def _timeout_runner(q, row_obj, base, meta):
-        try:
-            res = process_row(row_obj, base, meta)
-            q.put(("ok", res))
-        except BaseException as e:
-            q.put(("err", str(e)))
-
     def process_row_with_timeout(row_obj, base, meta, timeout_seconds=300):
         q = mp.Queue()
-        p = mp.Process(target=_timeout_runner, args=(q, row_obj, base, meta))
+        p = mp.Process(target=_process_row_timeout_runner, args=(q, row_obj, base, meta))
         p.daemon = True
         p.start()
         try:

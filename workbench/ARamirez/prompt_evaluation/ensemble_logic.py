@@ -633,13 +633,13 @@ def ensemble_result(
             print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
             print(f"Dataset name: {dataset_name}")
             response = gradio_agent_v2.process_question(
-                "http://10.128.0.5:2024/",
+                "http://localhost:2025/",
                 question,
-                dataset_name,
+                "BIRD",
                 db_name,
                 mlflow_run_id,
                 question_id=question_idx,
-                architecture="Multi-Agent Supervisor",
+                architecture="SQLATS",
             )
             gradio_df = response.get("dataframe") if isinstance(response, dict) else None
             if gradio_df is None:
