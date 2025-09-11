@@ -579,7 +579,7 @@ def agent_indiv_grade_selection(
 
     try:
         # Import lazily to avoid heavy deps unless method is actually used
-        from scooring_dspy import evaluate_single_dataframe as llm_evaluate_single
+        from scooring_agents import evaluate_single_dataframe as llm_evaluate_single
     except Exception as e:
         print(
             f"[WARNING] [Q{question_idx}] Failed importing LLM grader (scooring.evaluate_dataframes): {e}. Falling back to random."
