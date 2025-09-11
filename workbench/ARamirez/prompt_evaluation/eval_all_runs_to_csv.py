@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
 Read an all_runs CSV, evaluate each row using existing test_data.eval.process_row,
-add a column 'eval_result' with values {Match, NoMatch, Query error}, and
-write a new CSV in the same directory prefixed with 'eval_'.
+and write a new CSV in the same directory prefixed with 'eval_'.
+
+Outputs the following tri-state columns (each value is one of {Match, NoMatch, Query error}):
+- eval_custom: normalized custom DataFrame comparison result
+- eval_bird:   normalized BIRD SQL comparison result
+
+For backward compatibility, 'eval_result' is also written and equals 'eval_custom'.
 
 Usage:
   python eval_all_runs_to_csv.py \
@@ -37,7 +42,16 @@ def _normalize_eval_result(result_value):
     if text.replace(' ', '').lower() == 'nomatch':
         return 'NoMatch'
     # Treat any error/unknown/SQL error as a Query error per requirement
-    if 'error' in text.lower() or 'unknown' in text.lower() or 'sql' in text.lower() or 'query' in text.lower():
+    lowered = text.lower()
+    if (
+        'error' in lowered
+        or 'unknown' in lowered
+        or 'sql' in lowered
+        or 'query' in lowered
+        or 'not available' in lowered
+        or 'no sql generated' in lowered
+        or 'timeout' in lowered
+    ):
         return 'Query error'
     # Default fallback
     return 'Query error'
@@ -66,10 +80,13 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
 
     def _eval_row(row):
         try:
-            res, exc = process_row(row, db_base_path, metadata_base_path)
+            custom_res, custom_exc, bird_res, bird_exc = process_row(row, db_base_path, metadata_base_path)
         except Exception:
-            res = 'Query Error'
-        return _normalize_eval_result(res)
+            return ('Query error', 'Query error')
+        return (
+            _normalize_eval_result(custom_res),
+            _normalize_eval_result(bird_res),
+        )
 
     if num_threads and num_threads > 1:
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -78,7 +95,11 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
         for _, row in df.iterrows():
             results.append(_eval_row(row))
 
-    df['eval_result'] = results
+    # Split results into columns
+    df['eval_custom'] = [r[0] for r in results]
+    df['eval_bird'] = [r[1] for r in results]
+    # Back-compat single column mirroring custom eval
+    df['eval_result'] = df['eval_custom']
 
     # Build output path in same directory, prefixing filename with 'eval_'
     in_dir = os.path.dirname(os.path.abspath(all_runs_path))

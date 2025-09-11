@@ -80,9 +80,23 @@ def evaluate_from_eval_column(all_runs_file: str, output_dir: str = None, eval_c
         raise ValueError(f"Column '{eval_column}' not found in input CSV")
 
     result_df = df.copy()
-    result_df['comparison_result'] = result_df[eval_column].map(_normalize_eval_result_to_comparison)
+    # Prefer new eval_custom column when present; fallback to provided eval_column
+    if 'eval_custom' in result_df.columns:
+        result_df['comparison_result'] = result_df['eval_custom'].map(_normalize_eval_result_to_comparison)
+    elif eval_column in result_df.columns:
+        result_df['comparison_result'] = result_df[eval_column].map(_normalize_eval_result_to_comparison)
+    else:
+        # If no suitable column exists, create empty comparison_result
+        result_df['comparison_result'] = None
     # Keep an exception column for schema parity; not applicable in eval-only
     result_df['exception'] = None
+    # Populate bird_comparison_result from new eval_bird column when present
+    if 'eval_bird' in result_df.columns:
+        result_df['bird_comparison_result'] = result_df['eval_bird'].map(_normalize_eval_result_to_comparison)
+    else:
+        # Ensure bird_comparison_result exists (may be populated by callers if bird eval available)
+        if 'bird_comparison_result' not in result_df.columns:
+            result_df['bird_comparison_result'] = None
 
     question_summary_df = create_question_summary(result_df, comparison_col='comparison_result')
 
@@ -189,7 +203,7 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
     except Exception:
         result_df['bird_comparison_result'] = None
     
-    # Create question summaries (custom and bird) - OUTPUT 2: Unique question IDs with has_match column
+    # Create question summaries (custom) - OUTPUT 2: Unique question IDs with has_match column
     question_summary_df = create_question_summary(result_df, comparison_col='comparison_result')
     
     # Save results if output directory is specified
@@ -844,12 +858,15 @@ def print_summary(result_df,
 
         # Overall BIRD statistics (reuse normalized column already in result_df)
         try:
-            bird_counts = result_df['bird_comparison_result'].value_counts()
-            bird_percentages = (bird_counts / total_runs * 100).round(2)
-            print(f"\nOVERALL RESULTS (Total runs: {total_runs}):")
-            for result_type, count in bird_counts.items():
-                percentage = bird_percentages[result_type]
-                print(f"  {result_type}: {count} ({percentage}%)")
+            if 'bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any():
+                bird_counts = result_df['bird_comparison_result'].value_counts()
+                bird_percentages = (bird_counts / total_runs * 100).round(2)
+                print(f"\nOVERALL RESULTS (Total runs: {total_runs}):")
+                for result_type, count in bird_counts.items():
+                    percentage = bird_percentages[result_type]
+                    print(f"  {result_type}: {count} ({percentage}%)")
+            else:
+                print("\nOVERALL RESULTS: No BIRD results available.")
         except Exception as e:
             print(f"[WARNING] Failed to compute BIRD overall stats: {e}")
 
@@ -867,7 +884,7 @@ def print_summary(result_df,
             print(f"[WARNING] Failed to compute BIRD question-level stats: {e}")
 
         # Ensemble tie-break stats per method - BIRD
-        if bird_tie_break_stats_per_method:
+        if bird_tie_break_stats_per_method and len(bird_tie_break_stats_per_method) > 0:
             try:
                 print(f"\nENSEMBLE TIE-BREAK STATS PER METHOD (BIRD):")
                 for method, stats in bird_tie_break_stats_per_method.items():
@@ -888,7 +905,7 @@ def print_summary(result_df,
                 print(f"[WARNING] Failed to compute per-method tie-break (BIRD): {e}")
 
         # Final ensemble BIRD per-method results using winners
-        if bird_final_winner_results_per_method:
+        if bird_final_winner_results_per_method and len(bird_final_winner_results_per_method) > 0:
             try:
                 print(f"\nFINAL ENSEMBLE PER-METHOD RESULTS (BIRD):")
                 for method, metrics in bird_final_winner_results_per_method.items():
@@ -907,7 +924,7 @@ def print_summary(result_df,
                 print(f"[WARNING] Failed to print final ensemble per-method results (BIRD): {e}")
 
         # Per-method ensemble results using ALL QUESTIONS as denominator - BIRD
-        if bird_ensemble_method_results:
+        if bird_ensemble_method_results and len(bird_ensemble_method_results) > 0:
             try:
                 print(f"\nENSEMBLE METHOD RESULTS (All questions as denominator, BIRD):")
                 for method, metrics in bird_ensemble_method_results.items():
@@ -1500,13 +1517,15 @@ Examples:
                                 except Exception:
                                     pass
                             else:
-                                # Eval-only path: use eval_result mappings to assess winners
+                                # Eval-only path: use eval_custom/eval_result mappings to assess winners
                                 # Build join keys available in both winners_df and all_runs_df
                                 join_keys = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in all_runs_df.columns]
                                 merged = winners_df.merge(all_runs_df, on=join_keys, how='left', suffixes=('_winner', ''))
 
-                                # Normalize eval_result to comparison_result categories for winners
-                                if 'eval_result' in merged.columns:
+                                # Normalize to comparison categories for winners (prefer eval_custom)
+                                if 'eval_custom' in merged.columns:
+                                    merged['winner_comparison'] = merged['eval_custom'].map(_normalize_eval_result_to_comparison)
+                                elif 'eval_result' in merged.columns:
                                     merged['winner_comparison'] = merged['eval_result'].map(_normalize_eval_result_to_comparison)
                                 elif 'comparison_result' in merged.columns:
                                     merged['winner_comparison'] = merged['comparison_result']
@@ -1536,11 +1555,16 @@ Examples:
                                     'no_match_pct_all': float(no_match_pct_all),
                                     'query_error_pct_all': float(query_error_pct_all),
                                 }
-                                # BIRD: eval-only, join winners to result_df to get bird_comparison_result
+                                # BIRD: eval-only, prefer eval_bird if present in all_runs_df; else join to result_df bird_comparison_result
                                 try:
-                                    join_keys2 = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in result_df.columns]
-                                    merged_bird = winners_df.merge(result_df[join_keys2 + ['bird_comparison_result']], on=join_keys2, how='left')
-                                    bird_winner_comp = merged_bird.get('bird_comparison_result')
+                                    bird_winner_comp = None
+                                    if 'eval_bird' in merged.columns:
+                                        bird_winner_comp = merged['eval_bird'].map(_normalize_eval_result_to_comparison)
+                                    else:
+                                        join_keys2 = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in result_df.columns]
+                                        if 'bird_comparison_result' in result_df.columns:
+                                            merged_bird = winners_df.merge(result_df[join_keys2 + ['bird_comparison_result']], on=join_keys2, how='left')
+                                            bird_winner_comp = merged_bird.get('bird_comparison_result')
                                     bird_match_count = int((bird_winner_comp == 'Match').sum()) if bird_winner_comp is not None else 0
                                     bird_no_match_count = int((bird_winner_comp == 'No Match').sum()) if bird_winner_comp is not None else 0
                                     bird_qe_measured = int(((bird_winner_comp.isna()) | (bird_winner_comp == 'Query Error')).sum()) if bird_winner_comp is not None else 0
@@ -1576,8 +1600,10 @@ Examples:
                     tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb, comparison_col='comparison_result')
                 except Exception as e:
                     logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (custom): {e}")
+                # Only compute BIRD stats if bird_comparison_result exists and has non-null values
                 try:
-                    bird_tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb, comparison_col='bird_comparison_result')
+                    if 'bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any():
+                        bird_tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb, comparison_col='bird_comparison_result')
                 except Exception as e:
                     logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (bird): {e}")
 
@@ -1618,7 +1644,12 @@ Examples:
             logger.warning(f"Failed building final per-method winner results: {e}")
 
         # Build bird question summary
-        bird_question_summary_df = create_question_summary(result_df, comparison_col='bird_comparison_result')
+        bird_question_summary_df = None
+        try:
+            if 'bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any():
+                bird_question_summary_df = create_question_summary(result_df, comparison_col='bird_comparison_result')
+        except Exception:
+            bird_question_summary_df = None
 
         # Print summary
         print_summary(
