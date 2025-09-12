@@ -123,7 +123,7 @@ def gradio_process_question_with_timeout(*args, timeout_seconds=180, **kwargs):
         _gradio_agent_child, args=args, kwargs=kwargs, timeout_seconds=timeout_seconds, label="gradio_agent_v2.process_question"
     )
     if err:
-        return {"dataframe": None}
+        return {"dataframe": None, "generated_sql": None}
     return payload
 
 # === Credential for google cloud ===
@@ -558,7 +558,7 @@ def run_models_parallel(
                 ga_response = gradio_process_question_with_timeout(
                     endpoint,
                     question,
-                    dataset_name,
+                    'BIRD',
                     db_name,
                     mlflow_run_id,
                     question_id=question_idx,
@@ -882,7 +882,7 @@ def process_questions(
                 "provider": "gradio",
                 "model_id": "SQLATS",
                 "config": {
-                    "endpoint": "http://10.128.0.5:2026/",
+                    "endpoint": "http://127.0.0.1:2026/",
                     "architecture": "SQLATS",
                     "timeout_seconds": 180,
                 },
