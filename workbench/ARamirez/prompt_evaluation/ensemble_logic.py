@@ -188,8 +188,9 @@ def favourite_based_selection(
         )
 
     print(f"[INFO] [Q{question_idx}] No Gemini or Claude response with valid DataFrame, calling Gradio agent...")
+    start = time.time()
     response = gradio_agent_v2.process_question(
-        "http://10.128.0.5:2024/",
+        "http://10.128.0.5:2026/",
         question,
         dataset_name,
         db_name,
@@ -197,6 +198,7 @@ def favourite_based_selection(
         question_id=question_idx,
         architecture="Multi-Agent Supervisor",
     )
+    duration = time.time() - start
     gradio_df = response.get("dataframe") if isinstance(response, dict) else None
     if gradio_df is None:
         print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
@@ -211,10 +213,11 @@ def favourite_based_selection(
         )
 
     gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
-    duration = claude_run.get("duration") if claude_run else None
+    gradio_sql = response.get("generated_sql") if isinstance(response, dict) else None
+    duration = duration if duration else claude_run.get("duration") if claude_run else None
     usage = claude_run.get("usage") if claude_run else None
     print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
-    return (response, duration, usage, "Gradio agent", gen_df_json, None)
+    return (response, duration, usage, "Gradio agent", gen_df_json, gradio_sql)
 
 
 def frequency_based_selection(
@@ -778,8 +781,9 @@ def ensemble_result(
         if use_gradio_agent:
             print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble. Calling Gradio agent...")
             print(f"Dataset name: {dataset_name}")
+            start = time.time()
             response = gradio_agent_v2.process_question(
-                "http://localhost:2025/",
+                "http://10.128.0.5:2026/",
                 question,
                 "BIRD",
                 db_name,
@@ -787,7 +791,9 @@ def ensemble_result(
                 question_id=question_idx,
                 architecture="SQLATS",
             )
+            duration = time.time() - start
             gradio_df = response.get("dataframe") if isinstance(response, dict) else None
+            gradio_sql = response.get("generated_sql") if isinstance(response, dict) else None
             if gradio_df is None:
                 print(f"[WARNING] [Q{question_idx}] Gradio agent returned None dataframe. Falling back to random valid run.")
                 fallback_runs = [r for r in all_runs if r.get("response")]
@@ -806,11 +812,11 @@ def ensemble_result(
                     return (None, 0.0, None, None, None, None)
 
             gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
-            claude_run = next((r for r in all_runs if r.get("model_name") == "claude"), None)
-            duration = claude_run.get("duration") if claude_run else None
-            usage = claude_run.get("usage") if claude_run else None
+            gemini_run = next((r for r in all_runs if r.get("model_name") == "gemini"), None)
+            duration = duration if duration else claude_run.get("duration") if claude_run else None
+            usage = gemini_run.get("usage") if gemini_run else None
             print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
-            return (response, duration, usage, "Gradio agent", gen_df_json, None)
+            return (response, duration, usage, "Gradio agent", gen_df_json, gradio_sql)
         else:
             print(f"[WARNING] [Q{question_idx}] No valid dataframes to ensemble.")
             for r in all_runs:

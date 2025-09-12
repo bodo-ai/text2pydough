@@ -552,13 +552,13 @@ def run_models_parallel(
         if model_info["name"] == "gradio_agent":
             try:
                 start = time.time()
-                endpoint = config.get("endpoint", "http://10.128.0.5:2025/")
+                endpoint = config.get("endpoint", "http://10.128.0.5:2026/")
                 architecture = config.get("architecture", "SQLATS")
                 timeout_seconds = config.get("timeout_seconds", 180)
                 ga_response = gradio_process_question_with_timeout(
                     endpoint,
                     question,
-                    "BIRD",
+                    dataset_name,
                     db_name,
                     mlflow_run_id,
                     question_id=question_idx,
@@ -567,6 +567,7 @@ def run_models_parallel(
                 )
                 duration = time.time() - start
                 gradio_df = ga_response.get("dataframe") if isinstance(ga_response, dict) else None
+                gradio_sql = ga_response.get("generated_sql") if isinstance(ga_response, dict) else None
                 gen_df_json = None
                 if gradio_df is not None:
                     gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
@@ -583,7 +584,7 @@ def run_models_parallel(
                     "df": gradio_df,
                     "gen_df_json": gen_df_json,
                     "sql": row.get("sql", ""),
-                    "generated_sql": None,
+                    "generated_sql": gradio_sql,
                     "dataset_name": row.get("dataset_name", ""),
                     "db_name": db_name,
                 }
@@ -881,7 +882,7 @@ def process_questions(
                 "provider": "gradio",
                 "model_id": "SQLATS",
                 "config": {
-                    "endpoint": "http://localhost:2025/",
+                    "endpoint": "http://10.128.0.5:2026/",
                     "architecture": "SQLATS",
                     "timeout_seconds": 180,
                 },
@@ -1127,6 +1128,13 @@ def build_results_df(df, results):
 
 if __name__ == "__main__":
     cwd = os.getcwd()
+    # Ensure safe multiprocessing on Linux when combining threads + processes
+    # Using 'spawn' avoids deadlocks that can happen with the default 'fork'
+    try:
+        import multiprocessing as _mp
+        _mp.set_start_method("spawn", force=True)
+    except Exception:
+        pass
     #db_path = './test_data/TPCH.db'
     #download_database(db_path)
     #if untracked_files(cwd) or modified_files(cwd):

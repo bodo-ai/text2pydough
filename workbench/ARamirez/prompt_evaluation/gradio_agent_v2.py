@@ -89,6 +89,14 @@ def extract_dataframe(json_data):
         print(f"Error converting to DataFrame: {e}")
         return None
 
+def extract_sql(result):
+    """Extract generated SQL from the assistant response (```sql ... ```)."""
+    plain_text = extract_plain_text(result)
+    if not plain_text:
+        return None
+    m = re.search(r"```sql\s*\n(.*?)\n```", plain_text, re.DOTALL | re.IGNORECASE)
+    return m.group(1).strip() if m else None
+
 def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=None, question_id=None, architecture="SQLATS"):
     """Process a single question and return the results."""
     #initialize the client
@@ -146,6 +154,14 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=
         plain_text = extract_plain_text(result)
         print(f"\nPlain text response length: {len(plain_text)} characters")
         
+        # Extract SQL
+        generated_sql = extract_sql(result)
+        if generated_sql:
+            print("Generated SQL detected (first 200 chars):")
+            print(generated_sql[:200] + ("..." if len(generated_sql) > 200 else ""))
+        else:
+            print("No SQL block detected in response")
+
         # Extract JSON
         json_data = extract_json(result)
         if json_data:
@@ -173,6 +189,7 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=
             'db_name': db_name,
             'selected_db_display': selected_db_display,
             'plain_text': plain_text,
+            'generated_sql': generated_sql,
             'json_data': json_data,
             'dataframe': df,
             'success': True
@@ -186,6 +203,7 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=
             'dataset_name': dataset_name,
             'db_name': db_name,
             'selected_db_display': selected_db_display,
+            'generated_sql': None,
             'error': str(e),
             'success': False
         }
@@ -193,8 +211,8 @@ def process_question(server_URL, question, dataset_name, db_name, mlflow_run_id=
 def main():
     """Main function to process questions from CSV file."""
     # Configuration
-    csv_file_path = "/home/jupyter/mount-folder/datasets/BIRD-SQL/bird_total_query_errors.csv"#test_execution_2025_06_29-05_18_34_QE.csv"
-    server_URL = "http://10.128.0.5:2025/"
+    csv_file_path = "/Users/bodo/Documents/repositories/text2pydough_finetuning/generator_team/eval_data/minibird/test_execution_2025_08_06-02_17_31_BIRDVAL_1TRY_57percent.csv"#test_execution_2025_06_29-05_18_34_QE.csv"
+    server_URL = "http://localhost:2025/"
     agent_architecture = "SQLATS"  # Options: "SQLATS", "Multi-Agent Supervisor", "ReAct (PyDough)", etc.
     
     # Initialize client
@@ -231,7 +249,15 @@ def main():
         print(f"\nProcessing question {index + 1}/{len(df)}")
         
         # Process the question
-        result = process_question(client, question, dataset_name, db_name, question_id, architecture=agent_architecture)
+        result = process_question(
+            server_URL,
+            question,
+            dataset_name,
+            db_name,
+            mlflow_run_id=None,
+            question_id=question_id,
+            architecture=agent_architecture,
+        )
         results.append(result)
         
         # Add a small delay between requests to avoid overwhelming the server
