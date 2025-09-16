@@ -668,7 +668,7 @@ def binary_comp_selection(
 
     # Lazy import to avoid heavy deps unless used
     try:
-        from scooring_agents import evaluate_binary_dataframes as llm_evaluate_binary
+        from scooring_agents import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
     except Exception as e:
         print(
             f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents.evaluate_binary_dataframes): {e}. Falling back to random."
