@@ -67,9 +67,12 @@ Assess each option independently on these criteria (cite explicit evidence such 
 
 Then select the better option strictly based on these criteria. If both are effectively equivalent, prefer the one that provides the most information.
 
+Additionally, provide a confidence score in the closed interval [0, 1] that reflects how strongly the evidence supports your choice (0 = no confidence, 1 = absolute confidence). The confidence should be based on how well the selected option satisfies the criteria relative to the other.
+
 You must respond with EXACTLY this JSON (no additional text):
 {
-    "best_index": 0
+    "best_index": 0,
+    "confidence": 0.0
 }
 Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
 """
@@ -109,6 +112,28 @@ def extract_json_evaluation(text):
             return {"score": 0, "reasoning": "Could not parse evaluation"}
     except json.JSONDecodeError:
         return {"score": 0, "reasoning": "Invalid JSON format"}
+
+def _parse_binary_evaluation(text):
+    try:
+        data = json.loads(text)
+        best_index = data.get("best_index", 0)
+        confidence = data.get("confidence", 0.0)
+        try:
+            best_index = int(best_index)
+        except Exception:
+            best_index = 0
+        try:
+            confidence = float(confidence)
+        except Exception:
+            confidence = 0.0
+        # Clamp confidence to [0,1]
+        if confidence < 0:
+            confidence = 0.0
+        if confidence > 1:
+            confidence = 1.0
+        return best_index, confidence
+    except Exception:
+        return 0, 0.0
 
 def evaluate_dataframes_csv():
     df = pd.read_csv("prueba.csv")    
@@ -169,6 +194,51 @@ def evaluate_binary_dataframes(question, dataframes_list):
     # Map selected index back to original indices
     original_index = order[presented_index]
     return original_index
+
+def evaluate_binary_dataframes_with_confidence(question, dataframes_list):
+    # Evaluate both permutations and use consensus or higher confidence to decide
+    if not isinstance(dataframes_list, (list, tuple)) or len(dataframes_list) < 2:
+        raise ValueError("dataframes_list must contain at least two items")
+
+    df_a = dataframes_list[0]
+    df_b = dataframes_list[1]
+
+    # Call 1: original order (A,B)
+    order1 = [0, 1]
+    with dspy.context(lm=lm):
+        resp1 = bi(
+            question=question,
+            dataframe_1=df_a,
+            dataframe_2=df_b,
+            evaluation_criteria=EVALUATION_BINARY_PROMPT
+        )
+    presented_index1, confidence1 = _parse_binary_evaluation(resp1.evaluation)
+    original_index1 = order1[presented_index1] if presented_index1 in (0, 1) else 0
+
+    # Call 2: swapped order (B,A)
+    order2 = [1, 0]
+    with dspy.context(lm=lm):
+        resp2 = bi(
+            question=question,
+            dataframe_1=df_b,
+            dataframe_2=df_a,
+            evaluation_criteria=EVALUATION_BINARY_PROMPT
+        )
+    presented_index2, confidence2 = _parse_binary_evaluation(resp2.evaluation)
+    original_index2 = order2[presented_index2] if presented_index2 in (0, 1) else 0
+
+    # If both picks coincide, return that
+    if original_index1 == original_index2:
+        return original_index1
+
+    # Otherwise, choose the higher confidence
+    if confidence1 > confidence2:
+        return original_index1
+    if confidence2 > confidence1:
+        return original_index2
+
+    # Tie-breaker: default to the result from the first evaluation
+    return original_index1
 
 def evaluate_dataframes(question, dataframes_list):
     best_score = -1
