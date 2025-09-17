@@ -202,6 +202,20 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
         result_df['bird_comparison_result'] = result_df['bird_eval'].map(_normalize_eval_result_to_comparison)
     except Exception:
         result_df['bird_comparison_result'] = None
+
+    # If input CSV already contains eval_bird (from eval_all_runs_to_csv), prefer it to backfill missing BIRD results
+    try:
+        if 'eval_bird' in df.columns:
+            mapped_bird = df['eval_bird'].map(_normalize_eval_result_to_comparison)
+            if 'bird_comparison_result' in result_df.columns:
+                # Fill only where we failed to produce a BIRD outcome
+                mask = result_df['bird_comparison_result'].isna()
+                if mask.any():
+                    result_df.loc[mask, 'bird_comparison_result'] = mapped_bird.loc[mask]
+            else:
+                result_df['bird_comparison_result'] = mapped_bird
+    except Exception:
+        pass
     
     # Create question summaries (custom) - OUTPUT 2: Unique question IDs with has_match column
     question_summary_df = create_question_summary(result_df, comparison_col='comparison_result')
@@ -946,8 +960,15 @@ def _log_mlflow_stats(args,
                       result_df: pd.DataFrame,
                       question_summary_df: pd.DataFrame,
                       tie_break_stats_per_method: dict = None,
-                      final_winner_results_per_method: dict = None):
-    """Log Overall, Question-level, Tie-break and Final ensemble results into MLflow."""
+                      final_winner_results_per_method: dict = None,
+                      bird_question_summary_df: pd.DataFrame = None,
+                      bird_tie_break_stats_per_method: dict = None,
+                      bird_final_winner_results_per_method: dict = None,
+                      bird_ensemble_method_results: dict = None):
+    """Log Overall, Question-level, Tie-break and Final ensemble results into MLflow.
+
+    Also logs BIRD (SQL comparison) metrics when available in result_df and provided summaries.
+    """
     if getattr(args, 'disable_mlflow', False):
         return
     if mlflow is None:
@@ -983,6 +1004,15 @@ def _log_mlflow_stats(args,
             run_name = getattr(args, 'mlflow_run_name', None) or 'evaluate_all_runs'
             mlflow.start_run(run_name=run_name)
             started_here = True
+
+        # Log the original all_runs CSV file as an artifact for traceability
+        try:
+            src_csv = getattr(args, 'all_runs', None)
+            if src_csv and os.path.isfile(src_csv):
+                mlflow.log_artifact(src_csv, artifact_path='inputs')
+        except Exception:
+            # Best-effort; continue if artifact logging fails
+            pass
 
         # Log parameters used to call the script (masking sensitive values)
         try:
@@ -1041,7 +1071,7 @@ def _log_mlflow_stats(args,
             # Continue even if extra-params logging fails
             pass
 
-        # Overall results
+        # Overall results (CUSTOM)
         total_runs = len(result_df)
         comparison_counts = result_df['comparison_result'].value_counts()
         total_percentages = (comparison_counts / total_runs * 100).round(2)
@@ -1051,7 +1081,7 @@ def _log_mlflow_stats(args,
             pct_val = float(total_percentages[result_type]) if result_type in total_percentages else 0.0
             mlflow.log_metric(f'overall_pct_{str(result_type).replace(" ", "_")}', pct_val)
 
-        # Question-level results
+        # Question-level results (CUSTOM)
         total_questions = len(question_summary_df)
         questions_with_match = int(question_summary_df['has_match'].sum())
         questions_without_match = int(total_questions - questions_with_match)
@@ -1088,7 +1118,7 @@ def _log_mlflow_stats(args,
         except Exception:
             pass
 
-        # Tie-break stats per-method
+        # Tie-break stats per-method (CUSTOM)
         if tie_break_stats_per_method:
             for key, stats in tie_break_stats_per_method.items():
                 prefix = _sanitize_mlflow_name(f'tb__{key}')
@@ -1127,7 +1157,7 @@ def _log_mlflow_stats(args,
                 except Exception:
                     pass
 
-        # Final ensemble per-method results
+        # Final ensemble per-method results (CUSTOM)
         if final_winner_results_per_method:
             for key, metrics in final_winner_results_per_method.items():
                 prefix = _sanitize_mlflow_name(f'final__{key}')
@@ -1179,6 +1209,142 @@ def _log_mlflow_stats(args,
                     mlflow.log_metric('Best_Query_Error', float(qe_pct))
             except Exception:
                 # Non-fatal; continue without best-of logs
+                pass
+
+        # ========================
+        # BIRD metrics (if present)
+        # ========================
+        try:
+            has_any_bird = ('bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any())
+        except Exception:
+            has_any_bird = False
+
+        if has_any_bird:
+            # Overall BIRD results
+            try:
+                bird_counts = result_df['bird_comparison_result'].value_counts()
+                bird_percentages = (bird_counts / total_runs * 100).round(2)
+                mlflow.log_metric('bird_overall_total_runs', int(total_runs))
+                for result_type, count in bird_counts.items():
+                    mlflow.log_metric(f'bird_overall_count_{str(result_type).replace(" ", "_")}', int(count))
+                    pct_val = float(bird_percentages[result_type]) if result_type in bird_percentages else 0.0
+                    mlflow.log_metric(f'bird_overall_pct_{str(result_type).replace(" ", "_")}', pct_val)
+            except Exception:
+                pass
+
+            # Question-level BIRD results
+            try:
+                if bird_question_summary_df is not None:
+                    total_bq = int(len(bird_question_summary_df))
+                    with_match_bq = int(bird_question_summary_df['has_match'].sum())
+                    without_match_bq = int(max(0, total_bq - with_match_bq))
+                    pct_with_bq = (with_match_bq / total_bq * 100.0) if total_bq > 0 else 0.0
+                    pct_without_bq = (without_match_bq / total_bq * 100.0) if total_bq > 0 else 0.0
+                    mlflow.log_metric('bird_questions_total', total_bq)
+                    mlflow.log_metric('bird_questions_with_match', with_match_bq)
+                    mlflow.log_metric('bird_questions_without_match', without_match_bq)
+                    mlflow.log_metric('bird_questions_with_match_pct', float(pct_with_bq))
+                    mlflow.log_metric('bird_questions_without_match_pct', float(pct_without_bq))
+                    # Breakdowns
+                    try:
+                        if 'complexity' in bird_question_summary_df.columns:
+                            comp_group_b = bird_question_summary_df.groupby('complexity')['has_match'].agg(['sum', 'count']).reset_index()
+                            for _, row in comp_group_b.iterrows():
+                                label = _sanitize_mlflow_name(str(row['complexity']))
+                                total = int(row['count'])
+                                matches = int(row['sum'])
+                                pct = (matches / total * 100.0) if total > 0 else 0.0
+                                mlflow.log_metric(f'bird_questions_by_complexity__{label}__total', total)
+                                mlflow.log_metric(f'bird_questions_by_complexity__{label}__with_match', matches)
+                                mlflow.log_metric(f'bird_questions_by_complexity__{label}__with_match_pct', float(pct))
+                        if 'difficulty' in bird_question_summary_df.columns:
+                            diff_group_b = bird_question_summary_df.groupby('difficulty')['has_match'].agg(['sum', 'count']).reset_index()
+                            for _, row in diff_group_b.iterrows():
+                                label = _sanitize_mlflow_name(str(row['difficulty']))
+                                total = int(row['count'])
+                                matches = int(row['sum'])
+                                pct = (matches / total * 100.0) if total > 0 else 0.0
+                                mlflow.log_metric(f'bird_questions_by_difficulty__{label}__total', total)
+                                mlflow.log_metric(f'bird_questions_by_difficulty__{label}__with_match', matches)
+                                mlflow.log_metric(f'bird_questions_by_difficulty__{label}__with_match_pct', float(pct))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # Tie-break stats per-method (BIRD)
+            try:
+                if bird_tie_break_stats_per_method:
+                    for key, stats in bird_tie_break_stats_per_method.items():
+                        prefix = _sanitize_mlflow_name(f'bird_tb__{key}')
+                        for metric_name in [
+                            'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
+                            'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
+                            'winner_query_error_count']:
+                            value = stats.get(metric_name)
+                            if value is not None:
+                                mlflow.log_metric(f'{prefix}__{metric_name}', float(value))
+                        # Per-bucket breakdowns
+                        try:
+                            by_comp = stats.get('by_complexity') if isinstance(stats, dict) else None
+                            if by_comp:
+                                for bucket, comp_stats in by_comp.items():
+                                    bucket_label = _sanitize_mlflow_name(str(bucket))
+                                    for metric_name in [
+                                        'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
+                                        'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
+                                        'winner_query_error_count']:
+                                        value = comp_stats.get(metric_name)
+                                        if value is not None:
+                                            mlflow.log_metric(f'{prefix}__by_complexity__{bucket_label}__{metric_name}', float(value))
+                            by_diff = stats.get('by_difficulty') if isinstance(stats, dict) else None
+                            if by_diff:
+                                for bucket, diff_stats in by_diff.items():
+                                    bucket_label = _sanitize_mlflow_name(str(bucket))
+                                    for metric_name in [
+                                        'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
+                                        'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
+                                        'winner_query_error_count']:
+                                        value = diff_stats.get(metric_name)
+                                        if value is not None:
+                                            mlflow.log_metric(f'{prefix}__by_difficulty__{bucket_label}__{metric_name}', float(value))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # Final ensemble per-method results (BIRD)
+            try:
+                if bird_final_winner_results_per_method:
+                    for key, metrics in bird_final_winner_results_per_method.items():
+                        prefix = _sanitize_mlflow_name(f'bird_final__{key}')
+                        total_q = int(metrics.get('total_questions', 0))
+                        m_cnt = int(metrics.get('winner_match_count', 0))
+                        nm_cnt = int(metrics.get('winner_no_match_count', 0))
+                        qe_cnt = int(metrics.get('winner_query_error_count_adjusted', 0))
+                        m_pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                        nm_pct = (nm_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                        qe_pct = (qe_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                        mlflow.log_metric(f'{prefix}__total_questions', total_q)
+                        mlflow.log_metric(f'{prefix}__winner_match_count', m_cnt)
+                        mlflow.log_metric(f'{prefix}__winner_no_match_count', nm_cnt)
+                        mlflow.log_metric(f'{prefix}__winner_query_error_count', qe_cnt)
+                        mlflow.log_metric(f'{prefix}__winner_match_pct', float(m_pct))
+                        mlflow.log_metric(f'{prefix}__winner_no_match_pct', float(nm_pct))
+                        mlflow.log_metric(f'{prefix}__winner_query_error_pct', float(qe_pct))
+            except Exception:
+                pass
+
+            # Ensemble method results over all questions (BIRD)
+            try:
+                if bird_ensemble_method_results:
+                    for key, metrics in bird_ensemble_method_results.items():
+                        prefix = _sanitize_mlflow_name(f'bird_method__{key}')
+                        for m_name in ['match_count', 'no_match_count', 'query_error_count', 'total_questions', 'match_pct_all', 'no_match_pct_all', 'query_error_pct_all']:
+                            val = metrics.get(m_name)
+                            if val is not None:
+                                mlflow.log_metric(f'{prefix}__{m_name}', float(val))
+            except Exception:
                 pass
 
         if started_here:
@@ -1593,6 +1759,7 @@ Examples:
         # Compute tie-break/finalist stats per method for both CUSTOM and BIRD using the same list
         tie_break_stats_per_method = {}
         bird_tie_break_stats_per_method = {}
+        has_any_bird = ('bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any())
         for method in methods_to_use:
             for tb in tie_breakers_to_use:
                 key = f"{method}|tb:{tb}"
@@ -1602,7 +1769,7 @@ Examples:
                     logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (custom): {e}")
                 # Only compute BIRD stats if bird_comparison_result exists and has non-null values
                 try:
-                    if 'bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any():
+                    if has_any_bird:
                         bird_tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb, comparison_col='bird_comparison_result')
                 except Exception as e:
                     logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (bird): {e}")
@@ -1646,7 +1813,7 @@ Examples:
         # Build bird question summary
         bird_question_summary_df = None
         try:
-            if 'bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any():
+            if has_any_bird:
                 bird_question_summary_df = create_question_summary(result_df, comparison_col='bird_comparison_result')
         except Exception:
             bird_question_summary_df = None
@@ -1671,6 +1838,10 @@ Examples:
             question_summary_df,
             tie_break_stats_per_method=tie_break_stats_per_method,
             final_winner_results_per_method=final_winner_results_per_method,
+            bird_question_summary_df=bird_question_summary_df,
+            bird_tie_break_stats_per_method=bird_tie_break_stats_per_method,
+            bird_final_winner_results_per_method=bird_final_winner_results_per_method,
+            bird_ensemble_method_results=bird_ensemble_method_results,
         )
         
         logger.info("Evaluation completed successfully!")
