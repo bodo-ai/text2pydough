@@ -65,7 +65,7 @@ def _normalize_eval_result_to_comparison(value: str) -> str:
 
 def evaluate_from_eval_column(all_runs_file: str, output_dir: str = None, eval_column: str = 'eval_result'):
     """
-    Build result_df and question_summary_df using an existing eval_result column without executing code.
+    Build result_df and question_summary_df using an existing eval column without executing code.
 
     Returns tuple: (result_df, question_summary_df)
     """
@@ -80,23 +80,10 @@ def evaluate_from_eval_column(all_runs_file: str, output_dir: str = None, eval_c
         raise ValueError(f"Column '{eval_column}' not found in input CSV")
 
     result_df = df.copy()
-    # Prefer new eval_custom column when present; fallback to provided eval_column
-    if 'eval_custom' in result_df.columns:
-        result_df['comparison_result'] = result_df['eval_custom'].map(_normalize_eval_result_to_comparison)
-    elif eval_column in result_df.columns:
-        result_df['comparison_result'] = result_df[eval_column].map(_normalize_eval_result_to_comparison)
-    else:
-        # If no suitable column exists, create empty comparison_result
-        result_df['comparison_result'] = None
+    # Strictly use the provided eval_column for normalization
+    result_df['comparison_result'] = result_df[eval_column].map(_normalize_eval_result_to_comparison)
     # Keep an exception column for schema parity; not applicable in eval-only
     result_df['exception'] = None
-    # Populate bird_comparison_result from new eval_bird column when present
-    if 'eval_bird' in result_df.columns:
-        result_df['bird_comparison_result'] = result_df['eval_bird'].map(_normalize_eval_result_to_comparison)
-    else:
-        # Ensure bird_comparison_result exists (may be populated by callers if bird eval available)
-        if 'bird_comparison_result' not in result_df.columns:
-            result_df['bird_comparison_result'] = None
 
     question_summary_df = create_question_summary(result_df, comparison_col='comparison_result')
 
@@ -1376,13 +1363,13 @@ Examples:
     
     parser.add_argument(
         '--db-base-path',
-        required=True,
+        required=False,
         help='Base path to the databases'
     )
     
     parser.add_argument(
         '--metadata-base-path',
-        required=True,
+        required=False,
         help='Base path to the metadata files'
     )
     
@@ -1428,6 +1415,12 @@ Examples:
         '--eval-column', '--eval_column',
         default='eval_result',
         help='Name of the column to use when --use-eval-result-only is enabled (default: eval_result)'
+    )
+    parser.add_argument(
+        '--eval-type', '--eval_type',
+        choices=['custom', 'bird'],
+        default='custom',
+        help='Select which eval column to use from CSV: custom uses eval_custom; bird uses eval_bird'
     )
 
     # MLflow options
@@ -1501,33 +1494,23 @@ Examples:
         logger.error(f"All runs file not found: {args.all_runs}")
         sys.exit(1)
     
-    # Validate paths only when executing code
-    if not args.use_eval_result_only:
-        if not os.path.exists(args.db_base_path):
-            logger.error(f"Database base path not found: {args.db_base_path}")
-            sys.exit(1)
-        if not os.path.exists(args.metadata_base_path):
-            logger.error(f"Metadata base path not found: {args.metadata_base_path}")
-            sys.exit(1)
-    
     try:
-        # Run evaluation
-        if args.use_eval_result_only:
-            logger.info("Starting evaluation (using eval_result only, no code execution)...")
-            result_df, question_summary_df = evaluate_from_eval_column(
-                args.all_runs,
-                args.output_dir,
-                eval_column=args.eval_column,
-            )
-        else:
-            logger.info("Starting evaluation (executing code)...")
-            result_df, question_summary_df = evaluate_all_runs(
-                args.all_runs,
-                args.db_base_path,
-                args.metadata_base_path,
-                args.output_dir,
-                num_threads=args.num_threads
-            )
+        # Always run in eval-only mode using the selected eval type
+        eval_column = 'eval_custom' if str(getattr(args, 'eval_type', 'custom')).lower() == 'custom' else 'eval_bird'
+        # If user explicitly passed --eval-column, allow override (back-compat)
+        try:
+            argv_tokens = sys.argv[1:]
+        except Exception:
+            argv_tokens = []
+        user_overrode_eval_col = any(t in argv_tokens for t in ['--eval-column', '--eval_column'])
+        if user_overrode_eval_col:
+            eval_column = args.eval_column
+        logger.info(f"Starting evaluation (no code execution). Using column: {eval_column}")
+        result_df, question_summary_df = evaluate_from_eval_column(
+            args.all_runs,
+            args.output_dir,
+            eval_column=eval_column,
+        )
 
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
@@ -1591,7 +1574,6 @@ Examples:
             logger.info("No valid ensemble methods provided; skipping ensemble comparison.")
 
         ensemble_method_results = None
-        bird_ensemble_method_results = None
         if (methods_to_use and len(methods_to_use) > 0):
             # Prepare winners per (method, tie-breaker) using all_runs DataFrame
             try:
@@ -1605,8 +1587,7 @@ Examples:
                 if 'extracted_python_code' not in all_runs_df.columns and 'code' in all_runs_df.columns:
                     all_runs_df['extracted_python_code'] = all_runs_df['code']
 
-                # In eval-only mode we will assess winners using the eval_result column
-                # Otherwise, we will execute process_row as before
+                # Assess winners using the selected eval column (no code execution)
                 ensemble_method_results = {}
                 for method in methods_to_use:
                     for tb in tie_breakers_to_use:
@@ -1621,149 +1602,46 @@ Examples:
                             )
 
                             total_questions = len(question_summary_df)
+                            # Eval-only path: use the selected eval column to assess winners
+                            # Build join keys available in both winners_df and all_runs_df
+                            join_keys = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in all_runs_df.columns]
+                            merged = winners_df.merge(all_runs_df, on=join_keys, how='left', suffixes=('_winner', ''))
 
-                            if not args.use_eval_result_only:
-                                # Execute code to evaluate winners like compare_output
-                                winners_eval_df = winners_df.copy()
-                                if 'extracted_python_code' not in winners_eval_df.columns:
-                                    winners_eval_df['extracted_python_code'] = winners_eval_df.get('response')
-
-                                match_count = 0
-                                no_match_count = 0
-                                qe_count_measured = 0
-                                total_rows = len(winners_eval_df)
-                                for _, row in winners_eval_df.iterrows():
-                                    try:
-                                        res, exc, bird_res, bird_exc = process_row(row, args.db_base_path, args.metadata_base_path)
-                                    except Exception:
-                                        res = 'Error'
-                                    outcome = str(res).strip()
-                                    if outcome == 'Match':
-                                        match_count += 1
-                                    elif outcome == 'No Match':
-                                        no_match_count += 1
-                                    else:
-                                        qe_count_measured += 1
-
-                                # Treat any missing winners as Query Error to keep denominator as all questions
-                                missing_questions = max(0, total_questions - total_rows)
-                                query_error_count = qe_count_measured + missing_questions
-                                match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                ensemble_method_results[key] = {
-                                    'match_count': match_count,
-                                    'no_match_count': no_match_count,
-                                    'query_error_count': query_error_count,
-                                    'total_questions': total_questions,
-                                    'match_pct_all': match_pct_all,
-                                    'no_match_pct_all': no_match_pct_all,
-                                    'query_error_pct_all': query_error_pct_all,
-                                }
-                                # BIRD: evaluate winners using precomputed bird_comparison_result from result_df
-                                try:
-                                    join_keys = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_eval_df.columns and k in result_df.columns]
-                                    merged_bird = winners_eval_df.merge(result_df[join_keys + ['bird_comparison_result']], on=join_keys, how='left')
-                                    bird_winner_comp = merged_bird.get('bird_comparison_result')
-                                    bird_match_count = int((bird_winner_comp == 'Match').sum()) if bird_winner_comp is not None else 0
-                                    bird_no_match_count = int((bird_winner_comp == 'No Match').sum()) if bird_winner_comp is not None else 0
-                                    bird_qe_measured = int(((bird_winner_comp.isna()) | (bird_winner_comp == 'Query Error')).sum()) if bird_winner_comp is not None else 0
-                                    bird_missing = max(0, total_questions - len(winners_eval_df))
-                                    bird_query_error_count = bird_qe_measured + bird_missing
-                                    bird_match_pct_all = (bird_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                    bird_no_match_pct_all = (bird_no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                    bird_query_error_pct_all = (bird_query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                    if bird_ensemble_method_results is None:
-                                        bird_ensemble_method_results = {}
-                                    bird_ensemble_method_results[key] = {
-                                        'match_count': bird_match_count,
-                                        'no_match_count': bird_no_match_count,
-                                        'query_error_count': bird_query_error_count,
-                                        'total_questions': total_questions,
-                                        'match_pct_all': bird_match_pct_all,
-                                        'no_match_pct_all': bird_no_match_pct_all,
-                                        'query_error_pct_all': bird_query_error_pct_all,
-                                    }
-                                except Exception:
-                                    pass
+                            # Normalize to comparison categories for winners using selected eval column
+                            if eval_column in merged.columns:
+                                merged['winner_comparison'] = merged[eval_column].map(_normalize_eval_result_to_comparison)
+                            elif 'comparison_result' in merged.columns:
+                                merged['winner_comparison'] = merged['comparison_result']
                             else:
-                                # Eval-only path: use eval_custom/eval_result mappings to assess winners
-                                # Build join keys available in both winners_df and all_runs_df
-                                join_keys = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in all_runs_df.columns]
-                                merged = winners_df.merge(all_runs_df, on=join_keys, how='left', suffixes=('_winner', ''))
+                                merged['winner_comparison'] = None
 
-                                # Normalize to comparison categories for winners (prefer eval_custom)
-                                if 'eval_custom' in merged.columns:
-                                    merged['winner_comparison'] = merged['eval_custom'].map(_normalize_eval_result_to_comparison)
-                                elif 'eval_result' in merged.columns:
-                                    merged['winner_comparison'] = merged['eval_result'].map(_normalize_eval_result_to_comparison)
-                                elif 'comparison_result' in merged.columns:
-                                    merged['winner_comparison'] = merged['comparison_result']
-                                else:
-                                    merged['winner_comparison'] = None
+                            match_count = int((merged['winner_comparison'] == 'Match').sum())
+                            no_match_count = int((merged['winner_comparison'] == 'No Match').sum())
+                            qe_measured = int(((merged['winner_comparison'].isna()) | (merged['winner_comparison'] == 'Query Error')).sum())
 
-                                match_count = int((merged['winner_comparison'] == 'Match').sum())
-                                no_match_count = int((merged['winner_comparison'] == 'No Match').sum())
-                                qe_measured = int((merged['winner_comparison'].isna()) | (merged['winner_comparison'] == 'Query Error'))
-                                qe_measured = int(((merged['winner_comparison'].isna()) | (merged['winner_comparison'] == 'Query Error')).sum())
+                            # Treat any missing winners (no DF to select) as Query Error to keep denominator constant
+                            total_rows = len(winners_df)
+                            missing_questions = max(0, total_questions - total_rows)
+                            query_error_count = int(qe_measured + missing_questions)
 
-                                # Treat any missing winners (no DF to select) as Query Error to keep denominator constant
-                                total_rows = len(winners_df)
-                                missing_questions = max(0, total_questions - total_rows)
-                                query_error_count = qe_measured + missing_questions
+                            match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                            no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
+                            query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
 
-                                match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
-
-                                ensemble_method_results[key] = {
-                                    'match_count': match_count,
-                                    'no_match_count': no_match_count,
-                                    'query_error_count': int(query_error_count),
-                                    'total_questions': int(total_questions),
-                                    'match_pct_all': float(match_pct_all),
-                                    'no_match_pct_all': float(no_match_pct_all),
-                                    'query_error_pct_all': float(query_error_pct_all),
-                                }
-                                # BIRD: eval-only, prefer eval_bird if present in all_runs_df; else join to result_df bird_comparison_result
-                                try:
-                                    bird_winner_comp = None
-                                    if 'eval_bird' in merged.columns:
-                                        bird_winner_comp = merged['eval_bird'].map(_normalize_eval_result_to_comparison)
-                                    else:
-                                        join_keys2 = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in result_df.columns]
-                                        if 'bird_comparison_result' in result_df.columns:
-                                            merged_bird = winners_df.merge(result_df[join_keys2 + ['bird_comparison_result']], on=join_keys2, how='left')
-                                            bird_winner_comp = merged_bird.get('bird_comparison_result')
-                                    bird_match_count = int((bird_winner_comp == 'Match').sum()) if bird_winner_comp is not None else 0
-                                    bird_no_match_count = int((bird_winner_comp == 'No Match').sum()) if bird_winner_comp is not None else 0
-                                    bird_qe_measured = int(((bird_winner_comp.isna()) | (bird_winner_comp == 'Query Error')).sum()) if bird_winner_comp is not None else 0
-                                    total_rows = len(winners_df)
-                                    bird_missing = max(0, total_questions - total_rows)
-                                    bird_query_error_count = bird_qe_measured + bird_missing
-                                    bird_match_pct_all = (bird_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                    bird_no_match_pct_all = (bird_no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                    bird_query_error_pct_all = (bird_query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                                    if bird_ensemble_method_results is None:
-                                        bird_ensemble_method_results = {}
-                                    bird_ensemble_method_results[key] = {
-                                        'match_count': int(bird_match_count),
-                                        'no_match_count': int(bird_no_match_count),
-                                        'query_error_count': int(bird_query_error_count),
-                                        'total_questions': int(total_questions),
-                                        'match_pct_all': float(bird_match_pct_all),
-                                        'no_match_pct_all': float(bird_no_match_pct_all),
-                                        'query_error_pct_all': float(bird_query_error_pct_all),
-                                    }
-                                except Exception:
-                                    pass
+                            ensemble_method_results[key] = {
+                                'match_count': int(match_count),
+                                'no_match_count': int(no_match_count),
+                                'query_error_count': int(query_error_count),
+                                'total_questions': int(total_questions),
+                                'match_pct_all': float(match_pct_all),
+                                'no_match_pct_all': float(no_match_pct_all),
+                                'query_error_pct_all': float(query_error_pct_all),
+                            }
                         except Exception as e:
                             logger.warning(f"Failed computing ensemble winners for method {method} with tie-breaker {tb}: {e}")
 
-        # Compute tie-break/finalist stats per method for both CUSTOM and BIRD using the same list
+        # Compute tie-break/finalist stats per method using the same list
         tie_break_stats_per_method = {}
-        bird_tie_break_stats_per_method = {}
-        has_any_bird = ('bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any())
         for method in methods_to_use:
             for tb in tie_breakers_to_use:
                 key = f"{method}|tb:{tb}"
@@ -1771,16 +1649,9 @@ Examples:
                     tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb, comparison_col='comparison_result')
                 except Exception as e:
                     logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (custom): {e}")
-                # Only compute BIRD stats if bird_comparison_result exists and has non-null values
-                try:
-                    if has_any_bird:
-                        bird_tie_break_stats_per_method[key] = _compute_ensemble_stats(result_df, method, tie_breaker=tb, comparison_col='bird_comparison_result')
-                except Exception as e:
-                    logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (bird): {e}")
 
         # Build final per-method winner outcome results using tie_break_stats (winners across questions considered)
         final_winner_results_per_method = {}
-        bird_final_winner_results_per_method = {}
         try:
             for key, stats in tie_break_stats_per_method.items():
                 total_questions = stats.get('total_questions', 0)
@@ -1797,30 +1668,8 @@ Examples:
                     'winner_no_match_count': w_nomatch,
                     'winner_query_error_count_adjusted': w_qerr_adjusted,
                 }
-            for key, stats in bird_tie_break_stats_per_method.items():
-                total_questions = stats.get('total_questions', 0)
-                considered_questions = stats.get('considered_questions', 0)
-                w_match = stats.get('winner_match_count', 0)
-                w_nomatch = stats.get('winner_no_match_count', 0)
-                w_qerr = stats.get('winner_query_error_count', 0)
-                missing = max(0, total_questions - considered_questions)
-                w_qerr_adjusted = w_qerr + missing
-                bird_final_winner_results_per_method[key] = {
-                    'total_questions': total_questions,
-                    'winner_match_count': w_match,
-                    'winner_no_match_count': w_nomatch,
-                    'winner_query_error_count_adjusted': w_qerr_adjusted,
-                }
         except Exception as e:
             logger.warning(f"Failed building final per-method winner results: {e}")
-
-        # Build bird question summary
-        bird_question_summary_df = None
-        try:
-            if has_any_bird:
-                bird_question_summary_df = create_question_summary(result_df, comparison_col='bird_comparison_result')
-        except Exception:
-            bird_question_summary_df = None
 
         # Print summary
         print_summary(
@@ -1829,10 +1678,6 @@ Examples:
             ensemble_method_results=ensemble_method_results,
             tie_break_stats_per_method=tie_break_stats_per_method,
             final_winner_results_per_method=final_winner_results_per_method,
-            bird_question_summary_df=bird_question_summary_df,
-            bird_tie_break_stats_per_method=bird_tie_break_stats_per_method,
-            bird_final_winner_results_per_method=bird_final_winner_results_per_method,
-            bird_ensemble_method_results=bird_ensemble_method_results,
         )
 
         # Log stats to MLflow
@@ -1842,10 +1687,6 @@ Examples:
             question_summary_df,
             tie_break_stats_per_method=tie_break_stats_per_method,
             final_winner_results_per_method=final_winner_results_per_method,
-            bird_question_summary_df=bird_question_summary_df,
-            bird_tie_break_stats_per_method=bird_tie_break_stats_per_method,
-            bird_final_winner_results_per_method=bird_final_winner_results_per_method,
-            bird_ensemble_method_results=bird_ensemble_method_results,
         )
         
         logger.info("Evaluation completed successfully!")
