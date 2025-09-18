@@ -648,13 +648,11 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
 
 def print_summary(result_df,
                   question_summary_df,
-                  ensemble_method_results: dict = None,
                   tie_break_stats_per_method: dict = None,
                   final_winner_results_per_method: dict = None,
                   bird_question_summary_df: pd.DataFrame = None,
                   bird_tie_break_stats_per_method: dict = None,
-                  bird_final_winner_results_per_method: dict = None,
-                  bird_ensemble_method_results: dict = None):
+                  bird_final_winner_results_per_method: dict = None):
     """
     Print a formatted summary of the evaluation results.
     
@@ -834,24 +832,6 @@ def print_summary(result_df,
         except Exception as e:
             print(f"\n[WARNING] Failed to print final ensemble per-method results: {e}")
 
-    # Per-method ensemble results using ALL QUESTIONS as denominator - CUSTOM (if provided)
-    if ensemble_method_results:
-        try:
-            print(f"\nENSEMBLE METHOD RESULTS (All questions as denominator):")
-            for method, metrics in ensemble_method_results.items():
-                total_q = metrics.get('total_questions', 0)
-                m_cnt = metrics.get('match_count', 0)
-                nm_cnt = metrics.get('no_match_count', 0)
-                qe_cnt = metrics.get('query_error_count', 0)
-                m_pct = metrics.get('match_pct_all', 0.0)
-                nm_pct = metrics.get('no_match_pct_all', 0.0)
-                qe_pct = metrics.get('query_error_pct_all', 0.0)
-                print(f"  {method}:")
-                print(f"    Match: {m_cnt}/{total_q} ({m_pct:.1f}%)")
-                print(f"    No Match: {nm_cnt}/{total_q} ({nm_pct:.1f}%)")
-                print(f"    Query Error: {qe_cnt}/{total_q} ({qe_pct:.1f}%)")
-        except Exception as e:
-            print(f"\n[WARNING] Failed to print ensemble method comparison: {e}")
 
     print("\n" + "="*80)
 
@@ -928,24 +908,6 @@ def print_summary(result_df,
             except Exception as e:
                 print(f"[WARNING] Failed to print final ensemble per-method results (BIRD): {e}")
 
-        # Per-method ensemble results using ALL QUESTIONS as denominator - BIRD
-        if bird_ensemble_method_results and len(bird_ensemble_method_results) > 0:
-            try:
-                print(f"\nENSEMBLE METHOD RESULTS (All questions as denominator, BIRD):")
-                for method, metrics in bird_ensemble_method_results.items():
-                    total_q = metrics.get('total_questions', 0)
-                    m_cnt = metrics.get('match_count', 0)
-                    nm_cnt = metrics.get('no_match_count', 0)
-                    qe_cnt = metrics.get('query_error_count', 0)
-                    m_pct = metrics.get('match_pct_all', 0.0)
-                    nm_pct = metrics.get('no_match_pct_all', 0.0)
-                    qe_pct = metrics.get('query_error_pct_all', 0.0)
-                    print(f"  {method}:")
-                    print(f"    Match: {m_cnt}/{total_q} ({m_pct:.1f}%)")
-                    print(f"    No Match: {nm_cnt}/{total_q} ({nm_pct:.1f}%)")
-                    print(f"    Query Error: {qe_cnt}/{total_q} ({qe_pct:.1f}%)")
-            except Exception as e:
-                print(f"[WARNING] Failed to print ensemble method comparison (BIRD): {e}")
 
 def _log_mlflow_stats(args,
                       result_df: pd.DataFrame,
@@ -1435,72 +1397,6 @@ Examples:
         else:
             logger.info("No valid ensemble methods provided; skipping ensemble comparison.")
 
-        ensemble_method_results = None
-        if (methods_to_use and len(methods_to_use) > 0):
-            # Prepare winners per (method, tie-breaker) using all_runs DataFrame
-            try:
-                all_runs_df = pd.read_csv(args.all_runs)
-            except Exception as e:
-                logger.error(f"Failed to reload all_runs file for ensemble methods: {e}")
-                all_runs_df = None
-
-            if all_runs_df is not None:
-                # Ensure extracted code is present if needed downstream
-                if 'extracted_python_code' not in all_runs_df.columns and 'code' in all_runs_df.columns:
-                    all_runs_df['extracted_python_code'] = all_runs_df['code']
-
-                # Assess winners using the selected eval column (no code execution)
-                ensemble_method_results = {}
-                for method in methods_to_use:
-                    for tb in tie_breakers_to_use:
-                        key = f"{method}|tb:{tb}"
-                        try:
-                            winners_df = ensemble_from_all_runs_df(
-                                all_runs_df,
-                                ensemble_selection_method=method,
-                                use_gradio_agent=False,
-                                mlflow_run_id=None,
-                                tie_break_method=tb,
-                            )
-
-                            total_questions = len(question_summary_df)
-                            # Eval-only path: use the selected eval column to assess winners
-                            # Build join keys available in both winners_df and all_runs_df
-                            join_keys = [k for k in ['question', 'dataset_name', 'db_name', 'question_index', 'model_name'] if k in winners_df.columns and k in all_runs_df.columns]
-                            merged = winners_df.merge(all_runs_df, on=join_keys, how='left', suffixes=('_winner', ''))
-
-                            # Normalize to comparison categories for winners using selected eval column
-                            if eval_column in merged.columns:
-                                merged['winner_comparison'] = merged[eval_column].map(_normalize_eval_result_to_comparison)
-                            elif 'comparison_result' in merged.columns:
-                                merged['winner_comparison'] = merged['comparison_result']
-                            else:
-                                merged['winner_comparison'] = None
-
-                            match_count = int((merged['winner_comparison'] == 'Match').sum())
-                            no_match_count = int((merged['winner_comparison'] == 'No Match').sum())
-                            qe_measured = int(((merged['winner_comparison'].isna()) | (merged['winner_comparison'] == 'Query Error')).sum())
-
-                            # Treat any missing winners (no DF to select) as Query Error to keep denominator constant
-                            total_rows = len(winners_df)
-                            missing_questions = max(0, total_questions - total_rows)
-                            query_error_count = int(qe_measured + missing_questions)
-
-                            match_pct_all = (match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                            no_match_pct_all = (no_match_count / total_questions * 100.0) if total_questions > 0 else 0.0
-                            query_error_pct_all = (query_error_count / total_questions * 100.0) if total_questions > 0 else 0.0
-
-                            ensemble_method_results[key] = {
-                                'match_count': int(match_count),
-                                'no_match_count': int(no_match_count),
-                                'query_error_count': int(query_error_count),
-                                'total_questions': int(total_questions),
-                                'match_pct_all': float(match_pct_all),
-                                'no_match_pct_all': float(no_match_pct_all),
-                                'query_error_pct_all': float(query_error_pct_all),
-                            }
-                        except Exception as e:
-                            logger.warning(f"Failed computing ensemble winners for method {method} with tie-breaker {tb}: {e}")
 
         # Compute tie-break/finalist stats per method using the same list
         tie_break_stats_per_method = {}
@@ -1537,7 +1433,6 @@ Examples:
         print_summary(
             result_df,
             question_summary_df,
-            ensemble_method_results=ensemble_method_results,
             tie_break_stats_per_method=tie_break_stats_per_method,
             final_winner_results_per_method=final_winner_results_per_method,
         )
