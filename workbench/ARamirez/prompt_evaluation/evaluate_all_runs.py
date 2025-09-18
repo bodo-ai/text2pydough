@@ -203,13 +203,17 @@ def evaluate_all_runs(all_runs_file, db_base_path, metadata_base_path, output_di
     except Exception:
         result_df['bird_comparison_result'] = None
 
-    # If input CSV already contains eval_bird (from eval_all_runs_to_csv), prefer it to backfill missing BIRD results
+    # If input CSV already contains eval_bird (from eval_all_runs_to_csv), prefer it to correct/override
+    # runtime BIRD results that are missing or classified as 'Query Error'. This ensures CSV-provided
+    # BIRD-only labels (Match/No Match/Query Error) are respected in the final summary.
     try:
         if 'eval_bird' in df.columns:
             mapped_bird = df['eval_bird'].map(_normalize_eval_result_to_comparison)
             if 'bird_comparison_result' in result_df.columns:
-                # Fill only where we failed to produce a BIRD outcome
-                mask = result_df['bird_comparison_result'].isna()
+                # Override where runtime value is NaN or 'Query Error' but CSV provides a concrete label
+                mask_available = mapped_bird.notna()
+                mask_runtime_bad = result_df['bird_comparison_result'].isna() | (result_df['bird_comparison_result'] == 'Query Error')
+                mask = mask_available & mask_runtime_bad
                 if mask.any():
                     result_df.loc[mask, 'bird_comparison_result'] = mapped_bird.loc[mask]
             else:
