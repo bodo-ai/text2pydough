@@ -75,6 +75,14 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
             # Proceed; process_row will yield Unknown/Query error
             df['extracted_python_code'] = None
 
+    # Normalize SQL column naming differences:
+    # Some producers write generated_sql rather than gen_sql which downstream expects
+    if 'gen_sql' not in df.columns:
+        if 'generated_sql' in df.columns:
+            df['gen_sql'] = df['generated_sql']
+        else:
+            df['gen_sql'] = None
+
     # Evaluate per row (optionally threaded)
     results = []
 

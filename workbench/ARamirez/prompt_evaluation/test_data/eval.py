@@ -557,9 +557,12 @@ def process_row(row, db_base_path, metadata_base_path):
             bird_eval_result = 'Not Available'
             return custom_eval_result, custom_eval_exception, bird_eval_result, bird_eval_exception
         
-        # Try to get generated DataFrame from CSV
+        # Try to get generated DataFrame/SQL from CSV
         generated_df_json = row.get('gen_df_json')
         generated_sql = row.get('gen_sql')
+        # Fallback: some producers name the column 'generated_sql'
+        if (generated_sql is None or (isinstance(generated_sql, float) and pd.isna(generated_sql))) and 'generated_sql' in row:
+            generated_sql = row.get('generated_sql')
 
         if generated_df_json is not None and generated_sql is not None:
             try:
@@ -574,6 +577,16 @@ def process_row(row, db_base_path, metadata_base_path):
                 custom_eval_result = 'Comparison Error'
                 custom_eval_exception = str(e)
                 bird_eval_result = 'Comparison Error'
+        elif generated_sql is not None:
+            # We have SQL but no generated DataFrame; still evaluate BIRD SQL comparison
+            try:
+                sql_comparison_result = bird_eval(generated_sql, sql, db_path)
+                bird_eval_result = 'Match' if sql_comparison_result == 1 else 'No Match'
+            except Exception as e:
+                bird_eval_result = 'Comparison Error'
+                bird_eval_exception = str(e)
+            # Custom DataFrame comparison cannot be performed without a generated dataframe
+            custom_eval_result = 'Insufficient Data'
         else:
             custom_eval_result = 'Insufficient Data'
             bird_eval_result = 'Not SQL Available'
