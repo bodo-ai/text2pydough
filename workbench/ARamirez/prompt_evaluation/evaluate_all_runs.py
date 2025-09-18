@@ -951,15 +951,8 @@ def _log_mlflow_stats(args,
                       result_df: pd.DataFrame,
                       question_summary_df: pd.DataFrame,
                       tie_break_stats_per_method: dict = None,
-                      final_winner_results_per_method: dict = None,
-                      bird_question_summary_df: pd.DataFrame = None,
-                      bird_tie_break_stats_per_method: dict = None,
-                      bird_final_winner_results_per_method: dict = None,
-                      bird_ensemble_method_results: dict = None):
-    """Log Overall, Question-level, Tie-break and Final ensemble results into MLflow.
-
-    Also logs BIRD (SQL comparison) metrics when available in result_df and provided summaries.
-    """
+                      final_winner_results_per_method: dict = None):
+    """Log Overall, Question-level, Tie-break and Final ensemble results into MLflow using a single unified comparison_result."""
     if getattr(args, 'disable_mlflow', False):
         return
     if mlflow is None:
@@ -1170,7 +1163,6 @@ def _log_mlflow_stats(args,
         # Best_(statistic) logs using final winner results (match criterion)
         if final_winner_results_per_method:
             try:
-                best_key = None
                 best_match_pct = -1.0
                 per_key_percentages = {}
                 for key, metrics in final_winner_results_per_method.items():
@@ -1189,153 +1181,23 @@ def _log_mlflow_stats(args,
                     per_key_percentages[key] = (match_pct, no_match_pct, query_error_pct)
                     if match_pct > best_match_pct:
                         best_match_pct = match_pct
-                        best_key = key
 
-                if best_key is not None:
-                    # Store pairing name as a parameter (string) and percentages as metrics
-                    mlflow.log_param('Best_Ensemble_Pairing', _sanitize_mlflow_name(str(best_key)))
-                    m_pct, nm_pct, qe_pct = per_key_percentages[best_key]
-                    mlflow.log_metric('Best_Match', float(m_pct))
+                # Collect all keys tied for best match percentage
+                if per_key_percentages:
+                    tolerance = 1e-9
+                    best_keys = [k for k, (mp, _, _) in per_key_percentages.items() if abs(mp - best_match_pct) <= tolerance]
+                    if len(best_keys) > 0:
+                        sanitized_keys = [_sanitize_mlflow_name(str(k)) for k in best_keys]
+                        mlflow.log_param('Best_Ensemble_Pairing', ','.join(sanitized_keys))
+                        # Log best percentages; match pct is identical across ties
+                        mlflow.log_metric('Best_Match', float(best_match_pct))
+                        # For No Match / Query Error, use the first best key for backward-compat
+                        first_key = best_keys[0]
+                        _, nm_pct, qe_pct = per_key_percentages[first_key]
                     mlflow.log_metric('Best_No_Match', float(nm_pct))
                     mlflow.log_metric('Best_Query_Error', float(qe_pct))
             except Exception:
                 # Non-fatal; continue without best-of logs
-                pass
-
-        # ========================
-        # BIRD metrics (if present)
-        # ========================
-        try:
-            has_any_bird = ('bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any())
-        except Exception:
-            has_any_bird = False
-
-        if has_any_bird:
-            # Overall BIRD results
-            try:
-                bird_counts = result_df['bird_comparison_result'].value_counts()
-                bird_percentages = (bird_counts / total_runs * 100).round(2)
-                mlflow.log_metric('bird_overall_total_runs', int(total_runs))
-                for result_type, count in bird_counts.items():
-                    mlflow.log_metric(f'bird_overall_count_{str(result_type).replace(" ", "_")}', int(count))
-                    pct_val = float(bird_percentages[result_type]) if result_type in bird_percentages else 0.0
-                    mlflow.log_metric(f'bird_overall_pct_{str(result_type).replace(" ", "_")}', pct_val)
-            except Exception:
-                pass
-
-            # Question-level BIRD results
-            try:
-                if bird_question_summary_df is not None:
-                    total_bq = int(len(bird_question_summary_df))
-                    with_match_bq = int(bird_question_summary_df['has_match'].sum())
-                    without_match_bq = int(max(0, total_bq - with_match_bq))
-                    pct_with_bq = (with_match_bq / total_bq * 100.0) if total_bq > 0 else 0.0
-                    pct_without_bq = (without_match_bq / total_bq * 100.0) if total_bq > 0 else 0.0
-                    mlflow.log_metric('bird_questions_total', total_bq)
-                    mlflow.log_metric('bird_questions_with_match', with_match_bq)
-                    mlflow.log_metric('bird_questions_without_match', without_match_bq)
-                    mlflow.log_metric('bird_questions_with_match_pct', float(pct_with_bq))
-                    mlflow.log_metric('bird_questions_without_match_pct', float(pct_without_bq))
-                    # Breakdowns
-                    try:
-                        if 'complexity' in bird_question_summary_df.columns:
-                            comp_group_b = bird_question_summary_df.groupby('complexity')['has_match'].agg(['sum', 'count']).reset_index()
-                            for _, row in comp_group_b.iterrows():
-                                label = _sanitize_mlflow_name(str(row['complexity']))
-                                total = int(row['count'])
-                                matches = int(row['sum'])
-                                pct = (matches / total * 100.0) if total > 0 else 0.0
-                                mlflow.log_metric(f'bird_questions_by_complexity__{label}__total', total)
-                                mlflow.log_metric(f'bird_questions_by_complexity__{label}__with_match', matches)
-                                mlflow.log_metric(f'bird_questions_by_complexity__{label}__with_match_pct', float(pct))
-                        if 'difficulty' in bird_question_summary_df.columns:
-                            diff_group_b = bird_question_summary_df.groupby('difficulty')['has_match'].agg(['sum', 'count']).reset_index()
-                            for _, row in diff_group_b.iterrows():
-                                label = _sanitize_mlflow_name(str(row['difficulty']))
-                                total = int(row['count'])
-                                matches = int(row['sum'])
-                                pct = (matches / total * 100.0) if total > 0 else 0.0
-                                mlflow.log_metric(f'bird_questions_by_difficulty__{label}__total', total)
-                                mlflow.log_metric(f'bird_questions_by_difficulty__{label}__with_match', matches)
-                                mlflow.log_metric(f'bird_questions_by_difficulty__{label}__with_match_pct', float(pct))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # Tie-break stats per-method (BIRD)
-            try:
-                if bird_tie_break_stats_per_method:
-                    for key, stats in bird_tie_break_stats_per_method.items():
-                        prefix = _sanitize_mlflow_name(f'bird_tb__{key}')
-                        for metric_name in [
-                            'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
-                            'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
-                            'winner_query_error_count']:
-                            value = stats.get(metric_name)
-                            if value is not None:
-                                mlflow.log_metric(f'{prefix}__{metric_name}', float(value))
-                        # Per-bucket breakdowns
-                        try:
-                            by_comp = stats.get('by_complexity') if isinstance(stats, dict) else None
-                            if by_comp:
-                                for bucket, comp_stats in by_comp.items():
-                                    bucket_label = _sanitize_mlflow_name(str(bucket))
-                                    for metric_name in [
-                                        'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
-                                        'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
-                                        'winner_query_error_count']:
-                                        value = comp_stats.get(metric_name)
-                                        if value is not None:
-                                            mlflow.log_metric(f'{prefix}__by_complexity__{bucket_label}__{metric_name}', float(value))
-                            by_diff = stats.get('by_difficulty') if isinstance(stats, dict) else None
-                            if by_diff:
-                                for bucket, diff_stats in by_diff.items():
-                                    bucket_label = _sanitize_mlflow_name(str(bucket))
-                                    for metric_name in [
-                                        'total_questions', 'tie_questions', 'single_finalist_questions', 'single_match_count',
-                                        'tie_match_count', 'considered_questions', 'winner_match_count', 'winner_no_match_count',
-                                        'winner_query_error_count']:
-                                        value = diff_stats.get(metric_name)
-                                        if value is not None:
-                                            mlflow.log_metric(f'{prefix}__by_difficulty__{bucket_label}__{metric_name}', float(value))
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-
-            # Final ensemble per-method results (BIRD)
-            try:
-                if bird_final_winner_results_per_method:
-                    for key, metrics in bird_final_winner_results_per_method.items():
-                        prefix = _sanitize_mlflow_name(f'bird_final__{key}')
-                        total_q = int(metrics.get('total_questions', 0))
-                        m_cnt = int(metrics.get('winner_match_count', 0))
-                        nm_cnt = int(metrics.get('winner_no_match_count', 0))
-                        qe_cnt = int(metrics.get('winner_query_error_count_adjusted', 0))
-                        m_pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                        nm_pct = (nm_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                        qe_pct = (qe_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                        mlflow.log_metric(f'{prefix}__total_questions', total_q)
-                        mlflow.log_metric(f'{prefix}__winner_match_count', m_cnt)
-                        mlflow.log_metric(f'{prefix}__winner_no_match_count', nm_cnt)
-                        mlflow.log_metric(f'{prefix}__winner_query_error_count', qe_cnt)
-                        mlflow.log_metric(f'{prefix}__winner_match_pct', float(m_pct))
-                        mlflow.log_metric(f'{prefix}__winner_no_match_pct', float(nm_pct))
-                        mlflow.log_metric(f'{prefix}__winner_query_error_pct', float(qe_pct))
-            except Exception:
-                pass
-
-            # Ensemble method results over all questions (BIRD)
-            try:
-                if bird_ensemble_method_results:
-                    for key, metrics in bird_ensemble_method_results.items():
-                        prefix = _sanitize_mlflow_name(f'bird_method__{key}')
-                        for m_name in ['match_count', 'no_match_count', 'query_error_count', 'total_questions', 'match_pct_all', 'no_match_pct_all', 'query_error_pct_all']:
-                            val = metrics.get(m_name)
-                            if val is not None:
-                                mlflow.log_metric(f'{prefix}__{m_name}', float(val))
-            except Exception:
                 pass
 
         if started_here:
