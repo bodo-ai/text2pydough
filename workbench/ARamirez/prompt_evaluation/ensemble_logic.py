@@ -760,6 +760,8 @@ def double_elim_selection(
     valid_runs: List[Dict[str, Any]],
     question: str,
     question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+    n: int = 5,
 ):
     """
     Run a double-elimination tournament among candidates using LLM binary evaluation.
@@ -795,8 +797,8 @@ def double_elim_selection(
                 serialized = ""
             candidates_json.append(serialized)
 
-    n = len(candidates_json)
-    if n == 1:
+    num_candidates = len(candidates_json)
+    if num_candidates == 1:
         best = valid_runs[0]
         print(f"[INFO] [Q{question_idx}] double_elim_selection: single candidate {best.get('model_name')}")
         return (
@@ -808,70 +810,87 @@ def double_elim_selection(
             best.get("generated_sql"),
         )
 
-    # Initialize loss counts and randomized seeding
-    indices: List[int] = list(range(n))
-    rng.shuffle(indices)
-    loss_count: Dict[int, int] = {i: 0 for i in indices}
+    def run_bracket_once() -> int:
+        # Initialize loss counts and randomized seeding for this tournament
+        indices: List[int] = list(range(num_candidates))
+        rng.shuffle(indices)
+        loss_count: Dict[int, int] = {i: 0 for i in indices}
 
-    # Active contenders are those with < 2 losses
-    def active_contenders() -> List[int]:
-        return [i for i in indices if loss_count.get(i, 0) < 2]
+        def active_contenders() -> List[int]:
+            return [i for i in indices if loss_count.get(i, 0) < 2]
 
-    def play_match(i: int, j: int) -> Tuple[int, int]:
-        """Return (winner_idx, loser_idx) among original indices i, j."""
-        try:
-            result_idx = llm_evaluate_binary(question, [candidates_json[i], candidates_json[j]])
+        def play_match(i: int, j: int) -> Tuple[int, int]:
+            """Return (winner_idx, loser_idx) among original indices i, j."""
             try:
-                pair_idx = int(result_idx)
+                result_idx = llm_evaluate_binary(question, [candidates_json[i], candidates_json[j]])
+                try:
+                    pair_idx = int(result_idx)
+                except Exception:
+                    pair_idx = None
             except Exception:
                 pair_idx = None
-        except Exception:
-            pair_idx = None
 
-        if pair_idx == 0:
-            return i, j
-        if pair_idx == 1:
-            return j, i
-        # On undecided, pick via seeded RNG for determinism
-        chosen = rng.choice([0, 1])
-        return (i, j) if chosen == 0 else (j, i)
+            if pair_idx == 0:
+                return i, j
+            if pair_idx == 1:
+                return j, i
+            # On undecided, pick via seeded RNG for determinism
+            chosen = rng.choice([0, 1])
+            return (i, j) if chosen == 0 else (j, i)
 
-    safety_counter = 0
-    while True:
-        alive = active_contenders()
-        if len(alive) <= 1:
-            break
-        # Randomize pairing order each round
-        rng.shuffle(alive)
-        # Pair adjacent; odd one gets bye
-        round_pairs: List[Tuple[int, int]] = []
-        k = 0
-        while k + 1 < len(alive):
-            round_pairs.append((alive[k], alive[k + 1]))
-            k += 2
-        # Process matches
-        for a, b in round_pairs:
-            winner, loser = play_match(a, b)
-            loss_count[loser] = loss_count.get(loser, 0) + 1
-        # Safety to avoid infinite loops on pathological cases
-        safety_counter += 1
-        if safety_counter > (n * 10):
-            print(f"[WARNING] [Q{question_idx}] Safety break in double_elim_selection after {safety_counter} rounds.")
-            break
+        safety_counter = 0
+        while True:
+            alive = active_contenders()
+            if len(alive) <= 1:
+                break
+            # Randomize pairing order each round
+            rng.shuffle(alive)
+            # Pair adjacent; odd one gets bye
+            round_pairs: List[Tuple[int, int]] = []
+            k = 0
+            while k + 1 < len(alive):
+                round_pairs.append((alive[k], alive[k + 1]))
+                k += 2
+            # Process matches
+            for a, b in round_pairs:
+                winner, loser = play_match(a, b)
+                loss_count[loser] = loss_count.get(loser, 0) + 1
+            # Safety to avoid infinite loops on pathological cases
+            safety_counter += 1
+            if safety_counter > (num_candidates * 10):
+                print(f"[WARNING] [Q{question_idx}] Safety break in double_elim_selection after {safety_counter} rounds.")
+                break
 
-    # Determine winner among remaining contenders (prefer lowest losses)
-    remaining = active_contenders()
-    if not remaining:
-        # Fallback: choose by minimum losses, then random
-        min_losses = min(loss_count.values()) if loss_count else 2
-        candidates = [i for i, l in loss_count.items() if l == min_losses]
-        winner_i = rng.choice(candidates) if candidates else rng.choice(list(range(n)))
+        # Determine winner among remaining contenders (prefer lowest losses)
+        remaining = [i for i in indices if loss_count.get(i, 0) < 2]
+        if not remaining:
+            min_losses = min(loss_count.values()) if loss_count else 2
+            cands = [i for i, l in loss_count.items() if l == min_losses]
+            return rng.choice(cands) if cands else rng.choice(list(range(num_candidates)))
+        return remaining[0]
+
+    # Run the tournament n times and collect winners
+    winners: List[int] = []
+    try:
+        total_runs = int(n) if isinstance(n, (int, float, str)) else 5
+    except Exception:
+        total_runs = 5
+    total_runs = max(1, int(total_runs))
+    for _ in range(total_runs):
+        winners.append(run_bracket_once())
+
+    # If a single winner across all runs, pick it; otherwise use tie-breaker
+    if len(set(winners)) == 1:
+        winner_i = winners[0]
     else:
-        winner_i = remaining[0]
+        # Pass the list (allowing duplicates) to tie-breaker for random weighting; others dedup internally
+        winner_i = select_tie_break_index(winners, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method)
+        if winner_i is None:
+            winner_i = rng.choice(winners)
 
     best = valid_runs[winner_i]
     print(
-        f"[INFO] [Q{question_idx}] double_elim_selection selected: {best.get('model_name')} (candidate #{winner_i}), losses: {loss_count.get(winner_i, 0)}."
+        f"[INFO] [Q{question_idx}] double_elim_selection selected: {best.get('model_name')} (candidate #{winner_i}) from {total_runs} tournaments."
     )
     return (
         best.get("response"),
@@ -981,7 +1000,7 @@ def ensemble_result(
         return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "double_elim":
         print(f"[INFO] [Q{question_idx}] Double-elimination selection (LLM binary)")
-        return double_elim_selection(valid_runs, question, question_idx=question_idx)
+        return double_elim_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method, n=5)
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
