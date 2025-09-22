@@ -518,6 +518,9 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
         elif selection_method == 'binary_comp_selection':
             # Stats-only path for binary LLM comp: consider all valid as finalists
             candidates = valid_indices.copy()
+        elif selection_method == 'double_elim':
+            # Stats-only path for double elimination; consider all valid as finalists
+            candidates = valid_indices.copy()
         
         else:
             # Default to size
@@ -646,103 +649,20 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
     }
 
 
-def print_summary(result_df,
-                  question_summary_df,
-                  tie_break_stats_per_method: dict = None,
-                  final_winner_results_per_method: dict = None,
-                  bird_question_summary_df: pd.DataFrame = None,
-                  bird_tie_break_stats_per_method: dict = None,
-                  bird_final_winner_results_per_method: dict = None):
-    """
-    Print a formatted summary of the evaluation results.
+def _print_ensemble_tie_break_stats(tie_break_stats_per_method: dict, section_name: str = ""):
+    """Helper function to print ensemble tie-break statistics."""
+    if not tie_break_stats_per_method:
+        return
     
-    Args:
-        result_df (pd.DataFrame): DataFrame with all evaluation results
-        question_summary_df (pd.DataFrame): DataFrame with question summary
-    """
-    print("\n" + "="*80)
-    print("EVALUATION SUMMARY")
-    print("="*80)
-    
-    # Overall statistics - CUSTOM
-    total_runs = len(result_df)
-    comparison_counts = result_df['comparison_result'].value_counts()
-    total_percentages = (comparison_counts / total_runs * 100).round(2)
-    
-    print(f"\nOVERALL RESULTS (Total runs: {total_runs}):")
-    for result_type, count in comparison_counts.items():
-        percentage = total_percentages[result_type]
-        print(f"  {result_type}: {count} ({percentage}%)")
-    
-    # Question-level statistics - CUSTOM
-    total_questions = len(question_summary_df)
-    questions_with_match = question_summary_df['has_match'].sum()
-    questions_without_match = total_questions - questions_with_match
-    
-    print(f"\nQUESTION-LEVEL RESULTS (Total unique questions: {total_questions}):")
-    print(f"  Questions with at least one match: {questions_with_match} ({questions_with_match/total_questions*100:.1f}%)")
-    print(f"  Questions with no matches: {questions_without_match} ({questions_without_match/total_questions*100:.1f}%)")
-
-    # Question-level breakdowns by complexity/difficulty when present
     try:
-        if 'complexity' in question_summary_df.columns:
-            by_comp = question_summary_df.groupby('complexity')['has_match'].agg(['sum', 'count']).reset_index()
-            print(f"\nBY COMPLEXITY (question-level has_match):")
-            for _, row in by_comp.iterrows():
-                label = str(row['complexity']) if str(row['complexity']).strip() else 'Unknown'
-                total = int(row['count'])
-                matches = int(row['sum'])
-                pct = (matches / total * 100.0) if total > 0 else 0.0
-                print(f"  {label}: {matches}/{total} ({pct:.1f}%)")
-        if 'difficulty' in question_summary_df.columns:
-            by_diff = question_summary_df.groupby('difficulty')['has_match'].agg(['sum', 'count']).reset_index()
-            print(f"\nBY DIFFICULTY (question-level has_match):")
-            for _, row in by_diff.iterrows():
-                label = str(row['difficulty']) if str(row['difficulty']).strip() else 'Unknown'
-                total = int(row['count'])
-                matches = int(row['sum'])
-                pct = (matches / total * 100.0) if total > 0 else 0.0
-                print(f"  {label}: {matches}/{total} ({pct:.1f}%)")
-    except Exception as e:
-        print(f"\n[WARNING] Failed to compute complexity/difficulty breakdowns: {e}")
-    
-    # Model-wise statistics - CUSTOM
-    if 'model_name' in result_df.columns:
-        model_stats = result_df.groupby('model_name')['comparison_result'].value_counts().unstack(fill_value=0)
-        print(f"\nBY MODEL:")
-        for model in model_stats.index:
-            model_total = model_stats.loc[model].sum()
-            print(f"\n  {model}:")
-            for result_type in ['Match', 'No Match', 'Query Error', 'SQL error', 'Unknown']:
-                if result_type in model_stats.columns:
-                    count = model_stats.loc[model, result_type]
-                    percentage = (count / model_total * 100) if model_total > 0 else 0
-                    print(f"    {result_type}: {count} ({percentage:.1f}%)")
-    
-    # Database-wise statistics - CUSTOM
-    if 'db_name' in result_df.columns:
-        db_stats = result_df.groupby('db_name')['comparison_result'].value_counts().unstack(fill_value=0)
-        print(f"\nBY DATABASE:")
-        for db in db_stats.index:
-            db_total = db_stats.loc[db].sum()
-            print(f"\n  {db}:")
-            for result_type in ['Match', 'No Match', 'Query Error', 'SQL error', 'Unknown']:
-                if result_type in db_stats.columns:
-                    count = db_stats.loc[db, result_type]
-                    percentage = (count / db_total * 100) if db_total > 0 else 0
-                    print(f"    {result_type}: {count} ({percentage:.1f}%)")
-    
-    # Ensemble tie-break and finalist statistics per method - CUSTOM (if provided)
-    if tie_break_stats_per_method:
-        try:
-            print(f"\nENSEMBLE TIE-BREAK STATS PER METHOD:")
-            for method, stats in tie_break_stats_per_method.items():
+        section_label = f" ({section_name})" if section_name else ""
+        print(f"\nENSEMBLE TIE-BREAK STATS PER METHOD{section_label}:")
+        for method, stats in tie_break_stats_per_method.items():
                 total_questions = stats.get('total_questions', 0)
                 tie_questions = stats.get('tie_questions', 0)
                 single_finalist_questions = stats.get('single_finalist_questions', 0)
                 single_match_count = stats.get('single_match_count', 0)
                 tie_match_count = stats.get('tie_match_count', 0)
-                considered_questions = stats.get('considered_questions', 0)
 
                 tie_percent = (tie_questions / total_questions * 100) if total_questions > 0 else 0.0
                 single_match_pct = (single_match_count / single_finalist_questions * 100) if single_finalist_questions > 0 else 0.0
@@ -810,14 +730,20 @@ def print_summary(result_df,
                             print(f"      {safe_label}: Match {wm}/{cq} ({wm_pct:.1f}%), No Match {wnm}/{cq} ({wnm_pct:.1f}%), Query Error {wqe}/{cq} ({wqe_pct:.1f}%)")
                 except Exception as e:
                     print(f"    [WARNING] Failed pairing breakdowns: {e}")
-        except Exception as e:
-            print(f"\n[WARNING] Failed to compute per-method tie-break statistics: {e}")
+    except Exception as e:
+            section_suffix = f" ({section_name})" if section_name else ""
+            print(f"\n[WARNING] Failed to compute per-method tie-break{section_suffix}: {e}")
 
-    # Final ensemble per-method results using winners' eval_result across all questions - CUSTOM
-    if final_winner_results_per_method:
-        try:
-            print(f"\nFINAL ENSEMBLE PER-METHOD RESULTS:")
-            for method, metrics in final_winner_results_per_method.items():
+
+def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
+    """Helper function to print final ensemble per-method results."""
+    if not final_winner_results_per_method:
+        return
+    
+    try:
+        section_label = f" ({section_name})" if section_name else ""
+        print(f"\nFINAL ENSEMBLE PER-METHOD RESULTS{section_label}:")
+        for method, metrics in final_winner_results_per_method.items():
                 total_q = metrics.get('total_questions', 0)
                 m_cnt = metrics.get('winner_match_count', 0)
                 nm_cnt = metrics.get('winner_no_match_count', 0)
@@ -829,8 +755,102 @@ def print_summary(result_df,
                 print(f"    Match: {m_cnt}/{total_q} ({m_pct:.1f}%)")
                 print(f"    No Match: {nm_cnt}/{total_q} ({nm_pct:.1f}%)")
                 print(f"    Query Error: {qe_cnt}/{total_q} ({qe_pct:.1f}%)")
-        except Exception as e:
-            print(f"\n[WARNING] Failed to print final ensemble per-method results: {e}")
+    except Exception as e:
+        section_suffix = f" ({section_name})" if section_name else ""
+        print(f"\n[WARNING] Failed to print final ensemble per-method results{section_suffix}: {e}")
+
+
+def print_summary(result_df,
+                  question_summary_df,
+                  tie_break_stats_per_method: dict = None,
+                  final_winner_results_per_method: dict = None,
+                  bird_question_summary_df: pd.DataFrame = None,
+                  bird_tie_break_stats_per_method: dict = None,
+                  bird_final_winner_results_per_method: dict = None):
+    """
+    Print a formatted summary of the evaluation results.
+    
+    Args:
+        result_df (pd.DataFrame): DataFrame with all evaluation results
+        question_summary_df (pd.DataFrame): DataFrame with question summary
+    """
+    print("\n" + "="*80)
+    print("EVALUATION SUMMARY")
+    print("="*80)
+    
+    # Overall statistics
+    total_runs = len(result_df)
+    comparison_counts = result_df['comparison_result'].value_counts()
+    total_percentages = (comparison_counts / total_runs * 100).round(2)
+    
+    print(f"\nOVERALL RESULTS (Total runs: {total_runs}):")
+    for result_type, count in comparison_counts.items():
+        percentage = total_percentages[result_type]
+        print(f"  {result_type}: {count} ({percentage}%)")
+    
+    # Question-level statistics
+    total_questions = len(question_summary_df)
+    questions_with_match = question_summary_df['has_match'].sum()
+    questions_without_match = total_questions - questions_with_match
+    
+    print(f"\nQUESTION-LEVEL RESULTS (Total unique questions: {total_questions}):")
+    print(f"  Questions with at least one match: {questions_with_match} ({questions_with_match/total_questions*100:.1f}%)")
+    print(f"  Questions with no matches: {questions_without_match} ({questions_without_match/total_questions*100:.1f}%)")
+
+    # Question-level breakdowns by complexity/difficulty when present
+    try:
+        if 'complexity' in question_summary_df.columns:
+            by_comp = question_summary_df.groupby('complexity')['has_match'].agg(['sum', 'count']).reset_index()
+            print(f"\nBY COMPLEXITY (question-level has_match):")
+            for _, row in by_comp.iterrows():
+                label = str(row['complexity']) if str(row['complexity']).strip() else 'Unknown'
+                total = int(row['count'])
+                matches = int(row['sum'])
+                pct = (matches / total * 100.0) if total > 0 else 0.0
+                print(f"  {label}: {matches}/{total} ({pct:.1f}%)")
+        if 'difficulty' in question_summary_df.columns:
+            by_diff = question_summary_df.groupby('difficulty')['has_match'].agg(['sum', 'count']).reset_index()
+            print(f"\nBY DIFFICULTY (question-level has_match):")
+            for _, row in by_diff.iterrows():
+                label = str(row['difficulty']) if str(row['difficulty']).strip() else 'Unknown'
+                total = int(row['count'])
+                matches = int(row['sum'])
+                pct = (matches / total * 100.0) if total > 0 else 0.0
+                print(f"  {label}: {matches}/{total} ({pct:.1f}%)")
+    except Exception as e:
+        print(f"\n[WARNING] Failed to compute complexity/difficulty breakdowns: {e}")
+    
+    # Model-wise statistics
+    if 'model_name' in result_df.columns:
+        model_stats = result_df.groupby('model_name')['comparison_result'].value_counts().unstack(fill_value=0)
+        print(f"\nBY MODEL:")
+        for model in model_stats.index:
+            model_total = model_stats.loc[model].sum()
+            print(f"\n  {model}:")
+            for result_type in ['Match', 'No Match', 'Query Error', 'SQL error', 'Unknown']:
+                if result_type in model_stats.columns:
+                    count = model_stats.loc[model, result_type]
+                    percentage = (count / model_total * 100) if model_total > 0 else 0
+                    print(f"    {result_type}: {count} ({percentage:.1f}%)")
+    
+    # Database-wise statistics
+    if 'db_name' in result_df.columns:
+        db_stats = result_df.groupby('db_name')['comparison_result'].value_counts().unstack(fill_value=0)
+        print(f"\nBY DATABASE:")
+        for db in db_stats.index:
+            db_total = db_stats.loc[db].sum()
+            print(f"\n  {db}:")
+            for result_type in ['Match', 'No Match', 'Query Error', 'SQL error', 'Unknown']:
+                if result_type in db_stats.columns:
+                    count = db_stats.loc[db, result_type]
+                    percentage = (count / db_total * 100) if db_total > 0 else 0
+                    print(f"    {result_type}: {count} ({percentage:.1f}%)")
+    
+    # Ensemble tie-break and finalist statistics per method (if provided)
+    _print_ensemble_tie_break_stats(tie_break_stats_per_method)
+
+    # Final ensemble per-method results using winners' eval_result across all questions
+    _print_final_ensemble_results(final_winner_results_per_method)
 
 
     print("\n" + "="*80)
@@ -841,7 +861,7 @@ def print_summary(result_df,
         print("BIRD EVALUATION SUMMARY")
         print("="*80)
 
-        # Overall BIRD statistics (reuse normalized column already in result_df)
+        # Overall statistics
         try:
             if 'bird_comparison_result' in result_df.columns and result_df['bird_comparison_result'].notna().any():
                 bird_counts = result_df['bird_comparison_result'].value_counts()
@@ -855,7 +875,7 @@ def print_summary(result_df,
         except Exception as e:
             print(f"[WARNING] Failed to compute BIRD overall stats: {e}")
 
-        # Question-level BIRD statistics
+        # Question-level statistics
         try:
             total_bird_questions = len(bird_question_summary_df)
             bird_with_match = bird_question_summary_df['has_match'].sum()
@@ -868,45 +888,11 @@ def print_summary(result_df,
         except Exception as e:
             print(f"[WARNING] Failed to compute BIRD question-level stats: {e}")
 
-        # Ensemble tie-break stats per method - BIRD
-        if bird_tie_break_stats_per_method and len(bird_tie_break_stats_per_method) > 0:
-            try:
-                print(f"\nENSEMBLE TIE-BREAK STATS PER METHOD (BIRD):")
-                for method, stats in bird_tie_break_stats_per_method.items():
-                    total_questions_b = stats.get('total_questions', 0)
-                    tie_questions_b = stats.get('tie_questions', 0)
-                    single_finalist_questions_b = stats.get('single_finalist_questions', 0)
-                    single_match_count_b = stats.get('single_match_count', 0)
-                    tie_match_count_b = stats.get('tie_match_count', 0)
-                    tie_percent_b = (tie_questions_b / total_questions_b * 100) if total_questions_b > 0 else 0.0
-                    single_match_pct_b = (single_match_count_b / single_finalist_questions_b * 100) if single_finalist_questions_b > 0 else 0.0
-                    tie_match_pct_b = (tie_match_count_b / tie_questions_b * 100) if tie_questions_b > 0 else 0.0
-                    tb_label = method.split('|tb:')[-1] if '|tb:' in method else 'random'
-                    print(f"  {method}:")
-                    print(f"    Questions with multiple finalists (tie): {tie_questions_b}/{total_questions_b} ({tie_percent_b:.1f}%)")
-                    print(f"    Match rate where only one finalist: {single_match_count_b}/{single_finalist_questions_b} ({single_match_pct_b:.1f}%)")
-                    print(f"    Match rate where multiple finalists ({tb_label} tie-break): {tie_match_count_b}/{tie_questions_b} ({tie_match_pct_b:.1f}%)")
-            except Exception as e:
-                print(f"[WARNING] Failed to compute per-method tie-break (BIRD): {e}")
+        # Ensemble tie-break stats per method
+        _print_ensemble_tie_break_stats(bird_tie_break_stats_per_method, "BIRD")
 
-        # Final ensemble BIRD per-method results using winners
-        if bird_final_winner_results_per_method and len(bird_final_winner_results_per_method) > 0:
-            try:
-                print(f"\nFINAL ENSEMBLE PER-METHOD RESULTS (BIRD):")
-                for method, metrics in bird_final_winner_results_per_method.items():
-                    total_q = metrics.get('total_questions', 0)
-                    m_cnt = metrics.get('winner_match_count', 0)
-                    nm_cnt = metrics.get('winner_no_match_count', 0)
-                    qe_cnt = metrics.get('winner_query_error_count_adjusted', 0)
-                    m_pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                    nm_pct = (nm_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                    qe_pct = (qe_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                    print(f"  {method}:")
-                    print(f"    Match: {m_cnt}/{total_q} ({m_pct:.1f}%)")
-                    print(f"    No Match: {nm_cnt}/{total_q} ({nm_pct:.1f}%)")
-                    print(f"    Query Error: {qe_cnt}/{total_q} ({qe_pct:.1f}%)")
-            except Exception as e:
-                print(f"[WARNING] Failed to print final ensemble per-method results (BIRD): {e}")
+        # Final ensemble per-method results using winners
+        _print_final_ensemble_results(bird_final_winner_results_per_method, "BIRD")
 
 
 def _log_mlflow_stats(args,
@@ -1017,7 +1003,7 @@ def _log_mlflow_stats(args,
             # Continue even if extra-params logging fails
             pass
 
-        # Overall results (CUSTOM)
+        # Overall results
         total_runs = len(result_df)
         comparison_counts = result_df['comparison_result'].value_counts()
         total_percentages = (comparison_counts / total_runs * 100).round(2)
@@ -1027,7 +1013,7 @@ def _log_mlflow_stats(args,
             pct_val = float(total_percentages[result_type]) if result_type in total_percentages else 0.0
             mlflow.log_metric(f'overall_pct_{str(result_type).replace(" ", "_")}', pct_val)
 
-        # Question-level results (CUSTOM)
+        # Question-level results
         total_questions = len(question_summary_df)
         questions_with_match = int(question_summary_df['has_match'].sum())
         questions_without_match = int(total_questions - questions_with_match)
@@ -1064,7 +1050,7 @@ def _log_mlflow_stats(args,
         except Exception:
             pass
 
-        # Tie-break stats per-method (CUSTOM)
+        # Tie-break stats per-method
         if tie_break_stats_per_method:
             for key, stats in tie_break_stats_per_method.items():
                 prefix = _sanitize_mlflow_name(f'tb__{key}')
@@ -1103,7 +1089,7 @@ def _log_mlflow_stats(args,
                 except Exception:
                     pass
 
-        # Final ensemble per-method results (CUSTOM)
+        # Final ensemble per-method results
         if final_winner_results_per_method:
             for key, metrics in final_winner_results_per_method.items():
                 prefix = _sanitize_mlflow_name(f'final__{key}')
@@ -1216,7 +1202,7 @@ Examples:
     )
     parser.add_argument(
         '--ensemble-selection-method', '--ensemble_selection_method',
-        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'reverse_size', 'reverse_frequency', 'reverse_density'],
+        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'double_elim', 'reverse_size', 'reverse_frequency', 'reverse_density'],
         default='size',
         help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
     )
@@ -1339,7 +1325,7 @@ Examples:
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
         def _normalize_methods(methods_raw):
-            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'reverse_size', 'reverse_frequency', 'reverse_density']
+            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'double_elim', 'reverse_size', 'reverse_frequency', 'reverse_density']
             if not methods_raw:
                 return []
             # Flatten and split on commas; lowercase and strip

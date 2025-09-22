@@ -4,6 +4,7 @@ import random
 from datetime import datetime
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
+import time
 
 import pandas as pd
 
@@ -754,6 +755,133 @@ def binary_comp_selection(
         best.get("generated_sql"),
     )
 
+
+def double_elim_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+):
+    """
+    Run a double-elimination tournament among candidates using LLM binary evaluation.
+
+    - Seeds are randomized in position using a seeded RNG (global rng).
+    - Each match compares two candidates via scooring_agents.evaluate_binary_dataframes.
+    - A candidate is eliminated after two losses. Last remaining wins.
+    """
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in double_elim_selection.")
+        return (None, 0.0, None, None, None, None)
+
+    # Lazy import to avoid heavy deps unless used
+    try:
+        from scooring_agents import evaluate_binary_dataframes as llm_evaluate_binary
+    except Exception as e:
+        print(
+            f"[WARNING] [Q{question_idx}] Failed importing LLM binary grader (scooring_agents.evaluate_binary_dataframes): {e}. Falling back to random."
+        )
+        return random_based_selection(valid_runs, question, question_idx=question_idx)
+
+    # Build JSON strings for each candidate
+    candidates_json: List[str] = []
+    for run in valid_runs:
+        gen_df_json = run.get("gen_df_json")
+        if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
+            candidates_json.append(gen_df_json)
+        else:
+            df_obj = run.get("df")
+            try:
+                serialized = df_obj.to_json(orient="records", date_format="iso") if df_obj is not None else ""
+            except Exception:
+                serialized = ""
+            candidates_json.append(serialized)
+
+    n = len(candidates_json)
+    if n == 1:
+        best = valid_runs[0]
+        print(f"[INFO] [Q{question_idx}] double_elim_selection: single candidate {best.get('model_name')}")
+        return (
+            best.get("response"),
+            best.get("duration"),
+            best.get("usage"),
+            best.get("model_name"),
+            best.get("gen_df_json"),
+            best.get("generated_sql"),
+        )
+
+    # Initialize loss counts and randomized seeding
+    indices: List[int] = list(range(n))
+    rng.shuffle(indices)
+    loss_count: Dict[int, int] = {i: 0 for i in indices}
+
+    # Active contenders are those with < 2 losses
+    def active_contenders() -> List[int]:
+        return [i for i in indices if loss_count.get(i, 0) < 2]
+
+    def play_match(i: int, j: int) -> Tuple[int, int]:
+        """Return (winner_idx, loser_idx) among original indices i, j."""
+        try:
+            result_idx = llm_evaluate_binary(question, [candidates_json[i], candidates_json[j]])
+            try:
+                pair_idx = int(result_idx)
+            except Exception:
+                pair_idx = None
+        except Exception:
+            pair_idx = None
+
+        if pair_idx == 0:
+            return i, j
+        if pair_idx == 1:
+            return j, i
+        # On undecided, pick via seeded RNG for determinism
+        chosen = rng.choice([0, 1])
+        return (i, j) if chosen == 0 else (j, i)
+
+    safety_counter = 0
+    while True:
+        alive = active_contenders()
+        if len(alive) <= 1:
+            break
+        # Randomize pairing order each round
+        rng.shuffle(alive)
+        # Pair adjacent; odd one gets bye
+        round_pairs: List[Tuple[int, int]] = []
+        k = 0
+        while k + 1 < len(alive):
+            round_pairs.append((alive[k], alive[k + 1]))
+            k += 2
+        # Process matches
+        for a, b in round_pairs:
+            winner, loser = play_match(a, b)
+            loss_count[loser] = loss_count.get(loser, 0) + 1
+        # Safety to avoid infinite loops on pathological cases
+        safety_counter += 1
+        if safety_counter > (n * 10):
+            print(f"[WARNING] [Q{question_idx}] Safety break in double_elim_selection after {safety_counter} rounds.")
+            break
+
+    # Determine winner among remaining contenders (prefer lowest losses)
+    remaining = active_contenders()
+    if not remaining:
+        # Fallback: choose by minimum losses, then random
+        min_losses = min(loss_count.values()) if loss_count else 2
+        candidates = [i for i, l in loss_count.items() if l == min_losses]
+        winner_i = rng.choice(candidates) if candidates else rng.choice(list(range(n)))
+    else:
+        winner_i = remaining[0]
+
+    best = valid_runs[winner_i]
+    print(
+        f"[INFO] [Q{question_idx}] double_elim_selection selected: {best.get('model_name')} (candidate #{winner_i}), losses: {loss_count.get(winner_i, 0)}."
+    )
+    return (
+        best.get("response"),
+        best.get("duration"),
+        best.get("usage"),
+        best.get("model_name"),
+        best.get("gen_df_json"),
+        best.get("generated_sql"),
+    )
+
 def ensemble_result(
     mlflow_run_id: Optional[str],
     all_runs: List[Dict[str, Any]],
@@ -813,7 +941,6 @@ def ensemble_result(
 
             gen_df_json = gradio_df.to_json(orient="records", date_format="iso")
             gemini_run = next((r for r in all_runs if r.get("model_name") == "gemini"), None)
-            duration = duration if duration else claude_run.get("duration") if claude_run else None
             usage = gemini_run.get("usage") if gemini_run else None
             print(f"[INFO] [Q{question_idx}] Choosing Gradio agent result.")
             return (response, duration, usage, "Gradio agent", gen_df_json, gradio_sql)
@@ -852,6 +979,9 @@ def ensemble_result(
     elif ensemble_selection_method == "binary_comp_selection":
         print(f"[INFO] [Q{question_idx}] Binary-comp selection (pairwise LLM)" )
         return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+    elif ensemble_selection_method == "double_elim":
+        print(f"[INFO] [Q{question_idx}] Double-elimination selection (LLM binary)")
+        return double_elim_selection(valid_runs, question, question_idx=question_idx)
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
