@@ -810,10 +810,20 @@ def double_elim_selection(
             best.get("generated_sql"),
         )
 
-    def run_bracket_once() -> int:
+    def run_bracket_once(t: int) -> int:
+        # Local deterministic RNG per tournament to vary brackets across n while reproducible
+        try:
+            q_hash = hash(str(question_idx)) & 0xFFFFFFFF
+        except Exception:
+            q_hash = 0
+        # Use a golden-ratio step to decorrelate
+        t_salt = (t * 0x9E3779B9) & 0xFFFFFFFF
+        seed_value = (RNG_SEED ^ q_hash ^ t_salt) & 0xFFFFFFFF
+        rng_local = random.Random(seed_value)
+
         # Initialize loss counts and randomized seeding for this tournament
         indices: List[int] = list(range(num_candidates))
-        rng.shuffle(indices)
+        rng_local.shuffle(indices)
         loss_count: Dict[int, int] = {i: 0 for i in indices}
 
         def active_contenders() -> List[int]:
@@ -834,8 +844,8 @@ def double_elim_selection(
                 return i, j
             if pair_idx == 1:
                 return j, i
-            # On undecided, pick via seeded RNG for determinism
-            chosen = rng.choice([0, 1])
+            # On undecided, pick via per-tournament RNG for determinism with variety across n
+            chosen = rng_local.choice([0, 1])
             return (i, j) if chosen == 0 else (j, i)
 
         safety_counter = 0
@@ -843,8 +853,8 @@ def double_elim_selection(
             alive = active_contenders()
             if len(alive) <= 1:
                 break
-            # Randomize pairing order each round
-            rng.shuffle(alive)
+            # Randomize pairing order each round (per-tournament RNG)
+            rng_local.shuffle(alive)
             # Pair adjacent; odd one gets bye
             round_pairs: List[Tuple[int, int]] = []
             k = 0
@@ -866,7 +876,7 @@ def double_elim_selection(
         if not remaining:
             min_losses = min(loss_count.values()) if loss_count else 2
             cands = [i for i, l in loss_count.items() if l == min_losses]
-            return rng.choice(cands) if cands else rng.choice(list(range(num_candidates)))
+            return rng_local.choice(cands) if cands else rng_local.choice(list(range(num_candidates)))
         return remaining[0]
 
     # Run the tournament n times and collect winners
@@ -876,8 +886,8 @@ def double_elim_selection(
     except Exception:
         total_runs = 5
     total_runs = max(1, int(total_runs))
-    for _ in range(total_runs):
-        winners.append(run_bracket_once())
+    for t in range(total_runs):
+        winners.append(run_bracket_once(t))
 
     # If a single winner across all runs, pick it; otherwise use tie-breaker
     if len(set(winners)) == 1:
@@ -1000,7 +1010,7 @@ def ensemble_result(
         return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "double_elim":
         print(f"[INFO] [Q{question_idx}] Double-elimination selection (LLM binary)")
-        return double_elim_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method, n=5)
+        return double_elim_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method, n=1)
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."

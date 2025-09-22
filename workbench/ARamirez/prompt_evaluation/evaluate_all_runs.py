@@ -519,8 +519,15 @@ def _compute_ensemble_stats(result_df: pd.DataFrame, selection_method: str, tie_
             # Stats-only path for binary LLM comp: consider all valid as finalists
             candidates = valid_indices.copy()
         elif selection_method == 'double_elim':
-            # Stats-only path for double elimination; consider all valid as finalists
-            candidates = valid_indices.copy()
+            # Stats-only path for double elimination. With n=1 there must be a single finalist,
+            # so pick one deterministically using the seeded RNG.
+            if valid_indices:
+                chosen = selection_random_tie_break(valid_indices, question_idx='?')
+                if chosen is None:
+                    chosen = rng_local.choice(valid_indices)
+                candidates = [chosen]
+            else:
+                candidates = []
         
         else:
             # Default to size
