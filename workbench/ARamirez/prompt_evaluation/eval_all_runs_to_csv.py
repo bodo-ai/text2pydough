@@ -22,10 +22,42 @@ import sys
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from typing import Dict, Tuple, Optional
 
 # Ensure we can import sibling package modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from test_data.eval import process_row  # type: ignore
+from test_data.eval import process_row, query_sqlite_db  # type: ignore
+
+
+def _create_ground_truth_cache(df: pd.DataFrame, db_base_path: str) -> Dict[Tuple[str, str, str], Tuple[Optional[pd.DataFrame], Optional[str]]]:
+    """Create a cache of ground truth SQL results keyed by (question_index, dataset_name, db_name, sql).
+    
+    Returns:
+        Dict mapping (question_index, dataset_name, db_name, sql) -> (ground_truth_df, sql_exception)
+    """
+    cache = {}
+    
+    # Group by the key columns to avoid duplicate SQL executions
+    unique_queries = df.groupby(['question_index', 'dataset_name', 'db_name', 'sql']).first().reset_index()
+    
+    print(f"Caching ground truth results for {len(unique_queries)} unique queries...")
+    
+    for _, row in unique_queries.iterrows():
+        question_index = row['question_index']
+        dataset_name = row['dataset_name']
+        db_name = row['db_name']
+        sql = row['sql']
+        
+        db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
+        
+        # Execute the ground truth SQL once per unique query
+        ground_truth_df, sql_exception = query_sqlite_db(sql, db_path)
+        
+        cache_key = (question_index, dataset_name, db_name, sql)
+        cache[cache_key] = (ground_truth_df, sql_exception)
+    
+    print(f"Ground truth cache created with {len(cache)} entries")
+    return cache
 
 
 def _normalize_eval_result(result_value):
@@ -57,6 +89,109 @@ def _normalize_eval_result(result_value):
     return 'Query error'
 
 
+def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, ground_truth_cache: Dict) -> Tuple[str, str]:
+    """Modified version of process_row that uses cached ground truth results.
+    
+    Returns:
+        Tuple of (custom_eval_result, bird_eval_result)
+    """
+    # Import here to avoid circular imports
+    from test_data.eval import execute_code_and_extract_result, compare_df, bird_eval
+    import pydough
+    from datetime import datetime
+    
+    extracted_code = row.get('extracted_python_code')
+    question = row.get('question')
+    question_index = row.get('question_index')
+    db_name = row['db_name']
+    dataset_name = row['dataset_name']
+    sql = row['sql']
+    db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
+    
+    # Get cached ground truth result
+    cache_key = (question_index, dataset_name, db_name, sql)
+    ground_truth_df, sql_exception = ground_truth_cache.get(cache_key, (None, "Cache miss"))
+    
+    # Initialize default return values
+    custom_eval_result = 'Unknown'
+    bird_eval_result = 'Unknown'
+    
+    # If ground truth SQL failed, both evaluations fail
+    if ground_truth_df is None:
+        return ('Query error', 'Query error')
+    
+    # Case 1: We have extracted Python code to execute
+    if pd.notna(extracted_code): 
+        local_env = {"pydough": pydough, "datetime": datetime}
+        metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
+        metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
+
+        # Execute the PyDough code
+        result_df, execution_exception, generated_sql = execute_code_and_extract_result(
+            extracted_code, local_env, metadata_path, db_name, db_path
+        )
+        
+        if result_df is not None:
+            # Custom evaluation: DataFrame comparison using cached ground truth
+            try:
+                df_comparison_success = compare_df(
+                    ground_truth_df, result_df, query_category="a", question=question
+                )
+                custom_eval_result = 'Match' if df_comparison_success else 'NoMatch'
+            except Exception:
+                custom_eval_result = 'Query error'
+            
+            # Bird evaluation: SQL execution comparison
+            if generated_sql is not None:
+                try:
+                    sql_comparison_result = bird_eval(generated_sql, sql, db_path)
+                    bird_eval_result = 'Match' if sql_comparison_result == 1 else 'NoMatch'
+                except Exception:
+                    bird_eval_result = 'Query error'
+            else:
+                bird_eval_result = 'Query error'
+        else:
+            # PyDough code execution failed
+            custom_eval_result = 'Query error'
+            bird_eval_result = 'Query error'
+    
+    # Case 2: No extracted code, try to use pre-computed DataFrame from CSV
+    else:
+        # Try to get generated DataFrame/SQL from CSV
+        generated_df_json = row.get('gen_df_json')
+        generated_sql = row.get('gen_sql')
+        # Fallback: some producers name the column 'generated_sql'
+        if (generated_sql is None or (isinstance(generated_sql, float) and pd.isna(generated_sql))) and 'generated_sql' in row:
+            generated_sql = row.get('generated_sql')
+
+        if generated_df_json is not None and generated_sql is not None:
+            try:
+                generated_df = pd.read_json(generated_df_json)
+                df_comparison_success = compare_df(
+                    ground_truth_df, generated_df, query_category="a", question=question
+                )
+                custom_eval_result = 'Match' if df_comparison_success else 'NoMatch'
+                sql_comparison_result = bird_eval(generated_sql, sql, db_path)
+                bird_eval_result = 'Match' if sql_comparison_result == 1 else 'NoMatch'
+            except Exception:
+                custom_eval_result = 'Query error'
+                bird_eval_result = 'Query error'
+        elif generated_sql is not None:
+            # We have SQL but no generated DataFrame; still evaluate BIRD SQL comparison
+            try:
+                sql_comparison_result = bird_eval(generated_sql, sql, db_path)
+                bird_eval_result = 'Match' if sql_comparison_result == 1 else 'NoMatch'
+            except Exception:
+                bird_eval_result = 'Query error'
+            # Custom DataFrame comparison cannot be performed without a generated dataframe
+            custom_eval_result = 'Query error'
+        else:
+            custom_eval_result = 'Query error'
+            bird_eval_result = 'Query error'
+    
+    return (custom_eval_result, bird_eval_result)
+
+
 def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str, num_threads: int = 0) -> str:
     """Evaluate rows from all_runs_path and write an eval_ prefixed CSV.
 
@@ -83,12 +218,15 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
         else:
             df['gen_sql'] = None
 
-    # Evaluate per row (optionally threaded)
+    # Create ground truth cache to minimize SQL calls per question
+    ground_truth_cache = _create_ground_truth_cache(df, db_base_path)
+
+    # Evaluate per row (optionally threaded) using cached ground truth
     results = []
 
     def _eval_row(row):
         try:
-            custom_res, custom_exc, bird_res, bird_exc = process_row(row, db_base_path, metadata_base_path)
+            custom_res, bird_res = _process_row_with_cache(row, db_base_path, metadata_base_path, ground_truth_cache)
         except Exception:
             return ('Query error', 'Query error')
         return (
