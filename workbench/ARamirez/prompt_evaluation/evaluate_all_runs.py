@@ -1422,27 +1422,41 @@ Examples:
         final_winner_results_per_method = {}
         try:
             for key, winners_df_exec in winners_per_method.items():
-                # Merge winners with result_df to get comparison_result for each chosen winner
+                # Merge winners with a single aggregated label per (question, db, dataset, question_index, model_name)
                 merge_keys = ['question', 'dataset_name', 'db_name', 'question_index', 'model_name']
                 for k in merge_keys:
                     if k not in winners_df_exec.columns:
-                        # If any key missing, skip this method
                         raise KeyError(f"Winners DF missing key column: {k}")
-                merged = winners_df_exec.merge(
-                    result_df[
-                        ['question', 'dataset_name', 'db_name', 'question_index', 'model_name', 'comparison_result']
-                    ],
-                    on=merge_keys,
-                    how='left'
-                )
-                # Denominator must be total number of unique questions in the dataset,
-                # regardless of whether the method produced a winner for each.
+
+                # One winner per question
+                winners_unique = winners_df_exec.drop_duplicates(subset=['question', 'dataset_name', 'db_name', 'question_index'])
+
+                # Build aggregated labels to avoid duplicate inflation on merge
+                labels = result_df.copy()
+                norm = labels['comparison_result'].astype(str).str.strip()
+                norm = norm.where(norm.isin(['Match', 'No Match']), other='Query Error')
+                labels['comparison_result_norm'] = norm
+
+                def _reduce_labels(series):
+                    vals = set(str(v).strip() for v in series if pd.notna(v))
+                    if 'Match' in vals:
+                        return 'Match'
+                    if 'No Match' in vals:
+                        return 'No Match'
+                    return 'Query Error'
+
+                agg_labels = labels.groupby(merge_keys)['comparison_result_norm'].agg(_reduce_labels).reset_index().rename(columns={'comparison_result_norm': 'winner_label'})
+
+                merged = winners_unique.merge(agg_labels, on=merge_keys, how='left')
+
+                # Denominator: total unique questions
                 total_questions = int(question_summary_df.shape[0]) if 'question_summary_df' in locals() and question_summary_df is not None else int(result_df.assign(question_id=result_df['question'].astype(str) + '_' + result_df['db_name'].astype(str) + '_' + result_df['dataset_name'].astype(str))['question_id'].nunique())
 
-                # Count outcomes among the final one winner per question present in merged
-                # Any missing winners are accounted as Query Error to keep denominator fixed
-                winner_match_count = int((merged['comparison_result'].astype(str).str.strip() == 'Match').sum())
-                winner_no_match_count = int((merged['comparison_result'].astype(str).str.strip() == 'No Match').sum())
+                # Count only the single winner per question; missing labels => Query Error
+                winner_label = merged['winner_label'].astype(str).str.strip().fillna('Query Error')
+                winner_label = winner_label.where(winner_label.isin(['Match', 'No Match']), other='Query Error')
+                winner_match_count = int((winner_label == 'Match').sum())
+                winner_no_match_count = int((winner_label == 'No Match').sum())
                 accounted = winner_match_count + winner_no_match_count
                 winner_query_error_count = max(0, total_questions - accounted)
                 final_winner_results_per_method[key] = {
