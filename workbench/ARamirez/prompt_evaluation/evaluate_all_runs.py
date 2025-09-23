@@ -1391,7 +1391,7 @@ Examples:
             logger.info("No valid ensemble methods provided; skipping ensemble comparison.")
 
 
-        # Compute tie-break/finalist stats per method using the same list
+        # Compute tie-break/finalist stats per method (simulated, no LLM execution)
         tie_break_stats_per_method = {}
         for method in methods_to_use:
             for tb in tie_breakers_to_use:
@@ -1401,26 +1401,54 @@ Examples:
                 except Exception as e:
                     logger.warning(f"Failed computing tie-break stats for method {method} with tie-breaker {tb} (custom): {e}")
 
-        # Build final per-method winner outcome results using tie_break_stats (winners across questions considered)
+        # Execute ensemble functions for each requested method|tie-breaker to obtain actual winners
+        winners_per_method = {}
+        for method in methods_to_use:
+            for tb in tie_breakers_to_use:
+                key = f"{method}|tb:{tb}"
+                try:
+                    winners_df_exec = ensemble_from_all_runs_df(
+                        result_df,
+                        ensemble_selection_method=method,
+                        use_gradio_agent=False,
+                        mlflow_run_id=None,
+                        tie_break_method=tb,
+                    )
+                    winners_per_method[key] = winners_df_exec
+                except Exception as e:
+                    logger.warning(f"Failed executing ensemble method {method} with tie-breaker {tb}: {e}")
+
+        # Build final per-method winner outcome results using executed winners (LLM may be called)
         final_winner_results_per_method = {}
         try:
-            for key, stats in tie_break_stats_per_method.items():
-                total_questions = stats.get('total_questions', 0)
-                considered_questions = stats.get('considered_questions', 0)
-                w_match = stats.get('winner_match_count', 0)
-                w_nomatch = stats.get('winner_no_match_count', 0)
-                w_qerr = stats.get('winner_query_error_count', 0)
-                # Adjust query error count to reflect all questions as denominator
-                missing = max(0, total_questions - considered_questions)
-                w_qerr_adjusted = w_qerr + missing
+            for key, winners_df_exec in winners_per_method.items():
+                # Merge winners with result_df to get comparison_result for each chosen winner
+                merge_keys = ['question', 'dataset_name', 'db_name', 'question_index', 'model_name']
+                for k in merge_keys:
+                    if k not in winners_df_exec.columns:
+                        # If any key missing, skip this method
+                        raise KeyError(f"Winners DF missing key column: {k}")
+                merged = winners_df_exec.merge(
+                    result_df[
+                        ['question', 'dataset_name', 'db_name', 'question_index', 'model_name', 'comparison_result']
+                    ],
+                    on=merge_keys,
+                    how='left'
+                )
+                total_q = len(merged)
+                # Normalize labels and count outcomes
+                winner_match_count = int((merged['comparison_result'].astype(str).str.strip() == 'Match').sum())
+                winner_no_match_count = int((merged['comparison_result'].astype(str).str.strip() == 'No Match').sum())
+                # Treat others/missing as Query Error
+                winner_query_error_count = int(total_q - winner_match_count - winner_no_match_count)
                 final_winner_results_per_method[key] = {
-                    'total_questions': total_questions,
-                    'winner_match_count': w_match,
-                    'winner_no_match_count': w_nomatch,
-                    'winner_query_error_count_adjusted': w_qerr_adjusted,
+                    'total_questions': int(total_q),
+                    'winner_match_count': winner_match_count,
+                    'winner_no_match_count': winner_no_match_count,
+                    'winner_query_error_count_adjusted': winner_query_error_count,
                 }
         except Exception as e:
-            logger.warning(f"Failed building final per-method winner results: {e}")
+            logger.warning(f"Failed building executed final winner results: {e}")
 
         # Print summary
         print_summary(
