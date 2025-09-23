@@ -1435,14 +1435,18 @@ Examples:
                     on=merge_keys,
                     how='left'
                 )
-                total_q = len(merged)
-                # Normalize labels and count outcomes
+                # Denominator must be total number of unique questions in the dataset,
+                # regardless of whether the method produced a winner for each.
+                total_questions = int(question_summary_df.shape[0]) if 'question_summary_df' in locals() and question_summary_df is not None else int(result_df.assign(question_id=result_df['question'].astype(str) + '_' + result_df['db_name'].astype(str) + '_' + result_df['dataset_name'].astype(str))['question_id'].nunique())
+
+                # Count outcomes among the final one winner per question present in merged
+                # Any missing winners are accounted as Query Error to keep denominator fixed
                 winner_match_count = int((merged['comparison_result'].astype(str).str.strip() == 'Match').sum())
                 winner_no_match_count = int((merged['comparison_result'].astype(str).str.strip() == 'No Match').sum())
-                # Treat others/missing as Query Error
-                winner_query_error_count = int(total_q - winner_match_count - winner_no_match_count)
+                accounted = winner_match_count + winner_no_match_count
+                winner_query_error_count = max(0, total_questions - accounted)
                 final_winner_results_per_method[key] = {
-                    'total_questions': int(total_q),
+                    'total_questions': int(total_questions),
                     'winner_match_count': winner_match_count,
                     'winner_no_match_count': winner_no_match_count,
                     'winner_query_error_count_adjusted': winner_query_error_count,
