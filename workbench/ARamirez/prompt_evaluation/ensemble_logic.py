@@ -18,6 +18,58 @@ RNG_SEED = 12345
 rng = random.Random(RNG_SEED)
 
 
+# === Helper for LLM inputs ===
+MAX_LLM_ROWS = 100
+
+def to_truncated_records_json(
+    gen_df_json: Optional[str], df_obj: Optional[pd.DataFrame], max_rows: int = MAX_LLM_ROWS
+) -> str:
+    """
+    Return a JSON string (records orient) for LLM grading, truncated to at most max_rows.
+
+    Preference order:
+    1) Use provided gen_df_json if it is valid JSON; truncate list payloads to max_rows
+    2) Otherwise, serialize df_obj with .iloc[:max_rows] to JSON records
+    3) On failure, return empty string
+    """
+    # Try using provided JSON if present
+    if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
+        raw = gen_df_json.strip()
+        try:
+            # Clean common artifacts such as newlines
+            cleaned = raw.replace("\n", "").replace("\r", "")
+            data = json.loads(cleaned)
+            if isinstance(data, list):
+                # Truncate list of records
+                if len(data) > max_rows:
+                    data = data[:max_rows]
+                try:
+                    return json.dumps(data, ensure_ascii=False)
+                except Exception:
+                    pass
+                # Fall through on dump failure
+            elif isinstance(data, dict):
+                # Keep dict as-is (rare for records, but safe)
+                try:
+                    return json.dumps(data, ensure_ascii=False)
+                except Exception:
+                    pass
+            # If other types, fall back to DataFrame path
+        except Exception:
+            # If parsing fails, fall back to DataFrame path
+            pass
+
+    # Fall back: serialize the DataFrame if provided
+    if df_obj is not None:
+        try:
+            truncated = df_obj.iloc[:max_rows]
+            return truncated.to_json(orient="records", date_format="iso")
+        except Exception:
+            return ""
+
+    return ""
+
+
 def selection_random_tie_break(candidate_indices: List[int], question_idx: Union[int, str] = "?") -> Optional[int]:
     """
     Deterministically break ties among candidate indices using a seeded RNG.
@@ -590,20 +642,16 @@ def agent_indiv_grade_selection(
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
-    # Build list of candidate JSON strings for grading
+    # Build list of candidate JSON strings for grading (truncate to <= MAX_LLM_ROWS)
     candidates: List[str] = []
     for run in valid_runs:
-        gen_df_json = run.get("gen_df_json")
-        if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
-            candidates.append(gen_df_json)
-        else:
-            # As a fallback, serialize the DataFrame if present
-            df_obj = run.get("df")
-            try:
-                serialized = df_obj.to_json(orient="records", date_format="iso") if df_obj is not None else ""
-            except Exception:
-                serialized = ""
-            candidates.append(serialized)
+        candidates.append(
+            to_truncated_records_json(
+                run.get("gen_df_json"),
+                run.get("df"),
+                max_rows=MAX_LLM_ROWS,
+            )
+        )
 
     try:
         # Score each candidate individually using the LLM grader
@@ -676,19 +724,16 @@ def binary_comp_selection(
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
-    # Prepare JSON strings for each candidate
+    # Prepare JSON strings for each candidate (truncate to <= MAX_LLM_ROWS)
     candidates: List[str] = []
     for run in valid_runs:
-        gen_df_json = run.get("gen_df_json")
-        if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
-            candidates.append(gen_df_json)
-        else:
-            df_obj = run.get("df")
-            try:
-                serialized = df_obj.to_json(orient="records", date_format="iso") if df_obj is not None else ""
-            except Exception:
-                serialized = ""
-            candidates.append(serialized)
+        candidates.append(
+            to_truncated_records_json(
+                run.get("gen_df_json"),
+                run.get("df"),
+                max_rows=MAX_LLM_ROWS,
+            )
+        )
 
     n = len(candidates)
     if n == 1:
@@ -783,19 +828,16 @@ def double_elim_selection(
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
-    # Build JSON strings for each candidate
+    # Build JSON strings for each candidate (truncate to <= MAX_LLM_ROWS)
     candidates_json: List[str] = []
     for run in valid_runs:
-        gen_df_json = run.get("gen_df_json")
-        if isinstance(gen_df_json, str) and len(gen_df_json.strip()) > 0:
-            candidates_json.append(gen_df_json)
-        else:
-            df_obj = run.get("df")
-            try:
-                serialized = df_obj.to_json(orient="records", date_format="iso") if df_obj is not None else ""
-            except Exception:
-                serialized = ""
-            candidates_json.append(serialized)
+        candidates_json.append(
+            to_truncated_records_json(
+                run.get("gen_df_json"),
+                run.get("df"),
+                max_rows=MAX_LLM_ROWS,
+            )
+        )
 
     num_candidates = len(candidates_json)
     if num_candidates == 1:
