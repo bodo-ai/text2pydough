@@ -593,7 +593,7 @@ def process_row(row, db_base_path, metadata_base_path):
     
     return custom_eval_result, custom_eval_exception, bird_eval_result, bird_eval_exception
 
-def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path):
+def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path, timeout_seconds: int = 180):
     """
     Extracts and returns the value of a specific variable from Python code in a CSV file.
     Returns:
@@ -602,7 +602,7 @@ def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path):
     # Read the CSV file into a Pandas DataFrame
     df = pd.read_csv(csv_file_path)
 
-    def process_row_with_timeout(row_obj, base, meta, timeout_seconds=300):
+    def process_row_with_timeout(row_obj, base, meta, timeout_seconds=180):
         q = mp.Queue()
         p = mp.Process(target=_timeout_runner, args=(q, row_obj, base, meta))
         p.daemon = True
@@ -614,7 +614,7 @@ def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path):
                 p.terminate()
             p.join()
             print(f"[TIMEOUT] process_row exceeded {timeout_seconds} seconds for question: {getattr(row_obj, 'question', '<unknown>')}")
-            return ('Timeout Error', f'Timeout after {timeout_seconds} seconds', 'Timeout Error', f'Timeout after {timeout_seconds} seconds')
+            return ('Query Error', 'timeout', 'Query Error', 'timeout')
         else:
             p.join()
             if status == 'ok':
@@ -622,7 +622,7 @@ def custom_eval(folder_path, csv_file_path, db_base_path, metadata_base_path):
             return ('Processing Error', str(payload), 'Processing Error', str(payload))
 
     def process_and_return(row):
-        return process_row_with_timeout(row, db_base_path, metadata_base_path, timeout_seconds=60)
+        return process_row_with_timeout(row, db_base_path, metadata_base_path, timeout_seconds=timeout_seconds)
 
     
     with ThreadPoolExecutor() as executor:

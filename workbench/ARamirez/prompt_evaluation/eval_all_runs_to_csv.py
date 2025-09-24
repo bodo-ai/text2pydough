@@ -23,6 +23,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, Tuple, Optional
+import multiprocessing as mp
 
 # Ensure we can import sibling package modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -89,14 +90,54 @@ def _normalize_eval_result(result_value):
     return 'Query error'
 
 
-def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, ground_truth_cache: Dict) -> Tuple[str, str]:
+def _pydough_exec_worker(q, extracted_code, metadata_path, db_name, db_path):
+    """Worker to execute PyDough code in a separate process."""
+    try:
+        import pydough  # noqa: F401  (import inside process)
+        from datetime import datetime  # noqa: F401
+        from test_data.eval import execute_code_and_extract_result  # type: ignore
+
+        local_env = {"pydough": pydough, "datetime": datetime}
+        result_df, execution_exception, generated_sql = execute_code_and_extract_result(
+            extracted_code, local_env, metadata_path, db_name, db_path
+        )
+        q.put(("ok", (result_df, execution_exception, generated_sql)))
+    except BaseException as e:
+        q.put(("err", str(e)))
+
+
+def _execute_pydough_with_timeout(extracted_code, metadata_path, db_name, db_path, timeout_seconds: int):
+    """Execute PyDough in a subprocess with timeout.
+
+    Returns (result_df, execution_exception, generated_sql, timed_out: bool)
+    """
+    q = mp.Queue()
+    p = mp.Process(target=_pydough_exec_worker, args=(q, extracted_code, metadata_path, db_name, db_path))
+    p.daemon = True
+    p.start()
+    try:
+        status, payload = q.get(timeout=timeout_seconds)
+    except Exception:
+        if p.is_alive():
+            p.terminate()
+        p.join()
+        return None, 'timeout', None, True
+    else:
+        p.join()
+        if status == 'ok':
+            result_df, execution_exception, generated_sql = payload
+            return result_df, execution_exception, generated_sql, False
+        return None, str(payload), None, False
+
+
+def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, ground_truth_cache: Dict, timeout_seconds: int) -> Tuple[str, str]:
     """Modified version of process_row that uses cached ground truth results.
     
     Returns:
         Tuple of (custom_eval_result, bird_eval_result)
     """
     # Import here to avoid circular imports
-    from test_data.eval import execute_code_and_extract_result, compare_df, bird_eval
+    from test_data.eval import compare_df, bird_eval
     import pydough
     from datetime import datetime
     
@@ -122,16 +163,19 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
     
     # Case 1: We have extracted Python code to execute
     if pd.notna(extracted_code): 
-        local_env = {"pydough": pydough, "datetime": datetime}
         metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
         metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
 
-        # Execute the PyDough code
-        result_df, execution_exception, generated_sql = execute_code_and_extract_result(
-            extracted_code, local_env, metadata_path, db_name, db_path
+        # Execute the PyDough code with timeout
+        result_df, execution_exception, generated_sql, timed_out = _execute_pydough_with_timeout(
+            extracted_code, metadata_path, db_name, db_path, timeout_seconds
         )
         
-        if result_df is not None:
+        if timed_out:
+            # On timeout classify both evaluations as Query error
+            return ('Query error', 'Query error')
+
+        if result_df is not None and execution_exception is None:
             # Custom evaluation: DataFrame comparison using cached ground truth
             try:
                 df_comparison_success = compare_df(
@@ -192,7 +236,7 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
     return (custom_eval_result, bird_eval_result)
 
 
-def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str, num_threads: int = 0) -> str:
+def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str, num_threads: int = 0, timeout_seconds: int = 180) -> str:
     """Evaluate rows from all_runs_path and write an eval_ prefixed CSV.
 
     Returns the path to the written CSV.
@@ -226,7 +270,7 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
 
     def _eval_row(row):
         try:
-            custom_res, bird_res = _process_row_with_cache(row, db_base_path, metadata_base_path, ground_truth_cache)
+            custom_res, bird_res = _process_row_with_cache(row, db_base_path, metadata_base_path, ground_truth_cache, timeout_seconds)
         except Exception:
             return ('Query error', 'Query error')
         return (
@@ -263,9 +307,16 @@ def main():
     parser.add_argument('--db-base-path', required=True, help='Base path to databases')
     parser.add_argument('--metadata-base-path', required=True, help='Base path to metadata files')
     parser.add_argument('--num-threads', type=int, default=0, help='Optional worker threads for evaluation')
+    parser.add_argument('--timeout', type=int, default=180, help='Timeout in seconds for PyDough execution (default 180)')
     args = parser.parse_args()
 
-    out_path = evaluate_file(args.all_runs, args.db_base_path, args.metadata_base_path, num_threads=args.num_threads)
+    out_path = evaluate_file(
+        args.all_runs,
+        args.db_base_path,
+        args.metadata_base_path,
+        num_threads=args.num_threads,
+        timeout_seconds=args.timeout,
+    )
     print(out_path)
 
 
