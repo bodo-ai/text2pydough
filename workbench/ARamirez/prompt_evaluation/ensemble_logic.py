@@ -963,6 +963,7 @@ def ensemble_result(
     ensemble_selection_method: str = "size",
     use_gradio_agent: bool = True,
     tie_break_method: str = "random",
+    double_elim_n: Optional[int] = None,
 ):
     """
     Uses dataframe comparison to select the most consistent output.
@@ -1052,7 +1053,13 @@ def ensemble_result(
         return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
     elif ensemble_selection_method == "double_elim":
         print(f"[INFO] [Q{question_idx}] Double-elimination selection (LLM binary)")
-        return double_elim_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method, n=1)
+        return double_elim_selection(
+            valid_runs,
+            question,
+            question_idx=question_idx,
+            tie_break_method=tie_break_method,
+            n=(double_elim_n if double_elim_n is not None else 1),
+        )
     else:
         print(
             f"[WARNING] [Q{question_idx}] Unknown ensemble selection method '{ensemble_selection_method}', defaulting to size."
@@ -1123,6 +1130,7 @@ def ensemble_from_all_runs_df(
     use_gradio_agent: bool = False,
     mlflow_run_id: Optional[str] = None,
     tie_break_method: str = "random",
+    double_elim_n: Optional[int] = None,
 ) -> pd.DataFrame:
     """
     Run ensemble selection per question group from an all_runs-style DataFrame.
@@ -1164,6 +1172,7 @@ def ensemble_from_all_runs_df(
             ensemble_selection_method=ensemble_selection_method,
             use_gradio_agent=use_gradio_agent,
             tie_break_method=tie_break_method,
+            double_elim_n=double_elim_n,
         )
         response, duration, usage, model_name, gen_df_json, generated_sql = _normalize_ensemble_output(_ret)
 
@@ -1193,6 +1202,7 @@ def ensemble_from_all_runs_file(
     output_dir: Optional[str] = None,
     mlflow_run_id: Optional[str] = None,
     tie_break_method: str = "random",
+    double_elim_n: Optional[int] = None,
 ):
     """
     Convenience wrapper to run ensemble from an all_runs CSV file.
@@ -1205,6 +1215,7 @@ def ensemble_from_all_runs_file(
         use_gradio_agent=use_gradio_agent,
         mlflow_run_id=mlflow_run_id,
         tie_break_method=tie_break_method,
+        double_elim_n=double_elim_n,
     )
 
     if output_dir:

@@ -494,6 +494,12 @@ Examples:
         help='List of tie-breaker methods to run for finalists (random, density, size). Default: random'
     )
     parser.add_argument(
+        '--double-elim-n', '--double_elim_n',
+        type=int,
+        default=1,
+        help='Number of tournaments to run for the double_elim method (default: 1)'
+    )
+    parser.add_argument(
         '--eval-column', '--eval_column',
         default='eval_result',
         help='Name of the column to use when --use-eval-result-only is enabled (default: eval_result)'
@@ -707,6 +713,7 @@ Examples:
                         use_gradio_agent=False,
                         mlflow_run_id=None,
                         tie_break_method=tb,
+                        double_elim_n=args.double_elim_n,
                     )
                     winners_per_method[key] = winners_df_exec
                 except Exception as e:
