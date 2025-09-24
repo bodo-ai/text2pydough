@@ -468,18 +468,6 @@ Examples:
     )
     
     parser.add_argument(
-        '--db-base-path',
-        required=False,
-        help='Base path to the databases'
-    )
-    
-    parser.add_argument(
-        '--metadata-base-path',
-        required=False,
-        help='Base path to the metadata files'
-    )
-    
-    parser.add_argument(
         '--output-dir',
         help='Directory to save output files (optional)'
     )
@@ -488,13 +476,6 @@ Examples:
         '--verbose',
         action='store_true',
         help='Enable verbose logging'
-    )
-
-    parser.add_argument(
-        '--num-threads', '--num_threads',
-        type=int,
-        default=None,
-        help='Number of worker threads to use for parallel evaluation (default: CPU count)'
     )
     parser.add_argument(
         '--ensemble-selection-method', '--ensemble_selection_method',
@@ -511,11 +492,6 @@ Examples:
         '--tie-breakers', '--tie_breakers',
         nargs='*',
         help='List of tie-breaker methods to run for finalists (random, density, size). Default: random'
-    )
-    parser.add_argument(
-        '--use-eval-result-only', '--use_eval_result_only',
-        action='store_true',
-        help='Use the eval_result column from the CSV instead of executing code'
     )
     parser.add_argument(
         '--eval-column', '--eval_column',
