@@ -703,35 +703,46 @@ Examples:
         final_winner_results_per_method = {}
         try:
             for key, winners_df_exec in winners_per_method.items():
-                # Merge winners with a single aggregated label per (question, db, dataset, question_index, model_name)
-                merge_keys = ['question', 'dataset_name', 'db_name', 'question_index', 'model_name']
-                for k in merge_keys:
-                    if k not in winners_df_exec.columns:
-                        raise KeyError(f"Winners DF missing key column: {k}")
+                # Label winners using the exact chosen row when available
+                winners_df_local = winners_df_exec.copy()
+                # Prefer selected_row_id if present; fallback to attempt if necessary
+                can_use_row_id = 'selected_row_id' in winners_df_local.columns and winners_df_local['selected_row_id'].notna().any()
 
-                # One winner per question
-                winners_unique = winners_df_exec.drop_duplicates(subset=['question', 'dataset_name', 'db_name', 'question_index'])
+                if can_use_row_id:
+                    # Ensure the original DataFrame has a stable index column to merge on
+                    labels = result_df.copy()
+                    labels = labels.reset_index().rename(columns={'index': '__row_id__'}) if 'index' not in labels.columns else labels.rename(columns={'index': '__row_id__'})
+                    labels['__row_id__'] = labels['__row_id__']
+                    labels['winner_label'] = labels['comparison_result'].astype(str).str.strip()
+                    labels['winner_label'] = labels['winner_label'].where(labels['winner_label'].isin(['Match', 'No Match']), other='Query Error')
 
-                # Build aggregated labels to avoid duplicate inflation on merge
-                labels = result_df.copy()
-                norm = labels['comparison_result'].astype(str).str.strip()
-                norm = norm.where(norm.isin(['Match', 'No Match']), other='Query Error')
-                labels['comparison_result_norm'] = norm
+                    winners_unique = winners_df_local.drop_duplicates(subset=['question', 'dataset_name', 'db_name', 'question_index'])
+                    merged = winners_unique.merge(labels[['__row_id__', 'winner_label']], left_on='selected_row_id', right_on='__row_id__', how='left')
+                else:
+                    # Fallback: use model+group keys (may over-credit if multiple attempts differ)
+                    merge_keys = ['question', 'dataset_name', 'db_name', 'question_index', 'model_name']
+                    for k in merge_keys:
+                        if k not in winners_df_local.columns:
+                            raise KeyError(f"Winners DF missing key column: {k}")
+                    winners_unique = winners_df_local.drop_duplicates(subset=['question', 'dataset_name', 'db_name', 'question_index'])
+                    labels = result_df.copy()
+                    norm = labels['comparison_result'].astype(str).str.strip()
+                    norm = norm.where(norm.isin(['Match', 'No Match']), other='Query Error')
+                    labels['comparison_result_norm'] = norm
 
-                def _reduce_labels(series):
-                    vals = set(str(v).strip() for v in series if pd.notna(v))
-                    if 'Match' in vals:
-                        return 'Match'
-                    if 'No Match' in vals:
-                        return 'No Match'
-                    return 'Query Error'
+                    def _reduce_labels(series):
+                        vals = set(str(v).strip() for v in series if pd.notna(v))
+                        if 'Match' in vals:
+                            return 'Match'
+                        if 'No Match' in vals:
+                            return 'No Match'
+                        return 'Query Error'
 
-                agg_labels = labels.groupby(merge_keys)['comparison_result_norm'].agg(_reduce_labels).reset_index().rename(columns={'comparison_result_norm': 'winner_label'})
+                    agg_labels = labels.groupby(merge_keys)['comparison_result_norm'].agg(_reduce_labels).reset_index().rename(columns={'comparison_result_norm': 'winner_label'})
+                    merged = winners_unique.merge(agg_labels, on=merge_keys, how='left')
 
-                merged = winners_unique.merge(agg_labels, on=merge_keys, how='left')
-
-                # Denominator: total unique questions
-                total_questions = int(question_summary_df.shape[0]) if 'question_summary_df' in locals() and question_summary_df is not None else int(result_df.assign(question_id=result_df['question'].astype(str) + '_' + result_df['db_name'].astype(str) + '_' + result_df['dataset_name'].astype(str))['question_id'].nunique())
+                # Denominator: number of unique winners (actual ensembled questions)
+                total_questions = int(winners_unique.shape[0])
 
                 # Count only the single winner per question; missing labels => Query Error
                 winner_label = merged['winner_label'].astype(str).str.strip().fillna('Query Error')

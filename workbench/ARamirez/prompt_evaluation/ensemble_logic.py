@@ -368,14 +368,16 @@ def size_based_selection(
         )
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
-        return (
-            best["response"],
-            best["duration"],
-            best["usage"],
-            best["model_name"],
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in size_based_selection.")
         return (None, 0.0, None, None, None, None)
@@ -395,14 +397,16 @@ def random_based_selection(
     if len(valid_runs) == 1:
         chosen = valid_runs[0]
         print(f"[INFO] [Q{question_idx}] Random-based selection: single candidate {chosen['model_name']}")
-        return (
-            chosen["response"],
-            chosen["duration"],
-            chosen["usage"],
-            chosen["model_name"],
-            chosen.get("gen_df_json"),
-            chosen.get("generated_sql"),
-        )
+        return {
+            "response": chosen.get("response"),
+            "duration": chosen.get("duration"),
+            "usage": chosen.get("usage"),
+            "model_name": chosen.get("model_name"),
+            "gen_df_json": chosen.get("gen_df_json"),
+            "generated_sql": chosen.get("generated_sql"),
+            "selected_attempt": chosen.get("attempt"),
+            "selected_row_id": chosen.get("row_id"),
+        }
 
     # Multiple candidates: defer to standard tie-break dispatcher for consistency
     candidate_indices = list(range(len(valid_runs)))
@@ -413,14 +417,16 @@ def random_based_selection(
         best_index = rng.choice(candidate_indices)
     chosen = valid_runs[best_index]
     print(f"[INFO] [Q{question_idx}] Random-based selection: {chosen['model_name']}")
-    return (
-        chosen["response"],
-        chosen["duration"],
-        chosen["usage"],
-        chosen["model_name"],
-        chosen.get("gen_df_json"),
-        chosen.get("generated_sql"),
-    )
+    return {
+        "response": chosen.get("response"),
+        "duration": chosen.get("duration"),
+        "usage": chosen.get("usage"),
+        "model_name": chosen.get("model_name"),
+        "gen_df_json": chosen.get("gen_df_json"),
+        "generated_sql": chosen.get("generated_sql"),
+        "selected_attempt": chosen.get("attempt"),
+        "selected_row_id": chosen.get("row_id"),
+    }
 
 
 def density_based_selection(
@@ -460,14 +466,16 @@ def density_based_selection(
         print(
             f"[INFO] [Q{question_idx}] Density-based selection: {best['model_name']} with density {density_dict[best_index]:.2f} bytes/cell."
         )
-        return (
-            best["response"],
-            best["duration"],
-            best["usage"],
-            best["model_name"],
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in density_based_selection.")
         return (None, 0.0, None, None, None, None)
@@ -502,14 +510,16 @@ def reverse_size_based_selection(
         )
         best = valid_runs[best_index]
         print(f"[INFO] [Q{question_idx}] Reverse size-based selection: {best['model_name']} with size {size_dict[best_index]}.")
-        return (
-            best["response"],
-            best["duration"],
-            best["usage"],
-            best["model_name"],
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in reverse_size_based_selection.")
         return (None, 0.0, None, None, None, None)
@@ -557,14 +567,16 @@ def reverse_density_based_selection(
         print(
             f"[INFO] [Q{question_idx}] Reverse density-based selection: {best['model_name']} with density {density_dict[best_index]:.2f} bytes/cell."
         )
-        return (
-            best["response"],
-            best["duration"],
-            best["usage"],
-            best["model_name"],
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
     else:
         print(f"[WARNING] [Q{question_idx}] No valid dataframes found in reverse_density_based_selection.")
         return (None, 0.0, None, None, None, None)
@@ -605,14 +617,16 @@ def reverse_frequency_based_selection(
         print(
             f"[INFO] [Q{question_idx}] Reverse frequency-based selection: {best['model_name']} with {consensus[best_index]} matches (lowest)."
         )
-        return (
-            best["response"],
-            best["duration"],
-            best["usage"],
-            best["model_name"],
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
     else:
         # If consensus empty (shouldn't happen with any valid_runs), fall back to random
         print(f"[WARNING] [Q{question_idx}] No consensus computed in reverse_frequency_based_selection. Falling back to random.")
@@ -685,14 +699,16 @@ def agent_indiv_grade_selection(
         print(
             f"[INFO] [Q{question_idx}] agent_indiv_grade selected: {best.get('model_name')} (candidate #{best_index}) with score {max_score}."
         )
-        return (
-            best.get("response"),
-            best.get("duration"),
-            best.get("usage"),
-            best.get("model_name"),
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
     except Exception as e:
         print(
             f"[WARNING] [Q{question_idx}] LLM grading failed in agent_indiv_grade_selection: {e}. Falling back to random."
@@ -739,14 +755,16 @@ def binary_comp_selection(
     if n == 1:
         best = valid_runs[0]
         print(f"[INFO] [Q{question_idx}] binary_comp_selection: single candidate {best.get('model_name')}")
-        return (
-            best.get("response"),
-            best.get("duration"),
-            best.get("usage"),
-            best.get("model_name"),
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
 
     scores: List[int] = [0] * n
 
@@ -791,14 +809,16 @@ def binary_comp_selection(
     print(
         f"[INFO] [Q{question_idx}] binary_comp_selection selected: {best.get('model_name')} (candidate #{best_index}) with score {max_score}."
     )
-    return (
-        best.get("response"),
-        best.get("duration"),
-        best.get("usage"),
-        best.get("model_name"),
-        best.get("gen_df_json"),
-        best.get("generated_sql"),
-    )
+    return {
+        "response": best.get("response"),
+        "duration": best.get("duration"),
+        "usage": best.get("usage"),
+        "model_name": best.get("model_name"),
+        "gen_df_json": best.get("gen_df_json"),
+        "generated_sql": best.get("generated_sql"),
+        "selected_attempt": best.get("attempt"),
+        "selected_row_id": best.get("row_id"),
+    }
 
 
 def double_elim_selection(
@@ -843,14 +863,16 @@ def double_elim_selection(
     if num_candidates == 1:
         best = valid_runs[0]
         print(f"[INFO] [Q{question_idx}] double_elim_selection: single candidate {best.get('model_name')}")
-        return (
-            best.get("response"),
-            best.get("duration"),
-            best.get("usage"),
-            best.get("model_name"),
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
 
     def run_bracket_once(t: int) -> int:
         # Local deterministic RNG per tournament to vary brackets across n while reproducible
@@ -944,14 +966,16 @@ def double_elim_selection(
     print(
         f"[INFO] [Q{question_idx}] double_elim_selection selected: {best.get('model_name')} (candidate #{winner_i}) from {total_runs} tournaments."
     )
-    return (
-        best.get("response"),
-        best.get("duration"),
-        best.get("usage"),
-        best.get("model_name"),
-        best.get("gen_df_json"),
-        best.get("generated_sql"),
-    )
+    return {
+        "response": best.get("response"),
+        "duration": best.get("duration"),
+        "usage": best.get("usage"),
+        "model_name": best.get("model_name"),
+        "gen_df_json": best.get("gen_df_json"),
+        "generated_sql": best.get("generated_sql"),
+        "selected_attempt": best.get("attempt"),
+        "selected_row_id": best.get("row_id"),
+    }
 
 def ensemble_result(
     mlflow_run_id: Optional[str],
@@ -1067,7 +1091,7 @@ def ensemble_result(
         return size_based_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
 
 
-def _row_to_run_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+def _row_to_run_dict(row: Dict[str, Any], row_index: Optional[Any] = None) -> Dict[str, Any]:
     """
     Convert a row from an all_runs-style DataFrame into the internal run dict
     expected by the ensemble selection functions.
@@ -1099,6 +1123,7 @@ def _row_to_run_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "generated_sql": row.get("generated_sql", row.get("gen_sql", None)),
         "dataset_name": row.get("dataset_name", None),
         "db_name": row.get("db_name", None),
+        "row_id": (row_index if row_index is not None else getattr(row, "name", None)),
     }
 
 
@@ -1160,7 +1185,7 @@ def ensemble_from_all_runs_df(
         db_name = group_dict.get("db_name", None)
         q_index = group_dict.get("question_index", "?")
 
-        runs = [_row_to_run_dict(row) for _, row in group_df.iterrows()]
+        runs = [_row_to_run_dict(row, row_index=idx) for idx, row in group_df.iterrows()]
 
         _ret = ensemble_result(
             mlflow_run_id,
@@ -1174,7 +1199,19 @@ def ensemble_from_all_runs_df(
             tie_break_method=tie_break_method,
             double_elim_n=double_elim_n,
         )
-        response, duration, usage, model_name, gen_df_json, generated_sql = _normalize_ensemble_output(_ret)
+        if isinstance(_ret, dict):
+            response = _ret.get("response")
+            duration = _ret.get("duration")
+            usage = _ret.get("usage")
+            model_name = _ret.get("model_name")
+            gen_df_json = _ret.get("gen_df_json")
+            generated_sql = _ret.get("generated_sql") or _ret.get("gen_sql")
+            selected_attempt = _ret.get("selected_attempt")
+            selected_row_id = _ret.get("selected_row_id")
+        else:
+            response, duration, usage, model_name, gen_df_json, generated_sql = _normalize_ensemble_output(_ret)
+            selected_attempt = None
+            selected_row_id = None
 
         winners.append(
             {
@@ -1189,6 +1226,8 @@ def ensemble_from_all_runs_df(
                 "model_name": model_name,
                 "gen_df_json": gen_df_json,
                 "gen_sql": generated_sql,
+                "selected_attempt": selected_attempt,
+                "selected_row_id": selected_row_id,
             }
         )
 
