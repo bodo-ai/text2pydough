@@ -7,6 +7,10 @@ Outputs the following tri-state columns (each value is one of {Match, NoMatch, Q
 - eval_custom: normalized custom DataFrame comparison result
 - eval_bird:   normalized BIRD SQL comparison result
 
+Additionally, two columns capture the reason when a result is 'Query error':
+- eval_custom_error_reason
+- eval_bird_error_reason
+
 For backward compatibility, 'eval_result' is also written and equals 'eval_custom'.
 
 Usage:
@@ -130,11 +134,11 @@ def _execute_pydough_with_timeout(extracted_code, metadata_path, db_name, db_pat
         return None, str(payload), None, False
 
 
-def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, ground_truth_cache: Dict, timeout_seconds: int) -> Tuple[str, str]:
+def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, ground_truth_cache: Dict, timeout_seconds: int) -> Tuple[str, str, Optional[str], Optional[str]]:
     """Modified version of process_row that uses cached ground truth results.
     
     Returns:
-        Tuple of (custom_eval_result, bird_eval_result)
+        Tuple of (custom_eval_result, bird_eval_result, custom_error_reason, bird_error_reason)
     """
     # Import here to avoid circular imports
     from test_data.eval import compare_df, bird_eval
@@ -156,10 +160,14 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
     # Initialize default return values
     custom_eval_result = 'Unknown'
     bird_eval_result = 'Unknown'
+    custom_error_reason: Optional[str] = None
+    bird_error_reason: Optional[str] = None
     
     # If ground truth SQL failed, both evaluations fail
     if ground_truth_df is None:
-        return ('Query error', 'Query error')
+        # If ground truth failed, both evaluations are Query error; capture reason
+        reason = f"ground truth sql error: {sql_exception}" if sql_exception else 'ground truth sql error'
+        return ('Query error', 'Query error', reason, reason)
     
     # Case 1: We have extracted Python code to execute
     if pd.notna(extracted_code): 
@@ -172,8 +180,8 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
         )
         
         if timed_out:
-            # On timeout classify both evaluations as Query error
-            return ('Query error', 'Query error')
+            # On timeout classify both evaluations as Query error and record reason
+            return ('Query error', 'Query error', 'timeout', 'timeout')
 
         if result_df is not None and execution_exception is None:
             # Custom evaluation: DataFrame comparison using cached ground truth
@@ -182,22 +190,31 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
                     ground_truth_df, result_df, query_category="a", question=question
                 )
                 custom_eval_result = 'Match' if df_comparison_success else 'NoMatch'
-            except Exception:
+                if custom_eval_result != 'Query error':
+                    custom_error_reason = None
+            except Exception as e:
                 custom_eval_result = 'Query error'
+                custom_error_reason = f'df comparison exception: {e}'
             
             # Bird evaluation: SQL execution comparison
             if generated_sql is not None:
                 try:
                     sql_comparison_result = bird_eval(generated_sql, sql, db_path)
                     bird_eval_result = 'Match' if sql_comparison_result == 1 else 'NoMatch'
-                except Exception:
+                    if bird_eval_result != 'Query error':
+                        bird_error_reason = None
+                except Exception as e:
                     bird_eval_result = 'Query error'
+                    bird_error_reason = f'bird eval exception: {e}'
             else:
                 bird_eval_result = 'Query error'
+                bird_error_reason = 'no generated sql'
         else:
             # PyDough code execution failed
             custom_eval_result = 'Query error'
             bird_eval_result = 'Query error'
+            custom_error_reason = f'execution exception: {execution_exception}' if execution_exception else 'execution failed'
+            bird_error_reason = 'execution failed'
     
     # Case 2: No extracted code, try to use pre-computed DataFrame from CSV
     else:
@@ -217,23 +234,35 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
                 custom_eval_result = 'Match' if df_comparison_success else 'NoMatch'
                 sql_comparison_result = bird_eval(generated_sql, sql, db_path)
                 bird_eval_result = 'Match' if sql_comparison_result == 1 else 'NoMatch'
-            except Exception:
+                if custom_eval_result != 'Query error':
+                    custom_error_reason = None
+                if bird_eval_result != 'Query error':
+                    bird_error_reason = None
+            except Exception as e:
                 custom_eval_result = 'Query error'
                 bird_eval_result = 'Query error'
+                custom_error_reason = f'generated df/compare exception: {e}'
+                bird_error_reason = f'bird eval exception: {e}'
         elif generated_sql is not None:
             # We have SQL but no generated DataFrame; still evaluate BIRD SQL comparison
             try:
                 sql_comparison_result = bird_eval(generated_sql, sql, db_path)
                 bird_eval_result = 'Match' if sql_comparison_result == 1 else 'NoMatch'
-            except Exception:
+                if bird_eval_result != 'Query error':
+                    bird_error_reason = None
+            except Exception as e:
                 bird_eval_result = 'Query error'
+                bird_error_reason = f'bird eval exception: {e}'
             # Custom DataFrame comparison cannot be performed without a generated dataframe
             custom_eval_result = 'Query error'
+            custom_error_reason = 'no generated df'
         else:
             custom_eval_result = 'Query error'
             bird_eval_result = 'Query error'
+            custom_error_reason = 'no generated df'
+            bird_error_reason = 'no generated sql'
     
-    return (custom_eval_result, bird_eval_result)
+    return (custom_eval_result, bird_eval_result, custom_error_reason, bird_error_reason)
 
 
 def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str, num_threads: int = 0, timeout_seconds: int = 180) -> str:
@@ -270,12 +299,14 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
 
     def _eval_row(row):
         try:
-            custom_res, bird_res = _process_row_with_cache(row, db_base_path, metadata_base_path, ground_truth_cache, timeout_seconds)
+            custom_res, bird_res, custom_reason, bird_reason = _process_row_with_cache(row, db_base_path, metadata_base_path, ground_truth_cache, timeout_seconds)
         except Exception:
-            return ('Query error', 'Query error')
+            return ('Query error', 'Query error', 'unexpected exception', 'unexpected exception')
         return (
             _normalize_eval_result(custom_res),
             _normalize_eval_result(bird_res),
+            custom_reason if _normalize_eval_result(custom_res) == 'Query error' else None,
+            bird_reason if _normalize_eval_result(bird_res) == 'Query error' else None,
         )
 
     if num_threads and num_threads > 1:
@@ -288,6 +319,9 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
     # Split results into columns
     df['eval_custom'] = [r[0] for r in results]
     df['eval_bird'] = [r[1] for r in results]
+    # Error reasons (only populated when corresponding result is 'Query error')
+    df['eval_custom_error_reason'] = [r[2] for r in results]
+    df['eval_bird_error_reason'] = [r[3] for r in results]
     # Back-compat single column mirroring custom eval
     df['eval_result'] = df['eval_custom']
 
