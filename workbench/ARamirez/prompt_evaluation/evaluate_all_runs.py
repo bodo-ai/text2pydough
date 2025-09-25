@@ -701,6 +701,7 @@ Examples:
 
         # Build final per-method winner outcome results using executed winners (LLM may be called)
         final_winner_results_per_method = {}
+        winners_labeled_exports = []
         try:
             for key, winners_df_exec in winners_per_method.items():
                 # Label winners using the exact chosen row when available
@@ -709,10 +710,9 @@ Examples:
                 can_use_row_id = 'selected_row_id' in winners_df_local.columns and winners_df_local['selected_row_id'].notna().any()
 
                 if can_use_row_id:
-                    # Ensure the original DataFrame has a stable index column to merge on
+                    # Ensure the original DataFrame has a stable index column to merge on (actual pandas index)
                     labels = result_df.copy()
-                    labels = labels.reset_index().rename(columns={'index': '__row_id__'}) if 'index' not in labels.columns else labels.rename(columns={'index': '__row_id__'})
-                    labels['__row_id__'] = labels['__row_id__']
+                    labels['__row_id__'] = labels.index
                     labels['winner_label'] = labels['comparison_result'].astype(str).str.strip()
                     labels['winner_label'] = labels['winner_label'].where(labels['winner_label'].isin(['Match', 'No Match']), other='Query Error')
 
@@ -757,6 +757,18 @@ Examples:
                     'winner_no_match_count': winner_no_match_count,
                     'winner_query_error_count_adjusted': winner_query_error_count,
                 }
+
+                # Collect labeled winners for export
+                try:
+                    export_cols = ['question', 'dataset_name', 'db_name', 'question_index', 'model_name']
+                    if 'selected_row_id' in merged.columns:
+                        export_cols.append('selected_row_id')
+                    export_payload = merged.copy()
+                    export_payload = export_payload.assign(method_tb=key, eval_source=eval_column)
+                    keep_cols = [c for c in export_cols if c in export_payload.columns] + ['winner_label', 'method_tb', 'eval_source']
+                    winners_labeled_exports.append(export_payload[keep_cols])
+                except Exception:
+                    pass
         except Exception as e:
             logger.warning(f"Failed building executed final winner results: {e}")
 
@@ -774,6 +786,18 @@ Examples:
             question_summary_df,
             final_winner_results_per_method=final_winner_results_per_method,
         )
+
+        # Write labeled winners export for drift inspection
+        try:
+            if winners_labeled_exports and args.output_dir:
+                os.makedirs(args.output_dir, exist_ok=True)
+                winners_labeled_df = pd.concat(winners_labeled_exports, ignore_index=True)
+                ts = datetime.now().strftime('%Y_%m_%d-%H_%M_%S')
+                winners_labeled_path = os.path.join(args.output_dir, f'winners_labeled_{ts}.csv')
+                winners_labeled_df.to_csv(winners_labeled_path, index=False)
+                logger.info(f"Saved labeled winners export to: {winners_labeled_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save labeled winners export: {e}")
         
         logger.info("Evaluation completed successfully!")
         
