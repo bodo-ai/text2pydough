@@ -614,28 +614,8 @@ Examples:
             # Best-effort normalization; continue if mapping fails
             pass
 
-        # Filter to valid candidates for ensembling: non-empty, JSON-parsable gen_df_json
-        def _is_valid_gen_df_json(val):
-            try:
-                if not isinstance(val, str):
-                    return False
-                text = val.strip()
-                if text == '' or text.lower() in ('nan', 'none', 'null'):
-                    return False
-                try:
-                    json.loads(text)
-                    return True
-                except Exception:
-                    cleaned = text.replace('\n', '').replace('\r', '')
-                    json.loads(cleaned)
-                    return True
-            except Exception:
-                return False
-
-        try:
-            df_valid = result_df[result_df['gen_df_json'].apply(_is_valid_gen_df_json)].copy()
-        except Exception:
-            df_valid = result_df.copy()
+        # Do not pre-filter results; validity is handled within ensemble_logic
+        normalized_df = result_df.copy()
 
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
@@ -708,7 +688,7 @@ Examples:
                 key = f"{method}|tb:{tb}"
                 try:
                     winners_df_exec = ensemble_from_all_runs_df(
-                        df_valid,
+                        normalized_df,
                         ensemble_selection_method=method,
                         use_gradio_agent=False,
                         mlflow_run_id=None,
