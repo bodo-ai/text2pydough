@@ -313,38 +313,44 @@ def frequency_based_selection(
             f"[INFO] [Q{question_idx}] Ensemble selected: {best_model} with {consensus[best_index]} matches. "
             f"{response_details} for the chosen response. {consensus_details} globally. "
         )
-        return (
-            best["response"],
-            best["duration"],
-            best["usage"],
-            best["model_name"],
-            best.get("gen_df_json"),
-            best.get("generated_sql"),
-        )
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
 
     gemini_runs = [r for r in valid_runs if r["model_name"] == "gemini"]
     if gemini_runs:
         fallback = rng.choice(gemini_runs)
         print(f"[INFO] [Q{question_idx}] No consensus found. Falling back to Gemini run.")
-        return (
-            fallback["response"],
-            fallback["duration"],
-            fallback["usage"],
-            fallback["model_name"],
-            fallback.get("gen_df_json"),
-            fallback.get("generated_sql"),
-        )
+        return {
+            "response": fallback.get("response"),
+            "duration": fallback.get("duration"),
+            "usage": fallback.get("usage"),
+            "model_name": fallback.get("model_name"),
+            "gen_df_json": fallback.get("gen_df_json"),
+            "generated_sql": fallback.get("generated_sql"),
+            "selected_attempt": fallback.get("attempt"),
+            "selected_row_id": fallback.get("row_id"),
+        }
     else:
         print(f"[WARNING] [Q{question_idx}] No Gemini runs available. Falling back to random valid run.")
         fallback = rng.choice(valid_runs)
-        return (
-            fallback["response"],
-            fallback["duration"],
-            fallback["usage"],
-            fallback["model_name"],
-            fallback.get("gen_df_json"),
-            fallback.get("generated_sql"),
-        )
+        return {
+            "response": fallback.get("response"),
+            "duration": fallback.get("duration"),
+            "usage": fallback.get("usage"),
+            "model_name": fallback.get("model_name"),
+            "gen_df_json": fallback.get("gen_df_json"),
+            "generated_sql": fallback.get("generated_sql"),
+            "selected_attempt": fallback.get("attempt"),
+            "selected_row_id": fallback.get("row_id"),
+        }
 
 
 def size_based_selection(
