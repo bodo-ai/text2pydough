@@ -655,7 +655,7 @@ def agent_indiv_grade_selection(
 
     try:
         # Import lazily to avoid heavy deps unless method is actually used
-        from scooring_agents import evaluate_single_dataframe as llm_evaluate_single
+        from scooring_agents_exp import evaluate_single_dataframe as llm_evaluate_single
     except Exception as e:
         print(
             f"[WARNING] [Q{question_idx}] Failed importing LLM grader (scooring.evaluate_dataframes): {e}. Falling back to random."
@@ -729,7 +729,7 @@ def binary_comp_selection(
     tie_break_method: str = "random",
 ):
     """
-    Round-robin pairwise comparison using LLM binary evaluator from scooring_agents.
+    Round-robin pairwise comparison using LLM binary evaluator from scooring_agents_exp.
     Each candidate gains +1 score for every other candidate it wins against.
     The highest total score wins; ties are resolved via the configured tie-breaker.
     """
@@ -739,10 +739,10 @@ def binary_comp_selection(
 
     # Lazy import to avoid heavy deps unless used
     try:
-        from scooring_agents import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
+        from scooring_agents_exp import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
     except Exception as e:
         print(
-            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents.evaluate_binary_dataframes): {e}. Falling back to random."
+            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents_exp.evaluate_binary_dataframes): {e}. Falling back to random."
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
@@ -838,7 +838,7 @@ def double_elim_selection(
     Run a double-elimination tournament among candidates using LLM binary evaluation.
 
     - Seeds are randomized in position using a seeded RNG (global rng).
-    - Each match compares two candidates via scooring_agents.evaluate_binary_dataframes.
+    - Each match compares two candidates via scooring_agents_exp.evaluate_binary_dataframes.
     - A candidate is eliminated after two losses. Last remaining wins.
     """
     if not valid_runs:
@@ -847,10 +847,10 @@ def double_elim_selection(
 
     # Lazy import to avoid heavy deps unless used
     try:
-        from scooring_agents import evaluate_binary_dataframes as llm_evaluate_binary
+        from scooring_agents_exp import evaluate_binary_dataframes as llm_evaluate_binary
     except Exception as e:
         print(
-            f"[WARNING] [Q{question_idx}] Failed importing LLM binary grader (scooring_agents.evaluate_binary_dataframes): {e}. Falling back to random."
+            f"[WARNING] [Q{question_idx}] Failed importing LLM binary grader (scooring_agents_exp.evaluate_binary_dataframes): {e}. Falling back to random."
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
