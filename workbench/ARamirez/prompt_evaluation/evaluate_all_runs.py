@@ -163,7 +163,27 @@ def _parse_df_from_json(gen_df_json):
             return None
 
 
+def compute_timeout_stats(df: pd.DataFrame, total_rows: int = None):
+    """Compute timeout count and percentage across any columns ending with "_error_reason".
 
+    Returns tuple: (timeout_rows: int, timeout_pct: float)
+    """
+    try:
+        if total_rows is None:
+            total_rows = len(df)
+        error_reason_cols = [c for c in df.columns if str(c).endswith('_error_reason')]
+        if error_reason_cols:
+            timeout_any_mask = pd.concat(
+                [df[c].astype(str).str.strip().str.lower().eq('timeout') for c in error_reason_cols],
+                axis=1
+            ).any(axis=1)
+            timeout_rows = int(timeout_any_mask.sum())
+        else:
+            timeout_rows = 0
+        timeout_pct = (timeout_rows / total_rows * 100.0) if total_rows > 0 else 0.0
+        return timeout_rows, float(timeout_pct)
+    except Exception:
+        return 0, 0.0
 
 def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
     """Helper function to print final ensemble per-method results."""
@@ -213,6 +233,10 @@ def print_summary(result_df,
     for result_type, count in comparison_counts.items():
         percentage = total_percentages[result_type]
         print(f"  {result_type}: {count} ({percentage}%)")
+    
+    # Timeouts across any columns ending with "_error_reason"
+    timeout_rows, timeout_pct = compute_timeout_stats(result_df, total_rows=total_runs)
+    print(f"  Timeouts: {timeout_rows} ({timeout_pct:.2f}%)")
     
     # Question-level statistics
     total_questions = len(question_summary_df)
@@ -347,6 +371,15 @@ def _log_mlflow_stats(args,
             mlflow.log_metric(f'overall_count_{str(result_type).replace(" ", "_")}', int(count))
             pct_val = float(total_percentages[result_type]) if result_type in total_percentages else 0.0
             mlflow.log_metric(f'overall_pct_{str(result_type).replace(" ", "_")}', pct_val)
+
+        # Timeouts across any columns ending with "_error_reason"
+        try:
+            timeout_rows, timeout_pct = compute_timeout_stats(result_df, total_rows=total_runs)
+            mlflow.log_metric('overall_count_timeouts', int(timeout_rows))
+            mlflow.log_metric('overall_pct_timeouts', float(timeout_pct))
+        except Exception:
+            # Best-effort; continue if timeout logging fails
+            pass
 
         # Question-level results
         total_questions = len(question_summary_df)
