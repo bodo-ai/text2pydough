@@ -50,26 +50,29 @@ REMEMBER: The score must ALWAYS be a number from 0 to 10, never True/False or ot
 """
 
 
-EVALUATION_BINARY_PROMPT = """You are an expert data analyst comparing two candidate DataFrames for the same question. The order of the options below has been randomized; do not favor an option due to its position. Evaluate both options symmetrically and base your decision on concrete evidence from the data.
+EVALUATION_BINARY_PROMPT = """You are an expert data analyst comparing two candidate DataFrames for the same question. Evaluate both options and base your decision on concrete evidence from the data.
 
 Question: {question}
 Option A (index 0): {dataframe_1}
 Option B (index 1): {dataframe_2}
 
-Assess each option independently on these criteria (cite explicit evidence such as column names, row counts, and data types):
-- Non-empty and correct structure (rows x cols)
-- Relevance of columns to the question
-- Absence of redundant/duplicate data
-- Appropriate data types for the analysis
-- Presence of critical information required to answer the question
-- Logical ordering of results if applicable
-- Overall clarity and consistency
+Evaluate each option separately using this checklist:
+- Non-empty with a valid shape (rows x columns)
+- Columns directly answer the question; avoid extra/unasked columns
+- No redundant/duplicate rows or columns
+- Data types fit the analysis (e.g., numeric for math, date for time)
+- Contains all information needed to answer the question
+- Sorted/ordered as the question requests, if applicable
+- Clear and consistent structure
 
-Then select the better option strictly based on these criteria. If both are effectively equivalent, prefer the one that provides the most information.
+Decision rule:
+- Pick the option that better satisfies the checklist.
+- If both are essentially equal, choose the one that more plausibly answers the question.
 
 Additionally, provide a confidence score in the closed interval [0, 1] that reflects how strongly the evidence supports your choice (0 = no confidence, 1 = absolute confidence). The confidence should be based on how well the selected option satisfies the criteria relative to the other.
 
-You must respond with EXACTLY this JSON (no additional text):
+Output:
+Return EXACTLY this JSON and nothing else:
 {
     "best_index": 0,
     "confidence": 0.0
@@ -170,7 +173,27 @@ def evaluate_single_dataframe(question, dataframe_str):
         
         evaluation_json = extract_json_evaluation(response.evaluation)
         return evaluation_json.get("score", 0) 
-    
+
+def evaluate_dataframe_with_description(question, dataframe_str, code_description):
+    extended_criteria = f"""{EVALUATION_PROMPT}
+
+Additional context to consider:
+- Review the following description of the created code's functionality.
+- Judge whether, if implemented as described, it would logically resolve the user's question and produce a correct DataFrame.
+- If the description convincingly addresses the requirements and aligns with the DataFrame's structure/content, this should positively influence the score; if it contradicts or omits critical steps, reflect that in the score and reasoning.
+
+Code description:
+{code_description}
+"""
+    with dspy.context(lm=lm):
+        response = qa(
+            question=question,
+            dataframe=dataframe_str,
+            evaluation_criteria=extended_criteria
+        )
+    evaluation_json = extract_json_evaluation(response.evaluation)
+    return evaluation_json.get("score", 0)
+
 def evaluate_binary_dataframes(question, dataframes_list):  
     # Randomize presentation order to mitigate position bias
     pairs = [(0, dataframes_list[0]), (1, dataframes_list[1])]
