@@ -172,7 +172,7 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
     # Case 1: We have extracted Python code to execute
     if pd.notna(extracted_code): 
         metadata_dir = os.path.join(metadata_base_path, dataset_name, "metadata")
-        metadata_path = os.path.join(metadata_dir, f"{db_name}_graph.json")
+        metadata_path = os.path.join(metadata_dir, f"{db_name}_graph_filled.json")
 
         # Execute the PyDough code with timeout
         result_df, execution_exception, generated_sql, timed_out = _execute_pydough_with_timeout(
