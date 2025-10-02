@@ -247,29 +247,56 @@ def compute_question_match_lists(
         missed_ids = sorted(list(any_match_ids - predicted_match_ids))
         missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
 
-    # Build question_id -> index mapping
+    # Build question_id -> index mapping (robust fallbacks)
     missed_index_list = []
     try:
+        # Primary: use indices from result_df
         ridx = result_df.copy()
         ridx['question_id'] = (
             ridx['question'].astype(str)
             + '_' + ridx['db_name'].astype(str)
             + '_' + ridx['dataset_name'].astype(str)
         )
-        id_col = None
-        if 'question_index' in ridx.columns:
-            id_col = 'question_index'
-        elif 'index' in ridx.columns:
-            id_col = 'index'
-        if id_col and not missed_df.empty:
-            qid_to_idx = ridx.groupby('question_id')[id_col].first().to_dict()
-            for qid in missed_df['question_id'].tolist():
-                val = qid_to_idx.get(qid)
-                try:
-                    if pd.notna(val):
-                        missed_index_list.append(int(val))
-                except Exception:
-                    pass
+        candidate_cols = [c for c in ['question_index', 'index', 'question_idx'] if c in ridx.columns]
+        if candidate_cols and not missed_df.empty:
+            qids = missed_df['question_id'].tolist()
+            for id_col in candidate_cols:
+                qid_to_idx = ridx.groupby('question_id')[id_col].first().to_dict()
+                for qid in qids:
+                    val = qid_to_idx.get(qid)
+                    try:
+                        if pd.notna(val):
+                            missed_index_list.append(int(val))
+                    except Exception:
+                        # Skip non-numeric values
+                        pass
+                if missed_index_list:
+                    break
+
+        # Fallback: derive indices from winners_labeled_df if available
+        if not missed_index_list and winners_labeled_df is not None and not missed_df.empty:
+            wl = winners_labeled_df.copy()
+            if 'question_id' not in wl.columns:
+                wl['question_id'] = (
+                    wl['question'].astype(str)
+                    + '_' + wl['db_name'].astype(str)
+                    + '_' + wl['dataset_name'].astype(str)
+                )
+            candidate_wl_cols = [c for c in ['question_index', 'index', 'question_idx'] if c in wl.columns]
+            if candidate_wl_cols:
+                qids = missed_df['question_id'].tolist()
+                for id_col in candidate_wl_cols:
+                    qid_to_idx = wl.groupby('question_id')[id_col].first().to_dict()
+                    for qid in qids:
+                        val = qid_to_idx.get(qid)
+                        try:
+                            if pd.notna(val):
+                                missed_index_list.append(int(val))
+                        except Exception:
+                            pass
+                    if missed_index_list:
+                        break
+
         missed_index_list = sorted(set(missed_index_list))
     except Exception:
         missed_index_list = []
