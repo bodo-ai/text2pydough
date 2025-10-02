@@ -102,12 +102,8 @@ def create_question_summary(df, comparison_col: str = 'comparison_result'):
     Returns:
         pd.DataFrame: Summary DataFrame with question_id and has_match columns
     """
-    # Work on a copy; do not mutate the source DataFrame's identifiers
-    df_local = df.copy()
-    # Ensure a question_id exists for grouping. If the input already has a question_id
-    # column (often numeric), preserve it. Otherwise synthesize one from keys.
-    if 'question_id' not in df_local.columns:
-        df_local['question_id'] = df_local['question'].astype(str) + '_' + df_local['db_name'].astype(str) + '_' + df_local['dataset_name'].astype(str)
+    # Create a unique question identifier
+    df['question_id'] = df['question'].astype(str) + '_' + df['db_name'].astype(str) + '_' + df['dataset_name'].astype(str)
     
     # Group by question_id and check if any result is a match
     agg_dict = {
@@ -123,7 +119,7 @@ def create_question_summary(df, comparison_col: str = 'comparison_result'):
         agg_dict['difficulty'] = 'first'
 
     # Use provided comparison column for aggregation by temporarily aligning name
-    tmp = df_local.copy()
+    tmp = df.copy()
     if comparison_col != 'comparison_result' and comparison_col in tmp.columns:
         tmp = tmp.rename(columns={comparison_col: 'comparison_result'})
     question_groups = tmp.groupby('question_id').agg(agg_dict).reset_index()
@@ -197,22 +193,25 @@ def compute_question_match_lists(
     final_winner_results_per_method: dict = None,
     winners_labeled_df: pd.DataFrame = None,
 ):
-    """Compute lists using question_index as the canonical key to avoid key drift.
+    """Compute:
+    - any_match_df: rows with at least one Match (question_id, question)
+    - missed_df: subset of any_match that best ensemble missed
+    - best_key: best ensemble identifier (highest winner match %)
+    - missed_index_list: sorted list of numeric indices for missed questions
 
     Returns tuple: (any_match_df, missed_df, best_key, missed_index_list)
     """
-    df = result_df.copy()
-    # Ensure canonical question_id exists and is stable; if not present, synthesize
-    if 'question_id' not in df.columns:
-        df['question_id'] = df['question'].astype(str) + '_' + df['db_name'].astype(str) + '_' + df['dataset_name'].astype(str)
+    # Ensure question_id exists in question_summary_df
+    qsum = question_summary_df.copy()
+    if 'question_id' not in qsum.columns:
+        qsum['question_id'] = (
+            qsum['question'].astype(str)
+            + '_' + qsum['db_name'].astype(str)
+            + '_' + qsum['dataset_name'].astype(str)
+        )
 
-    # Any-match IDs from result_df directly
-    matches_mask = df['comparison_result'].astype(str).str.strip().eq('Match')
-    any_match_ids_set = set(df.loc[matches_mask, 'question_id'].astype(str).tolist())
-
-    # Representative info keyed by question_id
-    reps = df[['question_id', 'question', 'db_name', 'dataset_name']].drop_duplicates(subset=['question_id']).set_index('question_id')
-    any_match_df = reps.loc[sorted(any_match_ids_set)].reset_index() if any_match_ids_set else reps.iloc[0:0].reset_index()
+    # Questions with any match
+    any_match_df = qsum[qsum['has_match'] == True][['question_id', 'question']].copy()
 
     # Determine best ensemble key
     best_key = None
@@ -226,31 +225,56 @@ def compute_question_match_lists(
                 best_pct_val = pct
                 best_key = key
 
-    # Best-ensemble matched IDs
-    best_matched_ids = set()
-    if winners_labeled_df is not None and best_key is not None:
+    missed_df = pd.DataFrame(columns=['question_id', 'question'])
+    if (
+        winners_labeled_df is not None
+        and best_key is not None
+        and not any_match_df.empty
+    ):
         wl = winners_labeled_df.copy()
-        # Ensure winners carry question_id; if not, derive from text keys
         if 'question_id' not in wl.columns:
-            try:
-                wl = wl.merge(
-                    df[['question', 'db_name', 'dataset_name', 'question_id']].drop_duplicates(),
-                    on=['question', 'db_name', 'dataset_name'], how='left'
-                )
-            except Exception:
-                pass
-        winners_best = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
-        if 'question_id' in winners_best.columns:
-            best_matched_ids = set(winners_best['question_id'].astype(str).tolist())
+            wl['question_id'] = (
+                wl['question'].astype(str)
+                + '_' + wl['db_name'].astype(str)
+                + '_' + wl['dataset_name'].astype(str)
+            )
+        best_winners = wl[
+            (wl['method_tb'] == best_key)
+            & (wl['winner_label'].astype(str).str.strip() == 'Match')
+        ]
+        predicted_match_ids = set(best_winners['question_id'].tolist())
+        any_match_ids = set(any_match_df['question_id'].tolist())
+        missed_ids = sorted(list(any_match_ids - predicted_match_ids))
+        missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
 
-    # Missed by best ensemble (by question_id)
-    missed_ids = sorted(list(any_match_ids_set - best_matched_ids))
-    missed_df = reps.loc[missed_ids].reset_index() if missed_ids else reps.iloc[0:0].reset_index()
-    # For printing compatibility, keep only question_id and question
-    any_match_df = any_match_df[['question_id', 'question']]
-    missed_df = missed_df[['question_id', 'question']]
+    # Build question_id -> index mapping
+    missed_index_list = []
+    try:
+        ridx = result_df.copy()
+        ridx['question_id'] = (
+            ridx['question'].astype(str)
+            + '_' + ridx['db_name'].astype(str)
+            + '_' + ridx['dataset_name'].astype(str)
+        )
+        id_col = None
+        if 'question_index' in ridx.columns:
+            id_col = 'question_index'
+        elif 'index' in ridx.columns:
+            id_col = 'index'
+        if id_col and not missed_df.empty:
+            qid_to_idx = ridx.groupby('question_id')[id_col].first().to_dict()
+            for qid in missed_df['question_id'].tolist():
+                val = qid_to_idx.get(qid)
+                try:
+                    if pd.notna(val):
+                        missed_index_list.append(int(val))
+                except Exception:
+                    pass
+        missed_index_list = sorted(set(missed_index_list))
+    except Exception:
+        missed_index_list = []
 
-    return any_match_df, missed_df, best_key, missed_ids
+    return any_match_df, missed_df, best_key, missed_index_list
 
 def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
     """Helper function to print final ensemble per-method results."""
@@ -576,17 +600,10 @@ def _log_mlflow_stats(args,
                 final_winner_results_per_method=final_winner_results_per_method,
                 winners_labeled_df=winners_labeled_df,
             )
-            print(f"missed_df: {missed_df}")
-            print(f"missed_index_list: {missed_index_list}")
             mlflow.log_metric('questions_any_match_count', int(len(any_match_df)))
             mlflow.log_metric('questions_missed_by_best_ensemble_count', int(len(missed_df)))
-            # Derive param directly from missed_df question_id, mirroring print loop
-            try:
-                missed_ids_for_param = missed_df['question_id'].astype(str).tolist()
-                if missed_ids_for_param:
-                    mlflow.log_param('questions_missed_by_best_ensemble_index', ','.join(missed_ids_for_param))
-            except Exception:
-                pass
+            if missed_index_list:
+                mlflow.log_metric('questions_missed_by_best_ensemble_index', ','.join(str(x) for x in missed_index_list))
 
             # Log both lists as artifacts for inspection
             with tempfile.TemporaryDirectory() as td:
