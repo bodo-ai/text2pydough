@@ -186,6 +186,96 @@ def compute_timeout_stats(df: pd.DataFrame, total_rows: int = None):
     except Exception:
         return 0, 0.0
 
+
+def compute_question_match_lists(
+    result_df: pd.DataFrame,
+    question_summary_df: pd.DataFrame,
+    final_winner_results_per_method: dict = None,
+    winners_labeled_df: pd.DataFrame = None,
+):
+    """Compute:
+    - any_match_df: rows with at least one Match (question_id, question)
+    - missed_df: subset of any_match that best ensemble missed
+    - best_key: best ensemble identifier (highest winner match %)
+    - missed_index_list: sorted list of numeric indices for missed questions
+
+    Returns tuple: (any_match_df, missed_df, best_key, missed_index_list)
+    """
+    # Ensure question_id exists in question_summary_df
+    qsum = question_summary_df.copy()
+    if 'question_id' not in qsum.columns:
+        qsum['question_id'] = (
+            qsum['question'].astype(str)
+            + '_' + qsum['db_name'].astype(str)
+            + '_' + qsum['dataset_name'].astype(str)
+        )
+
+    # Questions with any match
+    any_match_df = qsum[qsum['has_match'] == True][['question_id', 'question']].copy()
+
+    # Determine best ensemble key
+    best_key = None
+    if final_winner_results_per_method:
+        best_pct_val = -1.0
+        for key, metrics in final_winner_results_per_method.items():
+            total_q = int(metrics.get('total_questions', 0))
+            m_cnt = int(metrics.get('winner_match_count', 0))
+            pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
+            if pct > best_pct_val:
+                best_pct_val = pct
+                best_key = key
+
+    missed_df = pd.DataFrame(columns=['question_id', 'question'])
+    if (
+        winners_labeled_df is not None
+        and best_key is not None
+        and not any_match_df.empty
+    ):
+        wl = winners_labeled_df.copy()
+        if 'question_id' not in wl.columns:
+            wl['question_id'] = (
+                wl['question'].astype(str)
+                + '_' + wl['db_name'].astype(str)
+                + '_' + wl['dataset_name'].astype(str)
+            )
+        best_winners = wl[
+            (wl['method_tb'] == best_key)
+            & (wl['winner_label'].astype(str).str.strip() == 'Match')
+        ]
+        predicted_match_ids = set(best_winners['question_id'].tolist())
+        any_match_ids = set(any_match_df['question_id'].tolist())
+        missed_ids = sorted(list(any_match_ids - predicted_match_ids))
+        missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
+
+    # Build question_id -> index mapping
+    missed_index_list = []
+    try:
+        ridx = result_df.copy()
+        ridx['question_id'] = (
+            ridx['question'].astype(str)
+            + '_' + ridx['db_name'].astype(str)
+            + '_' + ridx['dataset_name'].astype(str)
+        )
+        id_col = None
+        if 'question_index' in ridx.columns:
+            id_col = 'question_index'
+        elif 'index' in ridx.columns:
+            id_col = 'index'
+        if id_col and not missed_df.empty:
+            qid_to_idx = ridx.groupby('question_id')[id_col].first().to_dict()
+            for qid in missed_df['question_id'].tolist():
+                val = qid_to_idx.get(qid)
+                try:
+                    if pd.notna(val):
+                        missed_index_list.append(int(val))
+                except Exception:
+                    pass
+        missed_index_list = sorted(set(missed_index_list))
+    except Exception:
+        missed_index_list = []
+
+    return any_match_df, missed_df, best_key, missed_index_list
+
 def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
     """Helper function to print final ensemble per-method results."""
     if not final_winner_results_per_method:
@@ -256,54 +346,23 @@ def print_summary(result_df,
 
     # Additional reporting: questions with any match, and missed by best ensemble
     try:
-        # Build question_id for question_summary_df if not present
-        if 'question_id' not in question_summary_df.columns:
-            question_summary_df = question_summary_df.copy()
-            question_summary_df['question_id'] = (
-                question_summary_df['question'].astype(str)
-                + '_' + question_summary_df['db_name'].astype(str)
-                + '_' + question_summary_df['dataset_name'].astype(str)
-            )
-
-        # Questions that had at least one Match (by any model/run)
-        any_match_df = question_summary_df[question_summary_df['has_match'] == True]
-        any_match_ids = set(any_match_df['question_id'].tolist())
+        any_match_df, missed_df, best_key, _missed_index_list = compute_question_match_lists(
+            result_df=result_df,
+            question_summary_df=question_summary_df,
+            final_winner_results_per_method=final_winner_results_per_method,
+            winners_labeled_df=winners_labeled_df,
+        )
 
         print("\nQUESTIONS WITH AT LEAST ONE MATCH (any model/run):")
-        print(f"  Count: {len(any_match_ids)}")
-        # Print id and question for readability
+        print(f"  Count: {len(any_match_df)}")
         for question_id, question in any_match_df[['question_id', 'question']].itertuples(index=False, name=None):
             print(f"  - {question_id}: {question}")
 
-        # If we have winners labeled across methods, compute best method misses
-        if winners_labeled_df is not None and final_winner_results_per_method:
-            # Determine best method by highest match percentage
-            best_key = None
-            best_pct = -1.0
-            for key, metrics in final_winner_results_per_method.items():
-                total_q = int(metrics.get('total_questions', 0))
-                m_cnt = int(metrics.get('winner_match_count', 0))
-                pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                if pct > best_pct:
-                    best_pct = pct
-                    best_key = key
-
-            if best_key is not None:
-                # Compute question_id for winners and filter to best method and Match labels
-                wl = winners_labeled_df.copy()
-                if 'question_id' not in wl.columns:
-                    wl['question_id'] = wl['question'].astype(str) + '_' + wl['db_name'].astype(str) + '_' + wl['dataset_name'].astype(str)
-                best_winners = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
-                predicted_match_ids = set(best_winners['question_id'].tolist())
-                # Questions that could have matched but did not in best ensemble
-                missed_ids = sorted(list(any_match_ids - predicted_match_ids))
-
-                # Join to fetch question text for display
-                missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
-                print(f"\nQUESTIONS MISSED BY BEST ENSEMBLE ({best_key}):")
-                print(f"  Count: {len(missed_ids)}")
-                for question_id, question in missed_df[['question_id', 'question']].itertuples(index=False, name=None):
-                    print(f"  - {question_id}: {question}")
+        if best_key is not None:
+            print(f"\nQUESTIONS MISSED BY BEST ENSEMBLE ({best_key}):")
+            print(f"  Count: {len(missed_df)}")
+            for question_id, question in missed_df[['question_id', 'question']].itertuples(index=False, name=None):
+                print(f"  - {question_id}: {question}")
     except Exception as e:
         print(f"\n[WARNING] Failed to compute extended question lists: {e}")
 
@@ -535,40 +594,16 @@ def _log_mlflow_stats(args,
 
         # Log question lists: any-match and missed-by-best-ensemble
         try:
-            # Ensure question_id available
-            qsum = question_summary_df.copy()
-            if 'question_id' not in qsum.columns:
-                qsum['question_id'] = (
-                    qsum['question'].astype(str)
-                    + '_' + qsum['db_name'].astype(str)
-                    + '_' + qsum['dataset_name'].astype(str)
-                )
-            any_match_df = qsum[qsum['has_match'] == True][['question_id', 'question']]
+            any_match_df, missed_df, best_key, missed_index_list = compute_question_match_lists(
+                result_df=result_df,
+                question_summary_df=question_summary_df,
+                final_winner_results_per_method=final_winner_results_per_method,
+                winners_labeled_df=winners_labeled_df,
+            )
             mlflow.log_metric('questions_any_match_count', int(len(any_match_df)))
-
-            # Determine best ensemble key (recompute simply)
-            best_key = None
-            best_pct_val = -1.0
-            if final_winner_results_per_method:
-                for key, metrics in final_winner_results_per_method.items():
-                    total_q = int(metrics.get('total_questions', 0))
-                    m_cnt = int(metrics.get('winner_match_count', 0))
-                    pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
-                    if pct > best_pct_val:
-                        best_pct_val = pct
-                        best_key = key
-
-            missed_df = pd.DataFrame(columns=['question_id', 'question'])
-            if winners_labeled_df is not None and best_key is not None and not any_match_df.empty:
-                wl = winners_labeled_df.copy()
-                if 'question_id' not in wl.columns:
-                    wl['question_id'] = wl['question'].astype(str) + '_' + wl['db_name'].astype(str) + '_' + wl['dataset_name'].astype(str)
-                best_winners = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
-                predicted_match_ids = set(best_winners['question_id'].tolist())
-                any_match_ids = set(any_match_df['question_id'].tolist())
-                missed_ids = sorted(list(any_match_ids - predicted_match_ids))
-                missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
             mlflow.log_metric('questions_missed_by_best_ensemble_count', int(len(missed_df)))
+            if missed_index_list:
+                mlflow.log_param('questions_missed_by_best_ensemble_index', ','.join(str(x) for x in missed_index_list))
 
             # Log both lists as artifacts for inspection
             with tempfile.TemporaryDirectory() as td:
