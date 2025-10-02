@@ -576,6 +576,8 @@ def _log_mlflow_stats(args,
                 final_winner_results_per_method=final_winner_results_per_method,
                 winners_labeled_df=winners_labeled_df,
             )
+            print(f"missed_df: {missed_df}")
+            print(f"missed_index_list: {missed_index_list}")
             mlflow.log_metric('questions_any_match_count', int(len(any_match_df)))
             mlflow.log_metric('questions_missed_by_best_ensemble_count', int(len(missed_df)))
             # Derive param directly from missed_df question_id, mirroring print loop
