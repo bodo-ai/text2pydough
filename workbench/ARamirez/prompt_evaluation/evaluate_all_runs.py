@@ -102,8 +102,12 @@ def create_question_summary(df, comparison_col: str = 'comparison_result'):
     Returns:
         pd.DataFrame: Summary DataFrame with question_id and has_match columns
     """
-    # Create a unique question identifier
-    df['question_id'] = df['question'].astype(str) + '_' + df['db_name'].astype(str) + '_' + df['dataset_name'].astype(str)
+    # Work on a copy; do not mutate the source DataFrame's identifiers
+    df_local = df.copy()
+    # Ensure a question_id exists for grouping. If the input already has a question_id
+    # column (often numeric), preserve it. Otherwise synthesize one from keys.
+    if 'question_id' not in df_local.columns:
+        df_local['question_id'] = df_local['question'].astype(str) + '_' + df_local['db_name'].astype(str) + '_' + df_local['dataset_name'].astype(str)
     
     # Group by question_id and check if any result is a match
     agg_dict = {
@@ -119,7 +123,7 @@ def create_question_summary(df, comparison_col: str = 'comparison_result'):
         agg_dict['difficulty'] = 'first'
 
     # Use provided comparison column for aggregation by temporarily aligning name
-    tmp = df.copy()
+    tmp = df_local.copy()
     if comparison_col != 'comparison_result' and comparison_col in tmp.columns:
         tmp = tmp.rename(columns={comparison_col: 'comparison_result'})
     question_groups = tmp.groupby('question_id').agg(agg_dict).reset_index()
@@ -198,28 +202,17 @@ def compute_question_match_lists(
     Returns tuple: (any_match_df, missed_df, best_key, missed_index_list)
     """
     df = result_df.copy()
-    # Ensure a stable question_index exists
-    if 'question_index' not in df.columns:
-        if 'index' in df.columns:
-            df['question_index'] = df['index']
-        else:
-            key_cols = [c for c in ['question', 'db_name', 'dataset_name'] if c in df.columns]
-            if len(key_cols) == 3:
-                df['question_index'] = pd.factorize(
-                    df['question'].astype(str) + '|' + df['db_name'].astype(str) + '|' + df['dataset_name'].astype(str)
-                )[0]
-            else:
-                return pd.DataFrame(columns=['question_id', 'question']), pd.DataFrame(columns=['question_id', 'question']), None, []
+    # Ensure canonical question_id exists and is stable; if not present, synthesize
+    if 'question_id' not in df.columns:
+        df['question_id'] = df['question'].astype(str) + '_' + df['db_name'].astype(str) + '_' + df['dataset_name'].astype(str)
 
-    # Any-match indices from result_df directly
+    # Any-match IDs from result_df directly
     matches_mask = df['comparison_result'].astype(str).str.strip().eq('Match')
-    any_match_indices = set(df.loc[matches_mask, 'question_index'].dropna().astype(int).unique().tolist())
+    any_match_ids_set = set(df.loc[matches_mask, 'question_id'].astype(str).tolist())
 
-    # Representative info and question_id
-    reps = df[['question_index', 'question', 'db_name', 'dataset_name']].drop_duplicates(subset=['question_index'])
-    reps = reps.assign(question_id=reps['question'].astype(str) + '_' + reps['db_name'].astype(str) + '_' + reps['dataset_name'].astype(str))
-    reps = reps[['question_index', 'question_id', 'question', 'db_name', 'dataset_name']].set_index('question_index')
-    any_match_df = reps.loc[sorted(any_match_indices)].reset_index() if any_match_indices else reps.iloc[0:0].reset_index()
+    # Representative info keyed by question_id
+    reps = df[['question_id', 'question', 'db_name', 'dataset_name']].drop_duplicates(subset=['question_id']).set_index('question_id')
+    any_match_df = reps.loc[sorted(any_match_ids_set)].reset_index() if any_match_ids_set else reps.iloc[0:0].reset_index()
 
     # Determine best ensemble key
     best_key = None
@@ -233,31 +226,31 @@ def compute_question_match_lists(
                 best_pct_val = pct
                 best_key = key
 
-    # Best-ensemble matched indices
-    best_matched_indices = set()
+    # Best-ensemble matched IDs
+    best_matched_ids = set()
     if winners_labeled_df is not None and best_key is not None:
         wl = winners_labeled_df.copy()
-        if 'question_index' not in wl.columns:
-            # Enrich winners with question_index by joining back to df on textual keys
+        # Ensure winners carry question_id; if not, derive from text keys
+        if 'question_id' not in wl.columns:
             try:
                 wl = wl.merge(
-                    df[['question', 'db_name', 'dataset_name', 'question_index']].drop_duplicates(),
+                    df[['question', 'db_name', 'dataset_name', 'question_id']].drop_duplicates(),
                     on=['question', 'db_name', 'dataset_name'], how='left'
                 )
             except Exception:
                 pass
         winners_best = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
-        if 'question_index' in winners_best.columns:
-            best_matched_indices = set(winners_best['question_index'].dropna().astype(int).unique().tolist())
+        if 'question_id' in winners_best.columns:
+            best_matched_ids = set(winners_best['question_id'].astype(str).tolist())
 
-    # Missed by best ensemble
-    missed_indices = sorted(list(any_match_indices - best_matched_indices))
-    missed_df = reps.loc[missed_indices].reset_index() if missed_indices else reps.iloc[0:0].reset_index()
+    # Missed by best ensemble (by question_id)
+    missed_ids = sorted(list(any_match_ids_set - best_matched_ids))
+    missed_df = reps.loc[missed_ids].reset_index() if missed_ids else reps.iloc[0:0].reset_index()
     # For printing compatibility, keep only question_id and question
     any_match_df = any_match_df[['question_id', 'question']]
     missed_df = missed_df[['question_id', 'question']]
 
-    return any_match_df, missed_df, best_key, missed_indices
+    return any_match_df, missed_df, best_key, missed_ids
 
 def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
     """Helper function to print final ensemble per-method results."""
