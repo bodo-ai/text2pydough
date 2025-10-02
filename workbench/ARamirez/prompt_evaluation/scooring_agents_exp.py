@@ -89,7 +89,7 @@ class DataFrame_Evaluator(dspy.Signature):
     evaluation: str = dspy.OutputField(desc="JSON evaluation with score (0-10) and reasoning")
 
 
-lm = dspy.LM('gemini/gemini-2.5-pro', api_key = os.getenv("GOOGLE_API_KEY_1"), temperature=0)
+lm = dspy.LM('vertex_ai/gemini/projects/316936339319/locations/us-central1/endpoints/1012811837390979072', api_key = os.getenv("GOOGLE_API_KEY_1"), temperature=0)
 qa = dspy.ChainOfThought(DataFrame_Evaluator)
 
 class DataFrame_Binary_Evaluator(dspy.Signature):
@@ -223,28 +223,32 @@ def evaluate_binary_dataframes_with_confidence(question, dataframes_list):
     if not isinstance(dataframes_list, (list, tuple)) or len(dataframes_list) < 2:
         raise ValueError("dataframes_list must contain at least two items")
 
-    df_a = dataframes_list[0]
-    df_b = dataframes_list[1]
+    # Randomize presentation order to mitigate position bias (same as evaluate_binary_dataframes)
+    pairs = [(0, dataframes_list[0]), (1, dataframes_list[1])]
+    random.shuffle(pairs)
+    order = [idx for idx, _ in pairs]
+    df_1 = pairs[0][1]
+    df_2 = pairs[1][1]
 
     # Call 1: original order (A,B)
-    order1 = [0, 1]
+    order1 = order
     with dspy.context(lm=lm):
         resp1 = bi(
             question=question,
-            dataframe_1=df_a,
-            dataframe_2=df_b,
+            dataframe_1=df_1,
+            dataframe_2=df_2,
             evaluation_criteria=EVALUATION_BINARY_PROMPT
         )
     presented_index1, confidence1 = _parse_binary_evaluation(resp1.evaluation)
     original_index1 = order1[presented_index1] if presented_index1 in (0, 1) else 0
 
     # Call 2: swapped order (B,A)
-    order2 = [1, 0]
+    order2 = [order[1], order[0]]
     with dspy.context(lm=lm):
         resp2 = bi(
             question=question,
-            dataframe_1=df_b,
-            dataframe_2=df_a,
+            dataframe_1=df_2,
+            dataframe_2=df_1,
             evaluation_criteria=EVALUATION_BINARY_PROMPT
         )
     presented_index2, confidence2 = _parse_binary_evaluation(resp2.evaluation)
@@ -260,8 +264,8 @@ def evaluate_binary_dataframes_with_confidence(question, dataframes_list):
     if confidence2 > confidence1:
         return original_index2
 
-    # Tie-breaker: default to the result from the first evaluation
-    return original_index1
+    # Tie-breaker: randomly choose one of the two original picks
+    return random.choice([original_index1, original_index2])
 
 def evaluate_dataframes(question, dataframes_list):
     best_score = -1
