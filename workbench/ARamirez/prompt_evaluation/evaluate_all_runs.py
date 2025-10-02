@@ -193,25 +193,33 @@ def compute_question_match_lists(
     final_winner_results_per_method: dict = None,
     winners_labeled_df: pd.DataFrame = None,
 ):
-    """Compute:
-    - any_match_df: rows with at least one Match (question_id, question)
-    - missed_df: subset of any_match that best ensemble missed
-    - best_key: best ensemble identifier (highest winner match %)
-    - missed_index_list: sorted list of numeric indices for missed questions
+    """Compute lists using question_index as the canonical key to avoid key drift.
 
     Returns tuple: (any_match_df, missed_df, best_key, missed_index_list)
     """
-    # Ensure question_id exists in question_summary_df
-    qsum = question_summary_df.copy()
-    if 'question_id' not in qsum.columns:
-        qsum['question_id'] = (
-            qsum['question'].astype(str)
-            + '_' + qsum['db_name'].astype(str)
-            + '_' + qsum['dataset_name'].astype(str)
-        )
+    df = result_df.copy()
+    # Ensure a stable question_index exists
+    if 'question_index' not in df.columns:
+        if 'index' in df.columns:
+            df['question_index'] = df['index']
+        else:
+            key_cols = [c for c in ['question', 'db_name', 'dataset_name'] if c in df.columns]
+            if len(key_cols) == 3:
+                df['question_index'] = pd.factorize(
+                    df['question'].astype(str) + '|' + df['db_name'].astype(str) + '|' + df['dataset_name'].astype(str)
+                )[0]
+            else:
+                return pd.DataFrame(columns=['question_id', 'question']), pd.DataFrame(columns=['question_id', 'question']), None, []
 
-    # Questions with any match
-    any_match_df = qsum[qsum['has_match'] == True][['question_id', 'question', 'db_name', 'dataset_name']].copy()
+    # Any-match indices from result_df directly
+    matches_mask = df['comparison_result'].astype(str).str.strip().eq('Match')
+    any_match_indices = set(df.loc[matches_mask, 'question_index'].dropna().astype(int).unique().tolist())
+
+    # Representative info and question_id
+    reps = df[['question_index', 'question', 'db_name', 'dataset_name']].drop_duplicates(subset=['question_index'])
+    reps = reps.assign(question_id=reps['question'].astype(str) + '_' + reps['db_name'].astype(str) + '_' + reps['dataset_name'].astype(str))
+    reps = reps[['question_index', 'question_id', 'question', 'db_name', 'dataset_name']].set_index('question_index')
+    any_match_df = reps.loc[sorted(any_match_indices)].reset_index() if any_match_indices else reps.iloc[0:0].reset_index()
 
     # Determine best ensemble key
     best_key = None
@@ -225,84 +233,31 @@ def compute_question_match_lists(
                 best_pct_val = pct
                 best_key = key
 
-    missed_df = pd.DataFrame(columns=['question_id', 'question'])
-    if (
-        winners_labeled_df is not None
-        and best_key is not None
-        and not any_match_df.empty
-    ):
+    # Best-ensemble matched indices
+    best_matched_indices = set()
+    if winners_labeled_df is not None and best_key is not None:
         wl = winners_labeled_df.copy()
-        if 'question_id' not in wl.columns:
-            wl['question_id'] = (
-                wl['question'].astype(str)
-                + '_' + wl['db_name'].astype(str)
-                + '_' + wl['dataset_name'].astype(str)
-            )
-        best_winners = wl[
-            (wl['method_tb'] == best_key)
-            & (wl['winner_label'].astype(str).str.strip() == 'Match')
-        ]
-        predicted_match_ids = set(best_winners['question_id'].tolist())
-        any_match_ids = set(any_match_df['question_id'].tolist())
-        missed_ids = sorted(list(any_match_ids - predicted_match_ids))
-        missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)].copy()
+        if 'question_index' not in wl.columns:
+            # Enrich winners with question_index by joining back to df on textual keys
+            try:
+                wl = wl.merge(
+                    df[['question', 'db_name', 'dataset_name', 'question_index']].drop_duplicates(),
+                    on=['question', 'db_name', 'dataset_name'], how='left'
+                )
+            except Exception:
+                pass
+        winners_best = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
+        if 'question_index' in winners_best.columns:
+            best_matched_indices = set(winners_best['question_index'].dropna().astype(int).unique().tolist())
 
-    # Build question_id -> index mapping (robust, normalized merge on keys)
-    missed_index_list = []
-    try:
-        if not missed_df.empty:
-            # Primary: map from result_df using normalized keys
-            ridx = result_df.copy()
-            candidate_cols = [c for c in ['question_index', 'index', 'question_idx'] if c in ridx.columns]
-            if candidate_cols:
-                id_col = candidate_cols[0]
-                ridx['_q'] = ridx['question'].astype(str).str.strip().str.lower()
-                ridx['_db'] = ridx['db_name'].astype(str).str.strip().str.lower()
-                ridx['_ds'] = ridx['dataset_name'].astype(str).str.strip().str.lower()
-                ridx_small = ridx[['_q', '_db', '_ds', id_col]].dropna(subset=[id_col]).drop_duplicates()
+    # Missed by best ensemble
+    missed_indices = sorted(list(any_match_indices - best_matched_indices))
+    missed_df = reps.loc[missed_indices].reset_index() if missed_indices else reps.iloc[0:0].reset_index()
+    # For printing compatibility, keep only question_id and question
+    any_match_df = any_match_df[['question_id', 'question']]
+    missed_df = missed_df[['question_id', 'question']]
 
-                mnorm = missed_df.copy()
-                mnorm['_q'] = mnorm['question'].astype(str).str.strip().str.lower()
-                mnorm['_db'] = mnorm['db_name'].astype(str).str.strip().str.lower()
-                mnorm['_ds'] = mnorm['dataset_name'].astype(str).str.strip().str.lower()
-
-                merged = mnorm.merge(ridx_small, on=['_q', '_db', '_ds'], how='left')
-                vals = merged[id_col].dropna().tolist()
-                for v in vals:
-                    try:
-                        missed_index_list.append(int(v))
-                    except Exception:
-                        pass
-
-            # Fallback: derive indices from winners_labeled_df if needed
-            if not missed_index_list and winners_labeled_df is not None:
-                wl = winners_labeled_df.copy()
-                candidate_wl_cols = [c for c in ['question_index', 'index', 'question_idx'] if c in wl.columns]
-                if candidate_wl_cols:
-                    id_col = candidate_wl_cols[0]
-                    wl['_q'] = wl['question'].astype(str).str.strip().str.lower()
-                    wl['_db'] = wl['db_name'].astype(str).str.strip().str.lower()
-                    wl['_ds'] = wl['dataset_name'].astype(str).str.strip().str.lower()
-                    wl_small = wl[['_q', '_db', '_ds', id_col]].dropna(subset=[id_col]).drop_duplicates()
-
-                    mnorm = missed_df.copy()
-                    mnorm['_q'] = mnorm['question'].astype(str).str.strip().str.lower()
-                    mnorm['_db'] = mnorm['db_name'].astype(str).str.strip().str.lower()
-                    mnorm['_ds'] = mnorm['dataset_name'].astype(str).str.strip().str.lower()
-
-                    merged = mnorm.merge(wl_small, on=['_q', '_db', '_ds'], how='left')
-                    vals = merged[id_col].dropna().tolist()
-                    for v in vals:
-                        try:
-                            missed_index_list.append(int(v))
-                        except Exception:
-                            pass
-
-        missed_index_list = sorted(set(missed_index_list))
-    except Exception:
-        missed_index_list = []
-
-    return any_match_df, missed_df, best_key, missed_index_list
+    return any_match_df, missed_df, best_key, missed_indices
 
 def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
     """Helper function to print final ensemble per-method results."""
