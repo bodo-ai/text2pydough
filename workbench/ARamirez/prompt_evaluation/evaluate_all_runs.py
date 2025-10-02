@@ -578,8 +578,13 @@ def _log_mlflow_stats(args,
             )
             mlflow.log_metric('questions_any_match_count', int(len(any_match_df)))
             mlflow.log_metric('questions_missed_by_best_ensemble_count', int(len(missed_df)))
-            if missed_index_list:
-                mlflow.log_param('questions_missed_by_best_ensemble_index', ','.join(str(x) for x in missed_index_list))
+            # Derive param directly from missed_df question_id, mirroring print loop
+            try:
+                missed_ids_for_param = missed_df['question_id'].astype(str).tolist()
+                if missed_ids_for_param:
+                    mlflow.log_param('questions_missed_by_best_ensemble_index', ','.join(missed_ids_for_param))
+            except Exception:
+                pass
 
             # Log both lists as artifacts for inspection
             with tempfile.TemporaryDirectory() as td:
