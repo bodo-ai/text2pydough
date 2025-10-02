@@ -16,6 +16,7 @@ from datetime import datetime
 import logging
 import json
 import re
+import tempfile
 try:
     import mlflow
 except Exception:
@@ -212,7 +213,8 @@ def _print_final_ensemble_results(final_winner_results_per_method: dict, section
 
 def print_summary(result_df,
                   question_summary_df,
-                  final_winner_results_per_method: dict = None):
+                  final_winner_results_per_method: dict = None,
+                  winners_labeled_df: pd.DataFrame = None):
     """
     Print a formatted summary of the evaluation results.
     
@@ -252,13 +254,67 @@ def print_summary(result_df,
     # Final ensemble per-method results using winners' eval_result across all questions
     _print_final_ensemble_results(final_winner_results_per_method)
 
+    # Additional reporting: questions with any match, and missed by best ensemble
+    try:
+        # Build question_id for question_summary_df if not present
+        if 'question_id' not in question_summary_df.columns:
+            question_summary_df = question_summary_df.copy()
+            question_summary_df['question_id'] = (
+                question_summary_df['question'].astype(str)
+                + '_' + question_summary_df['db_name'].astype(str)
+                + '_' + question_summary_df['dataset_name'].astype(str)
+            )
+
+        # Questions that had at least one Match (by any model/run)
+        any_match_df = question_summary_df[question_summary_df['has_match'] == True]
+        any_match_ids = set(any_match_df['question_id'].tolist())
+
+        print("\nQUESTIONS WITH AT LEAST ONE MATCH (any model/run):")
+        print(f"  Count: {len(any_match_ids)}")
+        # Print id and question for readability
+        for question_id, question in any_match_df[['question_id', 'question']].itertuples(index=False, name=None):
+            print(f"  - {question_id}: {question}")
+
+        # If we have winners labeled across methods, compute best method misses
+        if winners_labeled_df is not None and final_winner_results_per_method:
+            # Determine best method by highest match percentage
+            best_key = None
+            best_pct = -1.0
+            for key, metrics in final_winner_results_per_method.items():
+                total_q = int(metrics.get('total_questions', 0))
+                m_cnt = int(metrics.get('winner_match_count', 0))
+                pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                if pct > best_pct:
+                    best_pct = pct
+                    best_key = key
+
+            if best_key is not None:
+                # Compute question_id for winners and filter to best method and Match labels
+                wl = winners_labeled_df.copy()
+                if 'question_id' not in wl.columns:
+                    wl['question_id'] = wl['question'].astype(str) + '_' + wl['db_name'].astype(str) + '_' + wl['dataset_name'].astype(str)
+                best_winners = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
+                predicted_match_ids = set(best_winners['question_id'].tolist())
+                # Questions that could have matched but did not in best ensemble
+                missed_ids = sorted(list(any_match_ids - predicted_match_ids))
+
+                # Join to fetch question text for display
+                missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
+                print(f"\nQUESTIONS MISSED BY BEST ENSEMBLE ({best_key}):")
+                print(f"  Count: {len(missed_ids)}")
+                for question_id, question in missed_df[['question_id', 'question']].itertuples(index=False, name=None):
+                    print(f"  - {question_id}: {question}")
+    except Exception as e:
+        print(f"\n[WARNING] Failed to compute extended question lists: {e}")
+
     print("\n" + "="*80)
 
 
 def _log_mlflow_stats(args,
-                      result_df: pd.DataFrame,
-                      question_summary_df: pd.DataFrame,
-                      final_winner_results_per_method: dict = None):
+                     result_df: pd.DataFrame,
+                     question_summary_df: pd.DataFrame,
+                     final_winner_results_per_method: dict = None,
+                     winners_labeled_df: pd.DataFrame = None):
     """Log Overall, Question-level, and Final ensemble results into MLflow."""
     if getattr(args, 'disable_mlflow', False):
         return
@@ -476,6 +532,61 @@ def _log_mlflow_stats(args,
             except Exception:
                 # Non-fatal; continue without best-of logs
                 pass
+
+        # Log question lists: any-match and missed-by-best-ensemble
+        try:
+            # Ensure question_id available
+            qsum = question_summary_df.copy()
+            if 'question_id' not in qsum.columns:
+                qsum['question_id'] = (
+                    qsum['question'].astype(str)
+                    + '_' + qsum['db_name'].astype(str)
+                    + '_' + qsum['dataset_name'].astype(str)
+                )
+            any_match_df = qsum[qsum['has_match'] == True][['question_id', 'question']]
+            mlflow.log_metric('questions_any_match_count', int(len(any_match_df)))
+
+            # Determine best ensemble key (recompute simply)
+            best_key = None
+            best_pct_val = -1.0
+            if final_winner_results_per_method:
+                for key, metrics in final_winner_results_per_method.items():
+                    total_q = int(metrics.get('total_questions', 0))
+                    m_cnt = int(metrics.get('winner_match_count', 0))
+                    pct = (m_cnt / total_q * 100.0) if total_q > 0 else 0.0
+                    if pct > best_pct_val:
+                        best_pct_val = pct
+                        best_key = key
+
+            missed_df = pd.DataFrame(columns=['question_id', 'question'])
+            if winners_labeled_df is not None and best_key is not None and not any_match_df.empty:
+                wl = winners_labeled_df.copy()
+                if 'question_id' not in wl.columns:
+                    wl['question_id'] = wl['question'].astype(str) + '_' + wl['db_name'].astype(str) + '_' + wl['dataset_name'].astype(str)
+                best_winners = wl[(wl['method_tb'] == best_key) & (wl['winner_label'].astype(str).str.strip() == 'Match')]
+                predicted_match_ids = set(best_winners['question_id'].tolist())
+                any_match_ids = set(any_match_df['question_id'].tolist())
+                missed_ids = sorted(list(any_match_ids - predicted_match_ids))
+                missed_df = any_match_df[any_match_df['question_id'].isin(missed_ids)]
+            mlflow.log_metric('questions_missed_by_best_ensemble_count', int(len(missed_df)))
+
+            # Log both lists as artifacts for inspection
+            with tempfile.TemporaryDirectory() as td:
+                any_match_path = os.path.join(td, 'questions_with_any_match.csv')
+                missed_path = os.path.join(td, f'questions_missed_by_best_ensemble.csv')
+                try:
+                    any_match_df.to_csv(any_match_path, index=False)
+                    mlflow.log_artifact(any_match_path, artifact_path='derived')
+                except Exception:
+                    pass
+                try:
+                    missed_df.to_csv(missed_path, index=False)
+                    mlflow.log_artifact(missed_path, artifact_path='derived')
+                except Exception:
+                    pass
+        except Exception:
+            # Do not fail the run if question list logging fails
+            pass
 
         if started_here:
             mlflow.end_run()
@@ -810,6 +921,7 @@ Examples:
             result_df,
             question_summary_df,
             final_winner_results_per_method=final_winner_results_per_method,
+            winners_labeled_df=(pd.concat(winners_labeled_exports, ignore_index=True) if winners_labeled_exports else None),
         )
 
         # Log stats to MLflow
@@ -818,6 +930,7 @@ Examples:
             result_df,
             question_summary_df,
             final_winner_results_per_method=final_winner_results_per_method,
+            winners_labeled_df=(pd.concat(winners_labeled_exports, ignore_index=True) if winners_labeled_exports else None),
         )
 
         # Write labeled winners export for drift inspection
