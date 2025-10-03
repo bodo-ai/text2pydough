@@ -10,6 +10,8 @@ import textwrap
 import pydough
 import random
 
+random.seed(12345)
+
 
 load_dotenv()
 
@@ -64,6 +66,40 @@ Evaluate each option separately using this checklist:
 - Contains all information needed to answer the question
 - Sorted/ordered as the question requests, if applicable
 - Clear and consistent structure
+
+Decision rule:
+- Pick the option that better satisfies the checklist.
+- If both are essentially equal, choose the one that more plausibly answers the question.
+
+Additionally, provide a confidence score in the closed interval [0, 1] that reflects how strongly the evidence supports your choice (0 = no confidence, 1 = absolute confidence). The confidence should be based on how well the selected option satisfies the criteria relative to the other.
+
+Output:
+Return EXACTLY this JSON and nothing else:
+{
+    "best_index": 0,
+    "confidence": 0.0
+}
+Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
+"""
+
+EVALUATION_BINARY_PROMPT_ARA = """**You are an expert data analyst evaluating the quality of DataFrames returned for specific questions. You will have to choose between two dataframe options:**. 
+Evaluate both options and base your decision on concrete evidence from the data and structure.
+Question: {question}
+Option A (index 0): {dataframe_1}
+Option B (index 1): {dataframe_2}
+
+Evaluate each option separately using this checklist:
+
+1. **Non-empty and correct structure**: The DataFrame should not be empty and must include the appropriate columns and rows expected to answer the question.
+2. **Relevance of columns**: All included columns must directly contribute to answering the question. Irrelevant or off-topic columns should be penalized.
+3. **No unnecessary duplication**: Redundant rows or repeated information that do not provide additional value should be avoided.
+4. **Appropriate data types**: Ensure that column data types (e.g., numeric, string, datetime) are suitable for the question being answered.
+5. **Completeness of critical information**: All essential data needed to fully and accurately answer the question must be present.
+6. **Logical ordering**: The results should be ordered in a meaningful way that makes the output easier to interpret, if ordering is relevant to the question.
+7. **Communication and clarity**: The DataFrame should be well-structured, easy to understand, and free from inconsistencies, formatting issues, or ambiguous data presentation.
+8. **SQL query quality**: When available, consider the quality, efficiency, and correctness of the corresponding SQL query that generated the DataFrame. A well-written SQL query that aligns with the DataFrame structure adds credibility to the candidate.
+
+> ⚠️ **Be objective but not overly strict.** Minor stylistic differences, variations in column naming (e.g., synonyms), or row ordering should not result in a lower score if the core information is correct and complete.
 
 Decision rule:
 - Pick the option that better satisfies the checklist.
@@ -206,7 +242,7 @@ def evaluate_binary_dataframes(question, dataframes_list):
             question=question,
             dataframe_1=df_1,
             dataframe_2=df_2,
-            evaluation_criteria=EVALUATION_BINARY_PROMPT
+            evaluation_criteria=EVALUATION_BINARY_PROMPT_ARA
         )
     evaluation_data = json.loads(response.evaluation)
     presented_index = evaluation_data.get("best_index", 0)
@@ -237,7 +273,7 @@ def evaluate_binary_dataframes_with_confidence(question, dataframes_list):
             question=question,
             dataframe_1=df_1,
             dataframe_2=df_2,
-            evaluation_criteria=EVALUATION_BINARY_PROMPT
+            evaluation_criteria=EVALUATION_BINARY_PROMPT_ARA
         )
     presented_index1, confidence1 = _parse_binary_evaluation(resp1.evaluation)
     original_index1 = order1[presented_index1] if presented_index1 in (0, 1) else 0
@@ -249,7 +285,7 @@ def evaluate_binary_dataframes_with_confidence(question, dataframes_list):
             question=question,
             dataframe_1=df_2,
             dataframe_2=df_1,
-            evaluation_criteria=EVALUATION_BINARY_PROMPT
+            evaluation_criteria=EVALUATION_BINARY_PROMPT_ARA 
         )
     presented_index2, confidence2 = _parse_binary_evaluation(resp2.evaluation)
     original_index2 = order2[presented_index2] if presented_index2 in (0, 1) else 0
