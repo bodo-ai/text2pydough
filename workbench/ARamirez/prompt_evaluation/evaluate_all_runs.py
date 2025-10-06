@@ -276,6 +276,69 @@ def compute_question_match_lists(
 
     return any_match_df, missed_df, best_key, missed_index_list
 
+
+def compute_winner_methods_map(result_df: pd.DataFrame, winners_per_method: dict) -> dict:
+    """Build a mapping from original row index -> list of method labels for which that row was the selected winner.
+
+    The keys in winners_per_method are of the form "{method}|tb:{tb}", and will be converted
+    to "{method}:tb:{tb}" in the output labels.
+
+    Fallback behavior: if a winners DataFrame lacks 'selected_row_id', attempt to map winners back
+    to the original rows by matching on ['question','dataset_name','db_name','question_index','model_name'].
+    This may result in multiple original rows being marked as winners for that method if there were
+    multiple attempts from the same model for the same question group.
+    """
+    row_to_methods: dict = {}
+    if not winners_per_method:
+        return row_to_methods
+
+    for key, winners_df_exec in winners_per_method.items():
+        try:
+            method_label = str(key).replace("|tb:", ":tb:")
+            df_local = winners_df_exec.copy()
+
+            if 'selected_row_id' in df_local.columns and df_local['selected_row_id'].notna().any():
+                # Map via exact selected_row_id
+                for val in df_local['selected_row_id']:
+                    try:
+                        if pd.notna(val):
+                            idx = int(val)
+                            row_to_methods.setdefault(idx, []).append(method_label)
+                    except Exception:
+                        continue
+            else:
+                # Fallback: map via merge keys
+                merge_keys = ['question', 'dataset_name', 'db_name', 'question_index', 'model_name']
+                missing = [k for k in merge_keys if k not in df_local.columns]
+                if missing:
+                    # If we cannot map, skip this method
+                    continue
+                winners_unique = df_local.drop_duplicates(subset=['question', 'dataset_name', 'db_name', 'question_index'])
+                # For each winner row, mark matching original rows
+                for _, wrow in winners_unique.iterrows():
+                    mask = (
+                        result_df.get('question').astype(str) == str(wrow.get('question'))
+                    )
+                    if 'dataset_name' in result_df.columns:
+                        mask &= (result_df.get('dataset_name').astype(str) == str(wrow.get('dataset_name')))
+                    if 'db_name' in result_df.columns:
+                        mask &= (result_df.get('db_name').astype(str) == str(wrow.get('db_name')))
+                    if 'question_index' in result_df.columns:
+                        mask &= (result_df.get('question_index').astype(str) == str(wrow.get('question_index')))
+                    if 'model_name' in result_df.columns:
+                        mask &= (result_df.get('model_name').astype(str) == str(wrow.get('model_name')))
+                    try:
+                        idxs = result_df[mask].index.tolist()
+                        for idx in idxs:
+                            row_to_methods.setdefault(int(idx), []).append(method_label)
+                    except Exception:
+                        continue
+        except Exception:
+            # Continue best-effort on any failure per method
+            continue
+
+    return row_to_methods
+
 def _print_final_ensemble_results(final_winner_results_per_method: dict, section_name: str = ""):
     """Helper function to print final ensemble per-method results."""
     if not final_winner_results_per_method:
@@ -967,6 +1030,45 @@ Examples:
             final_winner_results_per_method=final_winner_results_per_method,
             winners_labeled_df=(pd.concat(winners_labeled_exports, ignore_index=True) if winners_labeled_exports else None),
         )
+
+        # Write enriched all_runs with winner_methods column
+        try:
+            if args.output_dir:
+                row_to_methods = compute_winner_methods_map(result_df=result_df, winners_per_method=winners_per_method)
+                enriched = result_df.copy()
+                # deterministic semicolon-joined label list per row index
+                def _join_methods(idx: int) -> str:
+                    try:
+                        methods = row_to_methods.get(int(idx), [])
+                        if not methods:
+                            return None
+                        # stable order per input; also deduplicate
+                        seen = set()
+                        ordered = []
+                        for m in methods:
+                            if m not in seen:
+                                seen.add(m)
+                                ordered.append(m)
+                        return ';'.join(ordered)
+                    except Exception:
+                        return None
+                enriched['winner_methods'] = [
+                    _join_methods(idx) for idx in enriched.index
+                ]
+                os.makedirs(args.output_dir, exist_ok=True)
+                original_name = os.path.basename(args.all_runs)
+                winner_methods_path = os.path.join(args.output_dir, f'{original_name}_ensembleWinner_by_row')
+                enriched.to_csv(winner_methods_path, index=False)
+                logger.info(f"Saved all_runs with winner_methods to: {winner_methods_path}")
+
+                # Optionally log to MLflow
+                try:
+                    if not getattr(args, 'disable_mlflow', False) and mlflow is not None and mlflow.active_run() is not None:
+                        mlflow.log_artifact(winner_methods_path, artifact_path='derived')
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Failed to save all_runs with winner_methods: {e}")
 
         # Write labeled winners export for drift inspection
         try:
