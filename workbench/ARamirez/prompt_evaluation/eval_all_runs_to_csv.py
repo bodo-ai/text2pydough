@@ -13,6 +13,10 @@ Additionally, two columns capture the reason when a result is 'Query error':
 
 For backward compatibility, 'eval_result' is also written and equals 'eval_custom'.
 
+The enriched CSV also includes the ground truth DataFrame (from executing the original SQL)
+serialized to JSON:
+- ground_truth_df_json
+
 Usage:
   python eval_all_runs_to_csv.py \
     --all-runs /path/to/all_runs.csv \
@@ -315,6 +319,20 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
     else:
         for _, row in df.iterrows():
             results.append(_eval_row(row))
+
+    # Include ground truth DataFrame (from original SQL) serialized as JSON
+    gt_jsons = []
+    for _, row in df.iterrows():
+        key = (row['question_index'], row['dataset_name'], row['db_name'], row['sql'])
+        gt_df, _ = ground_truth_cache.get(key, (None, None))
+        if gt_df is not None:
+            try:
+                gt_jsons.append(gt_df.to_json(orient='records'))
+            except Exception:
+                gt_jsons.append(None)
+        else:
+            gt_jsons.append(None)
+    df['ground_truth_df_json'] = gt_jsons
 
     # Split results into columns
     df['eval_custom'] = [r[0] for r in results]
