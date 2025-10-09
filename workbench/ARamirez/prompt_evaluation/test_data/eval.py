@@ -242,6 +242,14 @@ def compare_df(
     # Si no son iguales, usar el secondary_check
     return secondary_check(original_gold, original_gen) or secondary_check(df_gold, df_gen)
 
+def df_bird_eval(predicted_df, ground_truth_df):
+    try:
+        predicted_set = set(map(tuple, predicted_df.values))
+        ground_truth_set = set(map(tuple, ground_truth_df.values))
+        return predicted_set == ground_truth_set
+    except Exception as e:
+        print(f"Error comparing DataFrames: {e}")
+        return False
 
 def symetric_compare_df(
     df_a: pd.DataFrame,
