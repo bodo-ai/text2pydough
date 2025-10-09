@@ -588,7 +588,7 @@ def binary_comp_selection_singular(
         from scooring_agents_exp import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
     except Exception as e:
         print(
-            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents_exp.evaluate_binary_dataframes): {e}. Falling back to random."
+            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents_exp.evaluate_binary_dataframes_with_confidence): {e}. Falling back to random."
         )
         # Fall back to random among the unique set, using the existing tie-break machinery
         return random_based_selection([valid_runs[i] for i in unique_indices], question, question_idx=question_idx)
@@ -967,7 +967,7 @@ def binary_comp_selection(
         from scooring_agents_exp import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
     except Exception as e:
         print(
-            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents_exp.evaluate_binary_dataframes): {e}. Falling back to random."
+            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents_exp.evaluate_binary_dataframes_with_confidence): {e}. Falling back to random."
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
@@ -1063,7 +1063,7 @@ def double_elim_selection(
     Run a double-elimination tournament among candidates using LLM binary evaluation.
 
     - Seeds are randomized in position using a seeded RNG (global rng).
-    - Each match compares two candidates via scooring_agents_exp.evaluate_binary_dataframes.
+    - Each match compares two candidates via scooring_agents_exp.evaluate_binary_dataframes_with_confidence.
     - A candidate is eliminated after two losses. Last remaining wins.
     """
     if not valid_runs:
@@ -1072,10 +1072,10 @@ def double_elim_selection(
 
     # Lazy import to avoid heavy deps unless used
     try:
-        from scooring_agents_exp import evaluate_binary_dataframes as llm_evaluate_binary
+        from scooring_agents_exp import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
     except Exception as e:
         print(
-            f"[WARNING] [Q{question_idx}] Failed importing LLM binary grader (scooring_agents_exp.evaluate_binary_dataframes): {e}. Falling back to random."
+            f"[WARNING] [Q{question_idx}] Failed importing LLM binary grader (scooring_agents_exp.evaluate_binary_dataframes_with_confidence): {e}. Falling back to random."
         )
         return random_based_selection(valid_runs, question, question_idx=question_idx)
 
