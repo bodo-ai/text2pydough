@@ -28,6 +28,12 @@ The enriched CSV also includes the ground truth DataFrame (from executing the or
 serialized to JSON:
 - ground_truth_df_json
 
+Persistent ground truth cache:
+- Ground truth SQL results are cached on disk as JSON in the same directory as the input CSV
+  (file: 'ground_truth_cache.json') and reused across runs when the same (dataset_name, db_name, sql)
+  reappear. The in-memory cache for this run is built from the persistent cache and newly
+  computed entries are written back at the end.
+
 Usage:
   python eval_all_runs_to_csv.py \
     --all-runs /path/to/all_runs.csv \
@@ -41,6 +47,7 @@ import os
 import sys
 import ast
 import pandas as pd
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, Tuple, Optional
@@ -51,35 +58,116 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_data.eval import query_sqlite_db, compare_df, df_bird_eval, bird_eval  # type: ignore
 
 
-def _create_ground_truth_cache(df: pd.DataFrame, db_base_path: str) -> Dict[Tuple[str, str, str], Tuple[Optional[pd.DataFrame], Optional[str]]]:
-    """Create a cache of ground truth SQL results keyed by (question_index, dataset_name, db_name, sql).
-    
-    Returns:
-        Dict mapping (question_index, dataset_name, db_name, sql) -> (ground_truth_df, sql_exception)
+def _persistent_cache_key(dataset_name: str, db_name: str, sql: str) -> str:
+    return f"{dataset_name}||{db_name}||{sql}"
+
+
+def _load_persistent_gt_cache(cache_path: str) -> Dict[str, Tuple[Optional[pd.DataFrame], Optional[str]]]:
+    """Load persistent ground truth cache from JSON file.
+
+    Returns dict keyed by (dataset_name||db_name||sql) -> (df, sql_exception)
     """
-    cache = {}
-    
-    # Group by the key columns to avoid duplicate SQL executions
+    if not os.path.exists(cache_path):
+        return {}
+    try:
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        loaded: Dict[str, Tuple[Optional[pd.DataFrame], Optional[str]]] = {}
+        for entry in data:
+            dataset_name = entry.get('dataset_name')
+            db_name = entry.get('db_name')
+            sql = entry.get('sql')
+            df_json = entry.get('df_json')
+            sql_exception = entry.get('sql_exception')
+            key = _persistent_cache_key(dataset_name, db_name, sql)
+            if df_json is not None:
+                try:
+                    df = pd.read_json(df_json)
+                except Exception:
+                    df = None
+            else:
+                df = None
+            loaded[key] = (df, sql_exception)
+        return loaded
+    except Exception:
+        # On parse errors, start with empty cache
+        return {}
+
+
+def _save_persistent_gt_cache(cache: Dict[str, Tuple[Optional[pd.DataFrame], Optional[str]]], cache_path: str) -> None:
+    """Save persistent ground truth cache to JSON file.
+
+    Input dict is keyed by (dataset_name||db_name||sql) -> (df, sql_exception)
+    """
+    serializable = []
+    for key, (df, sql_exception) in cache.items():
+        try:
+            dataset_name, db_name, sql = key.split('||', 2)
+        except ValueError:
+            # Skip malformed keys
+            continue
+        df_json = None
+        if df is not None:
+            try:
+                df_json = df.to_json(orient='records')
+            except Exception:
+                df_json = None
+        serializable.append({
+            'dataset_name': dataset_name,
+            'db_name': db_name,
+            'sql': sql,
+            'df_json': df_json,
+            'sql_exception': sql_exception,
+        })
+    tmp_path = cache_path + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        json.dump(serializable, f)
+    os.replace(tmp_path, cache_path)
+
+
+def _create_ground_truth_cache(df: pd.DataFrame, db_base_path: str, persistent_cache_path: str) -> Dict[Tuple[str, str, str, str], Tuple[Optional[pd.DataFrame], Optional[str]]]:
+    """Create an in-memory cache keyed by (question_index, dataset_name, db_name, sql).
+
+    Uses and updates a persistent cache on disk keyed by (dataset_name, db_name, sql).
+    """
+    in_memory_cache: Dict[Tuple[str, str, str, str], Tuple[Optional[pd.DataFrame], Optional[str]]] = {}
+
+    # Load persistent cache
+    persistent_cache = _load_persistent_gt_cache(persistent_cache_path)
+
+    # Group by to avoid duplicate SQL executions
     unique_queries = df.groupby(['question_index', 'dataset_name', 'db_name', 'sql']).first().reset_index()
-    
-    print(f"Caching ground truth results for {len(unique_queries)} unique queries...")
-    
+
+    print(f"Caching ground truth results for {len(unique_queries)} unique queries (with persistent reuse)...")
+
+    updated_persistent = False
+
     for _, row in unique_queries.iterrows():
         question_index = row['question_index']
         dataset_name = row['dataset_name']
         db_name = row['db_name']
         sql = row['sql']
-        
-        db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
-        
-        # Execute the ground truth SQL once per unique query
-        ground_truth_df, sql_exception = query_sqlite_db(sql, db_path)
-        
+
+        pkey = _persistent_cache_key(dataset_name, db_name, sql)
+        if pkey in persistent_cache:
+            ground_truth_df, sql_exception = persistent_cache[pkey]
+        else:
+            db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
+            ground_truth_df, sql_exception = query_sqlite_db(sql, db_path)
+            persistent_cache[pkey] = (ground_truth_df, sql_exception)
+            updated_persistent = True
+
         cache_key = (question_index, dataset_name, db_name, sql)
-        cache[cache_key] = (ground_truth_df, sql_exception)
-    
-    print(f"Ground truth cache created with {len(cache)} entries")
-    return cache
+        in_memory_cache[cache_key] = (ground_truth_df, sql_exception)
+
+    if updated_persistent:
+        try:
+            _save_persistent_gt_cache(persistent_cache, persistent_cache_path)
+        except Exception:
+            pass
+
+    print(f"Ground truth cache created with {len(in_memory_cache)} entries (persistent size: {len(persistent_cache)})")
+    return in_memory_cache
 
 
 def _normalize_eval_result(result_value):
@@ -399,6 +487,10 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
 
     df = pd.read_csv(all_runs_path)
 
+    # Directory for outputs and persistent caches
+    in_dir = os.path.dirname(os.path.abspath(all_runs_path))
+    persistent_cache_path = os.path.join(in_dir, 'ground_truth_cache.json')
+
     # Ensure the code column exists where process_row expects it
     if 'extracted_python_code' not in df.columns:
         if 'code' in df.columns:
@@ -415,8 +507,8 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
         else:
             df['gen_sql'] = None
 
-    # Create ground truth cache to minimize SQL calls per question
-    ground_truth_cache = _create_ground_truth_cache(df, db_base_path)
+    # Create ground truth cache (reusing persistent cache on disk)
+    ground_truth_cache = _create_ground_truth_cache(df, db_base_path, persistent_cache_path)
 
     # Evaluate per row (optionally threaded) using cached ground truth
     results = []
@@ -467,7 +559,6 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
     df['eval_result'] = df['eval_custom']
 
     # Build output path in same directory, prefixing filename with 'eval_'
-    in_dir = os.path.dirname(os.path.abspath(all_runs_path))
     in_base = os.path.basename(all_runs_path)
     out_base = f"eval_{in_base}"
     out_path = os.path.join(in_dir, out_base)
