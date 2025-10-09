@@ -41,6 +41,8 @@ def normalize_table(
     
     # sort columns in alphabetical order of column names
     df = deduplicate_columns(df)  # remove duplicate columns
+
+    df = df.drop_duplicates() #remove duplicates rows
     
     sorted_df = df.reset_index(drop=True).reindex(sorted(df.columns), axis=1)
 
