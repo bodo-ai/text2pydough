@@ -221,6 +221,14 @@ def compare_df(
 
     if df_gold.equals(df_gen):
         return True
+    
+    if df_gold.empty and df_gen.empty:
+        # If both dataframes are empty, they match
+        return True
+    
+    if df_gold.empty or df_gen.empty:
+        # If either dataframe is empty, they cannot match
+        return False
 
     df_gold = normalize_table(df_gold, query_category, question, query_gold)
     df_gen = normalize_table(df_gen, query_category, question, query_gen)
