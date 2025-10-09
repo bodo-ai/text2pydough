@@ -11,6 +11,7 @@ import pandas as pd
 # External dependencies used by selection/ensemble logic
 import gradio_agent_v2
 from test_data.eval import symetric_compare_df
+from numbers import Number
 
 
 # === Global RNG (seeded) ===
@@ -68,6 +69,103 @@ def to_truncated_records_json(
             return ""
 
     return ""
+
+
+def _normalize_value_for_signature(value: Any) -> Any:
+    """
+    Normalize values for canonical DataFrame signatures so that comparisons
+    are robust to minor representation differences. This intentionally keeps
+    the representation simple and deterministic.
+    """
+    try:
+        if value is None:
+            return None
+        # Treat NaN/NaT as None
+        try:
+            if pd.isna(value):
+                return None
+        except Exception:
+            pass
+
+        # Numbers: round floats to reduce tiny diffs
+        if isinstance(value, Number):
+            try:
+                # Avoid rounding integers unnecessarily
+                if float(value).is_integer():
+                    return int(value)
+                return round(float(value), 6)
+            except Exception:
+                return float(value)
+
+        # Timestamps / datetimes -> ISO string
+        try:
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+        except Exception:
+            pass
+
+        # Strings: trim and lowercase
+        if isinstance(value, str):
+            s = value.strip().lower()
+            # Collapse multiple whitespace
+            return " ".join(s.split())
+
+        # Containers: json-stable representation
+        if isinstance(value, (list, tuple, dict)):
+            try:
+                return json.dumps(value, sort_keys=True, ensure_ascii=False)
+            except Exception:
+                return str(value)
+
+        # Fallback: stable string
+        return str(value)
+    except Exception:
+        return str(value)
+
+
+def _canonical_df_signature(df_obj: pd.DataFrame, num_rows: int = 10) -> Tuple[Any, ...]:
+    """
+    Build a canonical signature for a DataFrame that ignores column NAMES and
+    column ORDER, based only on the first `num_rows` rows of data.
+
+    Algorithm:
+    - Take head(num_rows)
+    - For each column, build the vector of normalized values across those rows
+    - Sort the set of column vectors lexicographically (ignores original names/order)
+    - Transpose into row-wise tuples and return as a tuple including (rows, cols)
+    """
+    try:
+        head_df = df_obj.iloc[: max(0, int(num_rows))]
+    except Exception:
+        return ("invalid",)
+
+    try:
+        # Collect per-column vectors of normalized values
+        col_vectors: List[Tuple[Any, ...]] = []
+        row_count = len(head_df.index)
+        for col in list(head_df.columns):
+            try:
+                series_vals = [
+                    _normalize_value_for_signature(head_df.iloc[r][col]) for r in range(row_count)
+                ]
+                col_vectors.append(tuple(series_vals))
+            except Exception:
+                # If any issue, mark the column with a sentinel to keep determinism
+                col_vectors.append(("__error__",))
+
+        # Sort columns by their content vectors to remove column-order influence
+        col_vectors_sorted = sorted(col_vectors)
+
+        # Transpose back into row tuples
+        if col_vectors_sorted:
+            row_tuples = list(zip(*col_vectors_sorted))
+        else:
+            row_tuples = []
+
+        # Include basic shape information to distinguish different structures
+        return (row_count, len(col_vectors_sorted), tuple(row_tuples))
+    except Exception:
+        return ("invalid",)
 
 
 def selection_random_tie_break(candidate_indices: List[int], question_idx: Union[int, str] = "?") -> Optional[int]:
@@ -432,6 +530,133 @@ def random_based_selection(
         "generated_sql": chosen.get("generated_sql"),
         "selected_attempt": chosen.get("attempt"),
         "selected_row_id": chosen.get("row_id"),
+    }
+
+
+def binary_comp_selection_singular(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+    signature_rows: int = 10,
+):
+    """
+    Round-robin pairwise comparison like binary_comp_selection but with two modifications:
+    - Deduplicate candidates by a canonical signature computed from only the first `signature_rows` rows,
+      ignoring column names and column order.
+    - Send only the first `signature_rows` rows to the LLM to mitigate quantity bias.
+    """
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in binary_comp_selection_singular.")
+        return (None, 0.0, None, None, None, None)
+
+    # Deduplicate by canonical signature (ignore column names/order; use head rows only)
+    signature_to_index: Dict[Tuple[Any, ...], int] = {}
+    unique_indices: List[int] = []
+    for idx, run in enumerate(valid_runs):
+        df_obj = run.get("df") if isinstance(run, dict) else None
+        if df_obj is None:
+            continue
+        sig = _canonical_df_signature(df_obj, num_rows=signature_rows)
+        if sig not in signature_to_index:
+            signature_to_index[sig] = idx
+            unique_indices.append(idx)
+
+    if not unique_indices:
+        print(f"[WARNING] [Q{question_idx}] No deduplicated candidates available in binary_comp_selection_singular.")
+        return (None, 0.0, None, None, None, None)
+
+    # If only one unique candidate, return it directly
+    if len(unique_indices) == 1:
+        chosen = valid_runs[unique_indices[0]]
+        print(
+            f"[INFO] [Q{question_idx}] binary_comp_selection_singular: single unique candidate {chosen.get('model_name')}"
+        )
+        return {
+            "response": chosen.get("response"),
+            "duration": chosen.get("duration"),
+            "usage": chosen.get("usage"),
+            "model_name": chosen.get("model_name"),
+            "gen_df_json": chosen.get("gen_df_json"),
+            "generated_sql": chosen.get("generated_sql"),
+            "selected_attempt": chosen.get("attempt"),
+            "selected_row_id": chosen.get("row_id"),
+        }
+
+    # Prepare truncated JSON for the unique candidates only
+    try:
+        from scooring_agents_exp import evaluate_binary_dataframes_with_confidence as llm_evaluate_binary
+    except Exception as e:
+        print(
+            f"[WARNING] [Q{question_idx}] Failed importing binary LLM grader (scooring_agents_exp.evaluate_binary_dataframes): {e}. Falling back to random."
+        )
+        # Fall back to random among the unique set, using the existing tie-break machinery
+        return random_based_selection([valid_runs[i] for i in unique_indices], question, question_idx=question_idx)
+
+    unique_runs: List[Dict[str, Any]] = [valid_runs[i] for i in unique_indices]
+
+    candidates: List[str] = []
+    for run in unique_runs:
+        candidates.append(
+            to_truncated_records_json(
+                run.get("gen_df_json"),
+                run.get("df"),
+                max_rows=signature_rows,
+            )
+        )
+
+    n = len(candidates)
+    scores: List[int] = [0] * n
+
+    # Round-robin pairwise comparisons among unique candidates
+    for i in range(n):
+        for j in range(i + 1, n):
+            try:
+                result = llm_evaluate_binary(question, [candidates[i], candidates[j]])
+                if isinstance(result, str):
+                    result = result.strip()
+                    pair_idx = int(result) if result.isdigit() else None
+                elif isinstance(result, (int, float)):
+                    pair_idx = int(result)
+                else:
+                    pair_idx = None
+            except Exception:
+                pair_idx = None
+
+            if pair_idx == 0:
+                scores[i] += 1
+            elif pair_idx == 1:
+                scores[j] += 1
+            else:
+                # undecided/invalid -> no score change
+                pass
+
+    max_score = max(scores) if scores else -1
+    tied_indices = [idx for idx, s in enumerate(scores) if s == max_score]
+
+    if len(tied_indices) == 1:
+        best_unique_index = tied_indices[0]
+    else:
+        # Use existing tie-break over the unique subset
+        best_unique_index = select_tie_break_index(
+            tied_indices, unique_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
+        if best_unique_index is None:
+            best_unique_index = rng.choice(tied_indices)
+
+    best = unique_runs[best_unique_index]
+    print(
+        f"[INFO] [Q{question_idx}] binary_comp_selection_singular selected: {best.get('model_name')} (unique candidate #{best_unique_index}) with score {max_score}."
+    )
+    return {
+        "response": best.get("response"),
+        "duration": best.get("duration"),
+        "usage": best.get("usage"),
+        "model_name": best.get("model_name"),
+        "gen_df_json": best.get("gen_df_json"),
+        "generated_sql": best.get("generated_sql"),
+        "selected_attempt": best.get("attempt"),
+        "selected_row_id": best.get("row_id"),
     }
 
 
@@ -1081,6 +1306,14 @@ def ensemble_result(
     elif ensemble_selection_method == "binary_comp_selection":
         print(f"[INFO] [Q{question_idx}] Binary-comp selection (pairwise LLM)" )
         return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+    elif ensemble_selection_method == "binary_comp_selection_singular":
+        print(f"[INFO] [Q{question_idx}] Binary-comp selection singular (dedup + head-only LLM)")
+        return binary_comp_selection_singular(
+            valid_runs,
+            question,
+            question_idx=question_idx,
+            tie_break_method=tie_break_method,
+        )
     elif ensemble_selection_method == "double_elim":
         print(f"[INFO] [Q{question_idx}] Double-elimination selection (LLM binary)")
         return double_elim_selection(
