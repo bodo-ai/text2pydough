@@ -70,8 +70,6 @@ Evaluate each option separately using this checklist:
 Decision rule:
 - Pick the option that better satisfies the checklist.
 - If both are essentially equal, choose the one that more plausibly answers the question.
-- Do not accept any extra columns aside from the explicitly indicated in the question.
-- Prefer the option that has the columns closer to what the question asks, no lacking or extra information.
 
 Additionally, provide a confidence score in the closed interval [0, 1] that reflects how strongly the evidence supports your choice (0 = no confidence, 1 = absolute confidence). The confidence should be based on how well the selected option satisfies the criteria relative to the other.
 
