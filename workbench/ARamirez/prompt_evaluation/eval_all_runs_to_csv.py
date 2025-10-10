@@ -217,8 +217,14 @@ def _parse_df_cell(cell) -> Optional[pd.DataFrame]:
         text = str(cell)
         if text.strip() == "":
             return None
-        # Try direct JSON parse first
+        # Try direct JSON parse first; prefer records orient and detect json-lines
         try:
+            stripped = text.lstrip()
+            if stripped.startswith('['):
+                return pd.read_json(text, orient='records')
+            # Heuristic: if multiple lines of JSON objects, treat as json-lines
+            if '\n' in text and stripped.startswith('{'):
+                return pd.read_json(text, lines=True)
             return pd.read_json(text)
         except Exception:
             pass
@@ -295,7 +301,10 @@ def _process_row_noexec(row, db_base_path: str, ground_truth_cache: Dict) -> Tup
 
     # Bird evaluation using df_bird_eval (dataframe set equivalence)
     try:
-        bird_match = df_bird_eval(predicted_df, ground_truth_df)
+        # Treat missing values equivalently to exec mode: use None instead of NaN
+        predicted_df_bird = predicted_df.where(pd.notna(predicted_df), None)
+        ground_truth_df_bird = ground_truth_df.where(pd.notna(ground_truth_df), None)
+        bird_match = df_bird_eval(predicted_df_bird, ground_truth_df_bird)
         bird_eval_result = 'Match' if bird_match else 'NoMatch'
         if bird_eval_result != 'Query error':
             bird_error_reason = None
