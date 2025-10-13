@@ -52,6 +52,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, Tuple, Optional
 import multiprocessing as mp
+from io import StringIO
 
 # Ensure we can import sibling package modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -226,11 +227,11 @@ def _parse_df_cell(cell) -> Optional[pd.DataFrame]:
         try:
             stripped = text.lstrip()
             if stripped.startswith('['):
-                return pd.read_json(text, orient='records')
+                return pd.read_json(StringIO(text), orient='records')
             # Heuristic: if multiple lines of JSON objects, treat as json-lines
             if '\n' in text and stripped.startswith('{'):
-                return pd.read_json(text, lines=True)
-            return pd.read_json(text)
+                return pd.read_json(StringIO(text), lines=True)
+            return pd.read_json(StringIO(text))
         except Exception:
             pass
         # Try Python literal -> list/dict shapes
@@ -280,7 +281,7 @@ def _process_row_noexec(row, db_base_path: str, ground_truth_cache: Dict) -> Tup
     gen_df_json = row.get('gen_df_json') if 'gen_df_json' in row else None
     if gen_df_json is not None and not (isinstance(gen_df_json, float) and pd.isna(gen_df_json)):
         try:
-            predicted_df = pd.read_json(gen_df_json)
+            predicted_df = pd.read_json(StringIO(gen_df_json))
         except Exception as e:
             predicted_df = None
             custom_error_reason = f'gen_df_json parse exception: {e}'
@@ -291,7 +292,7 @@ def _process_row_noexec(row, db_base_path: str, ground_truth_cache: Dict) -> Tup
 
     # Parse ground truth JSON only at comparison time, no normalization
     try:
-        ground_truth_df = pd.read_json(ground_truth_df_json)
+        ground_truth_df = pd.read_json(StringIO(ground_truth_df_json))
     except Exception as e:
         return ('Query error', 'Query error', f'ground truth json parse exception: {e}', f'ground truth json parse exception: {e}')
 
@@ -454,7 +455,7 @@ def _process_row_with_cache(row, db_base_path: str, metadata_base_path: str, gro
 
         if generated_df_json is not None and generated_sql is not None:
             try:
-                generated_df = pd.read_json(generated_df_json)
+                generated_df = pd.read_json(StringIO(generated_df_json))
                 df_comparison_success = compare_df(
                     ground_truth_df, generated_df, query_category="a", question=question
                 )
