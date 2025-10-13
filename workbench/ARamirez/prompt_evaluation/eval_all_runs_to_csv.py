@@ -62,17 +62,17 @@ def _persistent_cache_key(dataset_name: str, db_name: str, sql: str) -> str:
     return f"{dataset_name}||{db_name}||{sql}"
 
 
-def _load_persistent_gt_cache(cache_path: str) -> Dict[str, Tuple[Optional[pd.DataFrame], Optional[str]]]:
+def _load_persistent_gt_cache(cache_path: str) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
     """Load persistent ground truth cache from JSON file.
 
-    Returns dict keyed by (dataset_name||db_name||sql) -> (df, sql_exception)
+    Returns dict keyed by (dataset_name||db_name||sql) -> (df_json_str, sql_exception)
     """
     if not os.path.exists(cache_path):
         return {}
     try:
         with open(cache_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        loaded: Dict[str, Tuple[Optional[pd.DataFrame], Optional[str]]] = {}
+        loaded: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
         for entry in data:
             dataset_name = entry.get('dataset_name')
             db_name = entry.get('db_name')
@@ -80,36 +80,33 @@ def _load_persistent_gt_cache(cache_path: str) -> Dict[str, Tuple[Optional[pd.Da
             df_json = entry.get('df_json')
             sql_exception = entry.get('sql_exception')
             key = _persistent_cache_key(dataset_name, db_name, sql)
-            if df_json is not None:
-                try:
-                    df = pd.read_json(df_json)
-                except Exception:
-                    df = None
-            else:
-                df = None
-            loaded[key] = (df, sql_exception)
+            # Store raw JSON string without parsing to DataFrame
+            loaded[key] = (df_json, sql_exception)
         return loaded
     except Exception:
         # On parse errors, start with empty cache
         return {}
 
 
-def _save_persistent_gt_cache(cache: Dict[str, Tuple[Optional[pd.DataFrame], Optional[str]]], cache_path: str) -> None:
+def _save_persistent_gt_cache(cache: Dict[str, Tuple[Optional[object], Optional[str]]], cache_path: str) -> None:
     """Save persistent ground truth cache to JSON file.
 
     Input dict is keyed by (dataset_name||db_name||sql) -> (df, sql_exception)
     """
     serializable = []
-    for key, (df, sql_exception) in cache.items():
+    for key, (df_or_json, sql_exception) in cache.items():
         try:
             dataset_name, db_name, sql = key.split('||', 2)
         except ValueError:
             # Skip malformed keys
             continue
         df_json = None
-        if df is not None:
+        if isinstance(df_or_json, str):
+            df_json = df_or_json
+        elif df_or_json is not None:
             try:
-                df_json = df.to_json(orient='records')
+                # Fallback: if passed a DataFrame, serialize as records without any normalization steps
+                df_json = df_or_json.to_json(orient='records')  # type: ignore[attr-defined]
             except Exception:
                 df_json = None
         serializable.append({
@@ -125,12 +122,12 @@ def _save_persistent_gt_cache(cache: Dict[str, Tuple[Optional[pd.DataFrame], Opt
     os.replace(tmp_path, cache_path)
 
 
-def _create_ground_truth_cache(df: pd.DataFrame, db_base_path: str, persistent_cache_path: str) -> Dict[Tuple[str, str, str, str], Tuple[Optional[pd.DataFrame], Optional[str]]]:
+def _create_ground_truth_cache(df: pd.DataFrame, db_base_path: str, persistent_cache_path: str) -> Dict[Tuple[str, str, str, str], Tuple[Optional[str], Optional[str]]]:
     """Create an in-memory cache keyed by (question_index, dataset_name, db_name, sql).
 
     Uses and updates a persistent cache on disk keyed by (dataset_name, db_name, sql).
     """
-    in_memory_cache: Dict[Tuple[str, str, str, str], Tuple[Optional[pd.DataFrame], Optional[str]]] = {}
+    in_memory_cache: Dict[Tuple[str, str, str, str], Tuple[Optional[str], Optional[str]]] = {}
 
     # Load persistent cache
     persistent_cache = _load_persistent_gt_cache(persistent_cache_path)
@@ -150,15 +147,23 @@ def _create_ground_truth_cache(df: pd.DataFrame, db_base_path: str, persistent_c
 
         pkey = _persistent_cache_key(dataset_name, db_name, sql)
         if pkey in persistent_cache:
-            ground_truth_df, sql_exception = persistent_cache[pkey]
+            ground_truth_df_json, sql_exception = persistent_cache[pkey]
         else:
             db_path = os.path.join(db_base_path, dataset_name, "databases", db_name, f"{db_name}.sqlite")
             ground_truth_df, sql_exception = query_sqlite_db(sql, db_path)
-            persistent_cache[pkey] = (ground_truth_df, sql_exception)
+            # Serialize to raw JSON string for persistence
+            if ground_truth_df is not None:
+                try:
+                    ground_truth_df_json = ground_truth_df.to_json(orient='records')
+                except Exception:
+                    ground_truth_df_json = None
+            else:
+                ground_truth_df_json = None
+            persistent_cache[pkey] = (ground_truth_df_json, sql_exception)
             updated_persistent = True
 
         cache_key = (question_index, dataset_name, db_name, sql)
-        in_memory_cache[cache_key] = (ground_truth_df, sql_exception)
+        in_memory_cache[cache_key] = (ground_truth_df_json, sql_exception)
 
     if updated_persistent:
         try:
@@ -261,33 +266,34 @@ def _process_row_noexec(row, db_base_path: str, ground_truth_cache: Dict) -> Tup
 
     # Ground truth from cache
     cache_key = (question_index, dataset_name, db_name, sql)
-    ground_truth_df, sql_exception = ground_truth_cache.get(cache_key, (None, "Cache miss"))
+    ground_truth_df_json, sql_exception = ground_truth_cache.get(cache_key, (None, "Cache miss"))
 
-    if ground_truth_df is None:
+    if ground_truth_df_json is None:
         reason = f"ground truth sql error: {sql_exception}" if sql_exception else 'ground truth sql error'
         return ('Query error', 'Query error', reason, reason)
 
-    # Predicted DataFrame from 'df' or fallback 'gen_df_json'
+    # Predicted DataFrame exclusively from gen_df_json to minimize parsing drift
     custom_error_reason: Optional[str] = None
     bird_error_reason: Optional[str] = None
 
     predicted_df = None
-    df_cell = row.get('df') if 'df' in row else None
-    if df_cell is not None:
-        predicted_df = _parse_df_cell(df_cell)
-
-    if predicted_df is None:
-        gen_df_json = row.get('gen_df_json') if 'gen_df_json' in row else None
-        if gen_df_json is not None and not (isinstance(gen_df_json, float) and pd.isna(gen_df_json)):
-            try:
-                predicted_df = pd.read_json(gen_df_json)
-            except Exception as e:
-                predicted_df = None
-                custom_error_reason = f'gen_df_json parse exception: {e}'
-                bird_error_reason = f'gen_df_json parse exception: {e}'
+    gen_df_json = row.get('gen_df_json') if 'gen_df_json' in row else None
+    if gen_df_json is not None and not (isinstance(gen_df_json, float) and pd.isna(gen_df_json)):
+        try:
+            predicted_df = pd.read_json(gen_df_json)
+        except Exception as e:
+            predicted_df = None
+            custom_error_reason = f'gen_df_json parse exception: {e}'
+            bird_error_reason = f'gen_df_json parse exception: {e}'
 
     if predicted_df is None:
         return ('Query error', 'Query error', custom_error_reason or 'no generated df', bird_error_reason or 'no generated df')
+
+    # Parse ground truth JSON only at comparison time, no normalization
+    try:
+        ground_truth_df = pd.read_json(ground_truth_df_json)
+    except Exception as e:
+        return ('Query error', 'Query error', f'ground truth json parse exception: {e}', f'ground truth json parse exception: {e}')
 
     # Custom evaluation using compare_df
     try:
@@ -544,18 +550,12 @@ def evaluate_file(all_runs_path: str, db_base_path: str, metadata_base_path: str
         for _, row in df.iterrows():
             results.append(_eval_row(row))
 
-    # Include ground truth DataFrame (from original SQL) serialized as JSON
+    # Include ground truth DataFrame JSON from cache (already raw JSON strings)
     gt_jsons = []
     for _, row in df.iterrows():
         key = (row['question_index'], row['dataset_name'], row['db_name'], row['sql'])
-        gt_df, _ = ground_truth_cache.get(key, (None, None))
-        if gt_df is not None:
-            try:
-                gt_jsons.append(gt_df.to_json(orient='records'))
-            except Exception:
-                gt_jsons.append(None)
-        else:
-            gt_jsons.append(None)
+        gt_json, _ = ground_truth_cache.get(key, (None, None))
+        gt_jsons.append(gt_json)
     df['ground_truth_df_json'] = gt_jsons
 
     # Split results into columns
