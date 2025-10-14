@@ -153,33 +153,46 @@ Return EXACTLY this JSON and nothing else:
 Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
 """
 
-EVALUATION_BINARY_PROMPT_SQL = """**You are an expert data analyst comparing two candidate DataFrames for the same question. In addition to the DataFrames, you are given the associated SQL query for each option when available. Choose the better option.**
+EVALUATION_BINARY_PROMPT_SQL = """**You are an expert data analyst and SQL reviewer comparing two candidate DataFrames for the same question. You are given the DataFrames and, when available, the SQL used to produce them. Choose the better option.**
 
 Question: {question}
-Option A (index 0) - DataFrame: {dataframe_1}
-Option A - SQL (if any):
+Option A (index 0)
+- DataFrame: {dataframe_1}
+- SQL (if provided):
 {sql_1}
 
-Option B (index 1) - DataFrame: {dataframe_2}
-Option B - SQL (if any):
+Option B (index 1)
+- DataFrame: {dataframe_2}
+- SQL (if provided):
 {sql_2}
 
-Evaluate each option separately using this checklist:
+Evaluate each option IN THIS ORDER:
 
-1. Non-empty and correct structure: The DataFrame should not be empty and must include appropriate columns and rows for the question.
-2. Relevance of columns: All included columns must directly contribute to answering the question; penalize off-topic columns.
-3. No unnecessary duplication: Avoid redundant rows or repeated information that do not add value.
-4. Appropriate data types: Ensure column data types fit the analysis (numeric/date/text as needed).
-5. Completeness of critical information: All essential data required to answer the question must be present.
-6. Logical ordering: If ordering/sorting is relevant, it should be appropriate and helpful for interpretation.
-7. Communication and clarity: Well-structured, easy to understand, consistent formatting.
-8. SQL query quality and alignment: When SQL is provided, prefer options whose SQL is more likely to correctly generate the shown DataFrame and answer the question (correct tables/joins/filters, no obvious logic errors, alignment with the DataFrame's columns and semantics).
+1) DataFrame fitness for the question
+   - Non-empty with a plausible shape (rows × columns)
+   - Columns are minimal and directly relevant; avoid unasked/irrelevant columns
+   - No redundant/duplicate rows or columns
+   - Appropriate data types (numeric/date/text) for the intended analysis
+   - Completeness: contains all information needed to answer the question
+   - Logical ordering if the question implies order (e.g., top-N, sorting)
+   - Clear and consistent structure/formatting
+
+2) SQL-to-DataFrame alignment and correctness (if SQL is provided)
+   - SELECT list and aliases match the DataFrame column names and semantics
+   - Aggregations: GROUP BY keys and aggregate functions are consistent with the shown columns; no non-aggregated columns without grouping
+   - Filters (WHERE/HAVING): constraints reflect the question (e.g., date ranges, categories). If the DataFrame shows a filtered subset, the filter should appear in SQL
+   - Ordering/Limits: ORDER BY/LIMIT (or window functions) explain the DataFrame order when ranking or top-N is shown
+   - DISTINCT/UNIQUE usage is justified; it should not mask loss of critical information
+   - Calculated fields/expressions plausibly produce the shown values and data types
+   - No obvious syntax or logic errors; table/column references look plausible for the domain
+   - If SQL is missing or clearly misaligned with the DataFrame, penalize the option accordingly. Do not penalize absence of SQL if the DataFrame clearly answers the question better than the alternative
 
 Decision rule:
-- Pick the option that better satisfies the checklist.
-- If both are essentially equal, choose the one that more plausibly answers the question.
+- Prefer the option whose DataFrame best answers the question. Use SQL alignment as a strong tie-breaker and to downgrade options whose SQL could not plausibly produce the shown DataFrame or contradicts the question
+- If both are similar, choose the one with fewer assumptions and stronger SQL plausibility
 
-Additionally, provide a confidence score in the closed interval [0, 1] that reflects how strongly the evidence supports your choice (0 = no confidence, 1 = absolute confidence). Base this on how well the selected option satisfies the criteria relative to the other.
+Confidence:
+- Provide a score in [0, 1] reflecting how strongly the evidence supports your choice, emphasizing consistency between SQL, DataFrame, and the question
 
 Output:
 Return EXACTLY this JSON and nothing else:
