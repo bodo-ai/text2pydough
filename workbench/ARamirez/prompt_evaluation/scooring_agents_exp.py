@@ -75,10 +75,10 @@ Additionally, provide a confidence score in the closed interval [0, 1] that refl
 
 Output:
 Return EXACTLY this JSON and nothing else:
-{
+{{
     "best_index": 0,
     "confidence": 0.0
-}
+}}
 Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
 """
 
@@ -109,10 +109,10 @@ Additionally, provide a confidence score in the closed interval [0, 1] that refl
 
 Output:
 Return EXACTLY this JSON and nothing else:
-{
+{{
     "best_index": 0,
     "confidence": 0.0
-}
+}}
 Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
 """
 
