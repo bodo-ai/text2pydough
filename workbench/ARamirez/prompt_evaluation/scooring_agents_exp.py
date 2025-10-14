@@ -153,6 +153,43 @@ Return EXACTLY this JSON and nothing else:
 Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
 """
 
+EVALUATION_BINARY_PROMPT_SQL = """**You are an expert data analyst comparing two candidate DataFrames for the same question. In addition to the DataFrames, you are given the associated SQL query for each option when available. Choose the better option.**
+
+Question: {question}
+Option A (index 0) - DataFrame: {dataframe_1}
+Option A - SQL (if any):
+{sql_1}
+
+Option B (index 1) - DataFrame: {dataframe_2}
+Option B - SQL (if any):
+{sql_2}
+
+Evaluate each option separately using this checklist:
+
+1. Non-empty and correct structure: The DataFrame should not be empty and must include appropriate columns and rows for the question.
+2. Relevance of columns: All included columns must directly contribute to answering the question; penalize off-topic columns.
+3. No unnecessary duplication: Avoid redundant rows or repeated information that do not add value.
+4. Appropriate data types: Ensure column data types fit the analysis (numeric/date/text as needed).
+5. Completeness of critical information: All essential data required to answer the question must be present.
+6. Logical ordering: If ordering/sorting is relevant, it should be appropriate and helpful for interpretation.
+7. Communication and clarity: Well-structured, easy to understand, consistent formatting.
+8. SQL query quality and alignment: When SQL is provided, prefer options whose SQL is more likely to correctly generate the shown DataFrame and answer the question (correct tables/joins/filters, no obvious logic errors, alignment with the DataFrame's columns and semantics).
+
+Decision rule:
+- Pick the option that better satisfies the checklist.
+- If both are essentially equal, choose the one that more plausibly answers the question.
+
+Additionally, provide a confidence score in the closed interval [0, 1] that reflects how strongly the evidence supports your choice (0 = no confidence, 1 = absolute confidence). Base this on how well the selected option satisfies the criteria relative to the other.
+
+Output:
+Return EXACTLY this JSON and nothing else:
+{
+    "best_index": 0,
+    "confidence": 0.0
+}
+Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
+"""
+
 class DataFrame_Evaluator(dspy.Signature):
     """Evaluate the quality of a DataFrame result for a specific database query."""
 
@@ -383,7 +420,7 @@ def evaluate_binary_dataframes_with_pydough_confidence(question, dataframes_list
     # Call 1: original randomized order (A,B)
     order1 = order
     with dspy.context(lm=lm):
-        prompt1 = EVALUATION_BINARY_WITH_CODE_PROMPT_ARA.format(
+        prompt1 = EVALUATION_BINARY_WITH_CODE_PROMPT.format(
             question=question,
             dataframe_1=df_1,
             dataframe_2=df_2,
@@ -402,12 +439,102 @@ def evaluate_binary_dataframes_with_pydough_confidence(question, dataframes_list
     # Call 2: swapped order (B,A) with corresponding code swapped
     order2 = [order[1], order[0]]
     with dspy.context(lm=lm):
-        prompt2 = EVALUATION_BINARY_WITH_CODE_PROMPT_ARA.format(
+        prompt2 = EVALUATION_BINARY_WITH_CODE_PROMPT.format(
             question=question,
             dataframe_1=df_2,
             dataframe_2=df_1,
             code_1=code_2_txt,
             code_2=code_1_txt,
+        )
+        resp2 = bi(
+            question=question,
+            dataframe_1=df_2,
+            dataframe_2=df_1,
+            evaluation_criteria=prompt2,
+        )
+    presented_index2, confidence2 = _parse_binary_evaluation(resp2.evaluation)
+    original_index2 = order2[presented_index2] if presented_index2 in (0, 1) else 0
+
+    # If both picks coincide, return that
+    if original_index1 == original_index2:
+        return original_index1
+
+    # Otherwise, choose the higher confidence
+    if confidence1 > confidence2:
+        return original_index1
+    if confidence2 > confidence1:
+        return original_index2
+
+    # Tie-breaker: randomly choose one of the two original picks
+    return random.choice([original_index1, original_index2])
+
+def evaluate_binary_dataframes_with_confidence_sql(question, dataframes_list, sql_list=None):
+    """Binary evaluate two DataFrame candidates with optional SQL context.
+
+    Args:
+        question (str): The natural-language question to answer.
+        dataframes_list (List[str]): Two JSON-serializable DataFrame renderings (as strings).
+        sql_list (Optional[List[str]]): Optional list with two SQL strings aligned to dataframes_list.
+
+    Returns:
+        int: The index (0 or 1) of the better option in the ORIGINAL input order.
+    """
+    if not isinstance(dataframes_list, (list, tuple)) or len(dataframes_list) < 2:
+        raise ValueError("dataframes_list must contain at least two items")
+
+    sql_list = sql_list if isinstance(sql_list, (list, tuple)) else [None, None]
+    if len(sql_list) < 2:
+        # Pad to length 2 to simplify alignment logic
+        sql_list = list(sql_list) + [None] * (2 - len(sql_list))
+
+    def _canonical_sql_text(txt):
+        try:
+            if txt is None:
+                return "N/A"
+            s = str(txt)
+            max_chars = 4000
+            return s[:max_chars]
+        except Exception:
+            return "N/A"
+
+    # Randomize presentation order to mitigate position bias
+    pairs = [(0, dataframes_list[0], sql_list[0]), (1, dataframes_list[1], sql_list[1])]
+    random.shuffle(pairs)
+    order = [idx for idx, _, _ in pairs]
+    df_1, sql_1 = pairs[0][1], pairs[0][2]
+    df_2, sql_2 = pairs[1][1], pairs[1][2]
+
+    sql_1_txt = _canonical_sql_text(sql_1)
+    sql_2_txt = _canonical_sql_text(sql_2)
+
+    # Call 1: original randomized order (A,B)
+    order1 = order
+    with dspy.context(lm=lm):
+        prompt1 = EVALUATION_BINARY_PROMPT_SQL.format(
+            question=question,
+            dataframe_1=df_1,
+            dataframe_2=df_2,
+            sql_1=sql_1_txt,
+            sql_2=sql_2_txt,
+        )
+        resp1 = bi(
+            question=question,
+            dataframe_1=df_1,
+            dataframe_2=df_2,
+            evaluation_criteria=prompt1,
+        )
+    presented_index1, confidence1 = _parse_binary_evaluation(resp1.evaluation)
+    original_index1 = order1[presented_index1] if presented_index1 in (0, 1) else 0
+
+    # Call 2: swapped order (B,A) with corresponding SQL swapped
+    order2 = [order[1], order[0]]
+    with dspy.context(lm=lm):
+        prompt2 = EVALUATION_BINARY_PROMPT_SQL.format(
+            question=question,
+            dataframe_1=df_2,
+            dataframe_2=df_1,
+            sql_1=sql_2_txt,
+            sql_2=sql_1_txt,
         )
         resp2 = bi(
             question=question,

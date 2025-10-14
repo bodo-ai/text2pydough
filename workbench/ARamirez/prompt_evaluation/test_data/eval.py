@@ -14,6 +14,7 @@ metadata_lock = Lock()
 from pandas.testing import assert_frame_equal   # works in every supported pandas version
 import logging
 import multiprocessing as mp
+from io import StringIO
 
 def deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = df.columns.tolist()
@@ -243,13 +244,10 @@ def compare_df(
     return secondary_check(original_gold, original_gen) or secondary_check(df_gold, df_gen)
 
 def df_bird_eval(predicted_df, ground_truth_df):
-    try:
-        predicted_set = set(map(tuple, predicted_df.values))
-        ground_truth_set = set(map(tuple, ground_truth_df.values))
-        return predicted_set == ground_truth_set
-    except Exception as e:
-        print(f"Error comparing DataFrames: {e}")
-        return False
+    predicted_set = set(map(tuple, predicted_df.values))
+    ground_truth_set = set(map(tuple, ground_truth_df.values))
+    return predicted_set == ground_truth_set
+
 
 def symetric_compare_df(
     df_a: pd.DataFrame,
@@ -584,7 +582,7 @@ def process_row(row, db_base_path, metadata_base_path):
 
         if generated_df_json is not None and generated_sql is not None:
             try:
-                generated_df = pd.read_json(generated_df_json)
+                generated_df = pd.read_json(StringIO(generated_df_json))
                 df_comparison_success = compare_df(
                     ground_truth_df, generated_df, query_category="a", question=question
                 )

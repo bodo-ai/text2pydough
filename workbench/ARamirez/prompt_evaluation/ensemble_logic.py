@@ -1208,6 +1208,112 @@ def double_elim_selection(
         "selected_row_id": best.get("row_id"),
     }
 
+
+def binary_comp_sql_selection(
+    valid_runs: List[Dict[str, Any]],
+    question: str,
+    question_idx: Union[int, str] = "?",
+    tie_break_method: str = "random",
+):
+    """
+    Pairwise comparison using LLM binary evaluator with SQL context.
+    Each candidate gains +1 per victory against others. Highest total wins.
+    """
+    if not valid_runs:
+        print(f"[WARNING] [Q{question_idx}] No valid dataframes found in binary_comp_sql_selection.")
+        return (None, 0.0, None, None, None, None)
+
+    try:
+        from scooring_agents_exp import evaluate_binary_dataframes_with_confidence_sql as llm_eval_sql
+    except Exception as e:
+        print(
+            f"[WARNING] [Q{question_idx}] Failed importing SQL-aware LLM grader (evaluate_binary_dataframes_with_confidence_sql): {e}. Falling back to binary_comp_selection."
+        )
+        return binary_comp_selection(valid_runs, question, question_idx=question_idx, tie_break_method=tie_break_method)
+
+    # Prepare inputs (truncate DF JSON as usual) and collect SQL strings
+    df_candidates: List[str] = []
+    sql_candidates: List[str] = []
+    for run in valid_runs:
+        df_candidates.append(
+            to_truncated_records_json(
+                run.get("gen_df_json"),
+                run.get("df"),
+                max_rows=MAX_LLM_ROWS,
+            )
+        )
+        sql_candidates.append(run.get("generated_sql"))
+
+    n = len(df_candidates)
+    if n == 1:
+        best = valid_runs[0]
+        print(f"[INFO] [Q{question_idx}] binary_comp_sql_selection: single candidate {best.get('model_name')}")
+        return {
+            "response": best.get("response"),
+            "duration": best.get("duration"),
+            "usage": best.get("usage"),
+            "model_name": best.get("model_name"),
+            "gen_df_json": best.get("gen_df_json"),
+            "generated_sql": best.get("generated_sql"),
+            "selected_attempt": best.get("attempt"),
+            "selected_row_id": best.get("row_id"),
+        }
+
+    scores: List[int] = [0] * n
+
+    # Round-robin pairwise comparisons
+    for i in range(n):
+        for j in range(i + 1, n):
+            try:
+                result = llm_eval_sql(
+                    question,
+                    [df_candidates[i], df_candidates[j]],
+                    sql_list=[sql_candidates[i], sql_candidates[j]],
+                )
+                if isinstance(result, str):
+                    s = result.strip()
+                    pair_idx = int(s) if s.isdigit() else None
+                elif isinstance(result, (int, float)):
+                    pair_idx = int(result)
+                else:
+                    pair_idx = None
+            except Exception:
+                pair_idx = None
+
+            if pair_idx == 0:
+                scores[i] += 1
+            elif pair_idx == 1:
+                scores[j] += 1
+            else:
+                pass
+
+    max_score = max(scores) if scores else -1
+    tied_indices = [idx for idx, s in enumerate(scores) if s == max_score]
+
+    if len(tied_indices) == 1:
+        best_index = tied_indices[0]
+    else:
+        best_index = select_tie_break_index(
+            tied_indices, valid_runs, question_idx=question_idx, tie_break_method=tie_break_method
+        )
+        if best_index is None:
+            best_index = rng.choice(tied_indices)
+
+    best = valid_runs[best_index]
+    print(
+        f"[INFO] [Q{question_idx}] binary_comp_sql_selection selected: {best.get('model_name')} (candidate #{best_index}) with score {max_score}."
+    )
+    return {
+        "response": best.get("response"),
+        "duration": best.get("duration"),
+        "usage": best.get("usage"),
+        "model_name": best.get("model_name"),
+        "gen_df_json": best.get("gen_df_json"),
+        "generated_sql": best.get("generated_sql"),
+        "selected_attempt": best.get("attempt"),
+        "selected_row_id": best.get("row_id"),
+    }
+
 def ensemble_result(
     mlflow_run_id: Optional[str],
     all_runs: List[Dict[str, Any]],
@@ -1309,6 +1415,14 @@ def ensemble_result(
     elif ensemble_selection_method == "binary_comp_selection_singular":
         print(f"[INFO] [Q{question_idx}] Binary-comp selection singular (dedup + head-only LLM)")
         return binary_comp_selection_singular(
+            valid_runs,
+            question,
+            question_idx=question_idx,
+            tie_break_method=tie_break_method,
+        )
+    elif ensemble_selection_method == "binary_comp_sql":
+        print(f"[INFO] [Q{question_idx}] Binary-comp selection with SQL context")
+        return binary_comp_sql_selection(
             valid_runs,
             question,
             question_idx=question_idx,

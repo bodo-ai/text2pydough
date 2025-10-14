@@ -721,7 +721,7 @@ Examples:
     )
     parser.add_argument(
         '--ensemble-selection-method', '--ensemble_selection_method',
-        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'binary_comp_selection_singular', 'double_elim', 'reverse_size', 'reverse_frequency', 'reverse_density'],
+        choices=['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'binary_comp_selection_singular', 'binary_comp_sql', 'double_elim', 'reverse_size', 'reverse_frequency', 'reverse_density'],
         default='size',
         help='[DEPRECATED] Use --ensemble-methods instead to specify one or more methods'
     )
@@ -862,7 +862,7 @@ Examples:
         # Optional: compute ensemble winners per requested methods and evaluate Match/No Match percentages
         # Determine which ensemble methods to run; prefer --ensemble-methods, fallback to deprecated flag
         def _normalize_methods(methods_raw):
-            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'double_elim', 'reverse_size', 'reverse_frequency', 'reverse_density']
+            allowed = ['size', 'frequency', 'random', 'density', 'agent_indiv_grade', 'binary_comp_selection', 'binary_comp_sql', 'double_elim', 'reverse_size', 'reverse_frequency', 'reverse_density']
             if not methods_raw:
                 return []
             # Flatten and split on commas; lowercase and strip
