@@ -228,6 +228,23 @@ class DataFrame_Binary_Evaluator(dspy.Signature):
 bi = dspy.ChainOfThought(DataFrame_Binary_Evaluator)
 
 
+# SQL-aware evaluator: mirrors DataFrame_Binary_Evaluator but adds sql_1 and sql_2 inputs,
+# allowing us to use the same control flow while providing SQL context separately
+class DataFrame_Binary_Evaluator_SQL(dspy.Signature):
+    """Evaluate two DataFrame candidates with optional SQL context for each option."""
+
+    question: str = dspy.InputField(desc="The original question asked by the user")
+    dataframe_1: str = dspy.InputField(desc="String representation of candidate A's DataFrame")
+    dataframe_2: str = dspy.InputField(desc="String representation of candidate B's DataFrame")
+    sql_1: str = dspy.InputField(desc="SQL used to produce candidate A (or 'N/A')")
+    sql_2: str = dspy.InputField(desc="SQL used to produce candidate B (or 'N/A')")
+    evaluation_criteria: str = dspy.InputField(desc="Instructions/prompt for evaluating with SQL context")
+    evaluation: str = dspy.OutputField(desc="JSON with best_index and confidence in [0,1]")
+
+
+bi_sql = dspy.ChainOfThought(DataFrame_Binary_Evaluator_SQL)
+
+
 def extract_json_evaluation(text):
     try:
         # Buscar JSON en la respuesta
@@ -523,18 +540,14 @@ def evaluate_binary_dataframes_with_confidence_sql(question, dataframes_list, sq
     # Call 1: original randomized order (A,B)
     order1 = order
     with dspy.context(lm=lm):
-        prompt1 = EVALUATION_BINARY_PROMPT_SQL.format(
+        # Use unformatted SQL-aware prompt; provide SQL and DFs as separate inputs
+        resp1 = bi_sql(
             question=question,
             dataframe_1=df_1,
             dataframe_2=df_2,
             sql_1=sql_1_txt,
             sql_2=sql_2_txt,
-        )
-        resp1 = bi(
-            question=question,
-            dataframe_1=df_1,
-            dataframe_2=df_2,
-            evaluation_criteria=prompt1,
+            evaluation_criteria=EVALUATION_BINARY_PROMPT_SQL,
         )
     presented_index1, confidence1 = _parse_binary_evaluation(resp1.evaluation)
     original_index1 = order1[presented_index1] if presented_index1 in (0, 1) else 0
@@ -542,18 +555,13 @@ def evaluate_binary_dataframes_with_confidence_sql(question, dataframes_list, sq
     # Call 2: swapped order (B,A) with corresponding SQL swapped
     order2 = [order[1], order[0]]
     with dspy.context(lm=lm):
-        prompt2 = EVALUATION_BINARY_PROMPT_SQL.format(
+        resp2 = bi_sql(
             question=question,
             dataframe_1=df_2,
             dataframe_2=df_1,
             sql_1=sql_2_txt,
             sql_2=sql_1_txt,
-        )
-        resp2 = bi(
-            question=question,
-            dataframe_1=df_2,
-            dataframe_2=df_1,
-            evaluation_criteria=prompt2,
+            evaluation_criteria=EVALUATION_BINARY_PROMPT_SQL,
         )
     presented_index2, confidence2 = _parse_binary_evaluation(resp2.evaluation)
     original_index2 = order2[presented_index2] if presented_index2 in (0, 1) else 0
