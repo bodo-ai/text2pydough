@@ -203,6 +203,39 @@ Return EXACTLY this JSON and nothing else:
 Where 0 means Option A and 1 means Option B (indices refer to the presented order above).
 """
 
+EVALUATION_BINARY_PROMPT_SQL_Adj = """You are an expert data analyst evaluating the quality of DataFrames returned for specific questions. You will have to choose between two dataframe options according to the following criteria
+You have to take into account the query generated and the dataframe generated from that query.
+Question asked: {question}
+DataFrame 1: {dataframe_1}
+query 1: {query_1}
+DataFrame 2: {dataframe_2}
+queery 2: {query_2}
+Evaluate it on these criteria:
+- Empty DataFrames or incorrect structure: Verify the DataFrame contains data and has the expected columns and rows
+Columns that don't answer the question: Ensure all included columns are relevant to the user's query
+- Unnecessary duplicate data: Identify and handle redundant rows or information that doesn't add value
+- Inappropriate data types for the query: Confirm data types (numeric, string, datetime) are suitable for the analysis
+Missing critical information to answer the question: Verify all essential data needed to address the query is present
+- Inadequate ordering of results: Check that results are sorted in a logical, meaningful way for the user
+Communication quality: Is the DataFrame structure clear, concise, and free of data inconsistencies? Assess whether the presentation is easy to understand, properly formatted, and contains accurate, consistent data throughout.
+Important: Be thorough but not overly strict. Minor stylistic variations, synonyms, or differences in ordering should not incur large penalties as long as the essential information is present and correct.
+Guidelines:
+ Use a score from 0 to 10
+- Score 8-10: Excellent/optimal for the question
+- Score 5-7: Good with minor improvements needed
+- Score 3-4: Adequate but with significant room for improvement
+- Score 0-2: Severely lacking in that dimension
+- Focus deductions on substantive omissions rather than minor variations.
+- Verify that the DataFrame addresses all items requested in the question.
+Always respond EXACTLY this JSON format (no additional text), in case of tie return 1 as the best_dataframe_number. Always respect the "best_dataframe_number" field:
+Remember return the best_dataframe_number as an integer: 0 or 1.
+ouput example:
+{{
+    "best_index": 0
+}}
+"""
+
+
 class DataFrame_Evaluator(dspy.Signature):
     """Evaluate the quality of a DataFrame result for a specific database query."""
 
