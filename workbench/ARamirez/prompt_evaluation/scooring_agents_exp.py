@@ -245,7 +245,7 @@ class DataFrame_Evaluator(dspy.Signature):
     evaluation: str = dspy.OutputField(desc="JSON evaluation with score (0-10) and reasoning")
 
 
-lm = dspy.LM('vertex_ai/gemini/projects/316936339319/locations/us-central1/endpoints/1012811837390979072', api_key = os.getenv("GOOGLE_API_KEY_1"), temperature=0, max_tokens = None)
+lm = dspy.LM('vertex_ai/gemini/projects/316936339319/locations/us-central1/endpoints/2542839442045927424', api_key = os.getenv("GOOGLE_API_KEY_1"), temperature=0, max_tokens = None)
 qa = dspy.ChainOfThought(DataFrame_Evaluator)
 
 class DataFrame_Binary_Evaluator(dspy.Signature):
